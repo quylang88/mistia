@@ -1876,6 +1876,8 @@ struct SettlementSplitCalculatorSheet: View {
     @State private var shareTextsByParticipantID: [UUID: String] = [:]
     @State private var dismissBaselinePaidTextsByParticipantID: [UUID: String] = [:]
     @State private var dismissBaselineShareTextsByParticipantID: [UUID: String] = [:]
+    @State private var editingShareParticipantID: UUID?
+    @State private var editingShareText = ""
     @State private var alertMessage: String?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
     @State private var showsResetConfirmation = false
@@ -1983,15 +1985,10 @@ struct SettlementSplitCalculatorSheet: View {
         Dictionary(uniqueKeysWithValues: baseSplitResult.participants.map { ($0.id, $0.shareMinor) })
     }
 
-    private var shareOverrideValidation: SettlementShareOverrideValidation {
-        guard allInputsProvided else { return .valid }
-        return SettlementLogic.shareOverrideValidation(for: participantInputs)
-    }
-
     private var canFinalizeSplit: Bool {
         !nonSelfParticipants.isEmpty
             && allInputsProvided
-            && shareOverrideValidation == .valid
+            && editingShareParticipantID == nil
     }
 
     private var splitResult: SettlementSharedExpenseResult {
@@ -2003,11 +2000,14 @@ struct SettlementSplitCalculatorSheet: View {
 
     private var suggestionsForSelf: [SettlementSuggestion] {
         guard allInputsProvided else { return [] }
-        guard shareOverrideValidation == .valid else { return [] }
         guard let selfID = selfParticipant?.id else { return [] }
         return splitResult.suggestions.filter {
             $0.payerID == selfID || $0.receiverID == selfID
         }
+    }
+
+    private var totalShareDifferenceMinor: Int64 {
+        SettlementLogic.totalShareDifference(for: splitResult)
     }
 
     private var participantNameByID: [UUID: String] {
@@ -2033,6 +2033,7 @@ struct SettlementSplitCalculatorSheet: View {
                 && (
                     paidTextsByParticipantID != dismissBaselinePaidTextsByParticipantID
                         || shareTextsByParticipantID != dismissBaselineShareTextsByParticipantID
+                        || editingShareParticipantID != nil
                 )
         )
     }
@@ -2183,6 +2184,8 @@ struct SettlementSplitCalculatorSheet: View {
             shareTextsByParticipantID = [:]
             dismissBaselinePaidTextsByParticipantID = [:]
             dismissBaselineShareTextsByParticipantID = [:]
+            editingShareParticipantID = nil
+            editingShareText = ""
             initializePaidInputsIfNeeded()
         } catch {
             alertMessage = error.localizedDescription
@@ -2347,27 +2350,47 @@ struct SettlementSplitCalculatorSheet: View {
                 SharedExpenseParticipantShareEditRow(
                     participant: participant,
                     currencyCode: currencyCode,
-                    shareText: shareEditTextBinding(
-                        for: participant.id,
-                        currentShareMinor: participant.shareMinor
-                    ),
                     adjustmentDeltaMinor: manualShareDelta(
                         for: participant.id,
                         baseShareMinor: baseShareMinor
-                    )
+                    ),
+                    isEditing: editingShareParticipantID == participant.id,
+                    isAnotherRowEditing: editingShareParticipantID != nil
+                        && editingShareParticipantID != participant.id,
+                    editingText: $editingShareText,
+                    onEdit: { beginEditingShare(participant) },
+                    onSave: { commitEditingShare(for: participant.id) }
                 )
             }
 
-            if shareOverrideValidation != .valid {
-                Text(shareOverrideValidationMessage(shareOverrideValidation))
-                    .foregroundStyle(MistiaAccent.expense.color)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-            } else if suggestionsForSelf.isEmpty {
+            if totalShareDifferenceMinor != 0 {
+                Label(
+                    L10n.transactions.settlement.totalShareDifference(
+                        formattedSignedDifference(totalShareDifferenceMinor)
+                    ),
+                    systemImage: "info.circle"
+                )
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+            }
+
+            if suggestionsForSelf.isEmpty {
                 Text(L10n.transactions.settlement.noSettlementNeeded)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
                     settlementSuggestionButton(for: suggestion)
+                }
+            }
+
+            if !shareTextsByParticipantID.isEmpty {
+                Button {
+                    resetDraftSharesToAutomatic()
+                } label: {
+                    Label(
+                        L10n.transactions.settlement.recalculateSplit,
+                        systemImage: "arrow.counterclockwise"
+                    )
                 }
             }
         }
@@ -2411,14 +2434,22 @@ struct SettlementSplitCalculatorSheet: View {
         )
     }
 
-    private func shareEditTextBinding(
-        for participantID: UUID,
-        currentShareMinor: Int64
-    ) -> Binding<String> {
-        Binding(
-            get: { shareTextsByParticipantID[participantID] ?? String(currentShareMinor) },
-            set: { shareTextsByParticipantID[participantID] = $0 }
-        )
+    private func beginEditingShare(_ participant: SettlementParticipantResult) {
+        editingShareText = String(participant.shareMinor)
+        editingShareParticipantID = participant.id
+    }
+
+    private func commitEditingShare(for participantID: UUID) {
+        let trimmed = editingShareText.trimmingCharacters(in: .whitespacesAndNewlines)
+        shareTextsByParticipantID[participantID] = trimmed.isEmpty ? "0" : editingShareText
+        editingShareParticipantID = nil
+        editingShareText = ""
+    }
+
+    private func resetDraftSharesToAutomatic() {
+        shareTextsByParticipantID = [:]
+        editingShareParticipantID = nil
+        editingShareText = ""
     }
 
     private func shareOverrideMinor(for participantID: UUID) -> Int64? {
@@ -2435,15 +2466,9 @@ struct SettlementSplitCalculatorSheet: View {
         )
     }
 
-    private func shareOverrideValidationMessage(_ validation: SettlementShareOverrideValidation) -> String {
-        switch validation {
-        case .valid:
-            return ""
-        case .manualShareTotalExceedsTotalPaid:
-            return L10n.transactions.settlement.manualShareTotalExceedsTotalPaid
-        case .allManualSharesMustMatchTotalPaid:
-            return L10n.transactions.settlement.allManualSharesMustMatchTotalPaid
-        }
+    private func formattedSignedDifference(_ differenceMinor: Int64) -> String {
+        let amount = abs(differenceMinor).formattedCurrency(code: currencyCode)
+        return differenceMinor > 0 ? "+\(amount)" : "-\(amount)"
     }
 
     @ViewBuilder
@@ -2459,6 +2484,8 @@ struct SettlementSplitCalculatorSheet: View {
             )
         }
         .buttonStyle(.plain)
+        .disabled(editingShareParticipantID != nil)
+        .opacity(editingShareParticipantID == nil ? 1 : 0.45)
     }
 
     private func counterpartyID(for suggestion: SettlementSuggestion) -> UUID {
@@ -2621,11 +2648,6 @@ struct SettlementSplitCalculatorSheet: View {
             alertMessage = L10n.transactions.settlement.enterAllParticipantAmounts
             return []
         }
-        guard shareOverrideValidation == .valid else {
-            alertMessage = shareOverrideValidationMessage(shareOverrideValidation)
-            return []
-        }
-
         let now = Date()
         let ownerUserID = ownerUserID
         let currentSelfID = selfParticipant.id
@@ -3106,12 +3128,16 @@ private struct SharedExpenseParticipantPaidInputRow: View {
 private struct SharedExpenseParticipantShareEditRow: View {
     let participant: SettlementParticipantResult
     let currencyCode: String
-    @Binding var shareText: String
     let adjustmentDeltaMinor: Int64?
+    let isEditing: Bool
+    let isAnotherRowEditing: Bool
+    @Binding var editingText: String
+    let onEdit: () -> Void
+    let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(participant.name)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .lineLimit(1)
@@ -3130,70 +3156,49 @@ private struct SharedExpenseParticipantShareEditRow: View {
                                 .fill(adjustmentColor(for: adjustmentDeltaMinor).opacity(0.12))
                         }
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: 8)
-
-                Text(netText)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(netColor)
+            if isEditing {
+                MistiaCurrencyInputField(
+                    L10n.transactions.settlement.share,
+                    text: $editingText,
+                    font: .mistiaRounded(size: 16, weight: .semibold),
+                    showsCalculatorButton: false,
+                    requestsFocus: true,
+                    selectsAllOnFocus: true
+                )
+                .multilineTextAlignment(.trailing)
+                .frame(width: 132)
+                .frame(minHeight: 36)
+            } else {
+                Text(participant.shareMinor.formattedCurrency(code: currencyCode))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
 
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.transactions.settlement.paid)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-
-                    Text(participant.paidMinor.formattedCurrency(code: currencyCode))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.transactions.settlement.share)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-
-                    MistiaCurrencyInputField(
-                        L10n.transactions.settlement.share,
-                        text: $shareText,
-                        font: .mistiaRounded(size: 16, weight: .semibold)
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: isEditing ? onSave : onEdit) {
+                Image(systemName: isEditing ? "checkmark" : "pencil")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                    .frame(width: 30, height: 30)
+                    .background {
+                        Circle()
+                            .fill(Color(UIColor.tertiarySystemFill))
+                    }
             }
+            .buttonStyle(.plain)
+            .disabled(isAnotherRowEditing)
+            .opacity(isAnotherRowEditing ? 0.4 : 1)
+            .accessibilityLabel(
+                isEditing
+                    ? L10n.transactions.settlement.saveParticipantShare(participant.name)
+                    : L10n.transactions.settlement.editParticipantShare(participant.name)
+            )
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var netText: String {
-        if participant.netMinor > 0 {
-            return "+\(participant.netMinor.formattedCurrency(code: currencyCode))"
-        }
-        if participant.netMinor < 0 {
-            return "-\(abs(participant.netMinor).formattedCurrency(code: currencyCode))"
-        }
-        return participant.netMinor.formattedCurrency(code: currencyCode)
-    }
-
-    private var netColor: Color {
-        if participant.netMinor > 0 {
-            return MistiaAccent.income.color
-        }
-        if participant.netMinor < 0 {
-            return MistiaAccent.expense.color
-        }
-        return .secondary
     }
 
     private func formattedAdjustmentDelta(_ deltaMinor: Int64) -> String {

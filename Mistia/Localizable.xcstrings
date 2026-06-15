@@ -35505,29 +35505,6 @@
         }
       }
     },
-    "transactions.settlement.allManualSharesMustMatchTotalPaid" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "When every participant has a manual share, the share total must match the total paid."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全員の負担分を手入力する場合、負担分の合計は支払い合計と一致する必要があります。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Khi nhập phần chia cho tất cả người tham gia, tổng phần chia phải bằng tổng đã trả."
-          }
-        }
-      }
-    },
     "transactions.settlement.amount" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -35850,6 +35827,29 @@
         }
       }
     },
+    "transactions.settlement.editParticipantShare" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit %@'s share"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ の負担額を編集"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sửa phần chia của %@"
+          }
+        }
+      }
+    },
     "transactions.settlement.enterAllParticipantAmounts" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36099,29 +36099,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Đã sửa %@"
-          }
-        }
-      }
-    },
-    "transactions.settlement.manualShareTotalExceedsTotalPaid" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The total shared amount cannot be greater than the total paid."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "負担分の合計は支払い合計を超えられません。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tổng phần chia không được lớn hơn tổng đã trả."
           }
         }
       }
@@ -36563,6 +36540,29 @@
         }
       }
     },
+    "transactions.settlement.saveParticipantShare" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save %@'s share"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ の負担額を保存"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu phần chia của %@"
+          }
+        }
+      }
+    },
     "transactions.settlement.savedBills" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36996,6 +36996,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tổng đã trả"
+          }
+        }
+      }
+    },
+    "transactions.settlement.totalShareDifference" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total difference %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合計差額 %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chênh lệch tổng %@"
           }
         }
       }

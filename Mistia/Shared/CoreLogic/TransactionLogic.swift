@@ -429,12 +429,6 @@ nonisolated struct SettlementSharedExpenseResult: Equatable {
     let suggestions: [SettlementSuggestion]
 }
 
-nonisolated enum SettlementShareOverrideValidation: Equatable {
-    case valid
-    case manualShareTotalExceedsTotalPaid
-    case allManualSharesMustMatchTotalPaid
-}
-
 nonisolated enum SettlementLogic {
     static func canSavePreparingEvent(
         title: String,
@@ -905,12 +899,6 @@ nonisolated enum SettlementLogic {
     ) -> Int64 {
         result.participants.reduce(Int64.zero) { $0 + $1.shareMinor }
             - result.totalPaidMinor
-    }
-
-    static func shareOverrideValidation(
-        for participants: [SettlementParticipantInput]
-    ) -> SettlementShareOverrideValidation {
-        .valid
     }
 
     static func manualShareDelta(
