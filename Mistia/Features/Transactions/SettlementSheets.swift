@@ -2324,19 +2324,9 @@ struct SettlementSplitCalculatorSheet: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                 .listRowBackground(Color.clear)
             } else {
-                if let selfParticipant {
-                    SharedExpenseParticipantPaidInputRow(
-                        participantName: selfParticipant.displayName,
-                        currencyCode: currencyCode,
-                        lockedPaidMinor: selfPaidMinor,
-                        paidText: .constant("")
-                    )
-                }
                 ForEach(nonSelfParticipants) { participant in
                     SharedExpenseParticipantPaidInputRow(
                         participantName: participant.displayName,
-                        currencyCode: currencyCode,
-                        lockedPaidMinor: nil,
                         paidText: paidTextBinding(for: participant)
                     )
                 }
@@ -3097,42 +3087,25 @@ private struct SharedExpenseParticipantResultRow: View {
 
 private struct SharedExpenseParticipantPaidInputRow: View {
     let participantName: String
-    let currencyCode: String
-    let lockedPaidMinor: Int64?
     @Binding var paidText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        HStack(spacing: 12) {
             Text(participantName)
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.transactions.settlement.paidAmount)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-
-                if let lockedPaidMinor {
-                    Text(lockedPaidMinor.formattedCurrency(code: currencyCode))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                } else {
-                    MistiaCurrencyInputField(
-                        L10n.transactions.settlement.paidAmount,
-                        text: $paidText,
-                        font: .mistiaRounded(size: 16, weight: .semibold)
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            MistiaCurrencyInputField(
+                L10n.transactions.settlement.paidAmount,
+                text: $paidText,
+                font: .mistiaRounded(size: 16, weight: .semibold)
+            )
+            .multilineTextAlignment(.trailing)
+            .frame(minWidth: 132, idealWidth: 156, maxWidth: 180, minHeight: 40)
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
     }
 }
 
