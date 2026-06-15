@@ -978,7 +978,10 @@ struct TransactionsView: View {
         }
         .sheet(item: $preparingSettlementTarget) { target in
             SettlementSplitCalculatorSheet(target: target) { groupID in
-                let ownerUserID = familyContextStore.viewedMember?.userID ?? sessionStore.activeLocalProfileUserID
+                var ownerUserID = familyContextStore.viewedMember?.userID ?? sessionStore.activeLocalProfileUserID
+                if let group = storedSettlementGroups.first(where: { $0.id == groupID }) {
+                    ownerUserID = group.organizerUserID ?? ownerUserID
+                }
                 if familyContextStore.canEditEvent(for: ownerUserID) {
                     settlementEditorTarget = .editSharedExpense(groupID)
                 } else if let ownerUserID {
