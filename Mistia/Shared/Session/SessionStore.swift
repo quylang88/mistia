@@ -206,6 +206,7 @@ final class SessionStore {
     @ObservationIgnored private var postSyncRefreshHandler: ((SessionSyncTrigger) async -> Void)?
     @ObservationIgnored private var pendingQueuedAutoSync = false
     @ObservationIgnored private var queuedFamilyOwnerPushTask: Task<Void, Never>?
+    @ObservationIgnored private var queuedAutoSyncTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFamilyOwnerPush = false
     @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
     @ObservationIgnored private var remoteValidationTask: Task<Void, Never>?
@@ -563,7 +564,14 @@ final class SessionStore {
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
         Task { @MainActor [weak self] in
-            await self?.checkForRemoteAccountDeviceSignOutIfNeeded()
+            guard let self else { return }
+            await self.checkForRemoteAccountDeviceSignOutIfNeeded()
+            
+            guard self.isReadyForAutomaticSync else { return }
+            if let lastSync = self.lastSyncAt, Date().timeIntervalSince(lastSync) < 30 {
+                return
+            }
+            _ = await self.syncNow(isManual: false)
         }
     }
 
@@ -1158,7 +1166,11 @@ final class SessionStore {
 
             reconnectValidationTask?.cancel()
             reconnectValidationTask = Task { [weak self] in
-                await self?.revalidateRemoteSessionAfterReconnect()
+                guard let self else { return }
+                await self.revalidateRemoteSessionAfterReconnect()
+                if self.isReadyForAutomaticSync {
+                    _ = await self.syncNow(isManual: false)
+                }
             }
         }
     }
@@ -2733,6 +2745,13 @@ final class SessionStore {
 
         pendingQueuedAutoSync = true
         updateAutoSyncLoopState()
+
+        queuedAutoSyncTask?.cancel()
+        queuedAutoSyncTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
+            guard let self, !Task.isCancelled else { return }
+            _ = await self.syncNow(isManual: false)
+        }
     }
 
     private func updateQueuedAutoSyncAfterSync() {
@@ -2852,6 +2871,8 @@ final class SessionStore {
 
     private func cancelQueuedAutoSync() {
         pendingQueuedAutoSync = false
+        queuedAutoSyncTask?.cancel()
+        queuedAutoSyncTask = nil
     }
 
     private func cancelQueuedFamilyOwnerPush() {
