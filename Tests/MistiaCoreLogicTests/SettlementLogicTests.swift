@@ -339,6 +339,52 @@ final class SettlementLogicTests: XCTestCase {
         ])
     }
 
+    func testManualShareOverrideDoesNotRedistributeOtherParticipants() {
+        let organizerID = UUID()
+        let secondID = UUID()
+        let thirdID = UUID()
+        let participants = [
+            SettlementParticipantInput(id: organizerID, name: "Me", paidMinor: 9_000),
+            SettlementParticipantInput(id: secondID, name: "An", paidMinor: 0, shareOverrideMinor: 4_000),
+            SettlementParticipantInput(id: thirdID, name: "Binh", paidMinor: 0)
+        ]
+
+        let result = SettlementLogic.sharedExpenseSettlement(
+            participants: participants,
+            organizerID: organizerID
+        )
+
+        XCTAssertEqual(result.participants.map(\.shareMinor), [3_000, 4_000, 3_000])
+    }
+
+    func testManualSharesMayExceedTotalPaidAndReportPositiveDifference() {
+        let participants = [
+            SettlementParticipantInput(name: "Me", paidMinor: 6_000, shareOverrideMinor: 4_000),
+            SettlementParticipantInput(name: "An", paidMinor: 0, shareOverrideMinor: 3_000)
+        ]
+
+        let result = SettlementLogic.sharedExpenseSettlement(
+            participants: participants,
+            organizerID: participants[0].id
+        )
+
+        XCTAssertEqual(SettlementLogic.totalShareDifference(for: result), 1_000)
+    }
+
+    func testManualSharesMayRemainBelowTotalPaidAndReportNegativeDifference() {
+        let participants = [
+            SettlementParticipantInput(name: "Me", paidMinor: 6_000, shareOverrideMinor: 4_000),
+            SettlementParticipantInput(name: "An", paidMinor: 0, shareOverrideMinor: 1_000)
+        ]
+
+        let result = SettlementLogic.sharedExpenseSettlement(
+            participants: participants,
+            organizerID: participants[0].id
+        )
+
+        XCTAssertEqual(SettlementLogic.totalShareDifference(for: result), -1_000)
+    }
+
     func testSharedExpenseOddRoundingAssignsRemainderToOrganizer() {
         let organizerID = UUID(uuidString: "00000000-0000-0000-0000-000000000011")!
         let participantA = SettlementParticipantInput(id: organizerID, name: "A", paidMinor: 2)

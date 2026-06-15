@@ -878,28 +878,11 @@ nonisolated enum SettlementLogic {
             return SettlementSharedExpenseResult(totalPaidMinor: 0, participants: [], suggestions: [])
         }
 
-        let explicitShareTotal = participants.reduce(into: Int64.zero) { partial, participant in
-            partial += participant.shareOverrideMinor ?? 0
-        }
-        let participantsNeedingEqualShare = participants.filter { $0.shareOverrideMinor == nil }
-        let remainingShareTotal = max(totalPaid - explicitShareTotal, 0)
-        let equalShare = participantsNeedingEqualShare.isEmpty
-            ? Int64.zero
-            : remainingShareTotal / Int64(participantsNeedingEqualShare.count)
-        let remainder = participantsNeedingEqualShare.isEmpty
-            ? Int64.zero
-            : remainingShareTotal % Int64(participantsNeedingEqualShare.count)
-
-        var assignedRemainder = false
+        let equalShare = totalPaid / Int64(participants.count)
+        let remainder = totalPaid % Int64(participants.count)
         let results = participants.map { participant in
-            var share = participant.shareOverrideMinor ?? equalShare
-            if participant.shareOverrideMinor == nil,
-               !assignedRemainder,
-               remainder > 0,
-               participant.id == organizerID {
-                share += remainder
-                assignedRemainder = true
-            }
+            let automaticShare = equalShare + (participant.id == organizerID ? remainder : 0)
+            let share = participant.shareOverrideMinor ?? automaticShare
             return SettlementParticipantResult(
                 id: participant.id,
                 name: participant.name,
@@ -917,24 +900,17 @@ nonisolated enum SettlementLogic {
         )
     }
 
+    static func totalShareDifference(
+        for result: SettlementSharedExpenseResult
+    ) -> Int64 {
+        result.participants.reduce(Int64.zero) { $0 + $1.shareMinor }
+            - result.totalPaidMinor
+    }
+
     static func shareOverrideValidation(
         for participants: [SettlementParticipantInput]
     ) -> SettlementShareOverrideValidation {
-        guard !participants.isEmpty else { return .valid }
-
-        let totalPaid = participants.reduce(Int64.zero) { $0 + $1.paidMinor }
-        let manualShares = participants.compactMap(\.shareOverrideMinor)
-        let manualShareTotal = manualShares.reduce(Int64.zero, +)
-
-        if manualShareTotal > totalPaid {
-            return .manualShareTotalExceedsTotalPaid
-        }
-
-        if manualShares.count == participants.count, manualShareTotal != totalPaid {
-            return .allManualSharesMustMatchTotalPaid
-        }
-
-        return .valid
+        .valid
     }
 
     static func manualShareDelta(
