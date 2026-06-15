@@ -442,7 +442,7 @@ enum NotificationCenterGrouping {
         switch resourceType {
         case .transaction, .familyTransfer, .debt:
             .familyCashflow
-        case .wallet, .category, .budget, .goal, .card, .bill, .due, .installment, .permission, nil:
+        case .wallet, .category, .budget, .goal, .card, .bill, .due, .installment, .permission, .event, nil:
             .familyData
         }
     }
