@@ -22,6 +22,8 @@ existing Mistia icon-button style.
 ## Row Layout
 
 - Remove the separate `Đã trả` and `Phần chia` blocks from each result row.
+- Do not render the self participant as an editable row in the
+  `Chia chi phí` section.
 - Keep the participant name on the leading side.
 - Show `Đã sửa +...` or `Đã sửa -...` beside the name only after the saved
   share differs from that participant's automatic share.
@@ -45,6 +47,8 @@ existing Mistia icon-button style.
 
 ## Calculation Rules
 
+- Keep the self participant in the split calculation even though the self row
+  is hidden from this section.
 - Automatic shares are calculated without considering manual overrides.
 - Saving a manual share changes only that participant.
 - Other participants keep their existing automatic or manually saved shares.
@@ -56,6 +60,7 @@ existing Mistia icon-button style.
 - Settlement suggestions match available payers and receivers. Any unmatched
   difference remains visible through the total-difference row and is not
   assigned automatically.
+- Keep settlement suggestions involving the self participant visible.
 - The user must choose `Chia lại chi phí` to discard manual shares and return
   all participants to automatic allocation.
 - Before finalization, show `Chia lại chi phí` at the bottom of the section
