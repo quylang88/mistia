@@ -271,6 +271,69 @@ final class SettlementLogicTests: XCTestCase {
         ])
     }
 
+    func testEventTotalsCountOnlyDirectlyLinkedBillsIncludingPaidOnBehalfDebt() {
+        let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000B201")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let linkedExpense = settlementExpenseRecord(
+            groupID: groupID,
+            title: "Hotel",
+            amountMinor: 100_000,
+            occurredAt: now
+        )
+        let paidOnBehalf = paidOnBehalfEventBillRecord(
+            groupID: groupID,
+            amountMinor: 20_000,
+            occurredAt: now.addingTimeInterval(60)
+        )
+        let automaticPayable = sharedExpenseDebtPrincipalRecord(
+            groupID: groupID,
+            debtIntent: .borrow,
+            amountMinor: 50_000,
+            occurredAt: now.addingTimeInterval(120)
+        )
+        let automaticPayment = sharedExpenseDebtSettlementRecord(
+            groupID: groupID,
+            debtIntent: .repay,
+            amountMinor: 10_000,
+            reportingExpenseMinor: 0,
+            occurredAt: now.addingTimeInterval(180)
+        )
+        let archivedLinkedExpense = archivedSettlementExpenseRecord(
+            groupID: groupID,
+            amountMinor: 30_000,
+            occurredAt: now.addingTimeInterval(240)
+        )
+        let otherEventExpense = settlementExpenseRecord(
+            groupID: UUID(),
+            title: "Other event",
+            amountMinor: 999_000,
+            occurredAt: now
+        )
+        let group = settlementGroupSnapshot(
+            id: groupID,
+            status: .preparing,
+            title: "Trip",
+            now: now
+        )
+
+        let events = SettlementLogic.preparingEventSnapshots(
+            groups: [group],
+            participants: [],
+            records: [
+                linkedExpense,
+                paidOnBehalf,
+                automaticPayable,
+                automaticPayment,
+                archivedLinkedExpense,
+                otherEventExpense
+            ]
+        )
+
+        XCTAssertEqual(events.first?.totalPaidMinor, 120_000)
+        XCTAssertEqual(events.first?.billCount, 2)
+        XCTAssertEqual(events.first?.lastUpdatedAt, paidOnBehalf.occurredAt)
+    }
+
     func testResaleFullPaymentRecoversCostBeforeProfit() {
         let allocation = SettlementLogic.resaleReceiptAllocation(
             costMinor: 1_000,
@@ -653,6 +716,48 @@ final class SettlementLogicTests: XCTestCase {
         )
     }
 
+    func testDebtSettlementAllocationsIgnoreDirectlyLinkedPaidOnBehalfDebtBills() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D005")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let paidOnBehalf = paidOnBehalfEventBillRecord(
+            groupID: eventID,
+            amountMinor: 6_000,
+            occurredAt: now
+        )
+        let automaticPayable = sharedExpenseDebtPrincipalRecord(
+            groupID: eventID,
+            debtIntent: .borrow,
+            amountMinor: 4_000,
+            occurredAt: now.addingTimeInterval(60)
+        )
+
+        let allocations = SettlementLogic.sharedExpenseDebtPaymentAllocations(
+            from: [paidOnBehalf, automaticPayable],
+            settlementIntent: .repay,
+            paymentMinor: 7_000
+        )
+
+        XCTAssertEqual(
+            allocations,
+            [
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: eventID,
+                    settlementRole: .sharedExpensePayment,
+                    amountMinor: 4_000,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 0
+                ),
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: nil,
+                    settlementRole: nil,
+                    amountMinor: 3_000,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 0
+                )
+            ]
+        )
+    }
+
     private func settlementExpenseRecord(
         groupID: UUID,
         title: String,
@@ -683,6 +788,69 @@ final class SettlementLogicTests: XCTestCase {
             categoryID: UUID(),
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func archivedSettlementExpenseRecord(
+        groupID: UUID,
+        amountMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .expense,
+            transferSubtype: nil,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: "Archived",
+            note: nil,
+            amountMinor: amountMinor,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpensePaid,
+            reportingExpenseMinor: nil,
+            reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            isArchived: true,
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: UUID(),
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func paidOnBehalfEventBillRecord(
+        groupID: UUID,
+        amountMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            entryStatus: .posted,
+            title: "Duoc tra ho",
+            note: nil,
+            amountMinor: amountMinor,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpensePaid,
+            reportingExpenseMinor: nil,
+            reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: nil,
+            sourceWalletKind: nil,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: UUID(),
+            counterpartyName: "B",
+            normalizedCounterpartyKey: "b"
         )
     }
 

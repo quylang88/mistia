@@ -624,13 +624,69 @@ nonisolated enum SettlementLogic {
         return [selfInput] + otherInputs
     }
 
-    private static func isSharedExpenseEventBill(
+    static func isSharedExpenseEventBill(
         _ record: TransactionRecordSnapshot
     ) -> Bool {
         record.settlementGroupID != nil
             && record.settlementRole == .sharedExpensePaid
             && record.entryStatus == .posted
             && !record.isArchived
+    }
+
+    static func isSharedExpenseEventBill(
+        _ transaction: LedgerTransaction
+    ) -> Bool {
+        transaction.settlementGroupID != nil
+            && transaction.settlementRole == .sharedExpensePaid
+            && transaction.entryStatus == .posted
+            && transaction.deletedAt == nil
+            && !transaction.isArchived
+    }
+
+    private static func isSharedExpenseDebtPrincipal(
+        _ record: TransactionRecordSnapshot,
+        debtIntent: TransactionDebtIntent
+    ) -> Bool {
+        guard record.settlementGroupID != nil,
+              record.transferSubtype == .debt,
+              record.debtIntent == debtIntent,
+              record.entryStatus == .posted,
+              !record.isArchived
+        else {
+            return false
+        }
+
+        switch debtIntent {
+        case .lend:
+            return record.settlementRole == .sharedExpenseReceivable
+        case .borrow:
+            return record.settlementRole == .sharedExpensePayable
+        case .collect, .repay:
+            return false
+        }
+    }
+
+    private static func isSharedExpenseDebtPayment(
+        _ record: TransactionRecordSnapshot,
+        debtIntent: TransactionDebtIntent
+    ) -> Bool {
+        guard record.settlementGroupID != nil,
+              record.transferSubtype == .debt,
+              record.debtIntent == debtIntent,
+              record.entryStatus == .posted,
+              !record.isArchived
+        else {
+            return false
+        }
+
+        switch debtIntent {
+        case .collect:
+            return record.settlementRole == .sharedExpenseReceipt
+        case .repay:
+            return record.settlementRole == .sharedExpensePayment
+        case .lend, .borrow:
+            return false
+        }
     }
 
     private static func participantSort(
@@ -735,9 +791,8 @@ nonisolated enum SettlementLogic {
         let paymentIntent: TransactionDebtIntent = settlementIntent
         let groupedEventRecords = Dictionary(
             grouping: records.filter { record in
-                record.settlementGroupID != nil
-                    && record.transferSubtype == .debt
-                    && (record.debtIntent == principalIntent || record.debtIntent == paymentIntent)
+                isSharedExpenseDebtPrincipal(record, debtIntent: principalIntent)
+                    || isSharedExpenseDebtPayment(record, debtIntent: paymentIntent)
             }
         ) { record in
             record.settlementGroupID ?? UUID()

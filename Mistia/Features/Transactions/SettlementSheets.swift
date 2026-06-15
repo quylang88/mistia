@@ -831,9 +831,7 @@ struct SettlementEditorSheet: View {
         // Initialize linked bill IDs first
         let dbLinked = transactions.filter {
             $0.settlementGroupID == group.id
-                && $0.settlementRole == .sharedExpensePaid
-                && $0.deletedAt == nil
-                && !$0.isArchived
+                && SettlementLogic.isSharedExpenseEventBill($0)
         }
         let dbLinkedIDs = Set(dbLinked.map(\.id))
         initialLinkedBillIDs = dbLinkedIDs
@@ -1066,9 +1064,7 @@ struct SettlementEditorSheet: View {
     private func transactionsForTotal(groupID: UUID, createdTransactions: [LedgerTransaction]) -> [LedgerTransaction] {
         let existing = transactions.filter {
             $0.settlementGroupID == groupID
-                && $0.settlementRole == .sharedExpensePaid
-                && $0.deletedAt == nil
-                && !$0.isArchived
+                && SettlementLogic.isSharedExpenseEventBill($0)
         }
         let existingIDs = Set(existing.map(\.id))
         return existing + createdTransactions.filter { !existingIDs.contains($0.id) }
@@ -1293,9 +1289,7 @@ struct SettlementEditorSheet: View {
             .filter {
                 $0.id != bill.id
                     && $0.settlementGroupID == groupID
-                    && $0.settlementRole == .sharedExpensePaid
-                    && $0.deletedAt == nil
-                    && !$0.isArchived
+                    && SettlementLogic.isSharedExpenseEventBill($0)
             }
             .reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
         group.updatedAt = now
@@ -1351,9 +1345,7 @@ struct SettlementEditorSheet: View {
             .filter {
                 $0.id != bill.id
                     && $0.settlementGroupID == group.id
-                    && $0.settlementRole == .sharedExpensePaid
-                    && $0.deletedAt == nil
-                    && !$0.isArchived
+                    && SettlementLogic.isSharedExpenseEventBill($0)
             }
             .reduce(max(bill.amountMinor, 0)) { $0 + max($1.amountMinor, 0) }
         group.updatedAt = now
@@ -1412,7 +1404,7 @@ struct SettlementEditorSheet: View {
         }
 
         for transaction in groupTransactions {
-            if transaction.settlementRole == .sharedExpensePaid {
+            if SettlementLogic.isSharedExpenseEventBill(transaction) {
                 transaction.settlementGroupID = nil
                 transaction.settlementObligationID = nil
                 transaction.settlementRoleRawValue = nil
@@ -1907,8 +1899,7 @@ struct SettlementSplitCalculatorSheet: View {
         transactions
             .filter {
                 $0.settlementGroupID == target.groupID
-                    && $0.settlementRole == .sharedExpensePaid
-                    && $0.entryStatus == .posted
+                    && SettlementLogic.isSharedExpenseEventBill($0)
             }
             .sorted {
                 if $0.occurredAt != $1.occurredAt { return $0.occurredAt > $1.occurredAt }
@@ -2145,7 +2136,7 @@ struct SettlementSplitCalculatorSheet: View {
         let now = Date()
         let groupTxs = transactions.filter { $0.settlementGroupID == group.id && $0.deletedAt == nil }
         for tx in groupTxs {
-            if tx.settlementRole == .sharedExpensePaid {
+            if SettlementLogic.isSharedExpenseEventBill(tx) {
                 tx.reportingExpenseMinor = max(tx.amountMinor, 0)
                 tx.reportingIncomeMinor = 0
             } else {

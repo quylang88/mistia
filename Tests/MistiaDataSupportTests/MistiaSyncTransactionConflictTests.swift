@@ -235,6 +235,144 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         XCTAssertEqual(restoredTransaction.reportingIncomeMinor, 0)
     }
 
+    func testDiagnosticSettlementRoles() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let wallet = makeWallet()
+        context.insert(wallet)
+
+        let tx = LedgerTransaction(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            title: "Test Payable",
+            amountMinor: 2000,
+            settlementGroupID: UUID(),
+            settlementRole: .sharedExpensePayable,
+            occurredAt: Date(),
+            sourceWallet: nil
+        )
+        context.insert(tx)
+        try context.save()
+
+        // Fetch it back
+        let fetched = try context.fetch(FetchDescriptor<LedgerTransaction>()).first!
+        XCTAssertEqual(fetched.settlementRole, .sharedExpensePayable)
+
+        // Simulate importing back via JSON
+        let userID = UUID()
+        let transactionID = UUID()
+        let groupID = UUID()
+        let occurredAtString = MistiaISO8601DateCoding.stringWithFractionalSeconds(from: Date())
+        let jsonPayload = """
+        {
+          "user_id": "\(userID.uuidString)",
+          "id": "\(transactionID.uuidString)",
+          "primary_kind_raw_value": "transfer",
+          "transfer_subtype_raw_value": "debt",
+          "debt_intent_raw_value": "borrow",
+          "entry_status_raw_value": "posted",
+          "title": "Test suggestion",
+          "amount_minor": 2000,
+          "occurred_at": "\(occurredAtString)",
+          "created_at": "\(occurredAtString)",
+          "updated_at": "\(occurredAtString)",
+          "created_by_user_id": "\(userID.uuidString)",
+          "last_modified_by_user_id": "\(userID.uuidString)",
+          "settlement_group_id": "\(groupID.uuidString)",
+          "settlement_role_raw_value": "sharedExpensePayable",
+          "is_archived": false,
+          "sync_version": 1
+        }
+        """
+
+        let decodedRow = try JSONDecoder.mistiaRemoteAPIDecoder.decode(RemoteLedgerTransaction.self, from: Data(jsonPayload.utf8))
+        XCTAssertEqual(decodedRow.settlementRoleRawValue, "sharedExpensePayable")
+
+        let targetContainer = try makeContainer()
+        let targetContext = ModelContext(targetContainer)
+
+        try MistiaSyncLocalStore.mergeAccessibleTransactions(
+            [decodedRow],
+            protectedRecordIDs: [],
+            in: targetContainer
+        )
+
+        let targetFetched = try targetContext.fetch(FetchDescriptor<LedgerTransaction>()).first!
+        XCTAssertEqual(targetFetched.settlementRole, .sharedExpensePayable)
+    }
+
+    func testDiagnosticSettlementFinalizationReload() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let userID = UUID()
+        let groupID = UUID()
+        let group = SettlementGroup(
+            kind: .sharedExpense,
+            status: .preparing,
+            title: "Trip",
+            currencyCode: "VND",
+            occurredAt: Date(),
+            totalMinor: 100_000,
+            expectedMinor: 0,
+            organizerUserID: userID
+        )
+        context.insert(group)
+
+        // Link a bill
+        let wallet = makeWallet()
+        context.insert(wallet)
+        let bill = LedgerTransaction(
+            id: UUID(),
+            primaryKind: .expense,
+            title: "Dinner",
+            amountMinor: 100_000,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpensePaid,
+            occurredAt: Date(),
+            sourceWallet: wallet
+        )
+        context.insert(bill)
+
+        // Finalize split would create a suggestion
+        // Let's create a payable suggestion manually to simulate finalization
+        let payableSuggestion = LedgerTransaction(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            title: "Vay",
+            amountMinor: 50_000,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpensePayable,
+            occurredAt: Date(),
+            sourceWallet: nil
+        )
+        context.insert(payableSuggestion)
+
+        try context.save()
+
+        // Now, let's create a new model context from the same container (simulating reload/reopen)
+        let newContext = ModelContext(container)
+        let allTransactions = try newContext.fetch(FetchDescriptor<LedgerTransaction>())
+
+        // Filter like linkedBills does:
+        let linkedBills = allTransactions.filter {
+            $0.settlementGroupID == groupID
+                && $0.settlementRole == .sharedExpensePaid
+                && $0.entryStatus == .posted
+        }
+
+        // Total paid should be 100_000, not 150_000!
+        XCTAssertEqual(linkedBills.count, 1)
+        XCTAssertEqual(linkedBills.first?.id, bill.id)
+
+        let totalPaid = linkedBills.reduce(Int64.zero) { $0 + max($1.amountMinor, 0) }
+        XCTAssertEqual(totalPaid, 100_000)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
