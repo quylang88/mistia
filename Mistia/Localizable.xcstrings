@@ -35817,6 +35817,52 @@
         }
       }
     },
+    "transactions.settlement.allManualSharesMustMatchTotalPaid": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When every participant has a manual share, the share total must match the total paid."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全員の負担分を手入力する場合、負担分の合計は支払い合計と一致する必要があります。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Khi nhập phần chia cho tất cả người tham gia, tổng phần chia phải bằng tổng đã trả."
+          }
+        }
+      }
+    },
+    "transactions.settlement.manualShareTotalExceedsTotalPaid": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The total shared amount cannot be greater than the total paid."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "負担分の合計は支払い合計を超えられません。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tổng phần được chia không được lớn hơn tổng đã trả."
+          }
+        }
+      }
+    },
     "transactions.settlement.enterAmountsGreaterThanZero": {
       "extractionState": "stale",
       "localizations": {
@@ -36687,6 +36733,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "Phần chia"
+          }
+        }
+      }
+    },
+    "transactions.settlement.shareAmount": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "負担分"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Được chia"
           }
         }
       }
@@ -38274,6 +38343,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "Khoản chuyển tiền gia đình không thể sửa, lưu trữ hoặc xóa sau khi đã tạo."
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.eventGeneratedDebtReadOnlyNotice": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This loan entry was generated from an event. Use Recalculate split in the event to change it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この貸し借りはイベントから作成されました。変更するにはイベントの分割を再計算してください。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Khoản vay & cho vay này được tạo từ sự kiện. Dùng Chia lại chi phí trong sự kiện để thay đổi."
           }
         }
       }

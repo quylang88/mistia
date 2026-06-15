@@ -223,6 +223,14 @@ private struct TransactionEditorRenderContext {
     let ownerWalletLabelsByID: [UUID: String]
 }
 
+private struct TransactionEditorContextRowData: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let icon: String
+    let tint: Color
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -360,6 +368,87 @@ struct TransactionEditorSheet: View {
         return transaction.primaryKind == .transfer && transaction.transferSubtype == .debt
     }
 
+    private var isEventGeneratedSharedExpenseDebtDetail: Bool {
+        guard let transaction = target.transaction else { return false }
+        return TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(transaction.snapshot)
+    }
+
+    private var transactionContextRows: [TransactionEditorContextRowData] {
+        [transactionTypeContextRow, linkedEventContextRow].compactMap(\.self)
+    }
+
+    private var transactionTypeContextRow: TransactionEditorContextRowData? {
+        guard draft.primaryKind == .transfer else { return nil }
+        let isLockedTransferKind = target.transaction != nil
+            || target.prefill?.lockedTransferSubtype != nil
+            || target.prefill?.lockedDebtIntent != nil
+        guard isLockedTransferKind else { return nil }
+
+        let subtype = draft.transferSubtype ?? target.prefill?.lockedTransferSubtype ?? .internalTransfer
+        switch subtype {
+        case .debt:
+            let intent = draft.debtIntent
+            return TransactionEditorContextRowData(
+                id: "transfer-debt",
+                title: TransactionTransferSubtype.debt.title,
+                subtitle: debtContextSubtitle(intent: intent),
+                icon: intent?.financeIconToken ?? TransactionTransferSubtype.debt.financeIconToken,
+                tint: transactionEditorDebtIntentTint(intent)
+            )
+        case .internalTransfer, .familyTransfer:
+            return TransactionEditorContextRowData(
+                id: "transfer-\(subtype.rawValue)",
+                title: subtype.title,
+                subtitle: TransactionPrimaryKind.transfer.title,
+                icon: subtype.financeIconToken,
+                tint: MistiaAccent.transfer.color
+            )
+        }
+    }
+
+    private var linkedEventContextRow: TransactionEditorContextRowData? {
+        guard let linkedEvent else { return nil }
+        return TransactionEditorContextRowData(
+            id: "event-\(linkedEvent.id.uuidString)",
+            title: L10n.transactions.settlement.eventTitle,
+            subtitle: linkedEvent.title,
+            icon: "mistia.settlement.event",
+            tint: MistiaAccent.teal.color
+        )
+    }
+
+    private var shouldShowTransferTypeControls: Bool {
+        draft.primaryKind == .transfer && transactionTypeContextRow == nil
+    }
+
+    private var shouldShowDebtTypeControls: Bool {
+        draft.primaryKind == .transfer
+            && draft.transferSubtype == .debt
+            && transactionTypeContextRow == nil
+    }
+
+    private func debtContextSubtitle(intent: TransactionDebtIntent?) -> String {
+        if intent == .borrow, draft.borrowDebtEntryMode == .paidFor {
+            return L10n.transactions.transactioneditor.borrowPaidFor
+        }
+        return intent?.title ?? TransactionTransferSubtype.debt.title
+    }
+
+    private func transactionEditorDebtIntentTint(_ intent: TransactionDebtIntent?) -> Color {
+        switch intent {
+        case .lend:
+            return MistiaAccent.debtLend.color
+        case .collect:
+            return MistiaAccent.debtCollect.color
+        case .borrow:
+            return MistiaAccent.debtBorrow.color
+        case .repay:
+            return MistiaAccent.debtRepay.color
+        case nil:
+            return MistiaAccent.transfer.color
+        }
+    }
+
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
         MistiaDismissGuardConfiguration(
             mode: target.transaction == nil ? .creating : .editing,
@@ -368,7 +457,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var hasUnsavedChangesForDismissal: Bool {
-        guard !isLockedByStatement, !isFamilyTransferDetail else { return false }
+        guard !isLockedByStatement, !isFamilyTransferDetail, !isEventGeneratedSharedExpenseDebtDetail else { return false }
 
         let receiptChanged = receiptDraft?.isChanged == true || shouldDeleteReceiptOnSave
         if target.transaction == nil {
@@ -382,7 +471,7 @@ struct TransactionEditorSheet: View {
 
     var body: some View {
         let isLockedByStatement = self.isLockedByStatement
-        let isReadOnlyDetail = isLockedByStatement || isFamilyTransferDetail
+        let isReadOnlyDetail = isLockedByStatement || isFamilyTransferDetail || isEventGeneratedSharedExpenseDebtDetail
         let areEditorControlsDisabled = isReadOnlyDetail || isSaving || isProcessingReceiptImage
         let renderContext = makeRenderContext()
 
@@ -422,6 +511,23 @@ struct TransactionEditorSheet: View {
                         .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                     }
                 }
+                if isEventGeneratedSharedExpenseDebtDetail {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.2.wave.2.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(transactionEditorDebtIntentTint(draft.debtIntent))
+                                .padding(8)
+                                .background(transactionEditorDebtIntentTint(draft.debtIntent).opacity(0.12))
+                                .clipShape(Circle())
+
+                            Text(L10n.transactions.transactioneditor.eventGeneratedDebtReadOnlyNotice)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    }
+                }
 
                 if target.quickCapture && target.transaction == nil {
                     quickCaptureContent
@@ -443,7 +549,7 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    if !isAdjustment && !isLockedByStatement && !isFamilyTransferDetail {
+                    if !isAdjustment && !isLockedByStatement && !isFamilyTransferDetail && !isEventGeneratedSharedExpenseDebtDetail {
                         Button {
                             save()
                         } label: {
@@ -662,9 +768,16 @@ struct TransactionEditorSheet: View {
     }
     private func fullEditorContent(renderContext: TransactionEditorRenderContext) -> some View {
         @Bindable var bindableDraft = draft
+        let contextRows = transactionContextRows
 
         return Group {
-            if draft.primaryKind == .transfer {
+            if !contextRows.isEmpty {
+                Section {
+                    ForEach(contextRows) { row in
+                        TransactionEditorContextRow(row: row)
+                    }
+                }
+            } else if shouldShowTransferTypeControls {
                 Section(L10n.transactions.transactioneditor.transferType) {
                     MistiaNativeSegmentedControl(
                         selection: Binding(
@@ -694,7 +807,7 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
+            if shouldShowDebtTypeControls {
                 Section(L10n.transactions.transactioneditor.debtType) {
                     if usesExistingDebtIntentPicker {
                         Picker(L10n.transactions.transactioneditor.debtType, selection: Binding(
@@ -892,19 +1005,6 @@ struct TransactionEditorSheet: View {
                         selection: $bindableDraft.occurredAt,
                         mode: .dateAndTime
                     )
-
-                    if let event = linkedEvent {
-                        HStack {
-                            Text(L10n.transactions.settlement.eventTitle)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            MistiaMiniBadge(
-                                title: event.title,
-                                tint: MistiaAccent.teal.color
-                            )
-                        }
-                    }
                 }
             }
 
@@ -1129,7 +1229,7 @@ struct TransactionEditorSheet: View {
                 receiptSection
             }
 
-            if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail {
+            if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail, !isEventGeneratedSharedExpenseDebtDetail {
                 MistiaDestructiveActionSection(
                     buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
                     descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
@@ -2025,6 +2125,7 @@ struct TransactionEditorSheet: View {
     private func save() {
         guard !isSaving else { return }
         guard !isFamilyTransferDetail else { return }
+        guard !isEventGeneratedSharedExpenseDebtDetail else { return }
         if draft.primaryKind == .transfer {
             let subtype = draft.transferSubtype ?? .internalTransfer
             if let prompt = transferPermissionPrompt(for: subtype) {
@@ -3590,6 +3691,39 @@ struct TransactionEditorSheet: View {
             y: 4
         )
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct TransactionEditorContextRow: View {
+    let row: TransactionEditorContextRowData
+
+    var body: some View {
+        HStack(spacing: 12) {
+            MistiaFinanceIconView(
+                icon: row.icon,
+                fallbackColor: row.tint,
+                size: 34
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(row.title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Text(row.subtitle)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .layoutPriority(1)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 

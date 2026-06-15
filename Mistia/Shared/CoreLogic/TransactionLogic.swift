@@ -429,6 +429,12 @@ nonisolated struct SettlementSharedExpenseResult: Equatable {
     let suggestions: [SettlementSuggestion]
 }
 
+nonisolated enum SettlementShareOverrideValidation: Equatable {
+    case valid
+    case manualShareTotalExceedsTotalPaid
+    case allManualSharesMustMatchTotalPaid
+}
+
 nonisolated enum SettlementLogic {
     static func canSavePreparingEvent(
         title: String,
@@ -911,6 +917,26 @@ nonisolated enum SettlementLogic {
         )
     }
 
+    static func shareOverrideValidation(
+        for participants: [SettlementParticipantInput]
+    ) -> SettlementShareOverrideValidation {
+        guard !participants.isEmpty else { return .valid }
+
+        let totalPaid = participants.reduce(Int64.zero) { $0 + $1.paidMinor }
+        let manualShares = participants.compactMap(\.shareOverrideMinor)
+        let manualShareTotal = manualShares.reduce(Int64.zero, +)
+
+        if manualShareTotal > totalPaid {
+            return .manualShareTotalExceedsTotalPaid
+        }
+
+        if manualShares.count == participants.count, manualShareTotal != totalPaid {
+            return .allManualSharesMustMatchTotalPaid
+        }
+
+        return .valid
+    }
+
     private static func settlementSuggestions(
         from participants: [SettlementParticipantResult]
     ) -> [SettlementSuggestion] {
@@ -1087,6 +1113,11 @@ nonisolated enum TransactionLogic {
         record.primaryKind == .transfer
             && record.transferSubtype == .debt
             && (record.settlementRole == .sharedExpenseReceivable || record.settlementRole == .sharedExpensePayable)
+    }
+
+    static func isEventGeneratedSharedExpenseDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
+        record.settlementGroupID != nil
+            && isSharedExpenseDebtPrincipal(record)
     }
 
     static func isResaleReceivableDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {

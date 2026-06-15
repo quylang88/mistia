@@ -189,6 +189,55 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.repay))
     }
 
+    func testEventGeneratedSharedExpenseDebtPrincipalRequiresSettlementGroup() {
+        let groupID = UUID()
+        let generatedDebt = debtRecord(
+            amountMinor: 1_500,
+            intent: .lend,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpenseReceivable
+        )
+        let standaloneDebtWithSameRole = debtRecord(
+            amountMinor: 1_500,
+            intent: .lend,
+            settlementRole: .sharedExpenseReceivable
+        )
+        let eventReceipt = debtRecord(
+            amountMinor: 1_500,
+            intent: .collect,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpenseReceipt
+        )
+
+        XCTAssertTrue(TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(generatedDebt))
+        XCTAssertFalse(TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(standaloneDebtWithSameRole))
+        XCTAssertFalse(TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(eventReceipt))
+    }
+
+    func testManualShareOverridesCannotExceedTotalPaid() {
+        let participants = [
+            SettlementParticipantInput(name: "Me", paidMinor: 6_000, shareOverrideMinor: 4_000),
+            SettlementParticipantInput(name: "An", paidMinor: 0, shareOverrideMinor: 3_000)
+        ]
+
+        XCTAssertEqual(
+            SettlementLogic.shareOverrideValidation(for: participants),
+            .manualShareTotalExceedsTotalPaid
+        )
+    }
+
+    func testAllManualShareOverridesMustMatchTotalPaid() {
+        let participants = [
+            SettlementParticipantInput(name: "Me", paidMinor: 6_000, shareOverrideMinor: 4_000),
+            SettlementParticipantInput(name: "An", paidMinor: 0, shareOverrideMinor: 1_000)
+        ]
+
+        XCTAssertEqual(
+            SettlementLogic.shareOverrideValidation(for: participants),
+            .allManualSharesMustMatchTotalPaid
+        )
+    }
+
     func testCreditCardStatementKeepsDebtLendingChargeAfterCollectionToCashWallet() throws {
         let calendar = Calendar(identifier: .gregorian)
         let cardWalletID = UUID()
@@ -423,6 +472,8 @@ final class TransactionLogicTests: XCTestCase {
         counterpartyName: String = "An",
         normalizedCounterpartyKey: String? = TransactionLogic.normalizeCounterpartyName("An"),
         sourceWalletID: UUID = UUID(),
+        settlementGroupID: UUID? = nil,
+        settlementRole: SettlementTransactionRole? = nil,
         occurredAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
     ) -> TransactionRecordSnapshot {
         record(
@@ -436,6 +487,8 @@ final class TransactionLogicTests: XCTestCase {
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey,
             sourceWalletID: sourceWalletID,
+            settlementGroupID: settlementGroupID,
+            settlementRole: settlementRole,
             occurredAt: occurredAt
         )
     }
@@ -454,6 +507,8 @@ final class TransactionLogicTests: XCTestCase {
         sourceWalletKind: LedgerWalletKind = .cash,
         destinationWalletID: UUID? = nil,
         destinationWalletKind: LedgerWalletKind? = nil,
+        settlementGroupID: UUID? = nil,
+        settlementRole: SettlementTransactionRole? = nil,
         occurredAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
@@ -465,6 +520,8 @@ final class TransactionLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            settlementGroupID: settlementGroupID,
+            settlementRole: settlementRole,
             sourceCurrencyCode: currencyCode,
             isArchived: false,
             occurredAt: occurredAt,
