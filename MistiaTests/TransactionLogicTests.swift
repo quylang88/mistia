@@ -214,69 +214,65 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertFalse(TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(eventReceipt))
     }
 
-    func testManualShareOverrideDoesNotRedistributeOtherParticipants() {
-        let organizerID = UUID()
-        let secondID = UUID()
-        let thirdID = UUID()
-        let participants = [
-            SettlementParticipantInput(id: organizerID, name: "Me", paidMinor: 9_000),
-            SettlementParticipantInput(id: secondID, name: "An", paidMinor: 0, shareOverrideMinor: 4_000),
-            SettlementParticipantInput(id: thirdID, name: "Binh", paidMinor: 0)
-        ]
+    func testDebtAmountOverrideChangesOnlyMatchingSuggestion() {
+        let first = SettlementSuggestion(payerID: UUID(), receiverID: UUID(), amountMinor: 2_000)
+        let second = SettlementSuggestion(payerID: UUID(), receiverID: UUID(), amountMinor: 3_000)
 
-        let result = SettlementLogic.sharedExpenseSettlement(
-            participants: participants,
+        let result = SettlementLogic.applyingDebtAmountOverrides(
+            to: [first, second],
+            overridesBySuggestionID: [first.id: 2_500]
+        )
+
+        XCTAssertEqual(result, [
+            SettlementSuggestion(
+                payerID: first.payerID,
+                receiverID: first.receiverID,
+                amountMinor: 2_500
+            ),
+            second
+        ])
+    }
+
+    func testDebtAmountOverrideKeepsDirectionAndParticipantShares() throws {
+        let organizerID = UUID()
+        let participantID = UUID()
+        let split = SettlementLogic.sharedExpenseSettlement(
+            participants: [
+                SettlementParticipantInput(id: organizerID, name: "Me", paidMinor: 6_000),
+                SettlementParticipantInput(id: participantID, name: "An", paidMinor: 0)
+            ],
             organizerID: organizerID
         )
+        let automaticSuggestion = try XCTUnwrap(split.suggestions.first)
 
-        XCTAssertEqual(result.participants.map(\.shareMinor), [3_000, 4_000, 3_000])
-    }
-
-    func testManualSharesMayExceedTotalPaidAndReportPositiveDifference() {
-        let participants = [
-            SettlementParticipantInput(name: "Me", paidMinor: 6_000, shareOverrideMinor: 4_000),
-            SettlementParticipantInput(name: "An", paidMinor: 0, shareOverrideMinor: 3_000)
-        ]
-
-        let result = SettlementLogic.sharedExpenseSettlement(
-            participants: participants,
-            organizerID: participants[0].id
+        let overriddenSuggestions = SettlementLogic.applyingDebtAmountOverrides(
+            to: split.suggestions,
+            overridesBySuggestionID: [automaticSuggestion.id: 1_000]
         )
 
-        XCTAssertEqual(SettlementLogic.totalShareDifference(for: result), 1_000)
+        XCTAssertEqual(split.participants.map(\.shareMinor), [3_000, 3_000])
+        XCTAssertEqual(overriddenSuggestions.first?.payerID, automaticSuggestion.payerID)
+        XCTAssertEqual(overriddenSuggestions.first?.receiverID, automaticSuggestion.receiverID)
+        XCTAssertEqual(overriddenSuggestions.first?.amountMinor, 1_000)
     }
 
-    func testManualSharesMayRemainBelowTotalPaidAndReportNegativeDifference() {
-        let participants = [
-            SettlementParticipantInput(name: "Me", paidMinor: 6_000, shareOverrideMinor: 4_000),
-            SettlementParticipantInput(name: "An", paidMinor: 0, shareOverrideMinor: 1_000)
-        ]
+    func testDebtAmountOverrideIgnoresNonPositiveValues() {
+        let suggestion = SettlementSuggestion(payerID: UUID(), receiverID: UUID(), amountMinor: 2_000)
 
-        let result = SettlementLogic.sharedExpenseSettlement(
-            participants: participants,
-            organizerID: participants[0].id
-        )
-
-        XCTAssertEqual(SettlementLogic.totalShareDifference(for: result), -1_000)
-    }
-
-    func testManualShareDeltaReportsIncreaseFromBaseShare() {
         XCTAssertEqual(
-            SettlementLogic.manualShareDelta(editedShareMinor: 3_500, baseShareMinor: 2_000),
-            1_500
+            SettlementLogic.applyingDebtAmountOverrides(
+                to: [suggestion],
+                overridesBySuggestionID: [suggestion.id: 0]
+            ),
+            [suggestion]
         )
-    }
-
-    func testManualShareDeltaReportsDecreaseFromBaseShare() {
         XCTAssertEqual(
-            SettlementLogic.manualShareDelta(editedShareMinor: 1_500, baseShareMinor: 2_000),
-            -500
+            SettlementLogic.applyingDebtAmountOverrides(
+                to: [suggestion],
+                overridesBySuggestionID: [suggestion.id: -500]
+            ),
+            [suggestion]
         )
-    }
-
-    func testManualShareDeltaIgnoresUneditedOrUnchangedShare() {
-        XCTAssertNil(SettlementLogic.manualShareDelta(editedShareMinor: nil, baseShareMinor: 2_000))
-        XCTAssertNil(SettlementLogic.manualShareDelta(editedShareMinor: 2_000, baseShareMinor: 2_000))
     }
 
     func testCreditCardStatementKeepsDebtLendingChargeAfterCollectionToCashWallet() throws {

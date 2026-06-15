@@ -394,18 +394,15 @@ nonisolated struct SettlementParticipantInput: Equatable, Identifiable {
     let id: UUID
     let name: String
     let paidMinor: Int64
-    let shareOverrideMinor: Int64?
 
     init(
         id: UUID = UUID(),
         name: String,
-        paidMinor: Int64,
-        shareOverrideMinor: Int64? = nil
+        paidMinor: Int64
     ) {
         self.id = id
         self.name = name
         self.paidMinor = max(paidMinor, 0)
-        self.shareOverrideMinor = shareOverrideMinor.map { max($0, 0) }
     }
 }
 
@@ -417,10 +414,19 @@ nonisolated struct SettlementParticipantResult: Equatable, Identifiable {
     let netMinor: Int64
 }
 
-nonisolated struct SettlementSuggestion: Equatable {
+nonisolated struct SettlementSuggestionID: Equatable, Hashable {
+    let payerID: UUID
+    let receiverID: UUID
+}
+
+nonisolated struct SettlementSuggestion: Equatable, Identifiable {
     let payerID: UUID
     let receiverID: UUID
     let amountMinor: Int64
+
+    var id: SettlementSuggestionID {
+        SettlementSuggestionID(payerID: payerID, receiverID: receiverID)
+    }
 }
 
 nonisolated struct SettlementSharedExpenseResult: Equatable {
@@ -875,8 +881,7 @@ nonisolated enum SettlementLogic {
         let equalShare = totalPaid / Int64(participants.count)
         let remainder = totalPaid % Int64(participants.count)
         let results = participants.map { participant in
-            let automaticShare = equalShare + (participant.id == organizerID ? remainder : 0)
-            let share = participant.shareOverrideMinor ?? automaticShare
+            let share = equalShare + (participant.id == organizerID ? remainder : 0)
             return SettlementParticipantResult(
                 id: participant.id,
                 name: participant.name,
@@ -894,21 +899,22 @@ nonisolated enum SettlementLogic {
         )
     }
 
-    static func totalShareDifference(
-        for result: SettlementSharedExpenseResult
-    ) -> Int64 {
-        result.participants.reduce(Int64.zero) { $0 + $1.shareMinor }
-            - result.totalPaidMinor
-    }
+    static func applyingDebtAmountOverrides(
+        to suggestions: [SettlementSuggestion],
+        overridesBySuggestionID: [SettlementSuggestionID: Int64]
+    ) -> [SettlementSuggestion] {
+        suggestions.map { suggestion in
+            guard let override = overridesBySuggestionID[suggestion.id],
+                  override > 0 else {
+                return suggestion
+            }
 
-    static func manualShareDelta(
-        editedShareMinor: Int64?,
-        baseShareMinor: Int64
-    ) -> Int64? {
-        guard let editedShareMinor else { return nil }
-
-        let delta = max(editedShareMinor, 0) - max(baseShareMinor, 0)
-        return delta == 0 ? nil : delta
+            return SettlementSuggestion(
+                payerID: suggestion.payerID,
+                receiverID: suggestion.receiverID,
+                amountMinor: override
+            )
+        }
     }
 
     private static func settlementSuggestions(

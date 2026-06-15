@@ -4,6 +4,12 @@
     "" : {
 
     },
+    "-" : {
+
+    },
+    "+" : {
+
+    },
     "app.mistia.loadingYourData" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -35804,6 +35810,29 @@
         }
       }
     },
+    "transactions.settlement.editDebtAmount" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit %@ debt amount"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ の債務額を編集"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sửa khoản nợ của %@"
+          }
+        }
+      }
+    },
     "transactions.settlement.editEventTitle" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -35823,29 +35852,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sửa sự kiện"
-          }
-        }
-      }
-    },
-    "transactions.settlement.editParticipantShare" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edit %@'s share"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ の負担額を編集"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sửa phần chia của %@"
           }
         }
       }
@@ -36076,29 +36082,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lịch sử"
-          }
-        }
-      }
-    },
-    "transactions.settlement.manualShareAdjustmentBadge" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edited %@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 修正"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Đã sửa %@"
           }
         }
       }
@@ -36540,29 +36523,6 @@
         }
       }
     },
-    "transactions.settlement.saveParticipantShare" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save %@'s share"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ の負担額を保存"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lưu phần chia của %@"
-          }
-        }
-      }
-    },
     "transactions.settlement.savedBills" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36582,6 +36542,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chi tiêu đã lưu"
+          }
+        }
+      }
+    },
+    "transactions.settlement.saveDebtAmount" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save %@ debt amount"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ の債務額を保存"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu khoản nợ của %@"
           }
         }
       }
@@ -36996,29 +36979,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tổng đã trả"
-          }
-        }
-      }
-    },
-    "transactions.settlement.totalShareDifference" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Total difference %@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合計差額 %@"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chênh lệch tổng %@"
           }
         }
       }

@@ -1873,11 +1873,11 @@ struct SettlementSplitCalculatorSheet: View {
 
     @State private var additionalRows: [SharedExpenseParticipantDraft] = []
     @State private var paidTextsByParticipantID: [UUID: String] = [:]
-    @State private var shareTextsByParticipantID: [UUID: String] = [:]
+    @State private var debtAmountTextsBySuggestionID: [SettlementSuggestionID: String] = [:]
     @State private var dismissBaselinePaidTextsByParticipantID: [UUID: String] = [:]
-    @State private var dismissBaselineShareTextsByParticipantID: [UUID: String] = [:]
-    @State private var editingShareParticipantID: UUID?
-    @State private var editingShareText = ""
+    @State private var dismissBaselineDebtAmountTextsBySuggestionID: [SettlementSuggestionID: String] = [:]
+    @State private var editingDebtSuggestionID: SettlementSuggestionID?
+    @State private var editingDebtAmountText = ""
     @State private var alertMessage: String?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
     @State private var showsResetConfirmation = false
@@ -1940,27 +1940,6 @@ struct SettlementSplitCalculatorSheet: View {
             SettlementParticipantInput(
                 id: selfParticipant.id,
                 name: selfParticipant.displayName,
-                paidMinor: selfPaidMinor,
-                shareOverrideMinor: shareOverrideMinor(for: selfParticipant.id)
-            )
-        ]
-        inputs += nonSelfParticipants.map {
-            SettlementParticipantInput(
-                id: $0.id,
-                name: $0.displayName,
-                paidMinor: paidTextsByParticipantID[$0.id, default: ""].currencyInputToMinorUnits(currencyCode: currencyCode),
-                shareOverrideMinor: shareOverrideMinor(for: $0.id)
-            )
-        }
-        return inputs
-    }
-
-    private var baseParticipantInputs: [SettlementParticipantInput] {
-        guard let selfParticipant else { return [] }
-        var inputs = [
-            SettlementParticipantInput(
-                id: selfParticipant.id,
-                name: selfParticipant.displayName,
                 paidMinor: selfPaidMinor
             )
         ]
@@ -1974,21 +1953,10 @@ struct SettlementSplitCalculatorSheet: View {
         return inputs
     }
 
-    private var baseSplitResult: SettlementSharedExpenseResult {
-        SettlementLogic.sharedExpenseSettlement(
-            participants: baseParticipantInputs,
-            organizerID: selfParticipant?.id ?? UUID()
-        )
-    }
-
-    private var baseShareMinorByParticipantID: [UUID: Int64] {
-        Dictionary(uniqueKeysWithValues: baseSplitResult.participants.map { ($0.id, $0.shareMinor) })
-    }
-
     private var canFinalizeSplit: Bool {
         !nonSelfParticipants.isEmpty
             && allInputsProvided
-            && editingShareParticipantID == nil
+            && editingDebtSuggestionID == nil
     }
 
     private var splitResult: SettlementSharedExpenseResult {
@@ -1998,14 +1966,7 @@ struct SettlementSplitCalculatorSheet: View {
         )
     }
 
-    private var editableShareParticipants: [SettlementParticipantResult] {
-        guard let selfParticipantID = selfParticipant?.id else {
-            return splitResult.participants
-        }
-        return splitResult.participants.filter { $0.id != selfParticipantID }
-    }
-
-    private var suggestionsForSelf: [SettlementSuggestion] {
+    private var automaticSuggestionsForSelf: [SettlementSuggestion] {
         guard allInputsProvided else { return [] }
         guard let selfID = selfParticipant?.id else { return [] }
         return splitResult.suggestions.filter {
@@ -2013,8 +1974,22 @@ struct SettlementSplitCalculatorSheet: View {
         }
     }
 
-    private var totalShareDifferenceMinor: Int64 {
-        SettlementLogic.totalShareDifference(for: splitResult)
+    private var effectiveSuggestionsForSelf: [SettlementSuggestion] {
+        SettlementLogic.applyingDebtAmountOverrides(
+            to: automaticSuggestionsForSelf,
+            overridesBySuggestionID: debtAmountOverridesBySuggestionID
+        )
+    }
+
+    private var debtAmountOverridesBySuggestionID: [SettlementSuggestionID: Int64] {
+        var overrides: [SettlementSuggestionID: Int64] = [:]
+        for (suggestionID, text) in debtAmountTextsBySuggestionID {
+            let amountMinor = text.currencyInputToMinorUnits(currencyCode: currencyCode)
+            if amountMinor > 0 {
+                overrides[suggestionID] = amountMinor
+            }
+        }
+        return overrides
     }
 
     private var participantNameByID: [UUID: String] {
@@ -2039,8 +2014,8 @@ struct SettlementSplitCalculatorSheet: View {
             hasUnsavedChanges: !isFinalized
                 && (
                     paidTextsByParticipantID != dismissBaselinePaidTextsByParticipantID
-                        || shareTextsByParticipantID != dismissBaselineShareTextsByParticipantID
-                        || editingShareParticipantID != nil
+                        || debtAmountTextsBySuggestionID != dismissBaselineDebtAmountTextsBySuggestionID
+                        || editingDebtSuggestionID != nil
                 )
         )
     }
@@ -2188,11 +2163,11 @@ struct SettlementSplitCalculatorSheet: View {
         do {
             try modelContext.save()
             paidTextsByParticipantID = [:]
-            shareTextsByParticipantID = [:]
+            debtAmountTextsBySuggestionID = [:]
             dismissBaselinePaidTextsByParticipantID = [:]
-            dismissBaselineShareTextsByParticipantID = [:]
-            editingShareParticipantID = nil
-            editingShareText = ""
+            dismissBaselineDebtAmountTextsBySuggestionID = [:]
+            editingDebtSuggestionID = nil
+            editingDebtAmountText = ""
             initializePaidInputsIfNeeded()
         } catch {
             alertMessage = error.localizedDescription
@@ -2352,47 +2327,18 @@ struct SettlementSplitCalculatorSheet: View {
                 .italic()
                 .font(.system(size: 14, design: .rounded))
         } else {
-            ForEach(editableShareParticipants) { participant in
-                let baseShareMinor = baseShareMinorByParticipantID[participant.id] ?? participant.shareMinor
-                SharedExpenseParticipantShareEditRow(
-                    participant: participant,
-                    currencyCode: currencyCode,
-                    adjustmentDeltaMinor: manualShareDelta(
-                        for: participant.id,
-                        baseShareMinor: baseShareMinor
-                    ),
-                    isEditing: editingShareParticipantID == participant.id,
-                    isAnotherRowEditing: editingShareParticipantID != nil
-                        && editingShareParticipantID != participant.id,
-                    editingText: $editingShareText,
-                    onEdit: { beginEditingShare(participant) },
-                    onSave: { commitEditingShare(for: participant.id) }
-                )
-            }
-
-            if totalShareDifferenceMinor != 0 {
-                Label(
-                    L10n.transactions.settlement.totalShareDifference(
-                        formattedSignedDifference(totalShareDifferenceMinor)
-                    ),
-                    systemImage: "info.circle"
-                )
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-            }
-
-            if suggestionsForSelf.isEmpty {
+            if effectiveSuggestionsForSelf.isEmpty {
                 Text(L10n.transactions.settlement.noSettlementNeeded)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
-                    settlementSuggestionButton(for: suggestion)
+                ForEach(effectiveSuggestionsForSelf) { suggestion in
+                    settlementSuggestionRow(for: suggestion)
                 }
             }
 
-            if !shareTextsByParticipantID.isEmpty {
+            if !debtAmountTextsBySuggestionID.isEmpty {
                 Button {
-                    resetDraftSharesToAutomatic()
+                    resetDebtAmountsToAutomatic()
                 } label: {
                     Label(
                         L10n.transactions.settlement.recalculateSplit,
@@ -2441,58 +2387,53 @@ struct SettlementSplitCalculatorSheet: View {
         )
     }
 
-    private func beginEditingShare(_ participant: SettlementParticipantResult) {
-        editingShareText = String(participant.shareMinor)
-        editingShareParticipantID = participant.id
-    }
-
-    private func commitEditingShare(for participantID: UUID) {
-        let trimmed = editingShareText.trimmingCharacters(in: .whitespacesAndNewlines)
-        shareTextsByParticipantID[participantID] = trimmed.isEmpty ? "0" : editingShareText
-        editingShareParticipantID = nil
-        editingShareText = ""
-    }
-
-    private func resetDraftSharesToAutomatic() {
-        shareTextsByParticipantID = [:]
-        editingShareParticipantID = nil
-        editingShareText = ""
-    }
-
-    private func shareOverrideMinor(for participantID: UUID) -> Int64? {
-        guard let rawText = shareTextsByParticipantID[participantID] else { return nil }
-        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
-        return text.currencyInputToMinorUnits(currencyCode: currencyCode)
-    }
-
-    private func manualShareDelta(for participantID: UUID, baseShareMinor: Int64) -> Int64? {
-        SettlementLogic.manualShareDelta(
-            editedShareMinor: shareOverrideMinor(for: participantID),
-            baseShareMinor: baseShareMinor
+    private func beginEditingDebt(_ suggestion: SettlementSuggestion) {
+        editingDebtAmountText = MistiaCurrencyInputFormatting.groupedInput(
+            String(suggestion.amountMinor)
         )
+        editingDebtSuggestionID = suggestion.id
     }
 
-    private func formattedSignedDifference(_ differenceMinor: Int64) -> String {
-        let amount = abs(differenceMinor).formattedCurrency(code: currencyCode)
-        return differenceMinor > 0 ? "+\(amount)" : "-\(amount)"
-    }
-
-    @ViewBuilder
-    private func settlementSuggestionButton(for suggestion: SettlementSuggestion) -> some View {
-        Button {
-            openDebtSettlement(for: suggestion)
-        } label: {
-            SharedExpenseSuggestionActionRow(
-                suggestion: suggestion,
-                selfParticipantID: selfParticipant?.id,
-                name: name(for: counterpartyID(for: suggestion)),
-                currencyCode: currencyCode
-            )
+    private func commitEditingDebt(for suggestion: SettlementSuggestion) {
+        let amountMinor = editingDebtAmountText.currencyInputToMinorUnits(currencyCode: currencyCode)
+        guard amountMinor > 0 else {
+            alertMessage = L10n.transactions.settlement.enterAmountsGreaterThanZero
+            return
         }
-        .buttonStyle(.plain)
-        .disabled(editingShareParticipantID != nil)
-        .opacity(editingShareParticipantID == nil ? 1 : 0.45)
+
+        let automaticAmountMinor = automaticSuggestionsForSelf
+            .first(where: { $0.id == suggestion.id })?
+            .amountMinor
+        if amountMinor == automaticAmountMinor {
+            debtAmountTextsBySuggestionID.removeValue(forKey: suggestion.id)
+        } else {
+            debtAmountTextsBySuggestionID[suggestion.id] =
+                MistiaCurrencyInputFormatting.groupedInput(String(amountMinor))
+        }
+        editingDebtSuggestionID = nil
+        editingDebtAmountText = ""
+    }
+
+    private func resetDebtAmountsToAutomatic() {
+        debtAmountTextsBySuggestionID = [:]
+        editingDebtSuggestionID = nil
+        editingDebtAmountText = ""
+    }
+
+    private func settlementSuggestionRow(for suggestion: SettlementSuggestion) -> some View {
+        SharedExpenseSuggestionActionRow(
+            suggestion: suggestion,
+            selfParticipantID: selfParticipant?.id,
+            name: name(for: counterpartyID(for: suggestion)),
+            currencyCode: currencyCode,
+            isEditing: editingDebtSuggestionID == suggestion.id,
+            isAnotherRowEditing: editingDebtSuggestionID != nil
+                && editingDebtSuggestionID != suggestion.id,
+            editingText: $editingDebtAmountText,
+            onOpen: { openDebtSettlement(for: suggestion) },
+            onEdit: { beginEditingDebt(suggestion) },
+            onSave: { commitEditingDebt(for: suggestion) }
+        )
     }
 
     private func counterpartyID(for suggestion: SettlementSuggestion) -> UUID {
@@ -2506,8 +2447,8 @@ struct SettlementSplitCalculatorSheet: View {
         if dismissBaselinePaidTextsByParticipantID.isEmpty {
             dismissBaselinePaidTextsByParticipantID = paidTextsByParticipantID
         }
-        if dismissBaselineShareTextsByParticipantID.isEmpty {
-            dismissBaselineShareTextsByParticipantID = shareTextsByParticipantID
+        if dismissBaselineDebtAmountTextsBySuggestionID.isEmpty {
+            dismissBaselineDebtAmountTextsBySuggestionID = debtAmountTextsBySuggestionID
         }
     }
 
@@ -2618,12 +2559,12 @@ struct SettlementSplitCalculatorSheet: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
 
-                if suggestionsForSelf.isEmpty {
+                if effectiveSuggestionsForSelf.isEmpty {
                     Text(L10n.transactions.settlement.noSettlementNeeded)
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
+                    ForEach(effectiveSuggestionsForSelf) { suggestion in
                         HStack {
                             Text(verbatim: "\(name(for: suggestion.payerID)) → \(name(for: suggestion.receiverID))")
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -2659,8 +2600,9 @@ struct SettlementSplitCalculatorSheet: View {
         let ownerUserID = ownerUserID
         let currentSelfID = selfParticipant.id
         var principalTransactions: [LedgerTransaction] = []
+        var reconciledPrincipalIDs: Set<UUID> = []
 
-        for suggestion in suggestionsForSelf {
+        for suggestion in effectiveSuggestionsForSelf {
             let isReceivable = suggestion.receiverID == currentSelfID
             let counterpartyID = isReceivable ? suggestion.payerID : suggestion.receiverID
             let counterpartyName = name(for: counterpartyID)
@@ -2669,7 +2611,6 @@ struct SettlementSplitCalculatorSheet: View {
             let role: SettlementTransactionRole = isReceivable ? .sharedExpenseReceivable : .sharedExpensePayable
             let existingTransaction = existingPrincipalDebt(
                 groupID: group.id,
-                debtIntent: debtIntent,
                 normalizedCounterpartyKey: normalizedKey
             )
             let transaction = existingTransaction ?? LedgerTransaction(
@@ -2713,6 +2654,15 @@ struct SettlementSplitCalculatorSheet: View {
             transaction.deletedAt = nil
             transaction.isArchived = false
             principalTransactions.append(transaction)
+            reconciledPrincipalIDs.insert(transaction.id)
+        }
+
+        let stalePrincipalTransactions = existingPrincipalDebtTransactions(groupID: group.id)
+            .filter { !reconciledPrincipalIDs.contains($0.id) }
+        for transaction in stalePrincipalTransactions {
+            transaction.updatedAt = now
+            transaction.deletedAt = now
+            transaction.isArchived = true
         }
 
         let selfShareMinor = splitResult.participants.first { $0.id == currentSelfID }?.shareMinor ?? selfPaidMinor
@@ -2720,12 +2670,13 @@ struct SettlementSplitCalculatorSheet: View {
             selfShareMinor: selfShareMinor,
             modifiedAt: now
         )
-        group.expectedMinor = suggestionsForSelf.reduce(Int64(0)) { $0 + $1.amountMinor }
+        group.expectedMinor = effectiveSuggestionsForSelf.reduce(Int64(0)) { $0 + $1.amountMinor }
         group.settledMinor = 0
         group.status = principalTransactions.isEmpty ? .settled : .open
         group.isArchived = principalTransactions.isEmpty
         group.archivedAt = principalTransactions.isEmpty ? now : nil
         group.updatedAt = now
+        let transactionsToSync = principalTransactions + stalePrincipalTransactions + billReportingUpdates
 
         do {
             if let ownerUserID {
@@ -2736,7 +2687,7 @@ struct SettlementSplitCalculatorSheet: View {
                     updatedAt: now,
                     context: modelContext
                 )
-                for transaction in principalTransactions + billReportingUpdates {
+                for transaction in transactionsToSync {
                     try MistiaRecordOwnershipStore.upsert(
                         entity: .transaction,
                         recordID: transaction.id,
@@ -2748,7 +2699,7 @@ struct SettlementSplitCalculatorSheet: View {
             }
             let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
             if let actorUserID {
-                for transaction in principalTransactions + billReportingUpdates {
+                for transaction in transactionsToSync {
                     try TransactionAuditStore.touch(
                         transactionID: transaction.id,
                         actorUserID: actorUserID,
@@ -2761,7 +2712,7 @@ struct SettlementSplitCalculatorSheet: View {
             try modelContext.save()
             queueFinalization(
                 group: group,
-                transactions: principalTransactions + billReportingUpdates,
+                transactions: transactionsToSync,
                 ownerUserID: ownerUserID,
                 modifiedAt: now
             )
@@ -2800,14 +2751,22 @@ struct SettlementSplitCalculatorSheet: View {
 
     private func existingPrincipalDebt(
         groupID: UUID,
-        debtIntent: TransactionDebtIntent,
         normalizedCounterpartyKey: String?
     ) -> LedgerTransaction? {
         transactions.first {
             $0.settlementGroupID == groupID
                 && $0.transferSubtype == .debt
-                && $0.debtIntent == debtIntent
                 && ($0.normalizedCounterpartyKey ?? TransactionLogic.normalizeCounterpartyName($0.counterpartyName)) == normalizedCounterpartyKey
+                && ($0.settlementRole == .sharedExpenseReceivable || $0.settlementRole == .sharedExpensePayable)
+                && $0.deletedAt == nil
+                && !$0.isArchived
+        }
+    }
+
+    private func existingPrincipalDebtTransactions(groupID: UUID) -> [LedgerTransaction] {
+        transactions.filter {
+            $0.settlementGroupID == groupID
+                && $0.transferSubtype == .debt
                 && ($0.settlementRole == .sharedExpenseReceivable || $0.settlementRole == .sharedExpensePayable)
                 && $0.deletedAt == nil
                 && !$0.isArchived
@@ -3132,97 +3091,17 @@ private struct SharedExpenseParticipantPaidInputRow: View {
     }
 }
 
-private struct SharedExpenseParticipantShareEditRow: View {
-    let participant: SettlementParticipantResult
-    let currencyCode: String
-    let adjustmentDeltaMinor: Int64?
-    let isEditing: Bool
-    let isAnotherRowEditing: Bool
-    @Binding var editingText: String
-    let onEdit: () -> Void
-    let onSave: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(participant.name)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
-                    .layoutPriority(1)
-
-                if let adjustmentDeltaMinor {
-                    Text(L10n.transactions.settlement.manualShareAdjustmentBadge(formattedAdjustmentDelta(adjustmentDeltaMinor)))
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(adjustmentColor(for: adjustmentDeltaMinor))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background {
-                            Capsule()
-                                .fill(adjustmentColor(for: adjustmentDeltaMinor).opacity(0.12))
-                        }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if isEditing {
-                MistiaCurrencyInputField(
-                    L10n.transactions.settlement.share,
-                    text: $editingText,
-                    font: .mistiaRounded(size: 16, weight: .semibold),
-                    showsCalculatorButton: false,
-                    requestsFocus: true,
-                    selectsAllOnFocus: true
-                )
-                .multilineTextAlignment(.trailing)
-                .frame(width: 132)
-                .frame(minHeight: 36)
-            } else {
-                Text(participant.shareMinor.formattedCurrency(code: currencyCode))
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
-
-            Button(action: isEditing ? onSave : onEdit) {
-                Image(systemName: isEditing ? "checkmark" : "pencil")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                    .frame(width: 30, height: 30)
-                    .background {
-                        Circle()
-                            .fill(Color(UIColor.tertiarySystemFill))
-                    }
-            }
-            .buttonStyle(.plain)
-            .disabled(isAnotherRowEditing)
-            .opacity(isAnotherRowEditing ? 0.4 : 1)
-            .accessibilityLabel(
-                isEditing
-                    ? L10n.transactions.settlement.saveParticipantShare(participant.name)
-                    : L10n.transactions.settlement.editParticipantShare(participant.name)
-            )
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func formattedAdjustmentDelta(_ deltaMinor: Int64) -> String {
-        let amount = abs(deltaMinor).formattedCurrency(code: currencyCode)
-        return deltaMinor > 0 ? "+\(amount)" : "-\(amount)"
-    }
-
-    private func adjustmentColor(for deltaMinor: Int64) -> Color {
-        deltaMinor > 0 ? MistiaAccent.expense.color : MistiaAccent.income.color
-    }
-}
-
 private struct SharedExpenseSuggestionActionRow: View {
     let suggestion: SettlementSuggestion
     let selfParticipantID: UUID?
     let name: String
     let currencyCode: String
+    let isEditing: Bool
+    let isAnotherRowEditing: Bool
+    @Binding var editingText: String
+    let onOpen: () -> Void
+    let onEdit: () -> Void
+    let onSave: () -> Void
 
     private var isReceivable: Bool {
         suggestion.receiverID == selfParticipantID
@@ -3243,32 +3122,78 @@ private struct SharedExpenseSuggestionActionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            MistiaFinanceIconView(
-                icon: isReceivable ? TransactionDebtIntent.lend.financeIconToken : TransactionDebtIntent.borrow.financeIconToken,
-                fallbackColor: amountColor,
-                size: 36
-            )
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    MistiaFinanceIconView(
+                        icon: isReceivable ? TransactionDebtIntent.lend.financeIconToken : TransactionDebtIntent.borrow.financeIconToken,
+                        fallbackColor: amountColor,
+                        size: 36
+                    )
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(name)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(subtitle)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isEditing || isAnotherRowEditing)
+            .opacity((isEditing || isAnotherRowEditing) ? 0.55 : 1)
+
+            if isEditing {
+                HStack(spacing: 4) {
+                    Text(isReceivable ? "+" : "-")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(amountColor)
+
+                    MistiaCurrencyInputField(
+                        L10n.transactions.settlement.amount,
+                        text: $editingText,
+                        font: .mistiaRounded(size: 16, weight: .bold),
+                        showsCalculatorButton: false,
+                        requestsFocus: true,
+                        selectsAllOnFocus: true
+                    )
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 110)
+                    .frame(minHeight: 36)
+                }
+            } else {
+                Text(signedAmountText)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(amountColor)
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
             }
 
-            Spacer(minLength: 12)
-
-            Text(signedAmountText)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(amountColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+            Button(action: isEditing ? onSave : onEdit) {
+                Image(systemName: isEditing ? "checkmark" : "pencil")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                    .frame(width: 30, height: 30)
+                    .background {
+                        Circle()
+                            .fill(Color(UIColor.tertiarySystemFill))
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(isAnotherRowEditing)
+            .opacity(isAnotherRowEditing ? 0.4 : 1)
+            .accessibilityLabel(
+                isEditing
+                    ? L10n.transactions.settlement.saveDebtAmount(name)
+                    : L10n.transactions.settlement.editDebtAmount(name)
+            )
         }
         .contentShape(Rectangle())
+        .padding(.vertical, 4)
     }
 }
 
