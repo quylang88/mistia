@@ -15,6 +15,8 @@ struct MistiaCurrencyInputField: View {
     var textColor: UIColor = .label
     var placeholderColor: UIColor = .tertiaryLabel
     var showsCalculatorButton: Bool = true
+    var requestsFocus: Bool = false
+    var selectsAllOnFocus: Bool = false
 
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.multilineTextAlignment) private var multilineTextAlignment
@@ -26,7 +28,9 @@ struct MistiaCurrencyInputField: View {
         font: UIFont = .mistiaRounded(size: 17, weight: .regular),
         textColor: UIColor = .label,
         placeholderColor: UIColor = .tertiaryLabel,
-        showsCalculatorButton: Bool = true
+        showsCalculatorButton: Bool = true,
+        requestsFocus: Bool = false,
+        selectsAllOnFocus: Bool = false
     ) {
         self.placeholder = placeholder
         self._text = text
@@ -34,6 +38,8 @@ struct MistiaCurrencyInputField: View {
         self.textColor = textColor
         self.placeholderColor = placeholderColor
         self.showsCalculatorButton = showsCalculatorButton
+        self.requestsFocus = requestsFocus
+        self.selectsAllOnFocus = selectsAllOnFocus
     }
 
     var body: some View {
@@ -45,7 +51,9 @@ struct MistiaCurrencyInputField: View {
                 textColor: textColor,
                 placeholderColor: placeholderColor,
                 textAlignment: multilineTextAlignment.uiTextAlignment,
-                isEnabled: isEnabled
+                isEnabled: isEnabled,
+                requestsFocus: requestsFocus,
+                selectsAllOnFocus: selectsAllOnFocus
             )
             .frame(maxWidth: .infinity, alignment: multilineTextAlignment.frameAlignment)
 
@@ -90,6 +98,8 @@ private struct MistiaCurrencyUITextField: UIViewRepresentable {
     var placeholderColor: UIColor
     var textAlignment: NSTextAlignment
     var isEnabled: Bool
+    var requestsFocus: Bool
+    var selectsAllOnFocus: Bool
 
     init(
         _ placeholder: String,
@@ -98,7 +108,9 @@ private struct MistiaCurrencyUITextField: UIViewRepresentable {
         textColor: UIColor,
         placeholderColor: UIColor,
         textAlignment: NSTextAlignment,
-        isEnabled: Bool
+        isEnabled: Bool,
+        requestsFocus: Bool,
+        selectsAllOnFocus: Bool
     ) {
         self.placeholder = placeholder
         self._text = text
@@ -107,6 +119,8 @@ private struct MistiaCurrencyUITextField: UIViewRepresentable {
         self.placeholderColor = placeholderColor
         self.textAlignment = textAlignment
         self.isEnabled = isEnabled
+        self.requestsFocus = requestsFocus
+        self.selectsAllOnFocus = selectsAllOnFocus
     }
 
     func makeUIView(context: Context) -> UITextField {
@@ -138,6 +152,16 @@ private struct MistiaCurrencyUITextField: UIViewRepresentable {
         let grouped = MistiaCurrencyInputFormatting.groupedInput(text)
         if uiView.text != grouped {
             uiView.text = grouped
+        }
+
+        guard requestsFocus, !uiView.isFirstResponder else { return }
+
+        DispatchQueue.main.async {
+            guard requestsFocus else { return }
+            uiView.becomeFirstResponder()
+            if selectsAllOnFocus {
+                uiView.selectAll(nil)
+            }
         }
     }
 
