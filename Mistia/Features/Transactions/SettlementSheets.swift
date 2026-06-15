@@ -1877,7 +1877,6 @@ struct SettlementSplitCalculatorSheet: View {
     @State private var dismissBaselinePaidTextsByParticipantID: [UUID: String] = [:]
     @State private var dismissBaselineShareTextsByParticipantID: [UUID: String] = [:]
     @State private var alertMessage: String?
-    @State private var eventEditorTarget: SettlementEditorTarget?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
     @State private var showsResetConfirmation = false
 
@@ -2230,13 +2229,7 @@ struct SettlementSplitCalculatorSheet: View {
         .onAppear(perform: initializePaidInputsIfNeeded)
         .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .presentationBackground(Color(UIColor.systemGroupedBackground))
-        .sheet(item: $eventEditorTarget) { target in
-            SettlementEditorSheet(target: target, onEventCancelled: {
-                dismiss()
-            })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
+
         .sheet(item: $debtSettlementTarget) { target in
             DebtSettlementSheet(target: target)
                 .presentationDetents([.large])
@@ -2277,7 +2270,8 @@ struct SettlementSplitCalculatorSheet: View {
             }
 
             Button {
-                eventEditorTarget = .editSharedExpense(target.groupID)
+                onEdit(target.groupID)
+                dismiss()
             } label: {
                 Label(L10n.management.management.edit, systemImage: "pencil")
             }

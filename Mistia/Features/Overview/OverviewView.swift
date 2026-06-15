@@ -767,7 +767,15 @@ struct OverviewView: View {
         }
         .sheet(item: $preparingSettlementTarget) { target in
             SettlementSplitCalculatorSheet(target: target) { groupID in
-                settlementEditorTarget = .editSharedExpense(groupID)
+                var ownerUserID = familyContextStore.viewedMember?.userID ?? sessionStore.activeLocalProfileUserID
+                if let group = storedSettlementGroups.first(where: { $0.id == groupID }) {
+                    ownerUserID = group.organizerUserID ?? ownerUserID
+                }
+                if familyContextStore.canEditEvent(for: ownerUserID) {
+                    settlementEditorTarget = .editSharedExpense(groupID)
+                } else if let ownerUserID {
+                    presentEventPermissionPrompt(ownerUserID: ownerUserID, scope: .edit)
+                }
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
@@ -906,6 +914,61 @@ struct OverviewView: View {
             if isApproved {
                 permissionPrompt = nil
                 editorTarget = TransactionEditorTarget(transaction: transaction)
+            }
+        }
+    }
+
+    private func presentEventPermissionPrompt(ownerUserID: UUID, scope: MistiaFamilyPermissionScope) {
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .event,
+            resourceID: nil,
+            scope: scope
+        )
+        permissionPrompt = OverviewPermissionPrompt(
+            title: scope == .create
+                ? L10n.planning.planning.noCreateAccess
+                : L10n.planning.planning.noEditAccess,
+            message: scope == .create
+                ? L10n.planning.planning.youDoNotHavePermissionToCreate(L10n.shared.persistence.notification.event)
+                : L10n.planning.planning.youDoNotHavePermissionToEdit(L10n.shared.persistence.notification.event),
+            actionTitle: isPending
+                ? L10n.planning.planning.accessRequested
+                : (scope == .create ? L10n.planning.planning.requestCreateAccess : L10n.planning.planning.requestEditAccess)
+        ) {
+            Task { @MainActor in
+                if isPending {
+                    let isApproved = await familyContextStore.refreshPermissionGrant(
+                        ownerUserID: ownerUserID,
+                        resourceType: .event,
+                        resourceID: nil,
+                        scope: scope,
+                        sessionStore: sessionStore
+                    )
+                    if isApproved {
+                        permissionPrompt = nil
+                    }
+                    return
+                }
+
+                let didSend = await familyContextStore.requestPermission(
+                    resourceType: .event,
+                    resourceID: nil,
+                    ownerUserID: ownerUserID,
+                    scope: scope,
+                    resourceName: L10n.shared.persistence.notification.event,
+                    sessionStore: sessionStore
+                )
+                permissionPrompt = nil
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                infoAlert = OverviewInfoAlert(
+                    title: didSend
+                        ? L10n.overview.overview.requestSent
+                        : L10n.overview.overview.couldnTSend,
+                    message: didSend
+                        ? L10n.overview.overview.thePermissionRequestWasSentToThe
+                        : (familyContextStore.lastErrorMessage ?? L10n.overview.overview.couldnTSendTheRequestRightNow)
+                )
             }
         }
     }
