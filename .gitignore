@@ -62,12 +62,5 @@ playground.xcworkspace
 **/supabase/.temp
 **/supabase/.branches
 
-# Qwen
-.qwen/
-QWEN.md
-
-# AI input files
+# AI
 .agent/
-
-# Gemini
-GEMINI.md
