@@ -4012,8 +4012,14 @@ nonisolated enum L10n {
             static func eventTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.eventTitle", vi: "Sự kiện", en: "Event", ja: "イベント", language: language) }
             static var history: String { L10n.tr("transactions.settlement.history", vi: "Lịch sử", en: "History", ja: "履歴") }
             static func history(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.history", vi: "Lịch sử", en: "History", ja: "履歴", language: language) }
-            static var manualShareTotalExceedsTotalPaid: String { L10n.tr("transactions.settlement.manualShareTotalExceedsTotalPaid", vi: "Tổng phần được chia không được lớn hơn tổng đã trả.", en: "The total shared amount cannot be greater than the total paid.", ja: "負担分の合計は支払い合計を超えられません。") }
-            static func manualShareTotalExceedsTotalPaid(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.manualShareTotalExceedsTotalPaid", vi: "Tổng phần được chia không được lớn hơn tổng đã trả.", en: "The total shared amount cannot be greater than the total paid.", ja: "負担分の合計は支払い合計を超えられません。", language: language) }
+            static func manualShareAdjustmentBadge(_ value: String) -> String {
+                L10n.format("transactions.settlement.manualShareAdjustmentBadge", vi: "Đã sửa %@", en: "Edited %@", ja: "%@ 修正", value)
+            }
+            static func manualShareAdjustmentBadge(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("transactions.settlement.manualShareAdjustmentBadge", vi: "Đã sửa %@", en: "Edited %@", ja: "%@ 修正", language: language, value)
+            }
+            static var manualShareTotalExceedsTotalPaid: String { L10n.tr("transactions.settlement.manualShareTotalExceedsTotalPaid", vi: "Tổng phần chia không được lớn hơn tổng đã trả.", en: "The total shared amount cannot be greater than the total paid.", ja: "負担分の合計は支払い合計を超えられません。") }
+            static func manualShareTotalExceedsTotalPaid(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.manualShareTotalExceedsTotalPaid", vi: "Tổng phần chia không được lớn hơn tổng đã trả.", en: "The total shared amount cannot be greater than the total paid.", ja: "負担分の合計は支払い合計を超えられません。", language: language) }
             static var noBillsYet: String { L10n.tr("transactions.settlement.noBillsYet", vi: "Chưa có chi tiêu", en: "No expenses yet", ja: "支出はまだありません") }
             static func noBillsYet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.noBillsYet", vi: "Chưa có chi tiêu", en: "No expenses yet", ja: "支出はまだありません", language: language) }
             static var noParticipantsYet: String { L10n.tr("transactions.settlement.noParticipantsYet", vi: "Chưa có người tham gia", en: "No participants yet", ja: "参加者なし") }
@@ -4072,8 +4078,6 @@ nonisolated enum L10n {
             static func settlementSuggestions(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.settlementSuggestions", vi: "Gợi ý thanh toán", en: "Settlement suggestions", ja: "精算候補", language: language) }
             static var share: String { L10n.tr("transactions.settlement.share", vi: "Phần chia", en: "Share", ja: "負担分") }
             static func share(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.share", vi: "Phần chia", en: "Share", ja: "負担分", language: language) }
-            static var shareAmount: String { L10n.tr("transactions.settlement.shareAmount", vi: "Được chia", en: "Share", ja: "負担分") }
-            static func shareAmount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.shareAmount", vi: "Được chia", en: "Share", ja: "負担分", language: language) }
             static var sharedExpensePaymentTitle: String { L10n.tr("transactions.settlement.sharedExpensePaymentTitle", vi: "Trả phần chia", en: "Split expense payment", ja: "割り勘支払い") }
             static func sharedExpensePaymentTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.sharedExpensePaymentTitle", vi: "Trả phần chia", en: "Split expense payment", ja: "割り勘支払い", language: language) }
             static var sharedExpenseQuickCreateSubtitle: String { L10n.tr("transactions.settlement.sharedExpenseQuickCreateSubtitle", vi: "Nhập ai đã trả bao nhiêu để tính phần cần thu/trả.", en: "Enter who paid what and calculate what to collect or pay.", ja: "誰がいくら払ったかを入力して、回収・支払い額を計算します。") }

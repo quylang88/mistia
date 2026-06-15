@@ -1954,6 +1954,36 @@ struct SettlementSplitCalculatorSheet: View {
         return inputs
     }
 
+    private var baseParticipantInputs: [SettlementParticipantInput] {
+        guard let selfParticipant else { return [] }
+        var inputs = [
+            SettlementParticipantInput(
+                id: selfParticipant.id,
+                name: selfParticipant.displayName,
+                paidMinor: selfPaidMinor
+            )
+        ]
+        inputs += nonSelfParticipants.map {
+            SettlementParticipantInput(
+                id: $0.id,
+                name: $0.displayName,
+                paidMinor: paidTextsByParticipantID[$0.id, default: ""].currencyInputToMinorUnits(currencyCode: currencyCode)
+            )
+        }
+        return inputs
+    }
+
+    private var baseSplitResult: SettlementSharedExpenseResult {
+        SettlementLogic.sharedExpenseSettlement(
+            participants: baseParticipantInputs,
+            organizerID: selfParticipant?.id ?? UUID()
+        )
+    }
+
+    private var baseShareMinorByParticipantID: [UUID: Int64] {
+        Dictionary(uniqueKeysWithValues: baseSplitResult.participants.map { ($0.id, $0.shareMinor) })
+    }
+
     private var shareOverrideValidation: SettlementShareOverrideValidation {
         guard allInputsProvided else { return .valid }
         return SettlementLogic.shareOverrideValidation(for: participantInputs)
@@ -2295,21 +2325,19 @@ struct SettlementSplitCalculatorSheet: View {
                 .listRowBackground(Color.clear)
             } else {
                 if let selfParticipant {
-                    SharedExpenseParticipantSplitInputRow(
+                    SharedExpenseParticipantPaidInputRow(
                         participantName: selfParticipant.displayName,
                         currencyCode: currencyCode,
                         lockedPaidMinor: selfPaidMinor,
-                        paidText: .constant(""),
-                        shareText: shareTextBinding(for: selfParticipant)
+                        paidText: .constant("")
                     )
                 }
                 ForEach(nonSelfParticipants) { participant in
-                    SharedExpenseParticipantSplitInputRow(
+                    SharedExpenseParticipantPaidInputRow(
                         participantName: participant.displayName,
                         currencyCode: currencyCode,
                         lockedPaidMinor: nil,
-                        paidText: paidTextBinding(for: participant),
-                        shareText: shareTextBinding(for: participant)
+                        paidText: paidTextBinding(for: participant)
                     )
                 }
             }
@@ -2329,16 +2357,34 @@ struct SettlementSplitCalculatorSheet: View {
                 .foregroundStyle(.secondary)
                 .italic()
                 .font(.system(size: 14, design: .rounded))
-        } else if shareOverrideValidation != .valid {
-            Text(shareOverrideValidationMessage(shareOverrideValidation))
-                .foregroundStyle(MistiaAccent.expense.color)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-        } else if suggestionsForSelf.isEmpty {
-            Text(L10n.transactions.settlement.noSettlementNeeded)
-                .foregroundStyle(.secondary)
         } else {
-            ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
-                settlementSuggestionButton(for: suggestion)
+            ForEach(splitResult.participants) { participant in
+                let baseShareMinor = baseShareMinorByParticipantID[participant.id] ?? participant.shareMinor
+                SharedExpenseParticipantShareEditRow(
+                    participant: participant,
+                    currencyCode: currencyCode,
+                    shareText: shareEditTextBinding(
+                        for: participant.id,
+                        currentShareMinor: participant.shareMinor
+                    ),
+                    adjustmentDeltaMinor: manualShareDelta(
+                        for: participant.id,
+                        baseShareMinor: baseShareMinor
+                    )
+                )
+            }
+
+            if shareOverrideValidation != .valid {
+                Text(shareOverrideValidationMessage(shareOverrideValidation))
+                    .foregroundStyle(MistiaAccent.expense.color)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+            } else if suggestionsForSelf.isEmpty {
+                Text(L10n.transactions.settlement.noSettlementNeeded)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
+                    settlementSuggestionButton(for: suggestion)
+                }
             }
         }
     }
@@ -2381,17 +2427,28 @@ struct SettlementSplitCalculatorSheet: View {
         )
     }
 
-    private func shareTextBinding(for participant: SettlementParticipant) -> Binding<String> {
+    private func shareEditTextBinding(
+        for participantID: UUID,
+        currentShareMinor: Int64
+    ) -> Binding<String> {
         Binding(
-            get: { shareTextsByParticipantID[participant.id, default: ""] },
-            set: { shareTextsByParticipantID[participant.id] = $0 }
+            get: { shareTextsByParticipantID[participantID] ?? String(currentShareMinor) },
+            set: { shareTextsByParticipantID[participantID] = $0 }
         )
     }
 
     private func shareOverrideMinor(for participantID: UUID) -> Int64? {
-        let text = shareTextsByParticipantID[participantID, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let rawText = shareTextsByParticipantID[participantID] else { return nil }
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         return text.currencyInputToMinorUnits(currencyCode: currencyCode)
+    }
+
+    private func manualShareDelta(for participantID: UUID, baseShareMinor: Int64) -> Int64? {
+        SettlementLogic.manualShareDelta(
+            editedShareMinor: shareOverrideMinor(for: participantID),
+            baseShareMinor: baseShareMinor
+        )
     }
 
     private func shareOverrideValidationMessage(_ validation: SettlementShareOverrideValidation) -> String {
@@ -2425,14 +2482,8 @@ struct SettlementSplitCalculatorSheet: View {
     }
 
     private func initializePaidInputsIfNeeded() {
-        if let selfParticipant, shareTextsByParticipantID[selfParticipant.id] == nil {
-            shareTextsByParticipantID[selfParticipant.id] = ""
-        }
         for participant in nonSelfParticipants where paidTextsByParticipantID[participant.id] == nil {
             paidTextsByParticipantID[participant.id] = ""
-        }
-        for participant in nonSelfParticipants where shareTextsByParticipantID[participant.id] == nil {
-            shareTextsByParticipantID[participant.id] = ""
         }
         if dismissBaselinePaidTextsByParticipantID.isEmpty {
             dismissBaselinePaidTextsByParticipantID = paidTextsByParticipantID
@@ -3044,12 +3095,11 @@ private struct SharedExpenseParticipantResultRow: View {
     }
 }
 
-private struct SharedExpenseParticipantSplitInputRow: View {
+private struct SharedExpenseParticipantPaidInputRow: View {
     let participantName: String
     let currencyCode: String
     let lockedPaidMinor: Int64?
     @Binding var paidText: String
-    @Binding var shareText: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -3057,39 +3107,96 @@ private struct SharedExpenseParticipantSplitInputRow: View {
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .lineLimit(1)
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L10n.transactions.settlement.paidAmount)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                if let lockedPaidMinor {
+                    Text(lockedPaidMinor.formattedCurrency(code: currencyCode))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                } else {
+                    MistiaCurrencyInputField(
+                        L10n.transactions.settlement.paidAmount,
+                        text: $paidText,
+                        font: .mistiaRounded(size: 16, weight: .semibold)
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct SharedExpenseParticipantShareEditRow: View {
+    let participant: SettlementParticipantResult
+    let currencyCode: String
+    @Binding var shareText: String
+    let adjustmentDeltaMinor: Int64?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(participant.name)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                if let adjustmentDeltaMinor {
+                    Text(L10n.transactions.settlement.manualShareAdjustmentBadge(formattedAdjustmentDelta(adjustmentDeltaMinor)))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(adjustmentColor(for: adjustmentDeltaMinor))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background {
+                            Capsule()
+                                .fill(adjustmentColor(for: adjustmentDeltaMinor).opacity(0.12))
+                        }
+                }
+
+                Spacer(minLength: 8)
+
+                Text(netText)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(netColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.transactions.settlement.paidAmount)
+                    Text(L10n.transactions.settlement.paid)
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
 
-                    if let lockedPaidMinor {
-                        Text(lockedPaidMinor.formattedCurrency(code: currencyCode))
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                    } else {
-                        MistiaCurrencyInputField(
-                            L10n.transactions.settlement.paidAmount,
-                            text: $paidText,
-                            font: .mistiaRounded(size: 16, weight: .semibold)
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                    }
+                    Text(participant.paidMinor.formattedCurrency(code: currencyCode))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.transactions.settlement.shareAmount)
+                    Text(L10n.transactions.settlement.share)
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
 
                     MistiaCurrencyInputField(
-                        L10n.transactions.settlement.shareAmount,
+                        L10n.transactions.settlement.share,
                         text: $shareText,
                         font: .mistiaRounded(size: 16, weight: .semibold)
                     )
@@ -3100,6 +3207,35 @@ private struct SharedExpenseParticipantSplitInputRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    private var netText: String {
+        if participant.netMinor > 0 {
+            return "+\(participant.netMinor.formattedCurrency(code: currencyCode))"
+        }
+        if participant.netMinor < 0 {
+            return "-\(abs(participant.netMinor).formattedCurrency(code: currencyCode))"
+        }
+        return participant.netMinor.formattedCurrency(code: currencyCode)
+    }
+
+    private var netColor: Color {
+        if participant.netMinor > 0 {
+            return MistiaAccent.income.color
+        }
+        if participant.netMinor < 0 {
+            return MistiaAccent.expense.color
+        }
+        return .secondary
+    }
+
+    private func formattedAdjustmentDelta(_ deltaMinor: Int64) -> String {
+        let amount = abs(deltaMinor).formattedCurrency(code: currencyCode)
+        return deltaMinor > 0 ? "+\(amount)" : "-\(amount)"
+    }
+
+    private func adjustmentColor(for deltaMinor: Int64) -> Color {
+        deltaMinor > 0 ? MistiaAccent.expense.color : MistiaAccent.income.color
     }
 }
 

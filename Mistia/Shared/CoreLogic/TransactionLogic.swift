@@ -937,6 +937,16 @@ nonisolated enum SettlementLogic {
         return .valid
     }
 
+    static func manualShareDelta(
+        editedShareMinor: Int64?,
+        baseShareMinor: Int64
+    ) -> Int64? {
+        guard let editedShareMinor else { return nil }
+
+        let delta = max(editedShareMinor, 0) - max(baseShareMinor, 0)
+        return delta == 0 ? nil : delta
+    }
+
     private static func settlementSuggestions(
         from participants: [SettlementParticipantResult]
     ) -> [SettlementSuggestion] {

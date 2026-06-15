@@ -238,6 +238,25 @@ final class TransactionLogicTests: XCTestCase {
         )
     }
 
+    func testManualShareDeltaReportsIncreaseFromBaseShare() {
+        XCTAssertEqual(
+            SettlementLogic.manualShareDelta(editedShareMinor: 3_500, baseShareMinor: 2_000),
+            1_500
+        )
+    }
+
+    func testManualShareDeltaReportsDecreaseFromBaseShare() {
+        XCTAssertEqual(
+            SettlementLogic.manualShareDelta(editedShareMinor: 1_500, baseShareMinor: 2_000),
+            -500
+        )
+    }
+
+    func testManualShareDeltaIgnoresUneditedOrUnchangedShare() {
+        XCTAssertNil(SettlementLogic.manualShareDelta(editedShareMinor: nil, baseShareMinor: 2_000))
+        XCTAssertNil(SettlementLogic.manualShareDelta(editedShareMinor: 2_000, baseShareMinor: 2_000))
+    }
+
     func testCreditCardStatementKeepsDebtLendingChargeAfterCollectionToCashWallet() throws {
         let calendar = Calendar(identifier: .gregorian)
         let cardWalletID = UUID()
