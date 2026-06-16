@@ -1295,6 +1295,7 @@ struct SettlementEditorSheet: View {
         group.updatedAt = now
 
         do {
+            let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
             if let ownerUserID {
                 try MistiaRecordOwnershipStore.upsert(
                     entity: .transaction,
@@ -1307,6 +1308,15 @@ struct SettlementEditorSheet: View {
                     entity: .settlementGroup,
                     recordID: group.id,
                     ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            if let actorUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: bill.id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
                     updatedAt: now,
                     context: modelContext
                 )
