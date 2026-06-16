@@ -205,6 +205,11 @@ private nonisolated struct SyncRemoteSystemCategoryKey: Hashable {
 
 @MainActor
 final class SyncCoordinator {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Mistia",
+        category: "SyncCoordinator"
+    )
+
     private let modelContainer: ModelContainer
     private let persistenceWorker: MistiaSyncPersistenceWorker
     private let remoteStore: MistiaRemoteStore
@@ -1594,7 +1599,10 @@ final class SyncCoordinator {
         do {
             try await remoteStore.createFamilyActivityNotification(event, session: session)
         } catch {
-            throw error
+            if error is CancellationError {
+                throw error
+            }
+            Self.logger.warning("Family activity notification sync skipped: \(String(describing: error), privacy: .public)")
         }
     }
 

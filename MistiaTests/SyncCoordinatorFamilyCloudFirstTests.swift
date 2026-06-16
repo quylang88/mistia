@@ -263,6 +263,62 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertFalse(outbox.contains(entity: .transaction, recordID: transactionID))
     }
 
+    func testFamilyCloudFirstPushKeepsFinanceSyncedWhenActivityNotificationIsForbidden() async throws {
+        let viewerUserID = UUID()
+        let memberUserID = UUID()
+        let walletID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let wallet = LedgerWallet(
+            id: walletID,
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759",
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            remoteVersion: 0
+        )
+        context.insert(wallet)
+        context.insert(OwnedRecordScope(entity: .wallet, recordID: walletID, ownerUserID: memberUserID, updatedAt: updatedAt))
+        try context.save()
+
+        let remoteStore = FamilyConflictRemoteStore()
+        remoteStore.familyNotificationError = SupabaseServiceError.serverMessage(
+            "[POST create_family_activity_notification] HTTP 403: forbidden"
+        )
+        let outbox = MistiaSyncOutbox(
+            defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+            key: "family-notification-forbidden"
+        )
+        let coordinator = SyncCoordinator(
+            modelContainer: container,
+            remoteStore: remoteStore,
+            outbox: outbox,
+            deviceID: UUID()
+        )
+        let mutation = MistiaSyncMutation(
+            entity: .wallet,
+            recordID: walletID,
+            subjectUserID: memberUserID,
+            kind: .upsert,
+            modifiedAt: updatedAt,
+            baseVersion: 0
+        )
+        coordinator.queue(mutation)
+
+        let pushed = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
+            [mutation],
+            session: makeSession(userID: viewerUserID)
+        )
+
+        XCTAssertTrue(pushed)
+        XCTAssertEqual(remoteStore.createdRecords.count, 1)
+        XCTAssertEqual(remoteStore.familyNotificationEvents.count, 1)
+        XCTAssertFalse(outbox.contains(entity: .wallet, recordID: walletID))
+    }
+
     private func remoteWallet(
         id: UUID,
         userID: UUID,
@@ -374,6 +430,7 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
     var fetchedEntities: [MistiaSyncEntity] = []
     var createdRecords: [MistiaSyncUploadRecord] = []
     var familyNotificationEvents: [RemoteFamilyActivityNotificationEvent] = []
+    var familyNotificationError: Error?
 
     init(
         snapshot: MistiaRemoteSnapshot = MistiaRemoteSnapshot(
@@ -456,5 +513,8 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
         session: SupabaseAuthSession
     ) async throws {
         familyNotificationEvents.append(event)
+        if let familyNotificationError {
+            throw familyNotificationError
+        }
     }
 }

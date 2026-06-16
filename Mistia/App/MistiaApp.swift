@@ -60,6 +60,10 @@ struct MistiaApp: App {
                     }
                     sessionStore.setPostSyncRefreshHandler { [weak store, sessionStore] trigger in
                         guard let store else { return }
+                        if trigger == .automaticLoop {
+                            await store.refreshNotifications(sessionStore: sessionStore)
+                            return
+                        }
                         guard trigger == .manual || trigger == .backgroundRefresh || trigger == .initial else {
                             return
                         }

@@ -616,7 +616,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertNil(familyStore.lastErrorMessage)
     }
 
-    func testQueuedLocalMutationWaitsForAutomaticCadenceInsteadOfImmediateSync() async throws {
+    func testQueuedLocalMutationRunsAutomaticSyncWithoutWaitingForCadence() async throws {
         let session = makeSession()
         let container = try storeTestContainer()
         let syncRemoteStore = SessionSyncRemoteStoreSpy()
@@ -642,16 +642,28 @@ final class SessionStoreOfflineTests: XCTestCase {
         store.requiresInitialSync = false
         store.lastSyncAt = .now
         store.setAutoSyncEnabled(true)
+        let wallet = LedgerWallet(
+            name: "Cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
 
         store.recordUpsert(
-            entity: .transaction,
-            recordID: UUID(),
-            modifiedAt: .now,
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
             subjectUserIDOverride: session.user.id
         )
-        try? await Task.sleep(for: .seconds(1))
 
-        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+        await waitUntil(
+            "queued local mutation runs automatic sync",
+            timeout: .seconds(8)
+        ) {
+            syncRemoteStore.createCallCount > 0
+        }
     }
 
     func testFamilyOwnerMutationPushesImmediatelyWithoutWaitingForAutoSyncCadence() async throws {
@@ -828,10 +840,11 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [Set([memberUserID])])
     }
 
-    func testForegroundActivationDoesNotRunAutomaticSyncWhenLastSyncIsOverdue() async throws {
+    func testForegroundActivationDoesNotRunAutomaticSyncWhenNoLocalWorkIsQueued() async throws {
         let session = makeSession()
         let container = try storeTestContainer()
         let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let accountDeviceStore = AccountDeviceRegistrySpy()
         let store = try makeSessionStore(
             authService: SessionAuthServiceSpy(
                 persistedSession: session,
@@ -847,7 +860,8 @@ final class SessionStoreOfflineTests: XCTestCase {
                     defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
                     key: "foreground-catch-up"
                 )
-            )
+            ),
+            accountDeviceStore: accountDeviceStore
         )
 
         await store.bootstrapIfNeeded()

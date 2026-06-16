@@ -566,12 +566,10 @@ final class SessionStore {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.checkForRemoteAccountDeviceSignOutIfNeeded()
-            
-            guard self.isReadyForAutomaticSync else { return }
-            if let lastSync = self.lastSyncAt, Date().timeIntervalSince(lastSync) < 30 {
-                return
+
+            if self.pendingQueuedAutoSync || self.hasQueuedOwnMutations() {
+                self.scheduleQueuedSyncIfAllowed()
             }
-            _ = await self.syncNow(isManual: false)
         }
     }
 
@@ -1168,8 +1166,8 @@ final class SessionStore {
             reconnectValidationTask = Task { [weak self] in
                 guard let self else { return }
                 await self.revalidateRemoteSessionAfterReconnect()
-                if self.isReadyForAutomaticSync {
-                    _ = await self.syncNow(isManual: false)
+                if self.pendingQueuedAutoSync || self.hasQueuedOwnMutations() {
+                    self.scheduleQueuedSyncIfAllowed()
                 }
             }
         }
