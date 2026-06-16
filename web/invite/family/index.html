@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mistia Family Invite</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: Canvas;
+      color: CanvasText;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(100%, 420px);
+      display: grid;
+      gap: 18px;
+      text-align: center;
+    }
+
+    .mark {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 6px;
+      border-radius: 24px;
+      display: grid;
+      place-items: center;
+      background: #6d3bc2;
+      color: white;
+      font-size: 34px;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: color-mix(in srgb, CanvasText 68%, transparent);
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    a.button {
+      display: block;
+      text-decoration: none;
+      color: white;
+      background: #6d3bc2;
+      border-radius: 14px;
+      padding: 14px 18px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .hint {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">M</div>
+    <h1>Bạn đã được mời tham gia một gia đình trên Mistia.</h1>
+    <p>Mở Mistia để xem chi tiết lời mời và quyết định có tham gia hay không.</p>
+    <a id="openAppButton" class="button" href="#">Mở trong Mistia</a>
+    <p class="hint">Nếu bạn chưa cài Mistia, hãy cài app rồi quay lại link này.</p>
+  </main>
+
+  <script>
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const token = parts[0] === "invite" && parts[1] === "family" ? parts[2] : "";
+    const appURL = token ? `mistia://family-invite/${encodeURIComponent(token)}` : "mistia://family-invite";
+    const button = document.getElementById("openAppButton");
+
+    button.href = appURL;
+    button.addEventListener("click", () => {
+      window.location.href = appURL;
+    });
+
+    if (token) {
+      setTimeout(() => {
+        window.location.href = appURL;
+      }, 300);
+    }
+  </script>
+</body>
+</html>

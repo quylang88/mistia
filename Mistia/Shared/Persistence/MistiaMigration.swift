@@ -10,138 +10,19 @@ enum MistiaSchemaV1: VersionedSchema {
         [
             LedgerWallet.self,
             CreditCardProfile.self,
-            TransactionCategory.self
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self
         ]
-    }
-
-    @Model
-    final class LedgerWallet {
-        @Attribute(.unique) var id: UUID
-        var name: String
-        var kindRawValue: String
-        var iconSymbolName: String
-        var iconColorHex: String
-        var currencyCode: String
-        var openingBalanceMinor: Int64
-        var institutionDisplayName: String?
-        var institutionPresetKey: String?
-        var sortOrder: Int
-        var isArchived: Bool
-        var createdAt: Date
-        var updatedAt: Date
-        var creditCardProfile: CreditCardProfile?
-
-        init(
-            id: UUID = UUID(),
-            name: String,
-            kindRawValue: String,
-            iconSymbolName: String,
-            iconColorHex: String,
-            currencyCode: String = "JPY",
-            openingBalanceMinor: Int64 = 0,
-            institutionDisplayName: String? = nil,
-            institutionPresetKey: String? = nil,
-            sortOrder: Int = 0,
-            isArchived: Bool = false,
-            createdAt: Date = .now,
-            updatedAt: Date = .now
-        ) {
-            self.id = id
-            self.name = name
-            self.kindRawValue = kindRawValue
-            self.iconSymbolName = iconSymbolName
-            self.iconColorHex = iconColorHex
-            self.currencyCode = currencyCode
-            self.openingBalanceMinor = openingBalanceMinor
-            self.institutionDisplayName = institutionDisplayName
-            self.institutionPresetKey = institutionPresetKey
-            self.sortOrder = sortOrder
-            self.isArchived = isArchived
-            self.createdAt = createdAt
-            self.updatedAt = updatedAt
-        }
-    }
-
-    @Model
-    final class CreditCardProfile {
-        @Attribute(.unique) var id: UUID
-        var issuerName: String
-        var networkRawValue: String
-        var last4: String
-        var creditLimitMinor: Int64
-        var statementClosingDay: Int
-        var paymentDueDay: Int
-        var notes: String?
-        var createdAt: Date
-        var updatedAt: Date
-        var wallet: LedgerWallet?
-        var paymentSourceWallet: LedgerWallet?
-
-        init(
-            id: UUID = UUID(),
-            issuerName: String = "",
-            networkRawValue: String = CreditCardNetwork.visa.rawValue,
-            last4: String = "",
-            creditLimitMinor: Int64 = 0,
-            statementClosingDay: Int = 25,
-            paymentDueDay: Int = 10,
-            notes: String? = nil,
-            createdAt: Date = .now,
-            updatedAt: Date = .now,
-            wallet: LedgerWallet? = nil,
-            paymentSourceWallet: LedgerWallet? = nil
-        ) {
-            self.id = id
-            self.issuerName = issuerName
-            self.networkRawValue = networkRawValue
-            self.last4 = last4
-            self.creditLimitMinor = creditLimitMinor
-            self.statementClosingDay = statementClosingDay
-            self.paymentDueDay = paymentDueDay
-            self.notes = notes
-            self.createdAt = createdAt
-            self.updatedAt = updatedAt
-            self.wallet = wallet
-            self.paymentSourceWallet = paymentSourceWallet
-        }
-    }
-
-    @Model
-    final class TransactionCategory {
-        @Attribute(.unique) var id: UUID
-        var name: String
-        var kindRawValue: String
-        var iconSymbolName: String
-        var iconColorHex: String
-        var isSystem: Bool
-        var sortOrder: Int
-        var isArchived: Bool
-        var createdAt: Date
-        var updatedAt: Date
-
-        init(
-            id: UUID = UUID(),
-            name: String,
-            kindRawValue: String,
-            iconSymbolName: String,
-            iconColorHex: String,
-            isSystem: Bool = false,
-            sortOrder: Int = 0,
-            isArchived: Bool = false,
-            createdAt: Date = .now,
-            updatedAt: Date = .now
-        ) {
-            self.id = id
-            self.name = name
-            self.kindRawValue = kindRawValue
-            self.iconSymbolName = iconSymbolName
-            self.iconColorHex = iconColorHex
-            self.isSystem = isSystem
-            self.sortOrder = sortOrder
-            self.isArchived = isArchived
-            self.createdAt = createdAt
-            self.updatedAt = updatedAt
-        }
     }
 }
 
@@ -155,7 +36,18 @@ enum MistiaSchemaV2: VersionedSchema {
             LedgerWallet.self,
             CreditCardProfile.self,
             TransactionCategory.self,
-            LedgerTransaction.self
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
         ]
     }
 }
@@ -175,20 +67,150 @@ enum MistiaSchemaV3: VersionedSchema {
             SavingsGoal.self,
             RecurringBillPlan.self,
             InstallmentPlan.self,
-            DueOccurrenceRecord.self
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
+        ]
+    }
+}
+
+enum MistiaSchemaV4: VersionedSchema {
+    typealias LedgerWallet = MistiaSchemaV4Models.LedgerWallet
+    typealias CreditCardProfile = MistiaSchemaV4Models.CreditCardProfile
+    typealias TransactionCategory = MistiaSchemaV4Models.TransactionCategory
+    typealias LedgerTransaction = MistiaSchemaV4Models.LedgerTransaction
+    typealias TransactionReceiptImage = MistiaSchemaV4Models.TransactionReceiptImage
+    typealias BudgetPlan = MistiaSchemaV4Models.BudgetPlan
+    typealias SavingsGoal = MistiaSchemaV4Models.SavingsGoal
+    typealias RecurringBillPlan = MistiaSchemaV4Models.RecurringBillPlan
+    typealias InstallmentPlan = MistiaSchemaV4Models.InstallmentPlan
+    typealias DueOccurrenceRecord = MistiaSchemaV4Models.DueOccurrenceRecord
+    typealias AppNotificationRecord = MistiaSchemaV4Models.AppNotificationRecord
+    typealias SyncConflict = MistiaSchemaV4Models.SyncConflict
+    typealias UserAccountProfile = MistiaSchemaV4Models.UserAccountProfile
+    typealias OwnedRecordScope = MistiaSchemaV4Models.OwnedRecordScope
+    typealias TransactionAuditRecord = MistiaSchemaV4Models.TransactionAuditRecord
+
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(4, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
+        ]
+    }
+}
+
+enum MistiaSchemaV5: VersionedSchema {
+    typealias LedgerTransaction = MistiaSchemaV5Models.LedgerTransaction
+
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(5, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
+        ]
+    }
+}
+
+enum MistiaSchemaV6: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(6, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            SettlementGroup.self,
+            SettlementParticipant.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
         ]
     }
 }
 
 enum MistiaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [MistiaSchemaV1.self, MistiaSchemaV2.self, MistiaSchemaV3.self]
+        [
+            MistiaSchemaV4.self,
+            MistiaSchemaV5.self,
+            MistiaSchemaV6.self
+        ]
     }
 
     static var stages: [MigrationStage] {
         [
-            .lightweight(fromVersion: MistiaSchemaV1.self, toVersion: MistiaSchemaV2.self),
-            .lightweight(fromVersion: MistiaSchemaV2.self, toVersion: MistiaSchemaV3.self)
+            MigrationStage.custom(
+                fromVersion: MistiaSchemaV4.self,
+                toVersion: MistiaSchemaV5.self,
+                willMigrate: nil,
+                didMigrate: { context in
+                    let descriptor = FetchDescriptor<RecurringBillPlan>()
+                    let bills = try context.fetch(descriptor)
+                    var didUpdate = false
+
+                    for bill in bills where bill.scheduleKindRawValue == recurringBillPausedScheduleKindRawValue {
+                        bill.isPaused = true
+                        bill.pausedAt = bill.paymentStartDate
+                        bill.resumeStartMonth = bill.autoPayDate
+                        bill.scheduleKindRawValue = PlanningBillScheduleKind.recurring.rawValue
+                        bill.paymentStartDate = nil
+                        bill.autoPayDate = nil
+                        didUpdate = true
+                    }
+
+                    if didUpdate {
+                        try context.save()
+                    }
+                }
+            )
         ]
     }
 }

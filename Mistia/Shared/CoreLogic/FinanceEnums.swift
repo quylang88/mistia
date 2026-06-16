@@ -1,36 +1,110 @@
 import Foundation
 
+nonisolated enum MistiaFinanceIconGroup: String, CaseIterable, Identifiable, Codable {
+    case wallet
+    case food
+    case home
+    case family
+    case mobility
+    case personal
+    case health
+    case leisure
+    case work
+    case finance
+    case income
+    case planning
+    case generic
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wallet:
+            L10n.shared.corelogic.financeenums.wallets
+        case .food:
+            L10n.shared.corelogic.financeenums.food
+        case .home:
+            L10n.shared.corelogic.financeenums.home
+        case .family:
+            L10n.shared.corelogic.financeenums.family
+        case .mobility:
+            L10n.shared.corelogic.financeenums.mobility
+        case .personal:
+            L10n.shared.corelogic.financeenums.personal
+        case .health:
+            L10n.shared.corelogic.financeenums.health
+        case .leisure:
+            L10n.shared.corelogic.financeenums.leisure
+        case .work:
+            L10n.shared.corelogic.financeenums.work
+        case .finance:
+            L10n.shared.corelogic.financeenums.finance
+        case .income:
+            L10n.shared.corelogic.financeenums.income
+        case .planning:
+            L10n.shared.corelogic.financeenums.planning
+        case .generic:
+            L10n.shared.corelogic.financeenums.other2
+        }
+    }
+}
+
 nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     case cash
     case payPay
     case bank
     case creditCard
+    case eWallet
+    case prepaid
+    case investment
+    case crypto
+    case other
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .cash:
-            mistiaLocalized(vi: "Tiền mặt", en: "Cash", ja: "現金")
+            L10n.shared.corelogic.financeenums.cash
         case .payPay:
             "PayPay"
         case .bank:
-            mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")
+            L10n.shared.corelogic.financeenums.bank
         case .creditCard:
-            mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")
+            L10n.shared.corelogic.financeenums.creditCard
+        case .eWallet:
+            L10n.shared.corelogic.financeenums.eWalletBarcode
+        case .prepaid:
+            L10n.shared.corelogic.financeenums.prepaidICCard
+        case .investment:
+            L10n.shared.corelogic.financeenums.investmentStocks
+        case .crypto:
+            L10n.shared.corelogic.financeenums.cryptoDigitalAssets
+        case .other:
+            L10n.shared.corelogic.financeenums.otherWallet
         }
     }
 
     var defaultIconSymbolName: String {
         switch self {
         case .cash:
-            "banknote.fill"
+            "mistia.wallet.cash"
         case .payPay:
-            "wallet.pass.fill"
+            "mistia.wallet.paypay"
         case .bank:
-            "building.columns.fill"
+            "mistia.wallet.bank"
         case .creditCard:
-            "creditcard.fill"
+            "mistia.wallet.credit_card"
+        case .eWallet:
+            "mistia.wallet.e_wallet"
+        case .prepaid:
+            "mistia.wallet.prepaid"
+        case .investment:
+            "mistia.wallet.investment"
+        case .crypto:
+            "mistia.wallet.crypto"
+        case .other:
+            "mistia.wallet.other"
         }
     }
 
@@ -43,38 +117,68 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
         case .bank:
             "#5B7BFF"
         case .creditCard:
+            "#7C85A3"
+        case .eWallet:
+            "#F26A5A"
+        case .prepaid:
+            "#FFB347"
+        case .investment:
+            "#9A67FF"
+        case .crypto:
+            "#F59B3F"
+        case .other:
             "#8A8A8E"
         }
     }
 
-    var legacyDefaultColorHexes: [String] {
+    var fallbackSystemName: String {
         switch self {
+        case .cash:
+            "banknote.fill"
+        case .payPay:
+            "qrcode"
+        case .bank:
+            "building.columns.fill"
         case .creditCard:
-            ["#7C85A3"]
-        default:
-            []
+            "creditcard.fill"
+        case .eWallet:
+            "qrcode"
+        case .prepaid:
+            "creditcard.fill"
+        case .investment:
+            "chart.line.uptrend.xyaxis"
+        case .crypto:
+            "bitcoinsign.circle.fill"
+        case .other:
+            "wallet.pass.fill"
         }
     }
 
     func matchesDefaultIconAppearance(symbolName: String, colorHex: String) -> Bool {
-        guard symbolName == defaultIconSymbolName else { return false }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        return normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex)
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        return symbolName == defaultIconSymbolName
+            && (normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault)
     }
 
     func migratedLegacyDefaultColorHex(for colorHex: String, symbolName: String) -> String? {
-        guard symbolName == defaultIconSymbolName else { return nil }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        guard legacyDefaultColorHexes.contains(normalizedColorHex) else { return nil }
-        return MistiaIconColorPalette.presetHex(forDefault: normalizedColorHex)
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        guard symbolName == defaultIconSymbolName,
+              normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault else {
+            return nil
+        }
+        return presetDefault
     }
 
     var balanceFieldTitle: String {
         switch self {
         case .creditCard:
-            mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用残高")
+            L10n.shared.corelogic.financeenums.currentDebt
         default:
-            mistiaLocalized(vi: "Số dư ban đầu", en: "Opening balance", ja: "初期残高")
+            L10n.shared.corelogic.financeenums.openingBalance
         }
     }
 }
@@ -88,217 +192,326 @@ nonisolated enum TransactionCategoryKind: String, CaseIterable, Identifiable, Co
     var title: String {
         switch self {
         case .expense:
-            mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            L10n.shared.corelogic.financeenums.expense
         case .income:
-            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            L10n.shared.corelogic.financeenums.income
         }
     }
 
     var defaultIconSymbolName: String {
         switch self {
         case .expense:
-            "fork.knife"
+            "mistia.flow.expense"
         case .income:
-            "briefcase.fill"
+            "mistia.flow.income"
         }
     }
 
     var defaultColorHex: String {
         switch self {
         case .expense:
-            "#FF9F1C"
+            "#FF7A59"
         case .income:
             "#2DAA9E"
         }
     }
 
-    var legacyDefaultColorHexes: [String] {
-        switch self {
-        case .expense:
-            ["#F59B3F"]
-        case .income:
-            []
-        }
-    }
-
     func matchesDefaultIconAppearance(symbolName: String, colorHex: String) -> Bool {
-        guard symbolName == defaultIconSymbolName else { return false }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        return normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex)
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        return symbolName == defaultIconSymbolName
+            && (normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault)
     }
 
     func migratedLegacyDefaultColorHex(for colorHex: String, symbolName: String) -> String? {
-        guard symbolName == defaultIconSymbolName else { return nil }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        guard legacyDefaultColorHexes.contains(normalizedColorHex) else { return nil }
-        return MistiaIconColorPalette.presetHex(forDefault: normalizedColorHex)
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        guard symbolName == defaultIconSymbolName,
+              normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault else {
+            return nil
+        }
+        return presetDefault
+    }
+}
+
+nonisolated enum TransactionCategoryHierarchyRole: String, CaseIterable, Identifiable, Codable {
+    case parent
+    case child
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .parent:
+            L10n.shared.corelogic.financeenums.parentCategory
+        case .child:
+            L10n.shared.corelogic.financeenums.childCategory
+        }
+    }
+}
+
+nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, Identifiable {
+    case livingExpense = "parent_expense_living"
+    case mobilityTravel = "parent_expense_mobility_travel"
+    case personalLifestyle = "parent_expense_personal_lifestyle"
+    case expenseFood = "parent_expense_food"
+    case expenseCostOfGoods = "parent_expense_cost_of_goods"
+    case expenseHomeBills = "parent_expense_home_bills"
+    case expenseFamilyChildren = "parent_expense_family_children"
+    case expenseTransportVehicle = "parent_expense_transport_vehicle"
+    case expensePersonalShopping = "parent_expense_personal_shopping"
+    case expenseHealth = "parent_expense_health"
+    case expenseFamilyRelations = "parent_expense_family_relations"
+    case expenseEntertainmentSocial = "parent_expense_entertainment_social"
+    case expenseWorkStudy = "parent_expense_work_study"
+    case expenseFinancialObligations = "parent_expense_financial_obligations"
+    case expensePetCare = "parent_expense_pet_care"
+    case expenseOther = "parent_expense_uncategorized"
+    case incomeSalaryWork = "parent_income_work"
+    case incomeBusiness = "parent_income_sales_other"
+    case incomeInvestmentFinance = "parent_income_investment_return"
+    case incomeRefundAdjustment = "parent_income_refund_adjustment"
+    case incomeSupportGift = "parent_income_support_gift"
+    case incomeLiquidation = "parent_income_liquidation"
+    case incomeOther = "parent_income_uncategorized"
+
+    private var parsed: ParsedSystemCategory? {
+        MistiaSystemCategoryRegistry.shared.metadata(forId: rawValue)
+    }
+
+    static var activeDefaults: [Self] {
+        MistiaSystemCategoryRegistry.shared.allParents
+            .filter { $0.active }
+            .compactMap { Self(rawValue: $0.id) }
+    }
+
+    var id: String { rawValue }
+    var kind: TransactionCategoryKind { parsed?.kind(in: MistiaSystemCategoryRegistry.shared) ?? .expense }
+    var title: String { localizedTitle(for: .current) }
+    var legacyVietnameseName: String { parsed?.translations["vi"] ?? rawValue }
+    var englishTitle: String { parsed?.translations["en"] ?? legacyVietnameseName }
+    var japaneseTitle: String { parsed?.translations["ja"] ?? legacyVietnameseName }
+    var fallbackSystemName: String { parsed?.fallbackIcon ?? "questionmark.circle.fill" }
+    var iconSymbolName: String { parsed?.icon ?? rawValue }
+    var iconColorHex: String { parsed?.color ?? "#8A8A8E" }
+    var pickerGroup: MistiaFinanceIconGroup { parsed?.group ?? .generic }
+    var isActiveDefault: Bool { parsed?.active ?? false }
+    var showsOnlyWhenHasChildren: Bool {
+        rawValue == "parent_expense_uncategorized" || rawValue == "parent_income_uncategorized"
+    }
+
+    func knownDefaultNames() -> [String] {
+        parsed?.knownDefaultNames() ?? [rawValue]
+    }
+
+    func localizedTitle(for language: MistiaAppLanguage) -> String {
+        parsed?.localizedTitle(for: language) ?? rawValue
     }
 }
 
 nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
     case food
     case entertainment
-    case travel
     case shopping
     case transportation
     case housing
     case billing
     case health
     case education
-    case loanRepayment = "loan_repayment"
-    case salary
-    case bonus
-    case freelance
     case investment
-    case refund
-    case sales
-    case gift
+    case grocery
+    case dailySupplies = "daily_supplies"
+    case dineOut = "dine_out"
+    case businessMeals = "business_meals"
+    case cafeTea = "cafe_tea"
+    case foodDelivery = "food_delivery"
+    case snacks
+    case smallAppliances = "small_appliances"
+    case importGoods = "import_goods"
+    case goodsSourcing = "goods_sourcing"
+    case shippingFee = "shipping_fee"
+    case packaging
+    case platformFee = "platform_fee"
+    case marketingAds = "marketing_ads"
+    case otherSalesCost = "other_sales_cost"
+    case rent
+    case electricity
+    case water
+    case internet
+    case phone
+    case gas
+    case mortgageInstallment = "mortgage_installment"
+    case condoFee = "condo_fee"
+    case homeRepair = "home_repair"
+    case furnitureAppliance = "furniture_appliance"
+    case diapersMilk = "diapers_milk"
+    case babyFood = "baby_food"
+    case childSupplies = "child_supplies"
+    case childToys = "child_toys"
+    case childTuition = "child_tuition"
+    case schoolBooksSupplies = "school_books_supplies"
+    case childExtracurricular = "child_extracurricular"
+    case childcare
+    case childMedical = "child_medical"
+    case childMedicine = "child_medicine"
+    case babyGear = "baby_gear"
+    case familyOther = "family_other"
+    case fuel
+    case parking
+    case grabTaxi = "grab_taxi"
+    case publicTransport = "public_transport"
+    case vehicleMaintenance = "vehicle_maintenance"
+    case vehicleRepair = "vehicle_repair"
+    case carWash = "car_wash"
+    case tolls
+    case vehicleInsurance = "vehicle_insurance"
+    case vehicleRegistration = "vehicle_registration"
+    case clothes
+    case footwear
+    case cosmeticsSkincare = "cosmetics_skincare"
+    case personalCare = "personal_care"
+    case accessories
+    case personalSupplies = "personal_supplies"
+    case medicalCheckup = "medical_checkup"
+    case medicine
+    case labTests = "lab_tests"
+    case dental
+    case hospital
+    case healthInsurance = "health_insurance"
+    case fitnessGym = "fitness_gym"
+    case supplements
+    case moviesLeisure = "movies_leisure"
+    case travel
+    case gamesApps = "games_apps"
+    case booksMusic = "books_music"
+    case partiesGatherings = "parties_gatherings"
+    case giftsCeremonies = "gifts_ceremonies"
+    case relationshipGifts = "relationship_gifts"
+    case parentsSupportExpense = "parents_support_expense"
+    case familySupportExpense = "family_support_expense"
+    case charity
+    case subscriptions
+    case hobbies
+    case coffeeFriends = "coffee_friends"
+    case workTools = "work_tools"
+    case workSoftwareSubscriptions = "work_software_subscriptions"
+    case clientEntertainment = "client_entertainment"
+    case businessTravel = "business_travel"
+    case courses
+    case professionalBooks = "professional_books"
+    case examsCertificates = "exams_certificates"
+    case insurance
+    case taxesFees = "taxes_fees"
+    case bankingFees = "banking_fees"
+    case loanInterest = "loan_interest"
+    case loanRepayment = "loan_repayment"
+    case finesFees = "fines_fees"
+    case otherObligations = "other_obligations"
+    case petFood = "pet_food"
+    case petMedical = "pet_medical"
+    case petSupplies = "pet_supplies"
+    case petGrooming = "pet_grooming"
+    case petOther = "pet_other"
+    case otherExpense = "other_expense"
+    case balanceAdjustmentExpense = "balance_adjustment_expense"
+    case salary
+    case sideSalary = "side_salary"
+    case bonus
     case allowance
+    case commission
+    case freelance
+    case overtime
+    case sales
+    case serviceRevenue = "service_revenue"
+    case businessProfit = "business_profit"
+    case onlineCollaboratorIncome = "online_collaborator_income"
+    case otherBusinessIncome = "other_business_income"
     case bankInterest = "bank_interest"
+    case dividends
+    case investmentGain = "investment_gain"
+    case loanInterestReceived = "loan_interest_received"
+    case otherFinancialIncome = "other_financial_income"
+    case refund
+    case cashback
+    case reimbursement
+    case peopleRepayment = "people_repayment"
+    case expenseRecovery = "expense_recovery"
+    case insurancePayout = "insurance_payout"
+    case gift
+    case supportReceived = "support_received"
+    case subsidy
+    case childAllowance = "child_allowance"
+    case maternityAllowance = "maternity_allowance"
+    case familySupport = "family_support"
+    case sellUsedItems = "sell_used_items"
+    case liquidateHousehold = "liquidate_household"
+    case otherLiquidationIncome = "other_liquidation_income"
+    case otherIncome = "other_income"
+    case balanceAdjustmentIncome = "balance_adjustment_income"
+    static let recurringBillQuickPickDefaults: [Self] = [
+        .rent,
+        .mortgageInstallment,
+        .electricity,
+        .water,
+        .internet,
+        .phone,
+        .gas,
+        .condoFee,
+        .publicTransport,
+        .parking,
+        .tolls,
+        .fuel,
+        .vehicleMaintenance,
+        .vehicleRepair,
+        .childTuition,
+        .childcare,
+        .healthInsurance,
+        .insurance,
+        .vehicleInsurance,
+        .vehicleRegistration,
+        .subscriptions,
+        .workSoftwareSubscriptions,
+        .fitnessGym,
+        .bankingFees,
+        .loanRepayment,
+        .taxesFees
+    ]
+
+    private var parsed: ParsedSystemCategory? {
+        MistiaSystemCategoryRegistry.shared.metadata(forId: rawValue)
+    }
+
+    static var activeDefaults: [Self] {
+        MistiaSystemCategoryRegistry.shared.allParents
+            .flatMap { $0.children ?? [] }
+            .filter { $0.active }
+            .compactMap { Self(rawValue: $0.id) }
+    }
 
     var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .food:
-            mistiaLocalized(vi: "Ăn uống", en: "Food & drinks", ja: "食費")
-        case .entertainment:
-            mistiaLocalized(vi: "Đi chơi", en: "Entertainment", ja: "娯楽")
-        case .travel:
-            mistiaLocalized(vi: "Du lịch", en: "Travel", ja: "旅行")
-        case .shopping:
-            mistiaLocalized(vi: "Mua sắm", en: "Shopping", ja: "買い物")
-        case .transportation:
-            mistiaLocalized(vi: "Di chuyển", en: "Transport", ja: "交通")
-        case .housing:
-            mistiaLocalized(vi: "Nhà ở", en: "Housing", ja: "住居")
-        case .billing:
-            mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書")
-        case .health:
-            mistiaLocalized(vi: "Sức khỏe", en: "Health", ja: "健康")
-        case .education:
-            mistiaLocalized(vi: "Giáo dục", en: "Education", ja: "教育")
-        case .loanRepayment:
-            mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入")
-        case .salary:
-            mistiaLocalized(vi: "Lương", en: "Salary", ja: "給与")
-        case .bonus:
-            mistiaLocalized(vi: "Thưởng", en: "Bonus", ja: "ボーナス")
-        case .freelance:
-            mistiaLocalized(vi: "Freelance", en: "Freelance", ja: "フリーランス")
-        case .investment:
-            mistiaLocalized(vi: "Đầu tư", en: "Investment", ja: "投資")
-        case .refund:
-            mistiaLocalized(vi: "Hoàn tiền", en: "Refund", ja: "返金")
-        case .sales:
-            mistiaLocalized(vi: "Bán hàng", en: "Sales", ja: "売上")
-        case .gift:
-            mistiaLocalized(vi: "Quà tặng", en: "Gift", ja: "ギフト")
-        case .allowance:
-            mistiaLocalized(vi: "Phụ cấp", en: "Allowance", ja: "手当")
-        case .bankInterest:
-            mistiaLocalized(vi: "Lãi ngân hàng", en: "Bank interest", ja: "銀行利息")
-        }
+    var title: String { localizedTitle(for: .current) }
+    var legacyVietnameseName: String { parsed?.translations["vi"] ?? rawValue }
+    var englishTitle: String { parsed?.translations["en"] ?? legacyVietnameseName }
+    var japaneseTitle: String { parsed?.translations["ja"] ?? legacyVietnameseName }
+    var parentKey: MistiaSystemCategoryParentKey? {
+        guard let parentId = MistiaSystemCategoryRegistry.shared.parentId(for: rawValue) else { return nil }
+        return MistiaSystemCategoryParentKey(rawValue: parentId)
     }
-
-    var legacyVietnameseName: String {
-        switch self {
-        case .food:
-            "Ăn uống"
-        case .entertainment:
-            "Đi chơi"
-        case .travel:
-            "Du lịch"
-        case .shopping:
-            "Mua sắm"
-        case .transportation:
-            "Di chuyển"
-        case .housing:
-            "Nhà ở"
-        case .billing:
-            "Hóa đơn"
-        case .health:
-            "Sức khỏe"
-        case .education:
-            "Giáo dục"
-        case .loanRepayment:
-            "Trả góp / vay"
-        case .salary:
-            "Lương"
-        case .bonus:
-            "Thưởng"
-        case .freelance:
-            "Freelance"
-        case .investment:
-            "Đầu tư"
-        case .refund:
-            "Hoàn tiền"
-        case .sales:
-            "Bán hàng"
-        case .gift:
-            "Quà tặng"
-        case .allowance:
-            "Phụ cấp"
-        case .bankInterest:
-            "Lãi ngân hàng"
-        }
-    }
+    var fallbackSystemName: String { parsed?.fallbackIcon ?? "questionmark.circle.fill" }
+    var iconSymbolName: String { parsed?.icon ?? rawValue }
+    var iconColorHex: String { parsed?.color ?? "#8A8A8E" }
+    var pickerGroup: MistiaFinanceIconGroup { parsed?.group ?? .generic }
+    var isActiveDefault: Bool { parsed?.active ?? false }
+    var kind: TransactionCategoryKind { parentKey?.kind ?? .expense }
 
     func knownDefaultNames() -> [String] {
-        [
-            legacyVietnameseName,
-            title,
-            localizedTitle(for: .english),
-            localizedTitle(for: .japanese)
-        ]
+        parsed?.knownDefaultNames() ?? [rawValue]
     }
 
     func localizedTitle(for language: MistiaAppLanguage) -> String {
-        switch language {
-        case .vietnamese:
-            mistiaLocalized(vi: legacyVietnameseName, en: "", ja: "", language: language)
-        case .english, .japanese:
-            switch self {
-            case .food:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Food & drinks", ja: "食費", language: language)
-            case .entertainment:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Entertainment", ja: "娯楽", language: language)
-            case .travel:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Travel", ja: "旅行", language: language)
-            case .shopping:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Shopping", ja: "買い物", language: language)
-            case .transportation:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Transport", ja: "交通", language: language)
-            case .housing:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Housing", ja: "住居", language: language)
-            case .billing:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Bills", ja: "請求書", language: language)
-            case .health:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Health", ja: "健康", language: language)
-            case .education:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Education", ja: "教育", language: language)
-            case .loanRepayment:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Installments / loans", ja: "分割払い・借入", language: language)
-            case .salary:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Salary", ja: "給与", language: language)
-            case .bonus:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Bonus", ja: "ボーナス", language: language)
-            case .freelance:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Freelance", ja: "フリーランス", language: language)
-            case .investment:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Investment", ja: "投資", language: language)
-            case .refund:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Refund", ja: "返金", language: language)
-            case .sales:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Sales", ja: "売上", language: language)
-            case .gift:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Gift", ja: "ギフト", language: language)
-            case .allowance:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Allowance", ja: "手当", language: language)
-            case .bankInterest:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Bank interest", ja: "銀行利息", language: language)
-            }
-        }
+        parsed?.localizedTitle(for: language) ?? rawValue
     }
 }
 
@@ -306,6 +519,13 @@ nonisolated enum PlanningDueSourceKind: String, CaseIterable, Codable, Identifia
     case creditCard
     case recurringBill
     case installment
+
+    var id: String { rawValue }
+}
+
+nonisolated enum PlanningBillScheduleKind: String, CaseIterable, Codable, Identifiable {
+    case recurring
+    case oneTime
 
     var id: String { rawValue }
 }
@@ -340,7 +560,7 @@ nonisolated enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable 
         case .unionPay:
             "UnionPay"
         case .other:
-            mistiaLocalized(vi: "Khác", en: "Other", ja: "その他")
+            L10n.shared.corelogic.financeenums.other
         }
     }
 }
@@ -355,11 +575,11 @@ nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .expense:
-            mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            L10n.shared.corelogic.financeenums.expense
         case .income:
-            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            L10n.shared.corelogic.financeenums.income
         case .transfer:
-            mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+            L10n.shared.corelogic.financeenums.transfer
         }
     }
 
@@ -373,10 +593,22 @@ nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Cod
             "arrow.left.arrow.right"
         }
     }
+
+    var financeIconToken: String {
+        switch self {
+        case .expense:
+            "mistia.flow.expense"
+        case .income:
+            "mistia.flow.income"
+        case .transfer:
+            "mistia.flow.transfer"
+        }
+    }
 }
 
 nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
     case internalTransfer
+    case familyTransfer
     case debt
 
     var id: String { rawValue }
@@ -384,9 +616,11 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
     var title: String {
         switch self {
         case .internalTransfer:
-            mistiaLocalized(vi: "Nội bộ", en: "Internal", ja: "内部")
+            L10n.shared.corelogic.financeenums.`internal`
+        case .familyTransfer:
+            L10n.shared.corelogic.financeenums.family
         case .debt:
-            mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+            L10n.shared.corelogic.financeenums.debt
         }
     }
 
@@ -394,9 +628,43 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             "arrow.left.arrow.right.circle"
+        case .familyTransfer:
+            "person.2.fill"
         case .debt:
             "person.2.wave.2.fill"
         }
+    }
+
+    var financeIconToken: String {
+        switch self {
+        case .internalTransfer:
+            "mistia.flow.transfer.internal"
+        case .familyTransfer:
+            "mistia.flow.transfer.family"
+        case .debt:
+            "mistia.flow.transfer.debt"
+        }
+    }
+
+    static func editorOptions(
+        isFamilyEligible: Bool,
+        includesFamilyTransfer: Bool
+    ) -> [TransactionTransferSubtype] {
+        var options: [TransactionTransferSubtype] = [.internalTransfer]
+        if isFamilyEligible || includesFamilyTransfer {
+            options.append(.familyTransfer)
+        }
+        options.append(.debt)
+        return options
+    }
+
+    static func isEditorOptionEnabled(
+        _ subtype: TransactionTransferSubtype,
+        canPerformRemoteActions: Bool,
+        isFamilyTransferDetail: Bool
+    ) -> Bool {
+        guard subtype == .familyTransfer else { return true }
+        return isFamilyTransferDetail || canPerformRemoteActions
     }
 }
 
@@ -409,15 +677,19 @@ nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Coda
     var id: String { rawValue }
 
     var title: String {
+        title(language: .current)
+    }
+
+    func title(language: MistiaAppLanguage) -> String {
         switch self {
         case .lend:
-            mistiaLocalized(vi: "Cho vay", en: "Lend", ja: "貸す")
+            L10n.shared.corelogic.financeenums.lend(language: language)
         case .collect:
-            mistiaLocalized(vi: "Thu nợ", en: "Collect debt", ja: "回収")
+            L10n.shared.corelogic.financeenums.collectDebt(language: language)
         case .borrow:
-            mistiaLocalized(vi: "Đi vay", en: "Borrow", ja: "借りる")
+            L10n.shared.corelogic.financeenums.borrow(language: language)
         case .repay:
-            mistiaLocalized(vi: "Trả nợ", en: "Repay", ja: "返済")
+            L10n.shared.corelogic.financeenums.repay(language: language)
         }
     }
 
@@ -433,6 +705,46 @@ nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Coda
             "tray.and.arrow.up.fill"
         }
     }
+
+    var financeIconToken: String {
+        switch self {
+        case .lend:
+            "mistia.debt.lend"
+        case .collect:
+            "mistia.debt.collect"
+        case .borrow:
+            "mistia.debt.borrow"
+        case .repay:
+            "mistia.debt.repay"
+        }
+    }
+}
+
+nonisolated enum SettlementKind: String, CaseIterable, Identifiable, Codable {
+    case sharedExpense
+
+    var id: String { rawValue }
+}
+
+nonisolated enum SettlementStatus: String, CaseIterable, Identifiable, Codable {
+    case preparing
+    case open
+    case partiallySettled
+    case settled
+
+    var id: String { rawValue }
+}
+
+nonisolated enum SettlementTransactionRole: String, CaseIterable, Identifiable, Codable {
+    case resaleReceivable
+    case resaleReceipt
+    case sharedExpensePaid
+    case sharedExpenseReceivable
+    case sharedExpensePayable
+    case sharedExpenseReceipt
+    case sharedExpensePayment
+
+    var id: String { rawValue }
 }
 
 nonisolated enum TransactionEntryStatus: String, CaseIterable, Identifiable, Codable {
@@ -444,9 +756,9 @@ nonisolated enum TransactionEntryStatus: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .posted:
-            mistiaLocalized(vi: "Đã ghi nhận", en: "Recorded", ja: "記録済み")
+            L10n.shared.corelogic.financeenums.recorded
         case .draft:
-            mistiaLocalized(vi: "Bản nháp", en: "Draft", ja: "下書き")
+            L10n.shared.corelogic.financeenums.draft
         }
     }
 }
@@ -462,13 +774,13 @@ nonisolated enum TransactionTimeScope: String, CaseIterable, Identifiable, Codab
     var title: String {
         switch self {
         case .allTime:
-            mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
+            L10n.shared.corelogic.financeenums.all
         case .thisMonth:
-            mistiaLocalized(vi: "Tháng này", en: "This month", ja: "今月")
+            L10n.shared.corelogic.financeenums.thisMonth
         case .yesterday:
-            mistiaLocalized(vi: "Hôm qua", en: "Yesterday", ja: "昨日")
+            L10n.shared.corelogic.financeenums.yesterday
         case .today:
-            mistiaLocalized(vi: "Hôm nay", en: "Today", ja: "今日")
+            L10n.shared.corelogic.financeenums.today
         }
     }
 }
@@ -483,11 +795,11 @@ nonisolated enum TransactionStatusScope: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .all:
-            mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
+            L10n.shared.corelogic.financeenums.all
         case .postedOnly:
-            mistiaLocalized(vi: "Đã ghi nhận", en: "Recorded", ja: "記録済み")
+            L10n.shared.corelogic.financeenums.recorded
         case .draftOnly:
-            mistiaLocalized(vi: "Bản nháp", en: "Draft", ja: "下書き")
+            L10n.shared.corelogic.financeenums.draft
         }
     }
 }

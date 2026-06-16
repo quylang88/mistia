@@ -1,0 +1,13 @@
+project_id = "wkbrtstnmoknmamddezg"
+
+[functions."delete-account"]
+verify_jwt = true
+
+[functions."analyze-receipt"]
+verify_jwt = true
+
+[functions."analyze-bill-items"]
+verify_jwt = true
+
+[functions."translate-category-name"]
+verify_jwt = false

@@ -4,6 +4,10 @@ import XCTest
 final class MistiaLocalizationTests: XCTestCase {
     private let referenceDate = Date(timeIntervalSince1970: 1_775_131_200) // 2026-04-02 12:00:00 UTC
 
+    private struct DatePayload: Codable, Equatable {
+        let occurredAt: Date
+    }
+
     private var gregorianCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
@@ -12,14 +16,12 @@ final class MistiaLocalizationTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        UserDefaults.standard.set(
-            MistiaAppLanguage.vietnamese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.vietnamese)
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
         super.tearDown()
     }
 
@@ -55,20 +57,52 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
-    func testDateFormattingUsesLanguageSpecificLocaleProfiles() {
-        XCTAssertEqual(
-            MistiaDateFormatting.fullDateString(for: referenceDate, language: .vietnamese),
-            "02/04/2026"
-        )
-        XCTAssertEqual(
-            MistiaDateFormatting.fullDateString(for: referenceDate, language: .english),
-            "04/02/2026"
-        )
-        XCTAssertEqual(
-            MistiaDateFormatting.fullDateString(for: referenceDate, language: .japanese),
-            "2026/04/02"
-        )
+    func testGeneratedL10nFollowsSelectedAppLanguage() {
+        XCTAssertEqual(L10n.settings.title(language: .vietnamese), "Cài đặt")
+        XCTAssertEqual(L10n.settings.title(language: .english), "Settings")
+        XCTAssertEqual(L10n.settings.title(language: .japanese), "設定")
 
+        MistiaAppLanguage.persist(.english)
+        XCTAssertEqual(L10n.settings.title, "Settings")
+
+        MistiaAppLanguage.persist(.japanese)
+        XCTAssertEqual(L10n.settings.title, "設定")
+
+        MistiaAppLanguage.persist(.vietnamese)
+        XCTAssertEqual(L10n.common.cancel, "Hủy")
+    }
+
+    func testAIBillEmptyStateMessageMentionsLimitAndAISplitting() {
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .vietnamese),
+            "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua."
+        )
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .english),
+            "Add up to 5 receipt images for AI to split items."
+        )
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .japanese),
+            "最大5枚のレシートを追加してAIで明細を分けます。"
+        )
+    }
+
+    func testCurrencyNamesFollowSelectedAppLanguage() {
+        XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .vietnamese), "Yên Nhật")
+        XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .vietnamese), "Việt Nam Đồng")
+        XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .japanese), "日本円")
+        XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .japanese), "ベトナムドン")
+    }
+
+    func testCurrencyRateModeDefaultsToManual() {
+        let suiteName = "MistiaLocalizationTests.currencyRateMode.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(MistiaCurrencySettings.rateMode(defaults: defaults), .manual)
+    }
+
+    func testMonthYearFormattingUsesLanguageSpecificLocaleProfiles() {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .vietnamese),
             "tháng 4 năm 2026"
@@ -80,6 +114,96 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .japanese),
             "2026年4月"
+        )
+    }
+
+    func testFullDateFormattingUsesSharedAppFormats() {
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(for: referenceDate, language: .vietnamese),
+            "02/04/2026"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(for: referenceDate, language: .english),
+            "2026-04-02"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(for: referenceDate, language: .japanese),
+            "2026年4月2日"
+        )
+    }
+
+    func testDateTimeFormattingUsesLocaleSpecificTimestampOrder() {
+        XCTAssertEqual(
+            MistiaDateFormatting.dateTimeString(
+                for: referenceDate,
+                language: .vietnamese,
+                calendar: gregorianCalendar
+            ),
+            "12:00 ngày 2 tháng 4, năm 2026"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.dateTimeString(
+                for: referenceDate,
+                language: .english,
+                calendar: gregorianCalendar
+            ),
+            "2026-04-02 12:00"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.dateTimeString(
+                for: referenceDate,
+                language: .japanese,
+                calendar: gregorianCalendar
+            ),
+            "2026年4月2日 12:00"
+        )
+    }
+
+    func testRemoteDateEncodingKeepsUTCInstantWhileFormattingInPhoneTimezone() throws {
+        let japanCalendar = MistiaCalendar.gregorian(
+            locale: Locale(identifier: "ja_JP"),
+            timeZone: TimeZone(identifier: "Asia/Tokyo")!
+        )
+        var components = DateComponents()
+        components.calendar = japanCalendar
+        components.year = 2026
+        components.month = 5
+        components.day = 6
+        components.hour = 18
+        components.minute = 15
+        components.second = 49
+        components.nanosecond = 204_000_000
+
+        let localDate = try XCTUnwrap(japanCalendar.date(from: components))
+        let encoded = try JSONEncoder.mistiaRemoteAPIEncoder.encode(DatePayload(occurredAt: localDate))
+        let payload = try XCTUnwrap(String(data: encoded, encoding: .utf8))
+
+        XCTAssertTrue(payload.contains("\"occurredAt\":\"2026-05-06T09:15:49.204Z\""))
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(
+                for: localDate,
+                language: .japanese,
+                calendar: japanCalendar
+            ),
+            "2026年5月6日"
+        )
+
+        let decoded = try JSONDecoder.mistiaRemoteAPIDecoder.decode(DatePayload.self, from: encoded)
+        XCTAssertEqual(decoded.occurredAt, localDate)
+    }
+
+    func testSharedISO8601DateCodingHandlesRemoteSyncFormats() throws {
+        let date = try XCTUnwrap(MistiaISO8601DateCoding.date(from: "2026-05-06T09:15:49.204Z"))
+
+        XCTAssertEqual(
+            MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date),
+            "2026-05-06T09:15:49.204Z"
+        )
+        XCTAssertEqual(
+            MistiaISO8601DateCoding
+                .date(from: "2026-05-06T09:15:49Z")
+                .map(MistiaISO8601DateCoding.stringWithFractionalSeconds(from:)),
+            "2026-05-06T09:15:49.000Z"
         )
     }
 
@@ -140,23 +264,53 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(knownNames.contains("食費"))
     }
 
+    func testActiveSystemCategoryDefaultsHaveLanguageSpecificTitles() {
+        for parentKey in MistiaSystemCategoryParentKey.activeDefaults {
+            let knownNames = Set(parentKey.knownDefaultNames())
+
+            XCTAssertTrue(knownNames.contains(parentKey.localizedTitle(for: .english)), parentKey.rawValue)
+            XCTAssertTrue(knownNames.contains(parentKey.localizedTitle(for: .japanese)), parentKey.rawValue)
+            XCTAssertNotEqual(
+                parentKey.localizedTitle(for: .english),
+                parentKey.localizedTitle(for: .vietnamese),
+                parentKey.rawValue
+            )
+            XCTAssertNotEqual(
+                parentKey.localizedTitle(for: .japanese),
+                parentKey.localizedTitle(for: .vietnamese),
+                parentKey.rawValue
+            )
+        }
+
+        let englishMatchesVietnamese: Set<MistiaSystemCategoryKey> = [.internet, .gas, .cashback]
+        for systemKey in MistiaSystemCategoryKey.activeDefaults {
+            let knownNames = Set(systemKey.knownDefaultNames())
+
+            XCTAssertTrue(knownNames.contains(systemKey.localizedTitle(for: .english)), systemKey.rawValue)
+            XCTAssertTrue(knownNames.contains(systemKey.localizedTitle(for: .japanese)), systemKey.rawValue)
+            if !englishMatchesVietnamese.contains(systemKey) {
+                XCTAssertNotEqual(
+                    systemKey.localizedTitle(for: .english),
+                    systemKey.localizedTitle(for: .vietnamese),
+                    systemKey.rawValue
+                )
+            }
+            XCTAssertNotEqual(
+                systemKey.localizedTitle(for: .japanese),
+                systemKey.localizedTitle(for: .vietnamese),
+                systemKey.rawValue
+            )
+        }
+    }
+
     func testCurrencyFormattingDoesNotChangeWhenAppLanguageChanges() {
-        UserDefaults.standard.set(
-            MistiaAppLanguage.vietnamese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.vietnamese)
         let vietnameseJPY = Int64(123_456).formattedCurrency(code: "JPY")
 
-        UserDefaults.standard.set(
-            MistiaAppLanguage.english.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.english)
         let englishJPY = Int64(123_456).formattedCurrency(code: "JPY")
 
-        UserDefaults.standard.set(
-            MistiaAppLanguage.japanese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.japanese)
         let japaneseJPY = Int64(123_456).formattedCurrency(code: "JPY")
 
         XCTAssertEqual(vietnameseJPY, englishJPY)
@@ -164,20 +318,87 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(vietnameseJPY.first.map { $0 == "¥" || $0 == "￥" } ?? false)
     }
 
-    func testLegacyDefaultIconColorsMapIntoCurrentPalette() {
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#F59B3F"), "#FF9F1C")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#FF7E67"), "#F26A5A")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#7C85A3"), "#8A8A8E")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#FFB13B"), "#FF9F1C")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#F45C7E"), "#F26A5A")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#8A6BFF"), "#9A67FF")
+    func testVNDFormatsWithoutFractionDigits() {
+        let formatted = Int64(123_456_789).formattedCurrency(code: "VND")
+
+        XCTAssertTrue(formatted.contains("₫") || formatted.uppercased().contains("VND"))
+        XCTAssertFalse(formatted.contains(".00"))
+        XCTAssertFalse(formatted.contains(",00"))
+    }
+
+    func testCurrencyInputFormattingGroupsThousandsWhileTyping() {
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput("1234"), "1,234")
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput("1234567"), "1,234,567")
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput("12,34a56"), "123,456")
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput(""), "")
+    }
+
+    func testCurrencyInputParsingIgnoresGroupingSeparators() {
+        XCTAssertEqual("1,234,567".currencyInputToMinorUnits(currencyCode: "JPY"), 1_234_567)
+        XCTAssertEqual("12,34a56".currencyInputToMinorUnits(currencyCode: "VND"), 123_456)
+    }
+
+    func testApproximatePrimaryAmountOnlyShowsForDifferentCurrencies() {
+        let rate = MistiaExchangeRate(
+            baseCurrencyCode: "VND",
+            quoteCurrencyCode: "JPY",
+            rateDecimalString: "0.006",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 1_774_051_200),
+            rateDate: "2026-03-21"
+        )
+
+        XCTAssertNil(
+            MistiaCurrencyLogic.approximatePrimaryAmountText(
+                amountMinor: 150_000,
+                sourceCurrencyCode: "VND",
+                primaryCurrencyCode: "VND",
+                rates: [rate]
+            )
+        )
+
+        let text = MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: 150_000,
+            sourceCurrencyCode: "VND",
+            primaryCurrencyCode: "JPY",
+            rates: [rate]
+        )
+
+        XCTAssertEqual(text, "~¥900")
+    }
+
+    func testBootstrapStoredPreferenceRestoresBackupBeforeInferringSystemLanguage() {
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        UserDefaults.standard.set(
+            MistiaAppLanguage.japanese.rawValue,
+            forKey: MistiaAppLanguage.backupUserDefaultsKey
+        )
+
+        let restored = MistiaAppLanguage.bootstrapStoredPreference(
+            preferredLanguages: ["vi-VN", "en-US"]
+        )
+
+        XCTAssertEqual(restored, .japanese)
+        XCTAssertEqual(
+            UserDefaults.standard.string(forKey: MistiaAppLanguage.userDefaultsKey),
+            MistiaAppLanguage.japanese.rawValue
+        )
+    }
+
+    func testDefaultIconColorsResolveToNearestPaletteColor() {
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#F59B3F"), "#FF9F1C")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#FF7E67"), "#F26A5A")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#7C85A3"), "#8A8A8E")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#FFB13B"), "#FF9F1C")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#F45C7E"), "#F26A5A")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#8A6BFF"), "#9A67FF")
 
         XCTAssertEqual(MistiaIconColorPalette.presetHexes.count, 10)
         XCTAssertFalse(MistiaIconColorPalette.presetHexes.contains("#F59B3F"))
         XCTAssertFalse(MistiaIconColorPalette.presetHexes.contains("#7C85A3"))
     }
 
-    func testLegacyDefaultIconAppearanceStillCountsAsDefault() {
+    func testDefaultIconAppearanceAcceptsStoredOrCanonicalDefaultColor() {
         XCTAssertTrue(
             LedgerWalletKind.creditCard.matchesDefaultIconAppearance(
                 symbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
@@ -187,14 +408,39 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(
             TransactionCategoryKind.expense.matchesDefaultIconAppearance(
                 symbolName: TransactionCategoryKind.expense.defaultIconSymbolName,
-                colorHex: "#F59B3F"
+                colorHex: MistiaIconColorPalette.presetHex(
+                    forDefault: TransactionCategoryKind.expense.defaultColorHex
+                )
             )
         )
         XCTAssertEqual(
             MistiaIconColorPalette.pickerSelectionHex(forStored: "#7C85A3"),
-            "#8A8A8E"
+            "#7C85A3"
         )
-        XCTAssertFalse(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#7C85A3"))
+        XCTAssertTrue(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#7C85A3"))
         XCTAssertTrue(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#123456"))
+    }
+
+    func testRecurringBillQuickPickDefaultsStayUniqueAndBillRelevant() {
+        let quickPickKeys = MistiaSystemCategoryKey.recurringBillQuickPickDefaults
+
+        XCTAssertEqual(quickPickKeys.count, Set(quickPickKeys).count)
+        XCTAssertTrue(quickPickKeys.contains(.rent))
+        XCTAssertTrue(quickPickKeys.contains(.mortgageInstallment))
+        XCTAssertTrue(quickPickKeys.contains(.electricity))
+        XCTAssertTrue(quickPickKeys.contains(.water))
+        XCTAssertTrue(quickPickKeys.contains(.internet))
+        XCTAssertTrue(quickPickKeys.contains(.phone))
+        XCTAssertTrue(quickPickKeys.contains(.gas))
+        XCTAssertTrue(quickPickKeys.contains(.publicTransport))
+        XCTAssertTrue(quickPickKeys.contains(.parking))
+        XCTAssertTrue(quickPickKeys.contains(.tolls))
+        XCTAssertTrue(quickPickKeys.contains(.fuel))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleMaintenance))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleRepair))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleInsurance))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleRegistration))
+        XCTAssertTrue(quickPickKeys.contains(.loanRepayment))
+        XCTAssertFalse(quickPickKeys.contains(.otherExpense))
     }
 }

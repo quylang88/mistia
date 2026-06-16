@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-struct OverviewShareItem: Identifiable {
+struct TransactionShareItem: Identifiable {
     let id = UUID()
     let url: URL
 }
 
-enum OverviewStatementExportSupport {
-    static func write(document: OverviewStatementDocument) throws -> URL {
+enum TransactionStatementExportSupport {
+    static func write(document: TransactionStatementDocument) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("mistia-statements", isDirectory: true)
 
@@ -28,7 +28,7 @@ enum OverviewStatementExportSupport {
     }
 }
 
-struct OverviewShareSheet: UIViewControllerRepresentable {
+struct TransactionShareSheet: UIViewControllerRepresentable {
     let url: URL
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -56,21 +56,38 @@ extension LedgerWallet {
     func overviewCreditCardStatementAccountSnapshot(
         records: [TransactionRecordSnapshot]
     ) -> OverviewCreditCardStatementAccountSnapshot? {
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [
+                TransactionWalletSnapshot(
+                    id: id,
+                    kind: kind,
+                    openingBalanceMinor: openingBalanceMinor
+                )
+            ],
+            records: records
+        )
+        return overviewCreditCardStatementAccountSnapshot(balanceIndex: balanceIndex)
+    }
+
+    func overviewCreditCardStatementAccountSnapshot(
+        balanceIndex: TransactionWalletBalanceIndex
+    ) -> OverviewCreditCardStatementAccountSnapshot? {
         guard kind == .creditCard, !isArchived, let profile = creditCardProfile else {
             return nil
         }
 
         let debt = max(
-            TransactionLogic.effectiveBalance(
+            balanceIndex.balance(
                 for: TransactionWalletSnapshot(
                     id: id,
-                    kind: .creditCard,
+                    kind: kind,
                     openingBalanceMinor: openingBalanceMinor
-                ),
-                records: records
+                )
             ),
             0
         )
+        
+        let availableCredit = max(profile.creditLimitMinor - debt, 0)
 
         return OverviewCreditCardStatementAccountSnapshot(
             id: id,
@@ -82,6 +99,7 @@ extension LedgerWallet {
             last4: profile.last4,
             creditLimitMinor: profile.creditLimitMinor,
             currentDebtMinor: debt,
+            availableCreditMinor: availableCredit,
             statementClosingDay: profile.statementClosingDay,
             paymentDueDay: profile.paymentDueDay,
             paymentSourceWalletName: profile.paymentSourceWallet?.name,
@@ -99,9 +117,12 @@ extension LedgerTransaction {
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,
             entryStatus: entryStatus,
-            title: title,
+            title: localizedTransactionTitle,
             note: note,
             amountMinor: amountMinor,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
+            sourceCurrencyCode: sourceCurrencyCode ?? sourceWallet?.currencyCode,
             occurredAt: occurredAt,
             createdAt: createdAt,
             sourceWalletID: sourceWallet?.id,
@@ -112,7 +133,14 @@ extension LedgerTransaction {
             destinationWalletKind: destinationWallet?.kind,
             categoryID: category?.id,
             categoryName: category?.localizedDisplayName,
-            counterpartyName: counterpartyName
+            categoryIconSymbolName: category?.iconSymbolName,
+            categoryColorHex: category?.iconColorHex,
+            categoryParentID: category?.parentCategory?.id,
+            categoryParentName: category?.parentCategory?.localizedDisplayName,
+            categoryParentIconSymbolName: category?.parentCategory?.iconSymbolName,
+            categoryParentColorHex: category?.parentCategory?.iconColorHex,
+            counterpartyName: counterpartyName,
+            isArchived: isArchived
         )
     }
 }

@@ -1,0 +1,321 @@
+import SwiftData
+import XCTest
+@testable import Mistia
+
+@MainActor
+final class FamilyScopedDataTests: XCTestCase {
+    func testSelfAndMemberContextsUseStrictOwnerScopedTransactions() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let sessionStore = makeSessionStore(container: container, userID: selfUserID)
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+
+        let selfWallet = makeWallet(name: "Self cash")
+        let memberWallet = makeWallet(name: "Member cash")
+        let selfTransactionCreatedByMember = makeTransaction(title: "Self transaction", wallet: selfWallet)
+        let memberTransactionCreatedBySelf = makeTransaction(title: "Member transaction", wallet: memberWallet)
+
+        let scopes = [
+            OwnedRecordScope(entity: .wallet, recordID: selfWallet.id, ownerUserID: selfUserID),
+            OwnedRecordScope(entity: .wallet, recordID: memberWallet.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: selfTransactionCreatedByMember.id, ownerUserID: selfUserID),
+            OwnedRecordScope(entity: .transaction, recordID: memberTransactionCreatedBySelf.id, ownerUserID: memberUserID)
+        ]
+        let audits = [
+            TransactionAuditRecord(
+                transactionID: selfTransactionCreatedByMember.id,
+                createdByUserID: memberUserID,
+                lastModifiedByUserID: memberUserID
+            ),
+            TransactionAuditRecord(
+                transactionID: memberTransactionCreatedBySelf.id,
+                createdByUserID: selfUserID,
+                lastModifiedByUserID: selfUserID
+            )
+        ]
+        let transactions = [
+            selfTransactionCreatedByMember,
+            memberTransactionCreatedBySelf
+        ]
+
+        familyContextStore.activeContext = .personalSelf
+        XCTAssertEqual(
+            visibleHistoryIDs(
+                transactions,
+                audits: audits,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [selfTransactionCreatedByMember.id]
+        )
+        XCTAssertEqual(
+            visibleFinancialIDs(
+                transactions,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [selfTransactionCreatedByMember.id]
+        )
+        XCTAssertEqual(
+            FamilyScopedData.visible(
+                [selfWallet, memberWallet],
+                entity: .wallet,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ).map(\.id),
+            [selfWallet.id]
+        )
+
+        familyContextStore.activeContext = FamilyContext(scope: .member(userID: memberUserID))
+        XCTAssertEqual(
+            visibleHistoryIDs(
+                transactions,
+                audits: audits,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [memberTransactionCreatedBySelf.id]
+        )
+        XCTAssertEqual(
+            visibleFinancialIDs(
+                transactions,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [memberTransactionCreatedBySelf.id]
+        )
+        XCTAssertEqual(
+            FamilyScopedData.visible(
+                [selfWallet, memberWallet],
+                entity: .wallet,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ).map(\.id),
+            [memberWallet.id]
+        )
+    }
+
+    func testTransactionVisibilityExcludesArchivedAndDeletedRows() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let sessionStore = makeSessionStore(container: container, userID: selfUserID)
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+
+        let memberWallet = makeWallet(name: "Member cash")
+        let active = makeTransaction(title: "Active", wallet: memberWallet)
+        let archived = makeTransaction(title: "Archived", wallet: memberWallet)
+        archived.isArchived = true
+        archived.archivedAt = Date(timeIntervalSince1970: 1_770_000_100)
+        let deleted = makeTransaction(title: "Deleted", wallet: memberWallet)
+        deleted.deletedAt = Date(timeIntervalSince1970: 1_770_000_200)
+
+        let scopes = [
+            OwnedRecordScope(entity: .wallet, recordID: memberWallet.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: active.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: archived.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: deleted.id, ownerUserID: memberUserID)
+        ]
+        let transactions = [active, archived, deleted]
+
+        familyContextStore.activeContext = FamilyContext(scope: .member(userID: memberUserID))
+
+        XCTAssertEqual(
+            visibleHistoryIDs(
+                transactions,
+                audits: [],
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [active.id]
+        )
+        XCTAssertEqual(
+            visibleFinancialIDs(
+                transactions,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [active.id]
+        )
+    }
+
+    func testCategoryUseRequestRequiresBothRequesterAndOwnerCloudSyncHistory() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+        let familyID = try XCTUnwrap(familyContextStore.currentMembership?.familyID)
+
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: false, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: true, isCurrentUser: false)
+        ]
+        XCTAssertFalse(familyContextStore.hasSyncedCloudData(userID: selfUserID))
+        XCTAssertFalse(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
+
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: true, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: false, isCurrentUser: false)
+        ]
+        XCTAssertTrue(familyContextStore.hasSyncedCloudData(userID: selfUserID))
+        XCTAssertFalse(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
+
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: true, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: true, isCurrentUser: false)
+        ]
+        XCTAssertTrue(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
+    }
+
+    func testMemberContextCanUseAggregateFamilyBudgetSpendingWhenBudgetRequestsIt() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+        let familyID = try XCTUnwrap(familyContextStore.currentMembership?.familyID)
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: true, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: true, isCurrentUser: false)
+        ]
+
+        familyContextStore.activeContext = FamilyContext(scope: .member(userID: memberUserID))
+
+        XCTAssertTrue(
+            FamilyScopedData.usesAggregateFamilyBudgetSpending(
+                isFamilyBudgetSpendingAvailable: true,
+                familyContextStore: familyContextStore
+            )
+        )
+
+        familyContextStore.activeContext = .personalSelf
+
+        XCTAssertTrue(
+            FamilyScopedData.usesAggregateFamilyBudgetSpending(
+                isFamilyBudgetSpendingAvailable: true,
+                familyContextStore: familyContextStore
+            )
+        )
+    }
+
+    private func visibleHistoryIDs(
+        _ transactions: [LedgerTransaction],
+        audits: [TransactionAuditRecord],
+        scopes: [OwnedRecordScope],
+        familyContextStore: FamilyContextStore,
+        sessionStore: SessionStore
+    ) -> [UUID] {
+        FamilyScopedData.visibleTransactionsForHistory(
+            transactions,
+            audits: audits,
+            scopes: scopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        ).map(\.id)
+    }
+
+    private func visibleFinancialIDs(
+        _ transactions: [LedgerTransaction],
+        scopes: [OwnedRecordScope],
+        familyContextStore: FamilyContextStore,
+        sessionStore: SessionStore
+    ) -> [UUID] {
+        FamilyScopedData.visibleTransactionsForFinancial(
+            transactions,
+            scopes: scopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        ).map(\.id)
+    }
+
+    private func makeWallet(name: String) -> LedgerWallet {
+        LedgerWallet(
+            name: name,
+            kind: .cash,
+            iconSymbolName: "wallet.pass.fill",
+            iconColorHex: "#6E56CF"
+        )
+    }
+
+    private func makeTransaction(title: String, wallet: LedgerWallet) -> LedgerTransaction {
+        LedgerTransaction(
+            primaryKind: .expense,
+            title: title,
+            amountMinor: 1_000,
+            sourceWallet: wallet
+        )
+    }
+
+    private func makeMember(
+        familyID: UUID,
+        userID: UUID,
+        hasSyncedCloudData: Bool,
+        isCurrentUser: Bool
+    ) -> FamilyMember {
+        let role: FamilyRole = isCurrentUser ? .owner : .member
+        return FamilyMember(
+            membershipID: UUID(),
+            familyID: familyID,
+            userID: userID,
+            displayName: isCurrentUser ? "Self" : "Member",
+            avatarURL: nil,
+            hasSyncedCloudData: hasSyncedCloudData,
+            role: role,
+            policy: .preset(for: role),
+            isCurrentUser: isCurrentUser
+        )
+    }
+
+    private func makeContainer() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: MistiaSchemaV1.self)
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func makeSessionStore(container: ModelContainer, userID: UUID) -> SessionStore {
+        let store = SessionStore(
+            modelContainer: container,
+            userDefaults: UserDefaults(suiteName: "MistiaFamilyScopedDataTests.\(UUID().uuidString)") ?? .standard,
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .disconnected),
+            registerBackgroundRefresh: false
+        )
+        store.summary = SessionSummary(
+            userID: userID,
+            displayName: "Self",
+            email: "self@example.com",
+            avatarURL: nil
+        )
+        return store
+    }
+
+    private func makeFamilyContextStore(container: ModelContainer, currentUserID: UUID) -> FamilyContextStore {
+        let now = Date(timeIntervalSince1970: 1_770_000_000)
+        let familyID = UUID()
+        let store = FamilyContextStore(modelContainer: container)
+        store.currentMembership = FamilyMembershipRecord(
+            id: UUID(),
+            familyID: familyID,
+            userID: currentUserID,
+            roleRawValue: FamilyRole.owner.rawValue,
+            canViewFamilyDashboard: true,
+            canViewOthers: true,
+            canEditOthers: false,
+            canViewWallets: true,
+            canViewDebts: true,
+            canViewKids: true,
+            canEditKids: false,
+            deletedAt: nil,
+            createdAt: now,
+            updatedAt: now
+        )
+        return store
+    }
+}

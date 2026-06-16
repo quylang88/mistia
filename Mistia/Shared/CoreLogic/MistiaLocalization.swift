@@ -6,6 +6,7 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
     case japanese = "ja"
 
     static let userDefaultsKey = "mistia.settings.app.language"
+    static let backupUserDefaultsKey = "mistia.settings.app.language.backup"
 
     var id: String { rawValue }
 
@@ -25,19 +26,17 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
     }
 
     var calendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.locale = locale
-        return calendar
+        MistiaCalendar.gregorian(locale: locale)
     }
 
     var displayName: String {
         switch self {
         case .vietnamese:
-            "Tiếng Việt"
+            L10n.settings.language.option.vietnamese
         case .english:
-            "English"
+            L10n.settings.language.option.english
         case .japanese:
-            "日本語"
+            L10n.settings.language.option.japanese
         }
     }
 
@@ -72,51 +71,77 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
         return infer(preferredLanguages: preferredLanguages)
     }
 
+    static func persist(_ language: Self, defaults: UserDefaults = .standard) {
+        defaults.set(language.rawValue, forKey: userDefaultsKey)
+        defaults.set(language.rawValue, forKey: backupUserDefaultsKey)
+    }
+
+    @discardableResult
+    static func bootstrapStoredPreference(
+        defaults: UserDefaults = .standard,
+        preferredLanguages: [String] = Locale.preferredLanguages
+    ) -> Self {
+        if let storedRawValue = defaults.string(forKey: userDefaultsKey),
+           let storedLanguage = Self(rawValue: storedRawValue) {
+            defaults.set(storedLanguage.rawValue, forKey: backupUserDefaultsKey)
+            return storedLanguage
+        }
+
+        if let backupRawValue = defaults.string(forKey: backupUserDefaultsKey),
+           let backupLanguage = Self(rawValue: backupRawValue) {
+            defaults.set(backupLanguage.rawValue, forKey: userDefaultsKey)
+            return backupLanguage
+        }
+
+        let inferredLanguage = infer(preferredLanguages: preferredLanguages)
+        persist(inferredLanguage, defaults: defaults)
+        return inferredLanguage
+    }
+
     static var current: Self {
-        resolve(storedRawValue: UserDefaults.standard.string(forKey: userDefaultsKey))
+        let defaults = UserDefaults.standard
+        if let storedRawValue = defaults.string(forKey: userDefaultsKey) {
+            return resolve(storedRawValue: storedRawValue)
+        }
+
+        if let backupRawValue = defaults.string(forKey: backupUserDefaultsKey) {
+            return resolve(storedRawValue: backupRawValue)
+        }
+
+        return infer()
     }
 }
 
-@inline(__always)
-nonisolated func mistiaLocalized(
-    vi: String,
-    en: String,
-    ja: String,
-    language: MistiaAppLanguage = .current
-) -> String {
-    switch language {
-    case .vietnamese:
-        vi
-    case .english:
-        en
-    case .japanese:
-        ja
+nonisolated enum MistiaCalendar {
+    static var current: Calendar {
+        gregorian(locale: .autoupdatingCurrent)
     }
-}
 
-@inline(__always)
-nonisolated func mistiaCatalog(
-    _ key: String,
-    language: MistiaAppLanguage = .current
-) -> String {
-    String(
-        localized: String.LocalizationValue(key),
-        bundle: .main,
-        locale: language.locale
-    )
+    static func gregorian(
+        locale: Locale? = nil,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale ?? .autoupdatingCurrent
+        calendar.timeZone = timeZone
+        return calendar
+    }
 }
 
 nonisolated enum MistiaDateFormatting {
+    private static let formatterCache = MistiaDateFormatterCache()
+
     static func shortDateString(
         for date: Date,
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatter(
-            template: "ddMM",
+        formatterCache.string(
+            from: date,
             language: language,
-            calendar: calendar
-        ).string(from: date)
+            calendar: calendar,
+            style: .dateFormat("dd/MM")
+        )
     }
 
     static func fullDateString(
@@ -124,11 +149,21 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatter(
-            template: "ddMMyyyy",
+        let dateFormat: String
+        switch language {
+        case .vietnamese:
+            dateFormat = "dd/MM/yyyy"
+        case .english:
+            dateFormat = "yyyy-MM-dd"
+        case .japanese:
+            dateFormat = "yyyy年M月d日"
+        }
+        return formatterCache.string(
+            from: date,
             language: language,
-            calendar: calendar
-        ).string(from: date)
+            calendar: calendar,
+            style: .dateFormat(dateFormat)
+        )
     }
 
     static func dateTimeString(
@@ -136,10 +171,21 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        let formatter = formatter(language: language, calendar: calendar)
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        let dateFormat: String
+        switch language {
+        case .vietnamese:
+            dateFormat = "HH:mm 'ngày' d 'tháng' M, yyyy"
+        case .english:
+            dateFormat = "yyyy-MM-dd HH:mm"
+        case .japanese:
+            dateFormat = "yyyy年M月d日 HH:mm"
+        }
+        return formatterCache.string(
+            from: date,
+            language: language,
+            calendar: calendar,
+            style: .dateFormat(dateFormat)
+        )
     }
 
     static func monthYearString(
@@ -147,11 +193,32 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatter(
-            template: "yMMMM",
+        formatterCache.string(
+            from: date,
             language: language,
-            calendar: calendar
-        ).string(from: date)
+            calendar: calendar,
+            style: .localizedTemplate("yMMMM")
+        )
+    }
+
+    static func statementMonthYearString(
+        for date: Date,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        let dateFormat: String
+        switch language {
+        case .vietnamese, .english:
+            dateFormat = "MM/yyyy"
+        case .japanese:
+            dateFormat = "yyyy年MM月"
+        }
+        return formatterCache.string(
+            from: date,
+            language: language,
+            calendar: calendar,
+            style: .dateFormat(dateFormat)
+        )
     }
 
     static func weekRangeTitle(
@@ -163,12 +230,7 @@ nonisolated enum MistiaDateFormatting {
     ) -> String {
         let range = "\(shortDateString(for: start, language: language, calendar: calendar)) - \(shortDateString(for: end, language: language, calendar: calendar))"
         guard isCurrentWeek else { return range }
-        return mistiaLocalized(
-            vi: "Tuần này • \(range)",
-            en: "This week • \(range)",
-            ja: "今週 • \(range)",
-            language: language
-        )
+        return L10n.shared.corelogic.mistialocalization.thisWeekValue(String(describing: range))
     }
 
     static func weekdayLabel(
@@ -177,6 +239,13 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current
     ) -> String {
         let weekday = calendar.component(.weekday, from: date)
+        return weekdayLabel(for: weekday, language: language)
+    }
+
+    static func weekdayLabel(
+        for weekday: Int,
+        language: MistiaAppLanguage = .current
+    ) -> String {
         let labels: [String]
 
         switch language {
@@ -197,26 +266,11 @@ nonisolated enum MistiaDateFormatting {
     ) -> String? {
         switch dayDelta {
         case 0:
-            return mistiaLocalized(
-                vi: "Hôm nay",
-                en: "Today",
-                ja: "今日",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.today(language: language)
         case 1:
-            return mistiaLocalized(
-                vi: "Hôm qua",
-                en: "Yesterday",
-                ja: "昨日",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.yesterday(language: language)
         case 2:
-            return mistiaLocalized(
-                vi: "Hôm kia",
-                en: "2 days ago",
-                ja: "一昨日",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.daysAgo(language: language)
         default:
             return nil
         }
@@ -225,57 +279,87 @@ nonisolated enum MistiaDateFormatting {
     static func relativeTimeLabel(
         for date: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current,
+        calendar: Calendar = MistiaCalendar.current,
         language: MistiaAppLanguage = .current
     ) -> String {
-        let startOfReference = calendar.startOfDay(for: referenceDate)
-        let startOfDate = calendar.startOfDay(for: date)
-        let dayDelta = calendar.dateComponents([.day], from: startOfDate, to: startOfReference).day ?? 0
+        let diff = referenceDate.timeIntervalSince(date)
 
-        if dayDelta == 0 {
-            let minutes = max(Int(referenceDate.timeIntervalSince(date) / 60), 0)
-            if minutes < 60 {
-                let safeMinutes = max(minutes, 1)
-                return mistiaLocalized(
-                    vi: "\(safeMinutes) phút trước",
-                    en: "\(safeMinutes) min ago",
-                    ja: "\(safeMinutes)分前",
-                    language: language
-                )
-            }
+        let referenceDay = calendar.startOfDay(for: referenceDate)
+        let dateDay = calendar.startOfDay(for: date)
+        let dayDelta = calendar.dateComponents([.day], from: dateDay, to: referenceDay).day ?? 0
 
-            let hours = max(Int(referenceDate.timeIntervalSince(date) / 3_600), 0)
-            if hours < 10 {
-                let safeHours = max(hours, 1)
-                return mistiaLocalized(
-                    vi: "\(safeHours) tiếng trước",
-                    en: "\(safeHours) hr ago",
-                    ja: "\(safeHours)時間前",
-                    language: language
-                )
-            }
+        if dayDelta == 0, diff < 3600 {
+            let minutes = max(Int(diff / 60), 1)
+            return L10n.shared.corelogic.mistialocalization.valueMinAgo(String(describing: minutes), language: language)
         }
 
-        if let relativeLabel = relativeDayLabel(for: dayDelta, language: language) {
-            return relativeLabel
+        if dayDelta == 0, diff < 6 * 3600 {
+            let hours = max(Int(diff / 3600), 1)
+            return L10n.shared.corelogic.mistialocalization.valueHrAgo(String(describing: hours), language: language)
+        }
+
+        if let label = relativeDayLabel(for: dayDelta, language: language) {
+            return label
         }
 
         return shortDateString(for: date, language: language, calendar: calendar)
     }
 
-    private static func formatter(
-        template: String? = nil,
+}
+
+nonisolated private final class MistiaDateFormatterCache: @unchecked Sendable {
+    private var formatters: [MistiaDateFormatterCacheKey: DateFormatter] = [:]
+    private let lock = NSLock()
+
+    func string(
+        from date: Date,
         language: MistiaAppLanguage,
-        calendar: Calendar? = nil
-    ) -> DateFormatter {
+        calendar: Calendar?,
+        style: MistiaDateFormatterCacheStyle
+    ) -> String {
+        let resolvedCalendar = calendar ?? language.calendar
+        let key = MistiaDateFormatterCacheKey(
+            languageRawValue: language.rawValue,
+            calendarIdentifier: String(describing: resolvedCalendar.identifier),
+            localeIdentifier: language.locale.identifier,
+            timeZoneIdentifier: resolvedCalendar.timeZone.identifier,
+            style: style
+        )
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let formatter = formatters[key] {
+            return formatter.string(from: date)
+        }
+
         let formatter = DateFormatter()
         formatter.locale = language.locale
-        formatter.calendar = calendar ?? language.calendar
-        if let template {
+        formatter.calendar = resolvedCalendar
+        formatter.timeZone = resolvedCalendar.timeZone
+        switch style {
+        case .dateFormat(let dateFormat):
+            formatter.dateFormat = dateFormat
+        case .localizedTemplate(let template):
             formatter.setLocalizedDateFormatFromTemplate(template)
         }
-        return formatter
+
+        formatters[key] = formatter
+        return formatter.string(from: date)
     }
+}
+
+nonisolated private struct MistiaDateFormatterCacheKey: Hashable {
+    let languageRawValue: String
+    let calendarIdentifier: String
+    let localeIdentifier: String
+    let timeZoneIdentifier: String
+    let style: MistiaDateFormatterCacheStyle
+}
+
+nonisolated private enum MistiaDateFormatterCacheStyle: Hashable {
+    case dateFormat(String)
+    case localizedTemplate(String)
 }
 
 nonisolated enum MistiaIconColorPalette {
@@ -292,16 +376,6 @@ nonisolated enum MistiaIconColorPalette {
         "#FF6FB5",
         "#9A67FF",
         "#8A8A8E"
-    ]
-
-    private static let legacyDefaultHexMappings: [String: String] = [
-        "#F59B3F": "#FF9F1C",
-        "#FF7E67": "#F26A5A",
-        "#7C85A3": "#8A8A8E",
-        "#FFB13B": "#FF9F1C",
-        "#F45C7E": "#F26A5A",
-        "#8A6BFF": "#9A67FF",
-        "#5FAEFF": "#57B7FF"
     ]
 
     static func normalizedHex(_ hex: String) -> String {
@@ -328,17 +402,13 @@ nonisolated enum MistiaIconColorPalette {
         presetHexes.contains(normalizedHex(hex))
     }
 
-    static func migratedLegacyDefaultHex(_ hex: String) -> String? {
-        legacyDefaultHexMappings[normalizedHex(hex)]
-    }
-
     static func pickerSelectionHex(forStored hex: String) -> String {
-        migratedLegacyDefaultHex(hex) ?? normalizedHex(hex)
+        normalizedHex(hex)
     }
 
     static func shouldShowCurrentSwatch(forStored hex: String) -> Bool {
         let normalized = normalizedHex(hex)
-        return !containsPreset(normalized) && migratedLegacyDefaultHex(normalized) == nil
+        return !containsPreset(normalized)
     }
 
     static func presetHex(forDefault hex: String) -> String {

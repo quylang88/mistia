@@ -35,10 +35,62 @@ nonisolated enum MistiaCurrencyFormatting {
     }
 }
 
+nonisolated enum MistiaCurrencyInputFormatting {
+    static func groupedInput(_ input: String) -> String {
+        let sanitized = sanitizedDigitsAndSign(from: input)
+        let isNegative = sanitized.hasPrefix("-")
+        let digits = isNegative ? String(sanitized.dropFirst()) : sanitized
+
+        guard !digits.isEmpty else { return isNegative ? "-" : "" }
+
+        let reversedDigits = Array(digits.reversed())
+        var grouped = ""
+        grouped.reserveCapacity(digits.count + digits.count / 3)
+
+        for (index, character) in reversedDigits.enumerated() {
+            if index > 0, index % 3 == 0 {
+                grouped.append(",")
+            }
+            grouped.append(character)
+        }
+
+        let result = String(grouped.reversed())
+        return isNegative ? "-" + result : result
+    }
+
+    static func minorUnits(from input: String, currencyCode: String) -> Int64 {
+        let sanitized = sanitizedDigitsAndSign(from: input)
+        guard let value = Int64(sanitized) else { return 0 }
+
+        if currencyCode.uppercased() == "JPY" {
+            return value
+        }
+
+        return value
+    }
+
+    private static func sanitizedDigitsAndSign(from input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sign = trimmed.hasPrefix("-") ? "-" : ""
+        let digits = trimmed.replacingOccurrences(
+            of: "[^0-9]",
+            with: "",
+            options: .regularExpression
+        )
+        return sign + digits
+    }
+}
+
+extension String {
+    nonisolated func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
+        MistiaCurrencyInputFormatting.minorUnits(from: self, currencyCode: currencyCode)
+    }
+}
+
 extension Int64 {
     nonisolated func formattedCurrency(code: String) -> String {
         let uppercaseCode = code.uppercased()
-        let fractionDigits = uppercaseCode == "JPY" ? 0 : 2
+        let fractionDigits = MistiaCurrencyLogic.hasMinorFractionDigits(uppercaseCode) ? 2 : 0
         let amount = decimalCurrencyAmount(fractionDigits: fractionDigits)
         let locale = MistiaCurrencyFormatting.locale(for: uppercaseCode)
 

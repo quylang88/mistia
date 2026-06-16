@@ -18,27 +18,27 @@ enum MistiaIconGroupID: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .finance:
-            mistiaLocalized(vi: "Tài chính", en: "Finance", ja: "金融")
+            L10n.core.ui.mistiaiconpicker.finance
         case .shopping:
-            mistiaLocalized(vi: "Mua sắm", en: "Shopping", ja: "買い物")
+            L10n.core.ui.mistiaiconpicker.shopping
         case .food:
-            mistiaLocalized(vi: "Ăn uống", en: "Food", ja: "食事")
+            L10n.core.ui.mistiaiconpicker.food
         case .home:
-            mistiaLocalized(vi: "Nhà cửa", en: "Home", ja: "住まい")
+            L10n.core.ui.mistiaiconpicker.home
         case .utilities:
-            mistiaLocalized(vi: "Hóa đơn / tiện ích", en: "Bills / utilities", ja: "請求・公共料金")
+            L10n.core.ui.mistiaiconpicker.billsUtilities
         case .transport:
-            mistiaLocalized(vi: "Di chuyển", en: "Transport", ja: "移動")
+            L10n.core.ui.mistiaiconpicker.transport
         case .travel:
-            mistiaLocalized(vi: "Du lịch", en: "Travel", ja: "旅行")
+            L10n.core.ui.mistiaiconpicker.travel
         case .health:
-            mistiaLocalized(vi: "Sức khỏe", en: "Health", ja: "健康")
+            L10n.core.ui.mistiaiconpicker.health
         case .work:
-            mistiaLocalized(vi: "Công việc / học tập", en: "Work / study", ja: "仕事・学習")
+            L10n.core.ui.mistiaiconpicker.workStudy
         case .entertainment:
-            mistiaLocalized(vi: "Giải trí", en: "Entertainment", ja: "娯楽")
+            L10n.core.ui.mistiaiconpicker.entertainment
         case .personal:
-            mistiaLocalized(vi: "Mục tiêu / cá nhân", en: "Goals / personal", ja: "目標・個人")
+            L10n.core.ui.mistiaiconpicker.goalsPersonal
         }
     }
 
@@ -218,17 +218,9 @@ private struct MistiaIconColorPreset: Identifiable, Hashable {
     var accessibilityLabel: String {
         switch kind {
         case .preset:
-            return mistiaLocalized(
-                vi: "Màu \(hex)",
-                en: "Color \(hex)",
-                ja: "色 \(hex)"
-            )
+            return L10n.core.ui.mistiaiconpicker.colorValue(String(describing: hex))
         case .current:
-            return mistiaLocalized(
-                vi: "Màu hiện tại \(hex)",
-                en: "Current color \(hex)",
-                ja: "現在の色 \(hex)"
-            )
+            return L10n.core.ui.mistiaiconpicker.currentColorValue(String(describing: hex))
         }
     }
 
@@ -251,6 +243,8 @@ struct MistiaIconPickerSheet: View {
 
     let title: String
     let onSave: (String, String) -> Void
+    private let initialSymbolName: String
+    private let initialColorHex: String
 
     @State private var selectedSymbolName: String
     @State private var selectedColorHex: String
@@ -270,6 +264,8 @@ struct MistiaIconPickerSheet: View {
         self.title = title
         self.onSave = onSave
         let normalizedSelectedColorHex = MistiaIconColorPalette.pickerSelectionHex(forStored: selectedColorHex)
+        self.initialSymbolName = selectedSymbolName
+        self.initialColorHex = normalizedSelectedColorHex
         _selectedSymbolName = State(initialValue: selectedSymbolName)
         _selectedColorHex = State(initialValue: normalizedSelectedColorHex)
         _selectedGroupID = State(initialValue: MistiaIconCatalog.initialGroup(for: selectedSymbolName))
@@ -284,6 +280,13 @@ struct MistiaIconPickerSheet: View {
         Color(hex: selectedColorHex)
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: selectedSymbolName != initialSymbolName || selectedColorHex != initialColorHex
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -295,7 +298,7 @@ struct MistiaIconPickerSheet: View {
                             size: 58
                         )
 
-                        Text(mistiaLocalized(vi: "Xem trước icon", en: "Icon preview", ja: "アイコンプレビュー"))
+                        Text(L10n.core.ui.mistiaiconpicker.iconPreview)
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
@@ -356,7 +359,7 @@ struct MistiaIconPickerSheet: View {
                                     )
                                     .animation(.snappy(duration: 0.18), value: isSelected)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                                 .accessibilityLabel(symbol)
                                 .zIndex(isSelected ? 10 : 0)
                             }
@@ -371,13 +374,7 @@ struct MistiaIconPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -387,7 +384,7 @@ struct MistiaIconPickerSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
                             .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.glassProminent)
@@ -396,6 +393,7 @@ struct MistiaIconPickerSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
     }
 
     @ViewBuilder
@@ -442,7 +440,7 @@ struct MistiaIconPickerSheet: View {
                 )
 
                 Text(choice.kind == .current
-                    ? mistiaLocalized(vi: "Hiện tại", en: "Current", ja: "現在")
+                    ? L10n.core.ui.mistiaiconpicker.current
                     : " ")
                     .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -451,7 +449,7 @@ struct MistiaIconPickerSheet: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
         .accessibilityLabel(choice.accessibilityLabel)
     }
 

@@ -1,0 +1,2659 @@
+[
+  {
+    "active" : false,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#FF9F1C",
+        "fallbackIcon" : "doc.text.fill",
+        "group" : "home",
+        "icon" : "mistia.category.legacy.billing",
+        "id" : "billing",
+        "translations" : {
+          "en" : "Bills",
+          "ja" : "請求",
+          "vi" : "Hóa đơn"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#FF9F1C",
+        "fallbackIcon" : "fork.knife",
+        "group" : "food",
+        "icon" : "mistia.category.legacy.food",
+        "id" : "food",
+        "translations" : {
+          "en" : "Food & drinks",
+          "ja" : "食費",
+          "vi" : "Ăn uống"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "house.fill",
+        "group" : "home",
+        "icon" : "mistia.category.legacy.housing",
+        "id" : "housing",
+        "translations" : {
+          "en" : "Housing",
+          "ja" : "住居",
+          "vi" : "Nhà ở"
+        }
+      }
+    ],
+    "color" : "#FF9F1C",
+    "fallbackIcon" : "house.fill",
+    "group" : "home",
+    "icon" : "mistia.category.parent.legacy.living",
+    "id" : "parent_expense_living",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Living",
+      "ja" : "生活費",
+      "vi" : "Sinh hoạt"
+    }
+  },
+  {
+    "active" : false,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "train.side.front.car",
+        "group" : "mobility",
+        "icon" : "mistia.category.legacy.transportation",
+        "id" : "transportation",
+        "translations" : {
+          "en" : "Transport",
+          "ja" : "交通",
+          "vi" : "Di chuyển"
+        }
+      }
+    ],
+    "color" : "#5B7BFF",
+    "fallbackIcon" : "airplane",
+    "group" : "mobility",
+    "icon" : "mistia.category.parent.legacy.mobility_travel",
+    "id" : "parent_expense_mobility_travel",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Mobility & trips",
+      "ja" : "移動・旅行",
+      "vi" : "Di chuyển & chuyến đi"
+    }
+  },
+  {
+    "active" : false,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#9A67FF",
+        "fallbackIcon" : "book.closed.fill",
+        "group" : "work",
+        "icon" : "mistia.category.legacy.education",
+        "id" : "education",
+        "translations" : {
+          "en" : "Education",
+          "ja" : "教育",
+          "vi" : "Giáo dục"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#F26A5A",
+        "fallbackIcon" : "party.popper.fill",
+        "group" : "leisure",
+        "icon" : "mistia.category.legacy.entertainment",
+        "id" : "entertainment",
+        "translations" : {
+          "en" : "Entertainment",
+          "ja" : "娯楽",
+          "vi" : "Đi chơi"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#F26A5A",
+        "fallbackIcon" : "cross.case.fill",
+        "group" : "health",
+        "icon" : "mistia.category.legacy.health",
+        "id" : "health",
+        "translations" : {
+          "en" : "Health",
+          "ja" : "健康",
+          "vi" : "Sức khỏe"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#F26A5A",
+        "fallbackIcon" : "bag.fill",
+        "group" : "personal",
+        "icon" : "mistia.category.legacy.shopping",
+        "id" : "shopping",
+        "translations" : {
+          "en" : "Shopping",
+          "ja" : "買い物",
+          "vi" : "Mua sắm"
+        }
+      }
+    ],
+    "color" : "#F26A5A",
+    "fallbackIcon" : "sparkles",
+    "group" : "personal",
+    "icon" : "mistia.category.parent.legacy.personal_lifestyle",
+    "id" : "parent_expense_personal_lifestyle",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Personal & lifestyle",
+      "ja" : "個人・ライフスタイル",
+      "vi" : "Cá nhân & phong cách sống"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+          "Đi chợ / thực phẩm"
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "basket.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.grocery",
+        "id" : "grocery",
+        "translations" : {
+          "en" : "Groceries",
+          "ja" : "食料品",
+          "vi" : "Đi chợ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "briefcase.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.business_meals",
+        "id" : "business_meals",
+        "translations" : {
+          "en" : "Business meals",
+          "ja" : "会食",
+          "vi" : "Ăn uống công việc"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#C46A6A",
+        "fallbackIcon" : "cup.and.saucer.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.cafe_tea",
+        "id" : "cafe_tea",
+        "translations" : {
+          "en" : "Cafe / milk tea",
+          "ja" : "カフェ・ミルクティー",
+          "vi" : "Cafe / trà sữa"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "bag.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.daily_supplies",
+        "id" : "daily_supplies",
+        "translations" : {
+          "en" : "Daily supplies",
+          "ja" : "日用品",
+          "vi" : "Đồ tiêu dùng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "fork.knife.circle.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.dine_out",
+        "id" : "dine_out",
+        "translations" : {
+          "en" : "Dining out",
+          "ja" : "外食",
+          "vi" : "Ăn ngoài"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF7A59",
+        "fallbackIcon" : "takeoutbag.and.cup.and.straw.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.delivery",
+        "id" : "food_delivery",
+        "translations" : {
+          "en" : "Food delivery",
+          "ja" : "フードデリバリー",
+          "vi" : "Đặt đồ ăn"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "desktopcomputer",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.small_appliances",
+        "id" : "small_appliances",
+        "translations" : {
+          "en" : "Small home goods",
+          "ja" : "小型家電",
+          "vi" : "Đồ gia dụng nhỏ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "birthday.cake.fill",
+        "group" : "food",
+        "icon" : "mistia.category.expense.food.snacks",
+        "id" : "snacks",
+        "translations" : {
+          "en" : "Snacks",
+          "ja" : "おやつ",
+          "vi" : "Ăn vặt / bánh kẹo"
+        }
+      }
+    ],
+    "color" : "#FF8A4C",
+    "fallbackIcon" : "cart.fill",
+    "group" : "food",
+    "icon" : "mistia.category.parent.expense.food",
+    "id" : "parent_expense_food",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Essentials",
+      "ja" : "生活費",
+      "vi" : "Sinh hoạt"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "cart.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.goods_sourcing",
+        "id" : "goods_sourcing",
+        "translations" : {
+          "en" : "Sourcing costs",
+          "ja" : "仕入れ費用",
+          "vi" : "Chi phí lấy hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "box.truck.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.import_goods",
+        "id" : "import_goods",
+        "translations" : {
+          "en" : "Inventory purchases",
+          "ja" : "仕入れ",
+          "vi" : "Nhập hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "megaphone.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.marketing_ads",
+        "id" : "marketing_ads",
+        "translations" : {
+          "en" : "Marketing / ads",
+          "ja" : "マーケティング・広告",
+          "vi" : "Marketing / quảng cáo"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "shippingbox.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.packaging",
+        "id" : "packaging",
+        "translations" : {
+          "en" : "Packaging",
+          "ja" : "梱包材",
+          "vi" : "Đóng gói / bao bì"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "building.2.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.platform_fee",
+        "id" : "platform_fee",
+        "translations" : {
+          "en" : "Platform fees",
+          "ja" : "プラットフォーム手数料",
+          "vi" : "Chi phí sàn"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "car.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.shipping_fee",
+        "id" : "shipping_fee",
+        "translations" : {
+          "en" : "Shipping fees",
+          "ja" : "配送料",
+          "vi" : "Phí vận chuyển hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "creditcard.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.other_sales_cost",
+        "id" : "other_sales_cost",
+        "translations" : {
+          "en" : "Other selling costs",
+          "ja" : "その他販売費",
+          "vi" : "Chi phí bán hàng khác"
+        }
+      }
+    ],
+    "color" : "#4C8DFF",
+    "fallbackIcon" : "shippingbox.fill",
+    "group" : "work",
+    "icon" : "mistia.category.parent.expense.cost_of_goods",
+    "id" : "parent_expense_cost_of_goods",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Cost of goods",
+      "ja" : "仕入高",
+      "vi" : "Tiền hàng"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+          "Phí chung cư / dịch vụ"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "building.2.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.condo_fee",
+        "id" : "condo_fee",
+        "translations" : {
+          "en" : "Condo / management fee",
+          "ja" : "管理費",
+          "vi" : "Phí chung cư / quản lý"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "bolt.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.electricity",
+        "id" : "electricity",
+        "translations" : {
+          "en" : "Electricity",
+          "ja" : "電気",
+          "vi" : "Điện"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "chair.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.furniture_appliance",
+        "id" : "furniture_appliance",
+        "translations" : {
+          "en" : "Furniture / appliances",
+          "ja" : "家具・家電",
+          "vi" : "Nội thất / đồ gia dụng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "flame.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.gas",
+        "id" : "gas",
+        "translations" : {
+          "en" : "Gas",
+          "ja" : "ガス",
+          "vi" : "Gas"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "wrench.and.screwdriver.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.home_repair",
+        "id" : "home_repair",
+        "translations" : {
+          "en" : "Home repairs",
+          "ja" : "住居修理",
+          "vi" : "Sửa chữa / bảo trì nhà"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "wifi",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.internet",
+        "id" : "internet",
+        "translations" : {
+          "en" : "Internet",
+          "ja" : "インターネット",
+          "vi" : "Internet"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "building.columns.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.mortgage_installment",
+        "id" : "mortgage_installment",
+        "translations" : {
+          "en" : "Mortgage installment",
+          "ja" : "住宅ローン",
+          "vi" : "Trả góp nhà"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "phone.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.phone",
+        "id" : "phone",
+        "translations" : {
+          "en" : "Phone",
+          "ja" : "携帯・電話",
+          "vi" : "Điện thoại"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Tiền nhà / thuê nhà"
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "house.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.rent",
+        "id" : "rent",
+        "translations" : {
+          "en" : "Rent",
+          "ja" : "家賃",
+          "vi" : "Tiền nhà"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "drop.fill",
+        "group" : "home",
+        "icon" : "mistia.category.expense.home_bills.water",
+        "id" : "water",
+        "translations" : {
+          "en" : "Water",
+          "ja" : "水道",
+          "vi" : "Nước"
+        }
+      }
+    ],
+    "color" : "#5B7BFF",
+    "fallbackIcon" : "house.fill",
+    "group" : "home",
+    "icon" : "mistia.category.parent.expense.home_bills",
+    "id" : "parent_expense_home_bills",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Housing & bills",
+      "ja" : "住居・請求",
+      "vi" : "Nhà ở & hóa đơn"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Gia đình & con cái"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "takeoutbag.and.cup.and.straw.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.baby_food",
+        "id" : "baby_food",
+        "translations" : {
+          "en" : "Milk / baby food",
+          "ja" : "ミルク・離乳食",
+          "vi" : "Sữa / đồ ăn dặm"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "bed.double.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.baby_gear",
+        "id" : "baby_gear",
+        "translations" : {
+          "en" : "Stroller / crib / baby gear",
+          "ja" : "ベビーカー・ベビー用品",
+          "vi" : "Xe đẩy / nôi / ghế ăn / đồ sơ sinh"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Hoạt động ngoại khóa"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "figure.run",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.child_extracurricular",
+        "id" : "child_extracurricular",
+        "translations" : {
+          "en" : "Leisure & play",
+          "ja" : "レジャー・遊び",
+          "vi" : "Hoạt động vui chơi"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Khám bệnh cho con"
+        ],
+        "color" : "#F45C7E",
+        "fallbackIcon" : "stethoscope",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.child_medical",
+        "id" : "child_medical",
+        "translations" : {
+          "en" : "Child doctor visits",
+          "ja" : "子どもの通院",
+          "vi" : "Khám bệnh cho bé"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "pills.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.child_medicine",
+        "id" : "child_medicine",
+        "translations" : {
+          "en" : "Child medicine / vitamins",
+          "ja" : "子どもの薬・ビタミン",
+          "vi" : "Thuốc / vitamin cho bé"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Đồ dùng cho con"
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "shippingbox.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.child_supplies",
+        "id" : "child_supplies",
+        "translations" : {
+          "en" : "Baby clothes / supplies",
+          "ja" : "子ども用品",
+          "vi" : "Quần áo / đồ dùng cho bé"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "gamecontroller.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.child_toys",
+        "id" : "child_toys",
+        "translations" : {
+          "en" : "Toys",
+          "ja" : "おもちゃ",
+          "vi" : "Đồ chơi"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Học phí cho con"
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "graduationcap.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.child_tuition",
+        "id" : "child_tuition",
+        "translations" : {
+          "en" : "Tuition / childcare",
+          "ja" : "学費・保育料",
+          "vi" : "Học phí / giữ trẻ / mầm non"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Giữ trẻ / trông trẻ"
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.childcare",
+        "id" : "childcare",
+        "translations" : {
+          "en" : "Babysitting",
+          "ja" : "保育・ベビーシッター",
+          "vi" : "Trông trẻ / babysitter"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Bỉm / sữa"
+        ],
+        "color" : "#FF9AB5",
+        "fallbackIcon" : "drop.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.diapers_milk",
+        "id" : "diapers_milk",
+        "translations" : {
+          "en" : "Diapers",
+          "ja" : "おむつ",
+          "vi" : "Bỉm / tã"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Sách / dụng cụ học tập"
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "book.closed.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.school_books_supplies",
+        "id" : "school_books_supplies",
+        "translations" : {
+          "en" : "School books / supplies",
+          "ja" : "教材・学用品",
+          "vi" : "Sách / học cụ cho bé"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Chi gia đình khác"
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "heart.text.square.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.family_other",
+        "id" : "family_other",
+        "translations" : {
+          "en" : "Other child expenses",
+          "ja" : "その他子ども費",
+          "vi" : "Chi khác cho con"
+        }
+      }
+    ],
+    "color" : "#FF6D8A",
+    "fallbackIcon" : "person.2.fill",
+    "group" : "family",
+    "icon" : "mistia.category.parent.expense.family_children",
+    "id" : "parent_expense_family_children",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Children",
+      "ja" : "子ども",
+      "vi" : "Con cái"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "drop.circle.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.car_wash",
+        "id" : "car_wash",
+        "translations" : {
+          "en" : "Car wash",
+          "ja" : "洗車",
+          "vi" : "Rửa xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Nhiên liệu",
+          "Đổ xăng"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "fuelpump.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.fuel",
+        "id" : "fuel",
+        "translations" : {
+          "en" : "Fuel",
+          "ja" : "ガソリン",
+          "vi" : "Xăng xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Taxi"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "car.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.grab_taxi",
+        "id" : "grab_taxi",
+        "translations" : {
+          "en" : "Rideshare / taxi",
+          "ja" : "配車・タクシー",
+          "vi" : "Grab / taxi"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Bãi đỗ xe",
+          "Phí gửi xe",
+          "Tiền bãi đỗ xe"
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "parkingsign.circle.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.parking",
+        "id" : "parking",
+        "translations" : {
+          "en" : "Parking",
+          "ja" : "駐車場",
+          "vi" : "Gửi xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Tiền tàu điện",
+          "Tàu điện",
+          "Vé tháng",
+          "Vé tàu",
+          "Vé xe buýt"
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "tram.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.public_transport",
+        "id" : "public_transport",
+        "translations" : {
+          "en" : "Bus / train / tickets",
+          "ja" : "バス・電車・乗車券",
+          "vi" : "Xe buýt / tàu / vé xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "ETC",
+          "Phí đường bộ"
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "road.lanes",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.tolls",
+        "id" : "tolls",
+        "translations" : {
+          "en" : "Tolls",
+          "ja" : "高速料金",
+          "vi" : "Phí cầu đường"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Bảo hiểm xe máy",
+          "Bảo hiểm ô tô"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "car.rear.waves.up.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.insurance",
+        "id" : "vehicle_insurance",
+        "translations" : {
+          "en" : "Vehicle insurance",
+          "ja" : "自動車保険",
+          "vi" : "Bảo hiểm xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Bảo trì xe"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "wrench.and.screwdriver.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.maintenance",
+        "id" : "vehicle_maintenance",
+        "translations" : {
+          "en" : "Vehicle maintenance",
+          "ja" : "車両メンテナンス",
+          "vi" : "Bảo dưỡng xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Giấy tờ xe",
+          "Đăng kiểm xe",
+          "Đăng ký xe"
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "doc.text.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.registration",
+        "id" : "vehicle_registration",
+        "translations" : {
+          "en" : "Vehicle registration",
+          "ja" : "車検・登録",
+          "vi" : "Đăng kiểm / giấy tờ xe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Sửa chữa xe"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "gearshape.2.fill",
+        "group" : "mobility",
+        "icon" : "mistia.category.expense.transport_vehicle.repair",
+        "id" : "vehicle_repair",
+        "translations" : {
+          "en" : "Vehicle repairs",
+          "ja" : "車両修理",
+          "vi" : "Sửa xe"
+        }
+      }
+    ],
+    "color" : "#2DAA9E",
+    "fallbackIcon" : "car.fill",
+    "group" : "mobility",
+    "icon" : "mistia.category.parent.expense.transport_vehicle",
+    "id" : "parent_expense_transport_vehicle",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Transport & vehicle",
+      "ja" : "交通・車",
+      "vi" : "Đi lại & xe cộ"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Mua sắm cá nhân"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "watch.analog",
+        "group" : "personal",
+        "icon" : "mistia.category.expense.personal_shopping.accessories",
+        "id" : "accessories",
+        "translations" : {
+          "en" : "Accessories",
+          "ja" : "アクセサリー",
+          "vi" : "Phụ kiện"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "tshirt.fill",
+        "group" : "personal",
+        "icon" : "mistia.category.expense.personal_shopping.clothes",
+        "id" : "clothes",
+        "translations" : {
+          "en" : "Clothing",
+          "ja" : "衣類",
+          "vi" : "Quần áo"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "sparkles",
+        "group" : "personal",
+        "icon" : "mistia.category.expense.personal_shopping.cosmetics_skincare",
+        "id" : "cosmetics_skincare",
+        "translations" : {
+          "en" : "Cosmetics / skincare",
+          "ja" : "コスメ・スキンケア",
+          "vi" : "Mỹ phẩm / skincare"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "shoeprints.fill",
+        "group" : "personal",
+        "icon" : "mistia.category.expense.personal_shopping.footwear",
+        "id" : "footwear",
+        "translations" : {
+          "en" : "Footwear",
+          "ja" : "靴",
+          "vi" : "Giày dép"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "hands.sparkles.fill",
+        "group" : "personal",
+        "icon" : "mistia.category.expense.personal_shopping.personal_care",
+        "id" : "personal_care",
+        "translations" : {
+          "en" : "Personal care",
+          "ja" : "パーソナルケア",
+          "vi" : "Chăm sóc cá nhân"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "shippingbox.fill",
+        "group" : "personal",
+        "icon" : "mistia.category.expense.personal_shopping.personal_supplies",
+        "id" : "personal_supplies",
+        "translations" : {
+          "en" : "Personal supplies",
+          "ja" : "個人用品",
+          "vi" : "Đồ dùng cá nhân"
+        }
+      }
+    ],
+    "color" : "#A76BFF",
+    "fallbackIcon" : "bag.fill",
+    "group" : "personal",
+    "icon" : "mistia.category.parent.expense.personal_shopping",
+    "id" : "parent_expense_personal_shopping",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Shopping",
+      "ja" : "買い物",
+      "vi" : "Mua sắm"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "cross.case.fill",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.dental",
+        "id" : "dental",
+        "translations" : {
+          "en" : "Dental",
+          "ja" : "歯科",
+          "vi" : "Nha khoa"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "figure.run",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.fitness_gym",
+        "id" : "fitness_gym",
+        "translations" : {
+          "en" : "Fitness / gym",
+          "ja" : "ジム・フィットネス",
+          "vi" : "Thể thao / gym"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "lock.shield.fill",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.insurance",
+        "id" : "health_insurance",
+        "translations" : {
+          "en" : "Health insurance",
+          "ja" : "健康保険",
+          "vi" : "Bảo hiểm sức khỏe"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Bệnh viện"
+        ],
+        "color" : "#F45C7E",
+        "fallbackIcon" : "cross.case.fill",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.hospital",
+        "id" : "hospital",
+        "translations" : {
+          "en" : "Hospital",
+          "ja" : "病院",
+          "vi" : "Bệnh viện / viện phí"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "cross.vial.fill",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.lab_tests",
+        "id" : "lab_tests",
+        "translations" : {
+          "en" : "Lab tests",
+          "ja" : "検査",
+          "vi" : "Xét nghiệm"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F45C7E",
+        "fallbackIcon" : "stethoscope",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.checkup",
+        "id" : "medical_checkup",
+        "translations" : {
+          "en" : "Medical checkup",
+          "ja" : "健康診断",
+          "vi" : "Khám bệnh"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "pills.fill",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.medicine",
+        "id" : "medicine",
+        "translations" : {
+          "en" : "Medicine",
+          "ja" : "薬",
+          "vi" : "Thuốc"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Thực phẩm hỗ trợ"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "leaf.fill",
+        "group" : "health",
+        "icon" : "mistia.category.expense.health.supplements",
+        "id" : "supplements",
+        "translations" : {
+          "en" : "Supplements",
+          "ja" : "サプリメント",
+          "vi" : "Thực phẩm bổ sung"
+        }
+      }
+    ],
+    "color" : "#F45C7E",
+    "fallbackIcon" : "cross.case.fill",
+    "group" : "health",
+    "icon" : "mistia.category.parent.expense.health",
+    "id" : "parent_expense_health",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Health",
+      "ja" : "健康",
+      "vi" : "Sức khỏe"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "heart.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.entertainment_social.charity",
+        "id" : "charity",
+        "translations" : {
+          "en" : "Charity",
+          "ja" : "チャリティー",
+          "vi" : "Từ thiện"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F26A5A",
+        "fallbackIcon" : "heart.text.square.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_relations.family_support",
+        "id" : "family_support_expense",
+        "translations" : {
+          "en" : "Family support",
+          "ja" : "親族支援",
+          "vi" : "Hỗ trợ người thân"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Hiếu hỉ / quà tặng"
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "gift.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.entertainment_social.gifts_ceremonies",
+        "id" : "gifts_ceremonies",
+        "translations" : {
+          "en" : "Gifts / ceremonies",
+          "ja" : "贈り物・冠婚葬祭",
+          "vi" : "Hiếu hỉ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_relations.parents_support",
+        "id" : "parents_support_expense",
+        "translations" : {
+          "en" : "Parents / grandparents support",
+          "ja" : "親・祖父母への支援",
+          "vi" : "Biếu ông bà / cha mẹ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Tiệc tùng / liên hoan"
+        ],
+        "color" : "#FF7A59",
+        "fallbackIcon" : "party.popper.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.entertainment_social.parties_gatherings",
+        "id" : "parties_gatherings",
+        "translations" : {
+          "en" : "Parties / gatherings",
+          "ja" : "パーティー・集まり",
+          "vi" : "Tiệc gia đình / liên hoan"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "giftcard.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_relations.gifts",
+        "id" : "relationship_gifts",
+        "translations" : {
+          "en" : "Relationship gifts",
+          "ja" : "交際ギフト",
+          "vi" : "Quà tặng"
+        }
+      }
+    ],
+    "color" : "#FF8A4C",
+    "fallbackIcon" : "gift.fill",
+    "group" : "family",
+    "icon" : "mistia.category.parent.expense.family_relations",
+    "id" : "parent_expense_family_relations",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Family & relationships",
+      "ja" : "家族・交際",
+      "vi" : "Gia đình & quan hệ"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Giải trí & xã hội"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "music.note.list",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.books_music",
+        "id" : "books_music",
+        "translations" : {
+          "en" : "Books / music",
+          "ja" : "本・音楽",
+          "vi" : "Sách / truyện / nhạc"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#C46A6A",
+        "fallbackIcon" : "cup.and.saucer.fill",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.coffee_friends",
+        "id" : "coffee_friends",
+        "translations" : {
+          "en" : "Coffee with friends",
+          "ja" : "友人とのカフェ",
+          "vi" : "Cà phê gặp bạn bè"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "gamecontroller.fill",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.games_apps",
+        "id" : "games_apps",
+        "translations" : {
+          "en" : "Games / apps",
+          "ja" : "ゲーム・アプリ",
+          "vi" : "Game / app"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "paintbrush.pointed.fill",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.hobbies",
+        "id" : "hobbies",
+        "translations" : {
+          "en" : "Hobbies",
+          "ja" : "趣味",
+          "vi" : "Sở thích cá nhân"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "film.fill",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.movies_leisure",
+        "id" : "movies_leisure",
+        "translations" : {
+          "en" : "Movies / leisure",
+          "ja" : "映画・レジャー",
+          "vi" : "Xem phim / đi chơi"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Subscription",
+          "Subscription (Netflix, Spotify, iCloud...)"
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "play.tv.fill",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.subscriptions",
+        "id" : "subscriptions",
+        "translations" : {
+          "en" : "Entertainment subscriptions",
+          "ja" : "娯楽サブスク",
+          "vi" : "Subscription giải trí"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "airplane",
+        "group" : "leisure",
+        "icon" : "mistia.category.expense.entertainment_social.travel",
+        "id" : "travel",
+        "translations" : {
+          "en" : "Travel",
+          "ja" : "旅行",
+          "vi" : "Du lịch"
+        }
+      }
+    ],
+    "color" : "#F59B3F",
+    "fallbackIcon" : "party.popper.fill",
+    "group" : "leisure",
+    "icon" : "mistia.category.parent.expense.entertainment_social",
+    "id" : "parent_expense_entertainment_social",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Entertainment",
+      "ja" : "娯楽",
+      "vi" : "Giải trí"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Công việc & học tập"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "car.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.business_travel",
+        "id" : "business_travel",
+        "translations" : {
+          "en" : "Business travel",
+          "ja" : "出張・移動",
+          "vi" : "Di chuyển công việc"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.client_entertainment",
+        "id" : "client_entertainment",
+        "translations" : {
+          "en" : "Client entertainment",
+          "ja" : "接待・取引先",
+          "vi" : "Tiếp khách / gặp đối tác"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "graduationcap.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.courses",
+        "id" : "courses",
+        "translations" : {
+          "en" : "Courses",
+          "ja" : "講座",
+          "vi" : "Khóa học"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "rosette",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.exams_certificates",
+        "id" : "exams_certificates",
+        "translations" : {
+          "en" : "Exams / certificates",
+          "ja" : "試験・資格",
+          "vi" : "Thi cử / chứng chỉ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Sách chuyên môn"
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "books.vertical.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.professional_books",
+        "id" : "professional_books",
+        "translations" : {
+          "en" : "Professional books",
+          "ja" : "専門書・資料",
+          "vi" : "Sách / tài liệu"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Phần mềm / subscription công việc"
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "laptopcomputer",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.software",
+        "id" : "work_software_subscriptions",
+        "translations" : {
+          "en" : "Software / subscriptions",
+          "ja" : "ソフトウェア・サブスク",
+          "vi" : "Phần mềm / subscription"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Dụng cụ làm việc"
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "wrench.and.screwdriver.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.work_study.tools",
+        "id" : "work_tools",
+        "translations" : {
+          "en" : "Study / work tools",
+          "ja" : "学習・仕事道具",
+          "vi" : "Dụng cụ học tập / làm việc"
+        }
+      }
+    ],
+    "color" : "#4C8DFF",
+    "fallbackIcon" : "briefcase.fill",
+    "group" : "work",
+    "icon" : "mistia.category.parent.expense.work_study",
+    "id" : "parent_expense_work_study",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Study & work",
+      "ja" : "学習・仕事",
+      "vi" : "Học tập & công việc"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Nghĩa vụ tài chính"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "building.columns.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.banking_fees",
+        "id" : "banking_fees",
+        "translations" : {
+          "en" : "Bank fees",
+          "ja" : "銀行手数料",
+          "vi" : "Phí ngân hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F45C7E",
+        "fallbackIcon" : "exclamationmark.circle.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.fines_fees",
+        "id" : "fines_fees",
+        "translations" : {
+          "en" : "Fines / charges",
+          "ja" : "罰金・諸費用",
+          "vi" : "Phạt / lệ phí"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Bảo hiểm"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "lock.shield.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.insurance",
+        "id" : "insurance",
+        "translations" : {
+          "en" : "Life insurance",
+          "ja" : "生命保険",
+          "vi" : "Bảo hiểm nhân thọ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F45C7E",
+        "fallbackIcon" : "percent",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.loan_interest",
+        "id" : "loan_interest",
+        "translations" : {
+          "en" : "Loan interest",
+          "ja" : "借入利息",
+          "vi" : "Lãi vay"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Trả góp / vay"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "creditcard.and.123",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.loan_repayment",
+        "id" : "loan_repayment",
+        "translations" : {
+          "en" : "Installment repayment",
+          "ja" : "ローン返済",
+          "vi" : "Trả góp"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "receipt.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.taxes_fees",
+        "id" : "taxes_fees",
+        "translations" : {
+          "en" : "Taxes / fees",
+          "ja" : "税金・手数料",
+          "vi" : "Thuế / phí"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Nghĩa vụ khác"
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.other_obligations",
+        "id" : "other_obligations",
+        "translations" : {
+          "en" : "Other financial obligations",
+          "ja" : "その他金融支払い",
+          "vi" : "Nghĩa vụ tài chính khác"
+        }
+      }
+    ],
+    "color" : "#7C85A3",
+    "fallbackIcon" : "creditcard.and.123",
+    "group" : "finance",
+    "icon" : "mistia.category.parent.expense.financial_obligations",
+    "id" : "parent_expense_financial_obligations",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Finance & obligations",
+      "ja" : "金融・支払い",
+      "vi" : "Tài chính & nghĩa vụ"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "pawprint.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.pet_care.pet_food",
+        "id" : "pet_food",
+        "translations" : {
+          "en" : "Pet food",
+          "ja" : "ペットフード",
+          "vi" : "Thức ăn thú cưng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "sparkles",
+        "group" : "family",
+        "icon" : "mistia.category.expense.pet_care.pet_grooming",
+        "id" : "pet_grooming",
+        "translations" : {
+          "en" : "Pet grooming",
+          "ja" : "ペットトリミング",
+          "vi" : "Grooming / chăm sóc"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F45C7E",
+        "fallbackIcon" : "cross.case.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.pet_care.pet_medical",
+        "id" : "pet_medical",
+        "translations" : {
+          "en" : "Pet medical",
+          "ja" : "ペット医療",
+          "vi" : "Khám / thuốc thú cưng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "shippingbox.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.pet_care.pet_supplies",
+        "id" : "pet_supplies",
+        "translations" : {
+          "en" : "Pet supplies",
+          "ja" : "ペット用品",
+          "vi" : "Đồ dùng thú cưng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.pet_care.pet_other",
+        "id" : "pet_other",
+        "translations" : {
+          "en" : "Other pet expenses",
+          "ja" : "その他ペット費",
+          "vi" : "Chi khác cho thú cưng"
+        }
+      }
+    ],
+    "color" : "#57B7FF",
+    "fallbackIcon" : "pawprint.fill",
+    "group" : "family",
+    "icon" : "mistia.category.parent.expense.pet_care",
+    "id" : "parent_expense_pet_care",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Pets",
+      "ja" : "ペット",
+      "vi" : "Thú cưng"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Chưa phân loại chi"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+          "Balance Adjustment"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "arrow.left.arrow.right",
+        "group" : "generic",
+        "icon" : "mistia.flow.transfer",
+        "id" : "balance_adjustment_expense",
+        "translations" : {
+          "en" : "Balance adjustment",
+          "ja" : "残高調整",
+          "vi" : "Điều chỉnh số dư"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "generic",
+        "icon" : "mistia.category.expense.other.expense",
+        "id" : "other_expense",
+        "translations" : {
+          "en" : "Other expenses",
+          "ja" : "その他支出",
+          "vi" : "Chi khác"
+        }
+      }
+    ],
+    "color" : "#8A8A8E",
+    "fallbackIcon" : "tray.full.fill",
+    "group" : "generic",
+    "icon" : "mistia.category.parent.expense.other",
+    "id" : "parent_expense_uncategorized",
+    "kind" : "expense",
+    "translations" : {
+      "en" : "Other expenses",
+      "ja" : "その他支出",
+      "vi" : "Chi khác"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Thu nhập công việc"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+          "Lương"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "banknote.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.salary",
+        "id" : "salary",
+        "translations" : {
+          "en" : "Main salary",
+          "ja" : "主給与",
+          "vi" : "Lương chính"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "banknote.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.side_salary",
+        "id" : "side_salary",
+        "translations" : {
+          "en" : "Side salary",
+          "ja" : "副収入",
+          "vi" : "Lương phụ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "wallet.pass.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.allowance",
+        "id" : "allowance",
+        "translations" : {
+          "en" : "Allowance",
+          "ja" : "手当",
+          "vi" : "Phụ cấp"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "gift.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.bonus",
+        "id" : "bonus",
+        "translations" : {
+          "en" : "Bonus",
+          "ja" : "ボーナス",
+          "vi" : "Thưởng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF7A59",
+        "fallbackIcon" : "percent",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.commission",
+        "id" : "commission",
+        "translations" : {
+          "en" : "Commission",
+          "ja" : "コミッション",
+          "vi" : "Hoa hồng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Freelance"
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "laptopcomputer",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.freelance",
+        "id" : "freelance",
+        "translations" : {
+          "en" : "Side work / freelance",
+          "ja" : "副業・フリーランス",
+          "vi" : "Làm thêm / freelance"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "clock.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.overtime",
+        "id" : "overtime",
+        "translations" : {
+          "en" : "Overtime",
+          "ja" : "残業代",
+          "vi" : "OT / tăng ca"
+        }
+      }
+    ],
+    "color" : "#2DAA9E",
+    "fallbackIcon" : "briefcase.fill",
+    "group" : "income",
+    "icon" : "mistia.category.parent.income.salary_work",
+    "id" : "parent_income_work",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Salary & work",
+      "ja" : "給与・仕事",
+      "vi" : "Lương & công việc"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Bán hàng & khác"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "chart.bar.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.business.business_profit",
+        "id" : "business_profit",
+        "translations" : {
+          "en" : "Business profit",
+          "ja" : "事業利益",
+          "vi" : "Lợi nhuận kinh doanh"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.business.online_collaborator_income",
+        "id" : "online_collaborator_income",
+        "translations" : {
+          "en" : "Online income",
+          "ja" : "オンライン収入",
+          "vi" : "Thu từ online"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F26A5A",
+        "fallbackIcon" : "storefront.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.business.sales",
+        "id" : "sales",
+        "translations" : {
+          "en" : "Sales revenue",
+          "ja" : "売上",
+          "vi" : "Doanh thu bán hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "sparkles",
+        "group" : "income",
+        "icon" : "mistia.category.income.business.service_revenue",
+        "id" : "service_revenue",
+        "translations" : {
+          "en" : "Service revenue",
+          "ja" : "サービス収入",
+          "vi" : "Thu dịch vụ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.business.other_business_income",
+        "id" : "other_business_income",
+        "translations" : {
+          "en" : "Other business income",
+          "ja" : "その他事業収入",
+          "vi" : "Thu kinh doanh khác"
+        }
+      }
+    ],
+    "color" : "#F26A5A",
+    "fallbackIcon" : "storefront.fill",
+    "group" : "income",
+    "icon" : "mistia.category.parent.income.business",
+    "id" : "parent_income_sales_other",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Business",
+      "ja" : "事業",
+      "vi" : "Kinh doanh"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Đầu tư & hoàn lại"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "building.columns.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.income.investment_finance.bank_interest",
+        "id" : "bank_interest",
+        "translations" : {
+          "en" : "Bank interest",
+          "ja" : "銀行利息",
+          "vi" : "Lãi ngân hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "chart.pie.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.income.investment_finance.dividends",
+        "id" : "dividends",
+        "translations" : {
+          "en" : "Dividends",
+          "ja" : "配当",
+          "vi" : "Cổ tức"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "chart.line.uptrend.xyaxis",
+        "group" : "finance",
+        "icon" : "mistia.category.legacy.investment",
+        "id" : "investment",
+        "translations" : {
+          "en" : "Investment",
+          "ja" : "投資",
+          "vi" : "Đầu tư"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "chart.line.uptrend.xyaxis",
+        "group" : "finance",
+        "icon" : "mistia.category.income.investment_finance.investment_gain",
+        "id" : "investment_gain",
+        "translations" : {
+          "en" : "Investment gains",
+          "ja" : "投資利益",
+          "vi" : "Lãi đầu tư"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Cho vay được trả lãi"
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "hand.thumbsup.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.income.investment_finance.loan_interest_received",
+        "id" : "loan_interest_received",
+        "translations" : {
+          "en" : "Loan interest received",
+          "ja" : "貸付利息",
+          "vi" : "Lãi cho vay"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.income.investment_finance.other_financial_income",
+        "id" : "other_financial_income",
+        "translations" : {
+          "en" : "Other financial income",
+          "ja" : "その他金融収入",
+          "vi" : "Thu nhập tài chính khác"
+        }
+      }
+    ],
+    "color" : "#5B7BFF",
+    "fallbackIcon" : "chart.line.uptrend.xyaxis",
+    "group" : "finance",
+    "icon" : "mistia.category.parent.income.investment_finance",
+    "id" : "parent_income_investment_return",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Investment & finance",
+      "ja" : "投資・金融",
+      "vi" : "Đầu tư & tài chính"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Hoàn lại & điều chỉnh"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FFB347",
+        "fallbackIcon" : "creditcard.and.123",
+        "group" : "income",
+        "icon" : "mistia.category.income.refund_adjustment.cashback",
+        "id" : "cashback",
+        "translations" : {
+          "en" : "Cashback",
+          "ja" : "キャッシュバック",
+          "vi" : "Cashback"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "person.2.wave.2.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.refund_adjustment.expense_recovery",
+        "id" : "expense_recovery",
+        "translations" : {
+          "en" : "Expense recovery",
+          "ja" : "立替回収",
+          "vi" : "Thu hồi khoản đã chi hộ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "shield.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.refund_adjustment.insurance_payout",
+        "id" : "insurance_payout",
+        "translations" : {
+          "en" : "Insurance payout / refund",
+          "ja" : "保険金・返金",
+          "vi" : "Bảo hiểm chi trả / hoàn tiền"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "person.crop.circle.badge.checkmark",
+        "group" : "income",
+        "icon" : "mistia.category.income.refund_adjustment.people_repayment",
+        "id" : "people_repayment",
+        "translations" : {
+          "en" : "Repayment from others",
+          "ja" : "返済受取",
+          "vi" : "Người khác trả lại tiền"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Hoàn tiền"
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "arrow.counterclockwise.circle.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.refund_adjustment.refund",
+        "id" : "refund",
+        "translations" : {
+          "en" : "Purchase refund",
+          "ja" : "購入返金",
+          "vi" : "Hoàn tiền mua hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#4C8DFF",
+        "fallbackIcon" : "arrow.uturn.backward.circle.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.refund_adjustment.reimbursement",
+        "id" : "reimbursement",
+        "translations" : {
+          "en" : "Reimbursement",
+          "ja" : "立替精算",
+          "vi" : "Hoàn ứng"
+        }
+      }
+    ],
+    "color" : "#57B7FF",
+    "fallbackIcon" : "arrow.counterclockwise.circle.fill",
+    "group" : "income",
+    "icon" : "mistia.category.parent.income.refund_adjustment",
+    "id" : "parent_income_refund_adjustment",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Refunds & reimbursements",
+      "ja" : "返金・調整",
+      "vi" : "Hoàn lại & bồi hoàn"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Hỗ trợ & quà tặng"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.child_allowance",
+        "id" : "child_allowance",
+        "translations" : {
+          "en" : "Child allowance",
+          "ja" : "児童手当",
+          "vi" : "Trợ cấp con nhỏ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Quà tặng"
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "gift.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.gift",
+        "id" : "gift",
+        "translations" : {
+          "en" : "Gift received",
+          "ja" : "贈与",
+          "vi" : "Được tặng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.maternity_allowance",
+        "id" : "maternity_allowance",
+        "translations" : {
+          "en" : "Maternity allowance",
+          "ja" : "出産・育児手当",
+          "vi" : "Trợ cấp thai sản"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Trợ cấp"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "hands.sparkles.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.subsidy",
+        "id" : "subsidy",
+        "translations" : {
+          "en" : "Social subsidy",
+          "ja" : "社会手当",
+          "vi" : "Trợ cấp xã hội"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Được hỗ trợ"
+        ],
+        "color" : "#5B7BFF",
+        "fallbackIcon" : "book.open.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.support_received",
+        "id" : "support_received",
+        "translations" : {
+          "en" : "Scholarship / study support",
+          "ja" : "奨学金・学習支援",
+          "vi" : "Học bổng / hỗ trợ học tập"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Thu khác từ gia đình"
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.family_support",
+        "id" : "family_support",
+        "translations" : {
+          "en" : "Family support received",
+          "ja" : "家族からの支援",
+          "vi" : "Gia đình hỗ trợ"
+        }
+      }
+    ],
+    "color" : "#FF6D8A",
+    "fallbackIcon" : "heart.fill",
+    "group" : "income",
+    "icon" : "mistia.category.parent.income.support_gift",
+    "id" : "parent_income_support_gift",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Support & benefits",
+      "ja" : "支援・手当",
+      "vi" : "Hỗ trợ & trợ cấp"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "chair.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.liquidation.liquidate_household",
+        "id" : "liquidate_household",
+        "translations" : {
+          "en" : "Household liquidation",
+          "ja" : "家財売却",
+          "vi" : "Thanh lý đồ gia dụng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#F59B3F",
+        "fallbackIcon" : "tag.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.liquidation.sell_used_items",
+        "id" : "sell_used_items",
+        "translations" : {
+          "en" : "Used item sales",
+          "ja" : "不用品売却",
+          "vi" : "Bán đồ cũ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.liquidation.other_liquidation_income",
+        "id" : "other_liquidation_income",
+        "translations" : {
+          "en" : "Other liquidation income",
+          "ja" : "その他売却収入",
+          "vi" : "Thu khác từ thanh lý"
+        }
+      }
+    ],
+    "color" : "#F59B3F",
+    "fallbackIcon" : "arrow.square.fill",
+    "group" : "income",
+    "icon" : "mistia.category.parent.income.liquidation",
+    "id" : "parent_income_liquidation",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Liquidation",
+      "ja" : "売却",
+      "vi" : "Thanh lý"
+    }
+  },
+  {
+    "active" : true,
+    "aliases" : [
+      "Chưa phân loại thu"
+    ],
+    "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+          "Balance Adjustment"
+        ],
+        "color" : "#7C85A3",
+        "fallbackIcon" : "arrow.left.arrow.right",
+        "group" : "generic",
+        "icon" : "mistia.flow.transfer",
+        "id" : "balance_adjustment_income",
+        "translations" : {
+          "en" : "Balance adjustment",
+          "ja" : "残高調整",
+          "vi" : "Điều chỉnh số dư"
+        }
+      },
+      {
+        "active" : false,
+        "aliases" : [
+          "Chưa phân loại thu"
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "plusminus.circle.fill",
+        "group" : "generic",
+        "icon" : "mistia.category.income.other.income",
+        "id" : "other_income",
+        "translations" : {
+          "en" : "Other income",
+          "ja" : "その他収入",
+          "vi" : "Thu khác"
+        }
+      }
+    ],
+    "color" : "#8A8A8E",
+    "fallbackIcon" : "plusminus.circle.fill",
+    "group" : "generic",
+    "icon" : "mistia.category.parent.income.other",
+    "id" : "parent_income_uncategorized",
+    "kind" : "income",
+    "translations" : {
+      "en" : "Other income",
+      "ja" : "その他収入",
+      "vi" : "Thu khác"
+    }
+  }
+]

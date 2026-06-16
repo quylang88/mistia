@@ -57,3 +57,10 @@ playground.xcworkspace
 
 # Project-local caches
 .modulecache/
+
+# Supabase CLI temporary files
+**/supabase/.temp
+**/supabase/.branches
+
+# AI
+.agent/

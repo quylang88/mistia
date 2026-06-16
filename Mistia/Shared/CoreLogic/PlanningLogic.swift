@@ -6,10 +6,66 @@ nonisolated struct BudgetPlanSnapshot: Equatable, Identifiable {
     let categoryName: String
     let categoryIconSymbolName: String
     let categoryColorHex: String
+    let categoryParentID: UUID?
+    let categoryParentName: String?
+    let categoryParentIconSymbolName: String?
+    let categoryParentColorHex: String?
+    let categoryIsParent: Bool
     let limitMinor: Int64
     let rolloverEnabled: Bool
     let currencyCode: String
     let monthAnchor: Date
+    let includesFamilySpending: Bool
+
+    init(
+        id: UUID,
+        categoryID: UUID?,
+        categoryName: String,
+        categoryIconSymbolName: String,
+        categoryColorHex: String,
+        limitMinor: Int64,
+        rolloverEnabled: Bool,
+        currencyCode: String,
+        monthAnchor: Date,
+        categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
+        categoryParentIconSymbolName: String? = nil,
+        categoryParentColorHex: String? = nil,
+        categoryIsParent: Bool = false,
+        includesFamilySpending: Bool = false
+    ) {
+        self.id = id
+        self.categoryID = categoryID
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
+        self.categoryParentID = categoryParentID
+        self.categoryParentName = categoryParentName
+        self.categoryParentIconSymbolName = categoryParentIconSymbolName
+        self.categoryParentColorHex = categoryParentColorHex
+        self.categoryIsParent = categoryIsParent
+        self.limitMinor = limitMinor
+        self.rolloverEnabled = rolloverEnabled
+        self.currencyCode = currencyCode
+        self.monthAnchor = monthAnchor
+        self.includesFamilySpending = includesFamilySpending
+    }
+
+    var branchCategoryID: UUID? {
+        categoryIsParent ? categoryID : (categoryParentID ?? categoryID)
+    }
+
+    var branchCategoryName: String {
+        categoryIsParent ? categoryName : (categoryParentName ?? categoryName)
+    }
+
+    var branchIconSymbolName: String {
+        categoryIsParent ? categoryIconSymbolName : (categoryParentIconSymbolName ?? categoryIconSymbolName)
+    }
+
+    var branchColorHex: String {
+        categoryIsParent ? categoryColorHex : (categoryParentColorHex ?? categoryColorHex)
+    }
 }
 
 nonisolated enum PlanningBudgetTone: String, Equatable {
@@ -26,13 +82,62 @@ nonisolated enum PlanningBudgetHealth: String, Equatable {
     var title: String {
         switch self {
         case .stable:
-            mistiaLocalized(vi: "Ổn định", en: "Stable", ja: "安定")
+            L10n.shared.corelogic.planning.stable
         case .caution:
-            mistiaLocalized(vi: "Cần chú ý", en: "Needs attention", ja: "注意")
+            L10n.shared.corelogic.planning.needsAttention
         case .exceeded:
-            mistiaLocalized(vi: "Vượt kế hoạch", en: "Exceeded", ja: "超過")
+            L10n.shared.corelogic.planning.exceeded
         }
     }
+}
+
+nonisolated struct PlanningFamilyBudgetSpendingCategoryScope: Equatable {
+    let categoryName: String
+    let categoryParentName: String?
+    let categoryIsParent: Bool
+    let familyBudgetSpendingEnabled: Bool
+
+    init(
+        categoryName: String,
+        categoryParentName: String? = nil,
+        categoryIsParent: Bool,
+        familyBudgetSpendingEnabled: Bool
+    ) {
+        self.categoryName = categoryName
+        self.categoryParentName = categoryParentName
+        self.categoryIsParent = categoryIsParent
+        self.familyBudgetSpendingEnabled = familyBudgetSpendingEnabled
+    }
+
+    var categoryKey: String {
+        FamilyLogic.normalizedFamilyGroupingName(categoryName)
+    }
+
+    var branchKey: String {
+        FamilyLogic.normalizedFamilyGroupingName(
+            categoryIsParent ? categoryName : (categoryParentName ?? categoryName)
+        )
+    }
+}
+
+nonisolated struct PlanningBudgetPaceAssessment: Equatable {
+    let health: PlanningBudgetHealth
+    let tone: PlanningBudgetTone
+    let targetProgress: Double
+    let projectedSpentMinor: Int64
+    let remainingDailyAllowanceMinor: Int64
+    let totalDays: Int
+    let elapsedDays: Int
+    let daysRemaining: Int
+    let isPastMonth: Bool
+    let isFutureMonth: Bool
+}
+
+nonisolated enum PlanningBudgetNotificationTransition: Equatable {
+    case none
+    case create
+    case updateSilently
+    case resurface
 }
 
 nonisolated struct PlanningBudgetRowSnapshot: Equatable, Identifiable {
@@ -44,8 +149,37 @@ nonisolated struct PlanningBudgetRowSnapshot: Equatable, Identifiable {
     let spentMinor: Int64
     let limitMinor: Int64
     let currencyCode: String
-    let daysRemaining: Int
-    let isPastMonth: Bool
+    let paceAssessment: PlanningBudgetPaceAssessment
+
+    init(
+        id: UUID,
+        categoryID: UUID?,
+        name: String,
+        iconSymbolName: String,
+        colorHex: String,
+        spentMinor: Int64,
+        limitMinor: Int64,
+        currencyCode: String,
+        paceAssessment: PlanningBudgetPaceAssessment
+    ) {
+        self.id = id
+        self.categoryID = categoryID
+        self.name = name
+        self.iconSymbolName = iconSymbolName
+        self.colorHex = colorHex
+        self.spentMinor = spentMinor
+        self.limitMinor = limitMinor
+        self.currencyCode = currencyCode
+        self.paceAssessment = paceAssessment
+    }
+
+    var daysRemaining: Int {
+        paceAssessment.daysRemaining
+    }
+
+    var isPastMonth: Bool {
+        paceAssessment.isPastMonth
+    }
 
     var progress: Double {
         guard limitMinor > 0 else { return 0 }
@@ -57,11 +191,11 @@ nonisolated struct PlanningBudgetRowSnapshot: Equatable, Identifiable {
     }
 
     var health: PlanningBudgetHealth {
-        PlanningLogic.health(forProgress: progress)
+        paceAssessment.health
     }
 
     var tone: PlanningBudgetTone {
-        PlanningLogic.tone(forProgress: progress)
+        paceAssessment.tone
     }
 }
 
@@ -69,7 +203,19 @@ nonisolated struct PlanningBudgetSummarySnapshot: Equatable {
     let totalBudgetMinor: Int64
     let spentMinor: Int64
     let remainingMinor: Int64
-    let health: PlanningBudgetHealth
+    let paceAssessment: PlanningBudgetPaceAssessment
+
+    var health: PlanningBudgetHealth {
+        paceAssessment.health
+    }
+
+    var projectedSpentMinor: Int64 {
+        paceAssessment.projectedSpentMinor
+    }
+
+    var remainingDailyAllowanceMinor: Int64 {
+        paceAssessment.remainingDailyAllowanceMinor
+    }
 
     var progress: Double {
         guard totalBudgetMinor > 0 else { return 0 }
@@ -79,6 +225,234 @@ nonisolated struct PlanningBudgetSummarySnapshot: Equatable {
     var progressClamped: Double {
         min(max(progress, 0), 1)
     }
+}
+
+nonisolated enum PlanningBudgetBranchMode: Equatable {
+    case parentOnly
+    case parentWithChildren
+    case childOnly
+}
+
+nonisolated struct PlanningBudgetSpendingIndex {
+    private let personalRecordsByCategory: [UUID: [TransactionRecordSnapshot]]
+    private let personalRecordsByBranch: [UUID: [TransactionRecordSnapshot]]
+    private let personalRecordsByCategoryKey: [String: [TransactionRecordSnapshot]]
+    private let personalRecordsByBranchKey: [String: [TransactionRecordSnapshot]]
+    private let familyTransactionsByCategoryKey: [String: [FamilyAggregateTransactionSnapshot]]
+
+    init(
+        records: [TransactionRecordSnapshot],
+        familyTransactions: [FamilyAggregateTransactionSnapshot],
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) {
+        let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
+        let expenseRecordsInMonth = records.filter { record in
+            guard record.entryStatus == .posted,
+                  TransactionLogic.reportedExpenseAmount(for: record) != 0,
+                  let monthInterval
+            else {
+                return false
+            }
+
+            return record.occurredAt >= monthInterval.start
+                && record.occurredAt < monthInterval.end
+        }
+
+        var recordsByCategory: [UUID: [TransactionRecordSnapshot]] = [:]
+        var recordsByBranch: [UUID: [TransactionRecordSnapshot]] = [:]
+        var recordsByCategoryKey: [String: [TransactionRecordSnapshot]] = [:]
+        var recordsByBranchKey: [String: [TransactionRecordSnapshot]] = [:]
+        for record in expenseRecordsInMonth {
+            if let categoryID = record.categoryID {
+                recordsByCategory[categoryID, default: []].append(record)
+            }
+            if let branchID = record.categoryParentID ?? record.categoryID {
+                recordsByBranch[branchID, default: []].append(record)
+            }
+            if let categoryName = record.categoryName {
+                let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+                if !key.isEmpty {
+                    recordsByCategoryKey[key, default: []].append(record)
+                }
+            }
+            for branchName in [record.categoryParentName, record.categoryName].compactMap(\.self) {
+                let key = FamilyLogic.normalizedFamilyGroupingName(branchName)
+                if !key.isEmpty {
+                    recordsByBranchKey[key, default: []].append(record)
+                }
+            }
+        }
+
+        self.personalRecordsByCategory = recordsByCategory
+        self.personalRecordsByBranch = recordsByBranch
+        self.personalRecordsByCategoryKey = recordsByCategoryKey
+        self.personalRecordsByBranchKey = recordsByBranchKey
+
+        var familyIndex: [String: [FamilyAggregateTransactionSnapshot]] = [:]
+        guard let monthInterval else {
+            self.familyTransactionsByCategoryKey = familyIndex
+            return
+        }
+
+        for transaction in familyTransactions {
+            let expenseMinor = transaction.reportingExpenseMinor ?? (
+                (transaction.kind == .expense && !transaction.isAdjustment && !transaction.isCreditCardPayment && !transaction.isInstallmentPayment) ? transaction.amountMinor : 0
+            )
+            guard expenseMinor != 0,
+                  transaction.occurredAt >= monthInterval.start,
+                  transaction.occurredAt < monthInterval.end
+            else {
+                continue
+            }
+
+            for key in Self.familyCategoryKeys(for: transaction) {
+                familyIndex[key, default: []].append(transaction)
+            }
+        }
+
+        self.familyTransactionsByCategoryKey = familyIndex
+    }
+
+    func personalSpentForCategory(
+        _ categoryID: UUID?,
+        categoryName: String,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        let categoryRecords = categoryID.flatMap { personalRecordsByCategory[$0] } ?? []
+        let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+        let nameRecords = key.isEmpty ? [] : personalRecordsByCategoryKey[key] ?? []
+        return personalSpent(
+            records: categoryRecords + nameRecords,
+            currencyCode: currencyCode,
+            rateIndex: rateIndex
+        )
+    }
+
+    func personalSpentForBranch(
+        _ branchID: UUID?,
+        branchName: String,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        let branchRecords = branchID.flatMap { personalRecordsByBranch[$0] } ?? []
+        let key = FamilyLogic.normalizedFamilyGroupingName(branchName)
+        let nameRecords = key.isEmpty ? [] : personalRecordsByBranchKey[key] ?? []
+        return personalSpent(
+            records: branchRecords + nameRecords,
+            currencyCode: currencyCode,
+            rateIndex: rateIndex
+        )
+    }
+
+    private func personalSpent(
+        records: [TransactionRecordSnapshot],
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        var seenRecordIDs = Set<UUID>()
+        return records
+            .reduce(into: Int64.zero) { partial, record in
+                guard seenRecordIDs.insert(record.id).inserted else { return }
+                partial += PlanningLogic.reportingAmount(
+                    for: record,
+                    currencyCode: currencyCode,
+                    rateIndex: rateIndex
+                )
+            }
+    }
+
+    func familySpentForCategoryName(
+        _ categoryName: String,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+        guard !key.isEmpty else { return 0 }
+
+        return familyTransactionsByCategoryKey[key]?
+            .reduce(into: Int64.zero) { partial, transaction in
+                let expenseMinor = transaction.reportingExpenseMinor ?? (
+                    (transaction.kind == .expense && !transaction.isAdjustment && !transaction.isCreditCardPayment && !transaction.isInstallmentPayment) ? transaction.amountMinor : 0
+                )
+                partial += PlanningLogic.reportingAmount(
+                    amountMinor: expenseMinor,
+                    sourceCurrencyCode: transaction.currencyCode,
+                    currencyCode: currencyCode,
+                    rateIndex: rateIndex
+                )
+            } ?? 0
+    }
+
+    private static func familyCategoryKeys(for transaction: FamilyAggregateTransactionSnapshot) -> Set<String> {
+        var keys = Set<String>()
+
+        if let categoryName = transaction.categoryName {
+            let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+            if !key.isEmpty {
+                keys.insert(key)
+            }
+        }
+
+        if let categoryParentName = transaction.categoryParentName {
+            let key = FamilyLogic.normalizedFamilyGroupingName(categoryParentName)
+            if !key.isEmpty {
+                keys.insert(key)
+            }
+        }
+
+        return keys
+    }
+}
+
+nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let parentCategoryID: UUID?
+    let name: String
+    let iconSymbolName: String
+    let colorHex: String
+    let spentMinor: Int64
+    let limitMinor: Int64
+    let currencyCode: String
+    let paceAssessment: PlanningBudgetPaceAssessment
+    let mode: PlanningBudgetBranchMode
+    let parentBudgetID: UUID?
+    let primaryBudgetID: UUID?
+    let allocatedChildLimitMinor: Int64
+    let unallocatedLimitMinor: Int64
+    let childRows: [PlanningBudgetRowSnapshot]
+
+    var daysRemaining: Int {
+        paceAssessment.daysRemaining
+    }
+
+    var isPastMonth: Bool {
+        paceAssessment.isPastMonth
+    }
+
+    var progress: Double {
+        guard limitMinor > 0 else { return 0 }
+        return Double(spentMinor) / Double(limitMinor)
+    }
+
+    var progressClamped: Double {
+        min(max(progress, 0), 1)
+    }
+
+    var health: PlanningBudgetHealth {
+        paceAssessment.health
+    }
+
+    var tone: PlanningBudgetTone {
+        paceAssessment.tone
+    }
+}
+
+nonisolated enum PlanningBudgetAllocationValidationResult: Equatable {
+    case valid
+    case childBudgetsExceedParent(childTotalMinor: Int64, parentLimitMinor: Int64)
+    case parentLimitBelowChildren(childTotalMinor: Int64, parentLimitMinor: Int64)
 }
 
 nonisolated struct SavingsGoalSnapshot: Equatable, Identifiable {
@@ -123,25 +497,180 @@ nonisolated struct PlanningCreditCardAccountSnapshot: Equatable, Identifiable {
     let id: UUID
     let walletID: UUID
     let walletName: String
+    let issuerName: String
     let network: CreditCardNetwork
     let last4: String
     let dueDay: Int
+    let statementClosingDay: Int
     let paymentSourceWalletID: UUID?
+    let paymentSourceWalletName: String?
     let currencyCode: String
     let currentDebtMinor: Int64
+    let availableCreditMinor: Int64
     let openedAt: Date
+    let autoPayEnabled: Bool
+
+    init(
+        id: UUID,
+        walletID: UUID,
+        walletName: String,
+        issuerName: String,
+        network: CreditCardNetwork,
+        last4: String,
+        dueDay: Int,
+        statementClosingDay: Int,
+        paymentSourceWalletID: UUID?,
+        paymentSourceWalletName: String?,
+        currencyCode: String,
+        currentDebtMinor: Int64,
+        availableCreditMinor: Int64,
+        openedAt: Date,
+        autoPayEnabled: Bool = true
+    ) {
+        self.id = id
+        self.walletID = walletID
+        self.walletName = walletName
+        self.issuerName = issuerName
+        self.network = network
+        self.last4 = last4
+        self.dueDay = dueDay
+        self.statementClosingDay = statementClosingDay
+        self.paymentSourceWalletID = paymentSourceWalletID
+        self.paymentSourceWalletName = paymentSourceWalletName
+        self.currencyCode = currencyCode
+        self.currentDebtMinor = currentDebtMinor
+        self.availableCreditMinor = availableCreditMinor
+        self.openedAt = openedAt
+        self.autoPayEnabled = autoPayEnabled
+    }
+}
+
+nonisolated enum PlanningCreditCardStatementState: String, Equatable {
+    case unclosed
+    case payable
+    case paid
+    case overdue
+}
+
+nonisolated enum PlanningCreditCardAutoPaymentDecision: Equatable {
+    case notDue
+    case alreadyPaid
+    case missingLinkedWallet
+    case insufficientFunds(availableMinor: Int64, requiredMinor: Int64)
+    case payable
+}
+
+nonisolated struct PlanningCreditCardStatementSnapshot: Equatable, Identifiable {
+    let id: String
+    let walletID: UUID
+    let walletName: String
+    let issuerName: String
+    let network: CreditCardNetwork
+    let last4: String
+    let statementMonth: Date
+    let closingDate: Date
+    let dueDate: Date
+    let amountMinor: Int64
+    let availableCreditMinor: Int64
+    let paymentSourceWalletID: UUID?
+    let paymentSourceWalletName: String?
+    let currencyCode: String
+    let status: PlanningDueOccurrenceStatus
+    let linkedTransactionID: UUID?
+    let state: PlanningCreditCardStatementState
+
+    var isPayable: Bool {
+        state == .payable || state == .overdue
+    }
+}
+
+nonisolated struct PlanningCurrencyAmountTotalSnapshot: Equatable, Identifiable {
+    let currencyCode: String
+    let amountMinor: Int64
+
+    var id: String { currencyCode }
 }
 
 nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let id: UUID
     let name: String
     let iconSymbolName: String
+    let categorySystemKey: MistiaSystemCategoryKey?
+    let categoryName: String?
+    let categoryIconSymbolName: String?
+    let categoryColorHex: String?
     let amountMinor: Int64?
     let dueDay: Int
     let frequencyMonths: Int
     let paymentWalletID: UUID?
     let currencyCode: String
     let createdAt: Date
+    let scheduleKind: PlanningBillScheduleKind
+    let paymentStartDay: Int
+    let paymentStartDate: Date?
+    let firstScheduledMonth: Date?
+    let hasExplicitDueDate: Bool
+    let dueDate: Date?
+    let autoPayEnabled: Bool
+    let autoPayDay: Int?
+    let autoPayDate: Date?
+    let isPaused: Bool
+    let pausedAt: Date?
+    let resumeStartMonth: Date?
+
+    init(
+        id: UUID,
+        name: String,
+        iconSymbolName: String,
+        categorySystemKey: MistiaSystemCategoryKey?,
+        categoryName: String? = nil,
+        categoryIconSymbolName: String? = nil,
+        categoryColorHex: String? = nil,
+        amountMinor: Int64?,
+        dueDay: Int,
+        frequencyMonths: Int,
+        paymentWalletID: UUID?,
+        currencyCode: String,
+        createdAt: Date,
+        scheduleKind: PlanningBillScheduleKind = .recurring,
+        paymentStartDay: Int? = nil,
+        paymentStartDate: Date? = nil,
+        firstScheduledMonth: Date? = nil,
+        hasExplicitDueDate: Bool = false,
+        dueDate: Date? = nil,
+        autoPayEnabled: Bool = false,
+        autoPayDay: Int? = nil,
+        autoPayDate: Date? = nil,
+        isPaused: Bool = false,
+        pausedAt: Date? = nil,
+        resumeStartMonth: Date? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.iconSymbolName = iconSymbolName
+        self.categorySystemKey = categorySystemKey
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
+        self.amountMinor = amountMinor
+        self.dueDay = dueDay
+        self.frequencyMonths = frequencyMonths
+        self.paymentWalletID = paymentWalletID
+        self.currencyCode = currencyCode
+        self.createdAt = createdAt
+        self.scheduleKind = scheduleKind
+        self.paymentStartDay = paymentStartDay ?? dueDay
+        self.paymentStartDate = paymentStartDate
+        self.firstScheduledMonth = firstScheduledMonth
+        self.hasExplicitDueDate = hasExplicitDueDate
+        self.dueDate = dueDate
+        self.autoPayEnabled = autoPayEnabled
+        self.autoPayDay = autoPayDay
+        self.autoPayDate = autoPayDate
+        self.isPaused = isPaused
+        self.pausedAt = pausedAt
+        self.resumeStartMonth = resumeStartMonth
+    }
 }
 
 nonisolated struct PlanningInstallmentSnapshot: Equatable, Identifiable {
@@ -175,6 +704,8 @@ nonisolated struct PlanningCreditCardDueSnapshot: Equatable, Identifiable {
     let network: CreditCardNetwork
     let last4: String
     let amountMinor: Int64
+    let availableCreditMinor: Int64
+    let statementMonth: Date
     let dueDate: Date
     let paymentSourceWalletID: UUID?
     let currencyCode: String
@@ -188,14 +719,71 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
     let sourceID: UUID
     let name: String
     let iconSymbolName: String
+    let categorySystemKey: MistiaSystemCategoryKey?
+    let categoryName: String?
+    let categoryIconSymbolName: String?
+    let categoryColorHex: String?
     let amountMinor: Int64?
+    let paymentStartDate: Date
     let dueDate: Date
+    let hasExplicitDueDate: Bool
+    let scheduleKind: PlanningBillScheduleKind
     let frequencyMonths: Int
     let totalCycles: Int?
     let paymentWalletID: UUID?
     let currencyCode: String
     let status: PlanningDueOccurrenceStatus
     let linkedTransactionID: UUID?
+    let autoPayEnabled: Bool
+    let autoPayDate: Date?
+
+    init(
+        id: UUID,
+        sourceKind: PlanningDueSourceKind,
+        sourceID: UUID,
+        name: String,
+        iconSymbolName: String,
+        categorySystemKey: MistiaSystemCategoryKey?,
+        categoryName: String? = nil,
+        categoryIconSymbolName: String? = nil,
+        categoryColorHex: String? = nil,
+        amountMinor: Int64?,
+        paymentStartDate: Date? = nil,
+        dueDate: Date,
+        hasExplicitDueDate: Bool = true,
+        scheduleKind: PlanningBillScheduleKind = .recurring,
+        frequencyMonths: Int,
+        totalCycles: Int?,
+        paymentWalletID: UUID?,
+        currencyCode: String,
+        status: PlanningDueOccurrenceStatus,
+        linkedTransactionID: UUID?,
+        autoPayEnabled: Bool = false,
+        autoPayDate: Date? = nil
+    ) {
+        self.id = id
+        self.sourceKind = sourceKind
+        self.sourceID = sourceID
+        self.name = name
+        self.iconSymbolName = iconSymbolName
+        self.categorySystemKey = categorySystemKey
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
+        self.amountMinor = amountMinor
+        self.paymentStartDate = paymentStartDate ?? dueDate
+        self.dueDate = dueDate
+        self.hasExplicitDueDate = hasExplicitDueDate && (paymentStartDate ?? dueDate) != dueDate
+        self.scheduleKind = scheduleKind
+        self.frequencyMonths = frequencyMonths
+        self.totalCycles = totalCycles
+        self.paymentWalletID = paymentWalletID
+        self.currencyCode = currencyCode
+        self.status = status
+        self.linkedTransactionID = linkedTransactionID
+        self.autoPayEnabled = autoPayEnabled
+        self.autoPayDate = autoPayDate
+    }
 }
 
 nonisolated struct PlanningDueSummarySnapshot: Equatable {
@@ -220,29 +808,205 @@ nonisolated enum PlanningDuePaymentError: Error, Equatable {
     case missingDestinationWallet
 }
 
+extension PlanningDuePaymentError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .missingAmount:
+            L10n.shared.corelogic.planning.enterAPaymentAmountBeforeContinuing
+        case .missingSourceWallet:
+            L10n.shared.corelogic.planning.chooseAPaymentWalletBeforeContinuing
+        case .missingDestinationWallet:
+            L10n.shared.corelogic.planning.theDestinationWalletForThisPaymentCould
+        }
+    }
+}
+
 nonisolated enum PlanningLogic {
-    static func health(forProgress progress: Double) -> PlanningBudgetHealth {
-        if progress > 1 {
-            return .exceeded
+    static let budgetPaceCautionMultiplier = 1.15
+
+    static func budgetPaceAssessment(
+        spentMinor: Int64,
+        limitMinor: Int64,
+        selectedMonth: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningBudgetPaceAssessment {
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+        let referenceMonthStart = startOfMonth(for: referenceDate, calendar: calendar)
+        let totalDays = calendar.range(of: .day, in: .month, for: selectedMonthStart)?.count ?? 30
+
+        if selectedMonthStart < referenceMonthStart {
+            return budgetPaceAssessment(
+                spentMinor: spentMinor,
+                limitMinor: limitMinor,
+                totalDays: totalDays,
+                elapsedDays: totalDays,
+                daysRemaining: 0,
+                isPastMonth: true,
+                isFutureMonth: false
+            )
         }
 
-        if progress >= 0.7 {
-            return .caution
+        if selectedMonthStart > referenceMonthStart {
+            return budgetPaceAssessment(
+                spentMinor: spentMinor,
+                limitMinor: limitMinor,
+                totalDays: totalDays,
+                elapsedDays: 0,
+                daysRemaining: totalDays,
+                isPastMonth: false,
+                isFutureMonth: true
+            )
         }
 
-        return .stable
+        let elapsedDays = min(max(calendar.component(.day, from: referenceDate), 1), totalDays)
+        return budgetPaceAssessment(
+            spentMinor: spentMinor,
+            limitMinor: limitMinor,
+            totalDays: totalDays,
+            elapsedDays: elapsedDays,
+            daysRemaining: totalDays - elapsedDays,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
     }
 
-    static func tone(forProgress progress: Double) -> PlanningBudgetTone {
-        if progress >= 0.9 {
-            return .critical
+    static func budgetNotificationTransition(
+        hasExistingNotification: Bool,
+        previousHealth: PlanningBudgetHealth?,
+        currentHealth: PlanningBudgetHealth
+    ) -> PlanningBudgetNotificationTransition {
+        guard hasExistingNotification else {
+            return currentHealth == .stable ? .none : .create
         }
 
-        if progress >= 0.7 {
-            return .warning
+        guard let previousHealth else {
+            return currentHealth == .stable ? .updateSilently : .resurface
         }
 
-        return .calm
+        guard previousHealth != currentHealth else {
+            return .none
+        }
+
+        if currentHealth == .stable {
+            return .updateSilently
+        }
+
+        if previousHealth == .stable || (previousHealth == .caution && currentHealth == .exceeded) {
+            return .resurface
+        }
+
+        return .updateSilently
+    }
+
+    static func budgetPaceAssessment(
+        spentMinor: Int64,
+        limitMinor: Int64,
+        totalDays: Int,
+        elapsedDays: Int,
+        daysRemaining: Int,
+        isPastMonth: Bool,
+        isFutureMonth: Bool
+    ) -> PlanningBudgetPaceAssessment {
+        let normalizedTotalDays = max(totalDays, 1)
+        let normalizedElapsedDays = min(max(elapsedDays, 0), normalizedTotalDays)
+        let normalizedRemainingDays = max(daysRemaining, 0)
+        let remainingMinor = max(limitMinor - spentMinor, 0)
+        let targetProgress: Double
+        let projectedSpentMinor: Int64
+
+        if isPastMonth {
+            targetProgress = 1
+            projectedSpentMinor = max(spentMinor, 0)
+        } else if isFutureMonth {
+            targetProgress = 0
+            projectedSpentMinor = max(spentMinor, 0)
+        } else {
+            targetProgress = Double(normalizedElapsedDays) / Double(normalizedTotalDays)
+            projectedSpentMinor = projectedBudgetSpending(
+                spentMinor: spentMinor,
+                elapsedDays: normalizedElapsedDays,
+                totalDays: normalizedTotalDays
+            )
+        }
+
+        let health: PlanningBudgetHealth
+        if isFutureMonth {
+            health = .stable
+        } else if limitMinor > 0, spentMinor >= limitMinor {
+            health = .exceeded
+        } else if isPastMonth || limitMinor <= 0 || targetProgress <= 0 {
+            health = .stable
+        } else {
+            let progress = Double(max(spentMinor, 0)) / Double(limitMinor)
+            let threshold = targetProgress * budgetPaceCautionMultiplier
+            health = (progress - threshold) > 1e-9 ? .caution : .stable
+        }
+
+        return PlanningBudgetPaceAssessment(
+            health: health,
+            tone: tone(forHealth: health),
+            targetProgress: targetProgress,
+            projectedSpentMinor: projectedSpentMinor,
+            remainingDailyAllowanceMinor: normalizedRemainingDays > 0
+                ? remainingMinor / Int64(normalizedRemainingDays)
+                : 0,
+            totalDays: normalizedTotalDays,
+            elapsedDays: normalizedElapsedDays,
+            daysRemaining: normalizedRemainingDays,
+            isPastMonth: isPastMonth,
+            isFutureMonth: isFutureMonth
+        )
+    }
+
+    private static func tone(forHealth health: PlanningBudgetHealth) -> PlanningBudgetTone {
+        switch health {
+        case .stable:
+            .calm
+        case .caution:
+            .warning
+        case .exceeded:
+            .critical
+        }
+    }
+
+    private static func projectedBudgetSpending(
+        spentMinor: Int64,
+        elapsedDays: Int,
+        totalDays: Int
+    ) -> Int64 {
+        guard spentMinor > 0, elapsedDays > 0 else { return max(spentMinor, 0) }
+        let projected = Double(spentMinor) / Double(elapsedDays) * Double(totalDays)
+        guard projected < Double(Int64.max) else { return Int64.max }
+        return Int64(projected.rounded())
+    }
+
+    private static func summaryPaceAssessment(
+        spentMinor: Int64,
+        limitMinor: Int64,
+        rowPaceAssessment: PlanningBudgetPaceAssessment?
+    ) -> PlanningBudgetPaceAssessment {
+        guard let rowPaceAssessment else {
+            return budgetPaceAssessment(
+                spentMinor: spentMinor,
+                limitMinor: limitMinor,
+                totalDays: 1,
+                elapsedDays: 0,
+                daysRemaining: 0,
+                isPastMonth: false,
+                isFutureMonth: true
+            )
+        }
+
+        return budgetPaceAssessment(
+            spentMinor: spentMinor,
+            limitMinor: limitMinor,
+            totalDays: rowPaceAssessment.totalDays,
+            elapsedDays: rowPaceAssessment.elapsedDays,
+            daysRemaining: rowPaceAssessment.daysRemaining,
+            isPastMonth: rowPaceAssessment.isPastMonth,
+            isFutureMonth: rowPaceAssessment.isFutureMonth
+        )
     }
 
     static func budgetRows(
@@ -250,30 +1014,40 @@ nonisolated enum PlanningLogic {
         records: [TransactionRecordSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = [],
+        familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
+        familySpendingAvailable: Bool = false
     ) -> [PlanningBudgetRowSnapshot] {
-        let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
-        let spentByCategory = Dictionary(grouping: records.filter { record in
-            guard record.entryStatus == .posted,
-                  record.primaryKind == .expense,
-                  record.categoryID != nil,
-                  let monthInterval
-            else {
-                return false
-            }
-
-            return monthInterval.contains(record.occurredAt)
-        }, by: \.categoryID)
-
-        let remainingDays = daysRemainingInMonth(for: selectedMonth, referenceDate: referenceDate, calendar: calendar)
-        let isPastMonth = isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar)
+        let spendingIndex = PlanningBudgetSpendingIndex(
+            records: records,
+            familyTransactions: familyTransactions,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
 
         return plans
             .map { plan in
-                let spent = spentByCategory[plan.categoryID]?
-                    .reduce(into: Int64.zero) { partial, record in
-                        partial += record.amountMinor
-                    } ?? 0
+                let spent = plan.includesFamilySpending && familySpendingAvailable
+                    ? spendingIndex.familySpentForCategoryName(
+                        plan.categoryName,
+                        currencyCode: plan.currencyCode,
+                        rateIndex: rateIndex
+                    )
+                    : spendingIndex.personalSpentForCategory(
+                        plan.categoryID,
+                        categoryName: plan.categoryName,
+                        currencyCode: plan.currencyCode,
+                        rateIndex: rateIndex
+                    )
+                let paceAssessment = budgetPaceAssessment(
+                    spentMinor: spent,
+                    limitMinor: plan.limitMinor,
+                    selectedMonth: selectedMonth,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                )
 
                 return PlanningBudgetRowSnapshot(
                     id: plan.id,
@@ -284,8 +1058,7 @@ nonisolated enum PlanningLogic {
                     spentMinor: spent,
                     limitMinor: plan.limitMinor,
                     currencyCode: plan.currencyCode,
-                    daysRemaining: remainingDays,
-                    isPastMonth: isPastMonth
+                    paceAssessment: paceAssessment
                 )
             }
             .sorted { lhs, rhs in
@@ -299,27 +1072,382 @@ nonisolated enum PlanningLogic {
             }
     }
 
-    static func budgetSummary(from rows: [PlanningBudgetRowSnapshot]) -> PlanningBudgetSummarySnapshot {
+    static func resolvingFamilySpendingCategoryScopes(
+        plans: [BudgetPlanSnapshot],
+        categoryScopes: [PlanningFamilyBudgetSpendingCategoryScope]
+    ) -> [BudgetPlanSnapshot] {
+        plans.map { plan in
+            let includesFamilySpending = plan.includesFamilySpending
+                || familySpendingEnabled(
+                    categoryName: plan.categoryName,
+                    branchCategoryName: plan.branchCategoryName,
+                    categoryScopes: categoryScopes
+                )
+            guard includesFamilySpending != plan.includesFamilySpending else {
+                return plan
+            }
+
+            return BudgetPlanSnapshot(
+                id: plan.id,
+                categoryID: plan.categoryID,
+                categoryName: plan.categoryName,
+                categoryIconSymbolName: plan.categoryIconSymbolName,
+                categoryColorHex: plan.categoryColorHex,
+                limitMinor: plan.limitMinor,
+                rolloverEnabled: plan.rolloverEnabled,
+                currencyCode: plan.currencyCode,
+                monthAnchor: plan.monthAnchor,
+                categoryParentID: plan.categoryParentID,
+                categoryParentName: plan.categoryParentName,
+                categoryParentIconSymbolName: plan.categoryParentIconSymbolName,
+                categoryParentColorHex: plan.categoryParentColorHex,
+                categoryIsParent: plan.categoryIsParent,
+                includesFamilySpending: includesFamilySpending
+            )
+        }
+    }
+
+    static func familySpendingEnabled(
+        categoryName: String,
+        branchCategoryName: String,
+        categoryScopes: [PlanningFamilyBudgetSpendingCategoryScope]
+    ) -> Bool {
+        let categoryKey = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+        let branchKey = FamilyLogic.normalizedFamilyGroupingName(branchCategoryName)
+        guard !categoryKey.isEmpty || !branchKey.isEmpty else { return false }
+
+        return categoryScopes.contains { scope in
+            guard scope.familyBudgetSpendingEnabled else { return false }
+            return (!categoryKey.isEmpty && scope.categoryKey == categoryKey)
+                || (!branchKey.isEmpty && scope.branchKey == branchKey)
+        }
+    }
+
+    static func budgetSummary(
+        from rows: [PlanningBudgetRowSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
+    ) -> PlanningBudgetSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
         let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
-            partial += row.limitMinor
+            partial += reportingAmount(
+                amountMinor: row.limitMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                rateIndex: rateIndex
+            )
         }
         let spent = rows.reduce(into: Int64.zero) { partial, row in
-            partial += row.spentMinor
+            partial += reportingAmount(
+                amountMinor: row.spentMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                rateIndex: rateIndex
+            )
         }
         let remaining = max(totalBudget - spent, 0)
+        let paceAssessment = summaryPaceAssessment(
+            spentMinor: spent,
+            limitMinor: totalBudget,
+            rowPaceAssessment: rows.first?.paceAssessment
+        )
 
         return PlanningBudgetSummarySnapshot(
             totalBudgetMinor: totalBudget,
             spentMinor: spent,
             remainingMinor: remaining,
-            health: health(forProgress: totalBudget > 0 ? Double(spent) / Double(totalBudget) : 0)
+            paceAssessment: paceAssessment
         )
+    }
+
+    static func budgetBranchRows(
+        plans: [BudgetPlanSnapshot],
+        records: [TransactionRecordSnapshot],
+        selectedMonth: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = [],
+        familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
+        familySpendingAvailable: Bool = false
+    ) -> [PlanningBudgetBranchRowSnapshot] {
+        let spendingIndex = PlanningBudgetSpendingIndex(
+            records: records,
+            familyTransactions: familyTransactions,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+
+        return Dictionary(grouping: plans) { $0.branchCategoryID }
+            .compactMap { branchID, branchPlans in
+                guard let branchID else { return nil }
+
+                let parentPlan = branchPlans.first(where: { $0.categoryIsParent })
+                let childPlans = branchPlans.filter { !$0.categoryIsParent }
+                let branchTemplate = parentPlan ?? childPlans.first
+                guard let branchTemplate else { return nil }
+                let childRows = childPlans
+                    .map { plan in
+                        let planIncludesFamilySpending = familySpendingAvailable
+                            && plan.includesFamilySpending
+                        let spent = planIncludesFamilySpending
+                            ? spendingIndex.familySpentForCategoryName(
+                                plan.categoryName,
+                                currencyCode: plan.currencyCode,
+                                rateIndex: rateIndex
+                            )
+                            : spendingIndex.personalSpentForCategory(
+                                plan.categoryID,
+                                categoryName: plan.categoryName,
+                                currencyCode: plan.currencyCode,
+                                rateIndex: rateIndex
+                            )
+                        let paceAssessment = budgetPaceAssessment(
+                            spentMinor: spent,
+                            limitMinor: plan.limitMinor,
+                            selectedMonth: selectedMonth,
+                            referenceDate: referenceDate,
+                            calendar: calendar
+                        )
+
+                        return PlanningBudgetRowSnapshot(
+                            id: plan.id,
+                            categoryID: plan.categoryID,
+                            name: plan.categoryName,
+                            iconSymbolName: plan.categoryIconSymbolName,
+                            colorHex: plan.categoryColorHex,
+                            spentMinor: spent,
+                            limitMinor: plan.limitMinor,
+                            currencyCode: plan.currencyCode,
+                            paceAssessment: paceAssessment
+                        )
+                    }
+                    .sorted { lhs, rhs in
+                        if lhs.progress != rhs.progress {
+                            return lhs.progress > rhs.progress
+                        }
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                    }
+
+                if let parentPlan {
+                    let parentIncludesFamilySpending = familySpendingAvailable
+                        && parentPlan.includesFamilySpending
+                    let spent = parentIncludesFamilySpending
+                        ? spendingIndex.familySpentForCategoryName(
+                            parentPlan.branchCategoryName,
+                            currencyCode: parentPlan.currencyCode,
+                            rateIndex: rateIndex
+                        )
+                        : spendingIndex.personalSpentForBranch(
+                            branchID,
+                            branchName: parentPlan.branchCategoryName,
+                            currencyCode: parentPlan.currencyCode,
+                            rateIndex: rateIndex
+                        )
+                    let allocatedChildLimit = childRows.reduce(into: Int64.zero) { partial, row in
+                        partial += reportingAmount(
+                            amountMinor: row.limitMinor,
+                            sourceCurrencyCode: row.currencyCode,
+                            currencyCode: parentPlan.currencyCode,
+                            rateIndex: rateIndex
+                        )
+                    }
+                    let paceAssessment = budgetPaceAssessment(
+                        spentMinor: spent,
+                        limitMinor: parentPlan.limitMinor,
+                        selectedMonth: selectedMonth,
+                        referenceDate: referenceDate,
+                        calendar: calendar
+                    )
+
+                    return PlanningBudgetBranchRowSnapshot(
+                        id: branchID,
+                        parentCategoryID: branchTemplate.branchCategoryID,
+                        name: parentPlan.branchCategoryName,
+                        iconSymbolName: parentPlan.branchIconSymbolName,
+                        colorHex: parentPlan.branchColorHex,
+                        spentMinor: spent,
+                        limitMinor: parentPlan.limitMinor,
+                        currencyCode: parentPlan.currencyCode,
+                        paceAssessment: paceAssessment,
+                        mode: childRows.isEmpty ? .parentOnly : .parentWithChildren,
+                        parentBudgetID: parentPlan.id,
+                        primaryBudgetID: parentPlan.id,
+                        allocatedChildLimitMinor: allocatedChildLimit,
+                        unallocatedLimitMinor: max(parentPlan.limitMinor - allocatedChildLimit, 0),
+                        childRows: childRows
+                    )
+                }
+
+                if childRows.count == 1, let childRow = childRows.first {
+                    return PlanningBudgetBranchRowSnapshot(
+                        id: branchID,
+                        parentCategoryID: branchTemplate.branchCategoryID,
+                        name: childRow.name,
+                        iconSymbolName: childRow.iconSymbolName,
+                        colorHex: childRow.colorHex,
+                        spentMinor: childRow.spentMinor,
+                        limitMinor: childRow.limitMinor,
+                        currencyCode: childRow.currencyCode,
+                        paceAssessment: childRow.paceAssessment,
+                        mode: .childOnly,
+                        parentBudgetID: nil,
+                        primaryBudgetID: childRow.id,
+                        allocatedChildLimitMinor: childRow.limitMinor,
+                        unallocatedLimitMinor: 0,
+                        childRows: []
+                    )
+                }
+
+                let spent = childRows.reduce(into: Int64.zero) { partial, row in
+                    partial += reportingAmount(
+                        amountMinor: row.spentMinor,
+                        sourceCurrencyCode: row.currencyCode,
+                        currencyCode: branchTemplate.currencyCode,
+                        rateIndex: rateIndex
+                    )
+                }
+                let limit = childRows.reduce(into: Int64.zero) { partial, row in
+                    partial += reportingAmount(
+                        amountMinor: row.limitMinor,
+                        sourceCurrencyCode: row.currencyCode,
+                        currencyCode: branchTemplate.currencyCode,
+                        rateIndex: rateIndex
+                    )
+                }
+                let paceAssessment = budgetPaceAssessment(
+                    spentMinor: spent,
+                    limitMinor: limit,
+                    selectedMonth: selectedMonth,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                )
+
+                return PlanningBudgetBranchRowSnapshot(
+                    id: branchID,
+                    parentCategoryID: branchTemplate.branchCategoryID,
+                    name: branchTemplate.branchCategoryName,
+                    iconSymbolName: branchTemplate.branchIconSymbolName,
+                    colorHex: branchTemplate.branchColorHex,
+                    spentMinor: spent,
+                    limitMinor: limit,
+                    currencyCode: branchTemplate.currencyCode,
+                    paceAssessment: paceAssessment,
+                    mode: .childOnly,
+                    parentBudgetID: nil,
+                    primaryBudgetID: nil,
+                    allocatedChildLimitMinor: limit,
+                    unallocatedLimitMinor: 0,
+                    childRows: childRows
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.progress != rhs.progress {
+                    return lhs.progress > rhs.progress
+                }
+                if lhs.daysRemaining != rhs.daysRemaining {
+                    return lhs.daysRemaining < rhs.daysRemaining
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+    }
+
+    static func budgetSummary(
+        from rows: [PlanningBudgetBranchRowSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
+    ) -> PlanningBudgetSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+        let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
+            partial += reportingAmount(
+                amountMinor: row.limitMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                rateIndex: rateIndex
+            )
+        }
+        let spent = rows.reduce(into: Int64.zero) { partial, row in
+            partial += reportingAmount(
+                amountMinor: row.spentMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                rateIndex: rateIndex
+            )
+        }
+        let remaining = max(totalBudget - spent, 0)
+        let paceAssessment = summaryPaceAssessment(
+            spentMinor: spent,
+            limitMinor: totalBudget,
+            rowPaceAssessment: rows.first?.paceAssessment
+        )
+
+        return PlanningBudgetSummarySnapshot(
+            totalBudgetMinor: totalBudget,
+            spentMinor: spent,
+            remainingMinor: remaining,
+            paceAssessment: paceAssessment
+        )
+    }
+
+    static func validateBudgetAllocation(
+        categoryID: UUID?,
+        branchCategoryID: UUID?,
+        categoryIsParent: Bool,
+        categoryIsChild: Bool,
+        limitMinor: Int64,
+        monthAnchor: Date,
+        plans: [BudgetPlanSnapshot],
+        editingBudgetID: UUID? = nil,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningBudgetAllocationValidationResult {
+        guard let branchCategoryID else {
+            return .valid
+        }
+
+        let selectedMonth = startOfMonth(for: monthAnchor, calendar: calendar)
+        let branchPlans = plans.filter { plan in
+            guard plan.id != editingBudgetID else { return false }
+            return plan.branchCategoryID == branchCategoryID
+                && startOfMonth(for: plan.monthAnchor, calendar: calendar) == selectedMonth
+        }
+
+        let childLimitTotal = branchPlans.reduce(into: Int64.zero) { partial, plan in
+            guard !plan.categoryIsParent else { return }
+            partial += plan.limitMinor
+        }
+
+        if categoryIsParent {
+            guard limitMinor >= childLimitTotal else {
+                return .parentLimitBelowChildren(
+                    childTotalMinor: childLimitTotal,
+                    parentLimitMinor: limitMinor
+                )
+            }
+
+            return .valid
+        }
+
+        guard categoryIsChild else {
+            return .valid
+        }
+
+        if let parentPlan = branchPlans.first(where: { $0.categoryIsParent }) {
+            let projectedChildLimitTotal = childLimitTotal + limitMinor
+            guard projectedChildLimitTotal <= parentPlan.limitMinor else {
+                return .childBudgetsExceedParent(
+                    childTotalMinor: projectedChildLimitTotal,
+                    parentLimitMinor: parentPlan.limitMinor
+                )
+            }
+        }
+
+        return .valid
     }
 
     static func goalRows(
         goals: [SavingsGoalSnapshot],
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningGoalRowSnapshot] {
         goals
             .map { goal in
@@ -351,7 +1479,12 @@ nonisolated enum PlanningLogic {
             }
     }
 
-    static func goalSummary(from rows: [PlanningGoalRowSnapshot]) -> PlanningGoalSummarySnapshot {
+    static func goalSummary(
+        from rows: [PlanningGoalRowSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
+    ) -> PlanningGoalSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
         let nearest = rows.max { lhs, rhs in
             if lhs.progress != rhs.progress {
                 return lhs.progress < rhs.progress
@@ -362,7 +1495,12 @@ nonisolated enum PlanningLogic {
         return PlanningGoalSummarySnapshot(
             activeCount: rows.count,
             totalSavedMinor: rows.reduce(into: Int64.zero) { partial, row in
-                partial += row.currentSavedMinor
+                partial += reportingAmount(
+                    amountMinor: row.currentSavedMinor,
+                    sourceCurrencyCode: row.currencyCode,
+                    currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                    rateIndex: rateIndex
+                )
             },
             nearestGoalName: nearest?.name
         )
@@ -370,93 +1508,235 @@ nonisolated enum PlanningLogic {
 
     static func creditCardDueItems(
         accounts: [PlanningCreditCardAccountSnapshot],
+        records: [TransactionRecordSnapshot] = [],
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningCreditCardDueSnapshot] {
-        let monthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let statements = creditCardStatementsDue(
+            in: selectedMonth,
+            accounts: accounts,
+            records: records,
+            occurrences: occurrences,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        return creditCardDueItems(from: statements)
+    }
 
-        return accounts
-            .filter { account in
-                calendar.compare(account.openedAt, to: endOfMonth(for: selectedMonth, calendar: calendar), toGranularity: .second) != .orderedDescending
-            }
-            .map { account in
-                let scheduledDate = scheduledDate(
-                    dueDay: account.dueDay,
-                    selectedMonth: selectedMonth,
-                    calendar: calendar
-                )
-                let occurrence = occurrenceRecord(
-                    for: .creditCard,
-                    sourceID: account.walletID,
-                    monthKey: monthKey,
-                    occurrences: occurrences
-                )
-                let amount = occurrence?.amountMinorSnapshot ?? account.currentDebtMinor
-
-                return PlanningCreditCardDueSnapshot(
-                    id: account.id,
-                    walletID: account.walletID,
-                    walletName: account.walletName,
-                    network: account.network,
-                    last4: account.last4,
-                    amountMinor: amount,
-                    dueDate: scheduledDate,
-                    paymentSourceWalletID: account.paymentSourceWalletID,
-                    currencyCode: account.currencyCode,
-                    status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID
+    static func creditCardDueItems(
+        from statements: [PlanningCreditCardStatementSnapshot]
+    ) -> [PlanningCreditCardDueSnapshot] {
+        statements
+            .filter { $0.state != .unclosed && $0.amountMinor > 0 }
+            .map { statement in
+                PlanningCreditCardDueSnapshot(
+                    id: statement.walletID,
+                    walletID: statement.walletID,
+                    walletName: statement.walletName,
+                    network: statement.network,
+                    last4: statement.last4,
+                    amountMinor: statement.amountMinor,
+                    availableCreditMinor: statement.availableCreditMinor,
+                    statementMonth: statement.statementMonth,
+                    dueDate: statement.dueDate,
+                    paymentSourceWalletID: statement.paymentSourceWalletID,
+                    currencyCode: statement.currencyCode,
+                    status: statement.status,
+                    linkedTransactionID: statement.linkedTransactionID
                 )
             }
             .sorted(by: dueSort)
+    }
+
+    static func creditCardStatementsDue(
+        in selectedMonth: Date,
+        accounts: [PlanningCreditCardAccountSnapshot],
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [PlanningCreditCardStatementSnapshot] {
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+        let candidateMonths = (-2...0).compactMap { offset in
+            calendar.date(byAdding: .month, value: offset, to: selectedMonthStart)
+        }
+
+        return creditCardStatementItems(
+            accounts: accounts,
+            records: records,
+            occurrences: occurrences,
+            statementMonths: candidateMonths,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        .filter { isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar) }
+        .sorted(by: dueSort)
+    }
+
+    static func creditCardStatementItems(
+        accounts: [PlanningCreditCardAccountSnapshot],
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        statementMonths: [Date],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [PlanningCreditCardStatementSnapshot] {
+        let months = Dictionary(
+            grouping: statementMonths.map { startOfMonth(for: $0, calendar: calendar) },
+            by: { monthKey(for: $0, calendar: calendar) }
+        )
+            .compactMap { $0.value.first }
+            .sorted()
+
+        guard !accounts.isEmpty, !months.isEmpty else { return [] }
+
+        let computationIndex = creditCardStatementComputationIndex(
+            records: records,
+            occurrences: occurrences,
+            calendar: calendar
+        )
+
+        return accounts.flatMap { account in
+            months.compactMap { month in
+                creditCardStatementItem(
+                    account: account,
+                    computationIndex: computationIndex,
+                    statementMonth: month,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                )
+            }
+        }
+        .sorted(by: dueSort)
+    }
+
+    static func creditCardStatementClosingDate(
+        statementMonth: Date,
+        statementClosingDay: Int,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> Date {
+        let nextMonth = calendar.date(
+            byAdding: .month,
+            value: 1,
+            to: startOfMonth(for: statementMonth, calendar: calendar)
+        ) ?? statementMonth
+        return scheduledDate(dueDay: statementClosingDay, selectedMonth: nextMonth, calendar: calendar)
+    }
+
+    static func creditCardStatementDueDate(
+        statementMonth: Date,
+        statementClosingDay: Int,
+        paymentDueDay: Int,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> Date {
+        let closingDate = creditCardStatementClosingDate(
+            statementMonth: statementMonth,
+            statementClosingDay: statementClosingDay,
+            calendar: calendar
+        )
+        let closingMonth = startOfMonth(for: closingDate, calendar: calendar)
+        let sameMonthDue = scheduledDate(
+            dueDay: paymentDueDay,
+            selectedMonth: closingMonth,
+            calendar: calendar
+        )
+
+        if sameMonthDue >= closingDate {
+            return sameMonthDue
+        }
+
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: closingMonth) ?? closingMonth
+        return scheduledDate(dueDay: paymentDueDay, selectedMonth: nextMonth, calendar: calendar)
     }
 
     static func recurringBillDueItems(
         bills: [PlanningBillSnapshot],
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningRecurringDueSnapshot] {
-        dueItems(
-            sourceKind: .recurringBill,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        ) { monthKey in
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrenceBySourceID = occurrenceMap(
+            for: .recurringBill,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return dueItems(
+            selectedMonthKey: selectedMonthKey
+        ) { _ in
             bills.compactMap { bill in
-                guard isScheduledMonth(
+                makeRecurringBillDueItem(
+                    bill: bill,
+                    occurrence: occurrenceBySourceID[bill.id],
                     selectedMonth: selectedMonth,
-                    anchorDate: bill.createdAt,
-                    frequencyMonths: bill.frequencyMonths,
-                    totalCycles: nil,
                     calendar: calendar
-                ) else {
-                    return nil
-                }
-
-                let occurrence = occurrenceRecord(
-                    for: .recurringBill,
-                    sourceID: bill.id,
-                    monthKey: monthKey,
-                    occurrences: occurrences
-                )
-
-                return PlanningRecurringDueSnapshot(
-                    id: bill.id,
-                    sourceKind: .recurringBill,
-                    sourceID: bill.id,
-                    name: bill.name,
-                    iconSymbolName: bill.iconSymbolName,
-                    amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
-                    dueDate: scheduledDate(dueDay: bill.dueDay, selectedMonth: selectedMonth, calendar: calendar),
-                    frequencyMonths: bill.frequencyMonths,
-                    totalCycles: nil,
-                    paymentWalletID: bill.paymentWalletID,
-                    currencyCode: bill.currencyCode,
-                    status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID
                 )
             }
+        }
+    }
+
+    static func pausedRecurringBills(
+        from bills: [PlanningBillSnapshot]
+    ) -> [PlanningBillSnapshot] {
+        bills
+            .filter { $0.scheduleKind == .recurring && $0.isPaused }
+            .sorted { lhs, rhs in
+                let nameComparison = lhs.name.localizedStandardCompare(rhs.name)
+                if nameComparison != .orderedSame {
+                    return nameComparison == .orderedAscending
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
+    }
+
+    static func recurringBillDueItem<Occurrences: Sequence>(
+        bill: PlanningBillSnapshot,
+        occurrences: Occurrences,
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningRecurringDueSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrence = firstOccurrence(
+            for: .recurringBill,
+            sourceID: bill.id,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return makeRecurringBillDueItem(
+            bill: bill,
+            occurrence: occurrence,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+    }
+
+    static func recurringBillAmountTotalsByCurrency(
+        _ items: [PlanningRecurringDueSnapshot]
+    ) -> [PlanningCurrencyAmountTotalSnapshot] {
+        Dictionary(grouping: items) { item in
+            MistiaCurrencyLogic.normalizedCode(item.currencyCode)
+        }
+        .compactMap { currencyCode, groupedItems in
+            let total = groupedItems.reduce(into: Int64.zero) { partial, item in
+                guard item.sourceKind == .recurringBill,
+                      let amountMinor = item.amountMinor,
+                      amountMinor > 0 else {
+                    return
+                }
+                partial += amountMinor
+            }
+            guard total > 0 else { return nil }
+            return PlanningCurrencyAmountTotalSnapshot(
+                currencyCode: currencyCode,
+                amountMinor: total
+            )
+        }
+        .sorted { lhs, rhs in
+            lhs.currencyCode.localizedCaseInsensitiveCompare(rhs.currencyCode) == .orderedAscending
         }
     }
 
@@ -464,86 +1744,159 @@ nonisolated enum PlanningLogic {
         plans: [PlanningInstallmentSnapshot],
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningRecurringDueSnapshot] {
-        dueItems(
-            sourceKind: .installment,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        ) { monthKey in
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrenceBySourceID = occurrenceMap(
+            for: .installment,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return dueItems(
+            selectedMonthKey: selectedMonthKey
+        ) { _ in
             plans.compactMap { plan in
-                guard isScheduledMonth(
+                makeInstallmentDueItem(
+                    plan: plan,
+                    occurrence: occurrenceBySourceID[plan.id],
                     selectedMonth: selectedMonth,
-                    anchorDate: plan.createdAt,
-                    frequencyMonths: plan.frequencyMonths,
-                    totalCycles: plan.totalCycles,
                     calendar: calendar
-                ) else {
-                    return nil
-                }
-
-                let occurrence = occurrenceRecord(
-                    for: .installment,
-                    sourceID: plan.id,
-                    monthKey: monthKey,
-                    occurrences: occurrences
-                )
-
-                return PlanningRecurringDueSnapshot(
-                    id: plan.id,
-                    sourceKind: .installment,
-                    sourceID: plan.id,
-                    name: plan.name,
-                    iconSymbolName: plan.iconSymbolName,
-                    amountMinor: occurrence?.amountMinorSnapshot ?? plan.amountPerCycleMinor,
-                    dueDate: scheduledDate(dueDay: plan.dueDay, selectedMonth: selectedMonth, calendar: calendar),
-                    frequencyMonths: plan.frequencyMonths,
-                    totalCycles: plan.totalCycles,
-                    paymentWalletID: plan.paymentWalletID,
-                    currencyCode: plan.currencyCode,
-                    status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID
                 )
             }
         }
+    }
+
+    static func installmentDueItem<Occurrences: Sequence>(
+        plan: PlanningInstallmentSnapshot,
+        occurrences: Occurrences,
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningRecurringDueSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrence = firstOccurrence(
+            for: .installment,
+            sourceID: plan.id,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return makeInstallmentDueItem(
+            plan: plan,
+            occurrence: occurrence,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+    }
+
+    static func dueSummary(
+        creditStatements: [PlanningCreditCardStatementSnapshot],
+        recurring: [PlanningRecurringDueSnapshot],
+        selectedMonth: Date,
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningDueSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+        let startOfToday = calendar.startOfDay(for: referenceDate)
+        let windowEnd = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+
+        let pendingStatements = creditStatements.filter {
+            $0.status == .pending
+                && $0.amountMinor > 0
+                && isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar)
+        }
+        let pendingRecurring = recurring.filter {
+            $0.status == .pending
+                && isSameMonth($0.paymentStartDate, other: selectedMonthStart, calendar: calendar)
+        }
+
+        // Sắp đến hạn: Trong vòng 7 ngày tới
+        let upcomingCards = pendingStatements.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
+        let upcomingRecurring = pendingRecurring.filter {
+            ($0.paymentStartDate >= startOfToday && $0.paymentStartDate <= windowEnd)
+                || ($0.hasExplicitDueDate && $0.dueDate >= startOfToday && $0.dueDate <= windowEnd)
+        }
+        let upcomingCount = upcomingCards.count + upcomingRecurring.count
+
+        let totalDueCards = pendingStatements.reduce(into: Int64.zero) { partial, statement in
+            partial += reportingAmount(
+                amountMinor: statement.amountMinor,
+                sourceCurrencyCode: statement.currencyCode,
+                currencyCode: reportingCurrencyCode ?? statement.currencyCode,
+                rateIndex: rateIndex
+            )
+        }
+        let totalDueRecurring = pendingRecurring.reduce(into: Int64.zero) { partial, item in
+            guard let amountMinor = item.amountMinor else { return }
+            partial += reportingAmount(
+                amountMinor: amountMinor,
+                sourceCurrencyCode: item.currencyCode,
+                currencyCode: reportingCurrencyCode ?? item.currencyCode,
+                rateIndex: rateIndex
+            )
+        }
+        let totalDueMinor = totalDueCards + totalDueRecurring
+
+        // Quá hạn
+        let overdueCount: Int
+        if isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar) {
+            overdueCount = pendingStatements.count + pendingRecurring.count
+        } else if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
+            let overdueCards = pendingStatements.filter { $0.dueDate < startOfToday }
+            let overdueRecurring = pendingRecurring.filter { $0.dueDate < startOfToday }
+            overdueCount = overdueCards.count + overdueRecurring.count
+        } else {
+            overdueCount = 0
+        }
+
+        return PlanningDueSummarySnapshot(
+            upcomingCount: upcomingCount,
+            totalDueMinor: totalDueMinor,
+            overdueCount: overdueCount
+        )
     }
 
     static func dueSummary(
         creditCards: [PlanningCreditCardDueSnapshot],
         recurring: [PlanningRecurringDueSnapshot],
         selectedMonth: Date,
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningDueSummarySnapshot {
-        let pendingCards = creditCards.filter { $0.status == .pending }
-        let pendingRecurring = recurring.filter { $0.status == .pending }
-        let pendingCombined = pendingCards.map {
-            PendingDueSnapshot(date: $0.dueDate, amountMinor: $0.amountMinor)
-        } + pendingRecurring.map {
-            PendingDueSnapshot(date: $0.dueDate, amountMinor: $0.amountMinor)
-        }
-
-        if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
-            let start = calendar.startOfDay(for: referenceDate)
-            let windowEnd = calendar.date(byAdding: .day, value: 7, to: start) ?? start
-            let overdue = pendingCombined.filter { $0.date < start }
-            let upcoming = pendingCombined.filter { $0.date >= start && $0.date <= windowEnd }
-
-            return PlanningDueSummarySnapshot(
-                upcomingCount: upcoming.count,
-                totalDueMinor: upcoming.reduce(into: Int64.zero) { partial, snapshot in
-                    partial += snapshot.amountMinor ?? 0
-                },
-                overdueCount: overdue.count
+        let statements = creditCards.map { card in
+            PlanningCreditCardStatementSnapshot(
+                id: "\(card.walletID.uuidString.lowercased())-\(monthKey(for: card.dueDate, calendar: calendar))",
+                walletID: card.walletID,
+                walletName: card.walletName,
+                issuerName: "",
+                network: card.network,
+                last4: card.last4,
+                statementMonth: selectedMonth,
+                closingDate: selectedMonth,
+                dueDate: card.dueDate,
+                amountMinor: card.amountMinor,
+                availableCreditMinor: card.availableCreditMinor,
+                paymentSourceWalletID: card.paymentSourceWalletID,
+                paymentSourceWalletName: nil,
+                currencyCode: card.currencyCode,
+                status: card.status,
+                linkedTransactionID: card.linkedTransactionID,
+                state: card.status == .paid ? .paid : .payable
             )
         }
-
-        return PlanningDueSummarySnapshot(
-            upcomingCount: pendingCombined.count,
-            totalDueMinor: pendingCombined.reduce(into: Int64.zero) { partial, snapshot in
-                partial += snapshot.amountMinor ?? 0
-            },
-            overdueCount: 0
+        return dueSummary(
+            creditStatements: statements,
+            recurring: recurring,
+            selectedMonth: selectedMonth,
+            reportingCurrencyCode: reportingCurrencyCode,
+            exchangeRates: exchangeRates,
+            referenceDate: referenceDate,
+            calendar: calendar
         )
     }
 
@@ -572,10 +1925,35 @@ nonisolated enum PlanningLogic {
     }
 
     static func makePaymentDraft(
-        for recurringItem: PlanningRecurringDueSnapshot,
+        for statement: PlanningCreditCardStatementSnapshot,
         overrideAmountMinor: Int64? = nil
     ) throws -> PlanningDuePaymentDraft {
-        guard let sourceWalletID = recurringItem.paymentWalletID else {
+        guard let sourceWalletID = statement.paymentSourceWalletID else {
+            throw PlanningDuePaymentError.missingSourceWallet
+        }
+
+        let amount = overrideAmountMinor ?? statement.amountMinor
+        guard amount > 0 else {
+            throw PlanningDuePaymentError.missingAmount
+        }
+
+        return PlanningDuePaymentDraft(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Thanh toán thẻ \(statement.walletName)",
+            amountMinor: amount,
+            sourceWalletID: sourceWalletID,
+            destinationWalletID: statement.walletID,
+            categorySystemKey: nil
+        )
+    }
+
+    static func makePaymentDraft(
+        for recurringItem: PlanningRecurringDueSnapshot,
+        overrideAmountMinor: Int64? = nil,
+        sourceWalletIDOverride: UUID? = nil
+    ) throws -> PlanningDuePaymentDraft {
+        guard let sourceWalletID = sourceWalletIDOverride ?? recurringItem.paymentWalletID else {
             throw PlanningDuePaymentError.missingSourceWallet
         }
 
@@ -584,7 +1962,15 @@ nonisolated enum PlanningLogic {
             throw PlanningDuePaymentError.missingAmount
         }
 
-        let systemKey: MistiaSystemCategoryKey = recurringItem.sourceKind == .recurringBill ? .billing : .loanRepayment
+        let systemKey: MistiaSystemCategoryKey
+        switch recurringItem.sourceKind {
+        case .recurringBill:
+            systemKey = recurringItem.categorySystemKey ?? .billing
+        case .installment:
+            systemKey = .loanRepayment
+        case .creditCard:
+            systemKey = .billing
+        }
 
         return PlanningDuePaymentDraft(
             primaryKind: .expense,
@@ -597,16 +1983,28 @@ nonisolated enum PlanningLogic {
         )
     }
 
-    static func monthKey(for date: Date, calendar: Calendar = .current) -> String {
+    static func monthKey(for date: Date, calendar: Calendar = MistiaCalendar.current) -> String {
         let components = calendar.dateComponents([.year, .month], from: date)
         return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
     }
 
-    static func startOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
+    static func month(from key: String, calendar: Calendar = MistiaCalendar.current) -> Date? {
+        let parts = key.split(separator: "-")
+        guard parts.count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]) else { return nil }
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = 1
+        return calendar.date(from: components)
+    }
+
+    static func startOfMonth(for date: Date, calendar: Calendar = MistiaCalendar.current) -> Date {
         calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
     }
 
-    static func endOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
+    static func endOfMonth(for date: Date, calendar: Calendar = MistiaCalendar.current) -> Date {
         guard let interval = calendar.dateInterval(of: .month, for: date) else {
             return date
         }
@@ -617,7 +2015,7 @@ nonisolated enum PlanningLogic {
     static func scheduledDate(
         dueDay: Int,
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Date {
         let monthStart = startOfMonth(for: selectedMonth, calendar: calendar)
         let maxDay = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 28
@@ -626,10 +2024,610 @@ nonisolated enum PlanningLogic {
         return calendar.date(byAdding: .day, value: clampedDay - 1, to: monthStart) ?? monthStart
     }
 
+    private struct RecurringBillWindow {
+        let paymentStartDate: Date
+        let dueDate: Date
+        let hasExplicitDueDate: Bool
+        let autoPayDate: Date?
+    }
+
+    private static func recurringBillWindow(
+        for bill: PlanningBillSnapshot,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> RecurringBillWindow? {
+        switch bill.scheduleKind {
+        case .recurring:
+            guard !bill.isPaused else {
+                return nil
+            }
+            let scheduleAnchor = bill.resumeStartMonth ?? bill.firstScheduledMonth ?? bill.createdAt
+            guard isScheduledMonth(
+                selectedMonth: selectedMonth,
+                anchorDate: scheduleAnchor,
+                frequencyMonths: bill.frequencyMonths,
+                totalCycles: nil,
+                calendar: calendar
+            ) else {
+                return nil
+            }
+
+            let paymentStartDate = scheduledDate(
+                dueDay: bill.paymentStartDay,
+                selectedMonth: selectedMonth,
+                calendar: calendar
+            )
+            let hasExplicitDueDate = bill.hasExplicitDueDate && bill.dueDay != bill.paymentStartDay
+            let dueDate: Date
+            if hasExplicitDueDate {
+                let dueMonth = bill.dueDay < bill.paymentStartDay
+                    ? calendar.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
+                    : selectedMonth
+                dueDate = scheduledDate(dueDay: bill.dueDay, selectedMonth: dueMonth, calendar: calendar)
+            } else {
+                dueDate = paymentStartDate
+            }
+
+            return RecurringBillWindow(
+                paymentStartDate: paymentStartDate,
+                dueDate: dueDate,
+                hasExplicitDueDate: hasExplicitDueDate,
+                autoPayDate: autoPayDate(
+                    enabled: bill.autoPayEnabled,
+                    autoPayDay: bill.autoPayDay,
+                    paymentStartDay: bill.paymentStartDay,
+                    paymentStartDate: paymentStartDate,
+                    dueDay: bill.dueDay,
+                    dueDate: dueDate,
+                    hasExplicitDueDate: hasExplicitDueDate,
+                    selectedMonth: selectedMonth,
+                    calendar: calendar
+                )
+            )
+
+        case .oneTime:
+            guard let paymentStartDate = bill.paymentStartDate else { return nil }
+            guard isSameMonth(paymentStartDate, other: selectedMonth, calendar: calendar) else { return nil }
+
+            let hasExplicitDueDate = bill.hasExplicitDueDate
+                && bill.dueDate != nil
+                && calendar.startOfDay(for: bill.dueDate ?? paymentStartDate) != calendar.startOfDay(for: paymentStartDate)
+                && calendar.startOfDay(for: bill.dueDate ?? paymentStartDate) >= calendar.startOfDay(for: paymentStartDate)
+            let dueDate = hasExplicitDueDate ? (bill.dueDate ?? paymentStartDate) : paymentStartDate
+            let autoPayDate = bill.autoPayEnabled
+                ? normalizedAutoPayDate(bill.autoPayDate, paymentStartDate: paymentStartDate, dueDate: dueDate, calendar: calendar)
+                : nil
+
+            return RecurringBillWindow(
+                paymentStartDate: paymentStartDate,
+                dueDate: dueDate,
+                hasExplicitDueDate: hasExplicitDueDate,
+                autoPayDate: autoPayDate
+            )
+        }
+    }
+
+    private static func autoPayDate(
+        enabled: Bool,
+        autoPayDay: Int?,
+        paymentStartDay: Int,
+        paymentStartDate: Date,
+        dueDay: Int,
+        dueDate: Date,
+        hasExplicitDueDate: Bool,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> Date? {
+        guard enabled else { return nil }
+        guard hasExplicitDueDate, let autoPayDay else {
+            return paymentStartDate
+        }
+
+        let autoPayMonth = dueDay < paymentStartDay && autoPayDay < paymentStartDay
+            ? calendar.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
+            : selectedMonth
+        let candidate = scheduledDate(dueDay: autoPayDay, selectedMonth: autoPayMonth, calendar: calendar)
+        return normalizedAutoPayDate(candidate, paymentStartDate: paymentStartDate, dueDate: dueDate, calendar: calendar)
+    }
+
+    private static func normalizedAutoPayDate(
+        _ candidate: Date?,
+        paymentStartDate: Date,
+        dueDate: Date,
+        calendar: Calendar
+    ) -> Date {
+        guard let candidate else { return paymentStartDate }
+        let day = calendar.startOfDay(for: candidate)
+        let start = calendar.startOfDay(for: paymentStartDate)
+        let due = calendar.startOfDay(for: dueDate)
+        guard day >= start, day <= due else { return paymentStartDate }
+        return day
+    }
+
+    private struct CreditCardStatementIndexKey: Hashable {
+        let walletID: UUID
+        let monthKey: String
+    }
+
+    private struct CreditCardStatementComputationIndex {
+        private let amountsByWalletAndMonth: [CreditCardStatementIndexKey: Int64]
+        private let paymentRecordsByWalletID: [UUID: [TransactionRecordSnapshot]]
+        private let occurrencesByWalletAndMonth: [CreditCardStatementIndexKey: PlanningDueOccurrenceSnapshot]
+
+        init(
+            amountsByWalletAndMonth: [CreditCardStatementIndexKey: Int64],
+            paymentRecordsByWalletID: [UUID: [TransactionRecordSnapshot]],
+            occurrencesByWalletAndMonth: [CreditCardStatementIndexKey: PlanningDueOccurrenceSnapshot]
+        ) {
+            self.amountsByWalletAndMonth = amountsByWalletAndMonth
+            self.paymentRecordsByWalletID = paymentRecordsByWalletID
+            self.occurrencesByWalletAndMonth = occurrencesByWalletAndMonth
+        }
+
+        func amount(walletID: UUID, monthKey: String) -> Int64 {
+            amountsByWalletAndMonth[CreditCardStatementIndexKey(walletID: walletID, monthKey: monthKey)] ?? 0
+        }
+
+        func paymentRecords(walletID: UUID) -> [TransactionRecordSnapshot] {
+            paymentRecordsByWalletID[walletID] ?? []
+        }
+
+        func occurrence(walletID: UUID, monthKey: String) -> PlanningDueOccurrenceSnapshot? {
+            occurrencesByWalletAndMonth[CreditCardStatementIndexKey(walletID: walletID, monthKey: monthKey)]
+        }
+    }
+
+    private static func creditCardStatementComputationIndex(
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        calendar: Calendar
+    ) -> CreditCardStatementComputationIndex {
+        var amountsByWalletAndMonth: [CreditCardStatementIndexKey: Int64] = [:]
+        var paymentRecordsByWalletID: [UUID: [TransactionRecordSnapshot]] = [:]
+
+        for record in records {
+            guard record.entryStatus == .posted, !record.isArchived else { continue }
+
+            if TransactionLogic.isCreditCardStatementCharge(record), let walletID = record.sourceWalletID {
+                let key = CreditCardStatementIndexKey(
+                    walletID: walletID,
+                    monthKey: monthKey(for: record.occurredAt, calendar: calendar)
+                )
+                amountsByWalletAndMonth[key, default: 0] += record.amountMinor
+                continue
+            }
+
+            if record.primaryKind == .transfer,
+               record.transferSubtype == .internalTransfer,
+               let walletID = record.destinationWalletID {
+                paymentRecordsByWalletID[walletID, default: []].append(record)
+            }
+        }
+
+        for walletID in Array(paymentRecordsByWalletID.keys) {
+            paymentRecordsByWalletID[walletID]?.sort(by: creditCardPaymentRecordSort)
+        }
+
+        var occurrencesByWalletAndMonth: [CreditCardStatementIndexKey: PlanningDueOccurrenceSnapshot] = [:]
+        occurrencesByWalletAndMonth.reserveCapacity(occurrences.count)
+        for occurrence in occurrences where occurrence.sourceKind == .creditCard {
+            let key = CreditCardStatementIndexKey(
+                walletID: occurrence.sourceID,
+                monthKey: occurrence.selectedMonthKey
+            )
+            if occurrencesByWalletAndMonth[key] == nil {
+                occurrencesByWalletAndMonth[key] = occurrence
+            }
+        }
+
+        return CreditCardStatementComputationIndex(
+            amountsByWalletAndMonth: amountsByWalletAndMonth,
+            paymentRecordsByWalletID: paymentRecordsByWalletID,
+            occurrencesByWalletAndMonth: occurrencesByWalletAndMonth
+        )
+    }
+
+    private static func creditCardStatementItem(
+        account: PlanningCreditCardAccountSnapshot,
+        computationIndex: CreditCardStatementComputationIndex,
+        statementMonth: Date,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> PlanningCreditCardStatementSnapshot? {
+        let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
+        let dueDate = creditCardStatementDueDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            paymentDueDay: account.dueDay,
+            calendar: calendar
+        )
+        let statementMonthKey = monthKey(for: monthStart, calendar: calendar)
+        let legacyDueMonthKey = monthKey(for: dueDate, calendar: calendar)
+        let occurrence = computationIndex.occurrence(
+            walletID: account.walletID,
+            monthKey: statementMonthKey
+        ) ?? computationIndex.occurrence(
+            walletID: account.walletID,
+            monthKey: legacyDueMonthKey
+        )
+        let computedAmount = computationIndex.amount(
+            walletID: account.walletID,
+            monthKey: statementMonthKey
+        )
+        return creditCardStatementItem(
+            account: account,
+            statementMonth: monthStart,
+            computedAmount: computedAmount,
+            occurrence: occurrence,
+            sortedPaymentRecords: computationIndex.paymentRecords(walletID: account.walletID),
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    private static func creditCardStatementItem<Records: Sequence, Occurrences: Sequence>(
+        account: PlanningCreditCardAccountSnapshot,
+        records: Records,
+        occurrences: Occurrences,
+        statementMonth: Date,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> PlanningCreditCardStatementSnapshot?
+        where Records.Element == TransactionRecordSnapshot,
+              Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
+        let statementMonthKey = monthKey(for: monthStart, calendar: calendar)
+        let dueDate = creditCardStatementDueDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            paymentDueDay: account.dueDay,
+            calendar: calendar
+        )
+        let legacyDueMonthKey = monthKey(for: dueDate, calendar: calendar)
+        let occurrence = firstCreditCardStatementOccurrence(
+            walletID: account.walletID,
+            statementMonthKey: statementMonthKey,
+            legacyDueMonthKey: legacyDueMonthKey,
+            occurrences: occurrences
+        )
+
+        var computedAmount: Int64 = 0
+        var paymentRecords: [TransactionRecordSnapshot] = []
+        for record in records {
+            guard record.entryStatus == .posted, !record.isArchived else { continue }
+
+            if TransactionLogic.isCreditCardStatementCharge(record), let walletID = record.sourceWalletID {
+                if walletID == account.walletID,
+                   monthKey(for: record.occurredAt, calendar: calendar) == statementMonthKey {
+                    computedAmount += record.amountMinor
+                }
+                continue
+            }
+
+            if record.primaryKind == .transfer,
+               record.transferSubtype == .internalTransfer,
+               record.destinationWalletID == account.walletID {
+                paymentRecords.append(record)
+            }
+        }
+        paymentRecords.sort(by: creditCardPaymentRecordSort)
+
+        return creditCardStatementItem(
+            account: account,
+            statementMonth: monthStart,
+            computedAmount: computedAmount,
+            occurrence: occurrence,
+            sortedPaymentRecords: paymentRecords,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    private static func creditCardStatementItem(
+        account: PlanningCreditCardAccountSnapshot,
+        statementMonth: Date,
+        computedAmount: Int64,
+        occurrence: PlanningDueOccurrenceSnapshot?,
+        sortedPaymentRecords: [TransactionRecordSnapshot],
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> PlanningCreditCardStatementSnapshot? {
+        let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
+        let closingDate = creditCardStatementClosingDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            calendar: calendar
+        )
+        let dueDate = creditCardStatementDueDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            paymentDueDay: account.dueDay,
+            calendar: calendar
+        )
+        let matchedOccurrence = occurrence.flatMap { occurrence -> PlanningDueOccurrenceSnapshot? in
+            guard let snapshotAmount = occurrence.amountMinorSnapshot,
+                  snapshotAmount == computedAmount,
+                  computedAmount > 0 else {
+                return nil
+            }
+            return occurrence
+        }
+        let amount = matchedOccurrence?.amountMinorSnapshot ?? computedAmount
+        if calendar.compare(
+            account.openedAt,
+            to: endOfMonth(for: monthStart, calendar: calendar),
+            toGranularity: .second
+        ) == .orderedDescending,
+           matchedOccurrence == nil,
+           amount <= 0 {
+            return nil
+        }
+
+        let inferredPayment = firstMatchingCreditCardPaymentRecord(
+            amountMinor: amount,
+            closingDate: closingDate,
+            sortedPaymentRecords: sortedPaymentRecords,
+            calendar: calendar
+        )
+        let status: PlanningDueOccurrenceStatus =
+            matchedOccurrence?.status == .paid || inferredPayment != nil
+            ? .paid
+            : .pending
+        let linkedTransactionID = matchedOccurrence?.status == .paid
+            ? matchedOccurrence?.linkedTransactionID ?? inferredPayment?.id
+            : inferredPayment?.id ?? matchedOccurrence?.linkedTransactionID
+        let state = creditCardStatementState(
+            status: status,
+            amountMinor: amount,
+            closingDate: closingDate,
+            dueDate: dueDate,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        return PlanningCreditCardStatementSnapshot(
+            id: "\(account.walletID.uuidString.lowercased())-\(monthKey(for: monthStart, calendar: calendar))",
+            walletID: account.walletID,
+            walletName: account.walletName,
+            issuerName: account.issuerName,
+            network: account.network,
+            last4: account.last4,
+            statementMonth: monthStart,
+            closingDate: closingDate,
+            dueDate: dueDate,
+            amountMinor: amount,
+            availableCreditMinor: account.availableCreditMinor,
+            paymentSourceWalletID: account.paymentSourceWalletID,
+            paymentSourceWalletName: account.paymentSourceWalletName,
+            currencyCode: account.currencyCode,
+            status: status,
+            linkedTransactionID: linkedTransactionID,
+            state: state
+        )
+    }
+
+    private static func firstCreditCardStatementOccurrence<Occurrences: Sequence>(
+        walletID: UUID,
+        statementMonthKey: String,
+        legacyDueMonthKey: String,
+        occurrences: Occurrences
+    ) -> PlanningDueOccurrenceSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        var legacyDueMonthOccurrence: PlanningDueOccurrenceSnapshot?
+
+        for occurrence in occurrences where occurrence.sourceKind == .creditCard && occurrence.sourceID == walletID {
+            if occurrence.selectedMonthKey == statementMonthKey {
+                return occurrence
+            }
+
+            if occurrence.selectedMonthKey == legacyDueMonthKey, legacyDueMonthOccurrence == nil {
+                legacyDueMonthOccurrence = occurrence
+            }
+        }
+
+        return legacyDueMonthOccurrence
+    }
+
+    static func creditCardStatementPaymentRecord(
+        walletID: UUID,
+        amountMinor: Int64,
+        closingDate: Date,
+        records: [TransactionRecordSnapshot],
+        calendar: Calendar = MistiaCalendar.current
+    ) -> TransactionRecordSnapshot? {
+        guard amountMinor > 0 else { return nil }
+        let closingDay = calendar.startOfDay(for: closingDate)
+
+        let matchingRecords = records
+            .filter { record in
+                guard record.entryStatus == .posted,
+                      !record.isArchived,
+                      record.primaryKind == .transfer,
+                      record.transferSubtype == .internalTransfer,
+                      record.destinationWalletID == walletID,
+                      record.occurredAt >= closingDay
+                else {
+                    return false
+                }
+
+                let paidAmount = record.destinationAmountMinor ?? record.amountMinor
+                return paidAmount >= amountMinor
+            }
+            .sorted(by: creditCardPaymentRecordSort)
+
+        return matchingRecords.first
+    }
+
+    private static func firstMatchingCreditCardPaymentRecord(
+        amountMinor: Int64,
+        closingDate: Date,
+        sortedPaymentRecords: [TransactionRecordSnapshot],
+        calendar: Calendar
+    ) -> TransactionRecordSnapshot? {
+        guard amountMinor > 0 else { return nil }
+        let closingDay = calendar.startOfDay(for: closingDate)
+
+        return sortedPaymentRecords.first { record in
+            guard record.occurredAt >= closingDay else { return false }
+            let paidAmount = record.destinationAmountMinor ?? record.amountMinor
+            return paidAmount >= amountMinor
+        }
+    }
+
+    private static func creditCardPaymentRecordSort(
+        lhs: TransactionRecordSnapshot,
+        rhs: TransactionRecordSnapshot
+    ) -> Bool {
+        if lhs.occurredAt != rhs.occurredAt {
+            return lhs.occurredAt < rhs.occurredAt
+        }
+        return lhs.createdAt < rhs.createdAt
+    }
+
+    static func creditCardStatementState(
+        status: PlanningDueOccurrenceStatus,
+        amountMinor: Int64,
+        closingDate: Date,
+        dueDate: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningCreditCardStatementState {
+        if status == .paid {
+            return .paid
+        }
+
+        let today = calendar.startOfDay(for: referenceDate)
+        let closingDay = calendar.startOfDay(for: closingDate)
+        if today < closingDay {
+            return .unclosed
+        }
+
+        if amountMinor <= 0 {
+            return .paid
+        }
+
+        if calendar.startOfDay(for: dueDate) < today {
+            return .overdue
+        }
+
+        return .payable
+    }
+
+    static func paidCreditCardStatementForExpense<Records: Sequence, Occurrences: Sequence>(
+        account: PlanningCreditCardAccountSnapshot,
+        records: Records,
+        occurrences: Occurrences,
+        occurredAt: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningCreditCardStatementSnapshot?
+        where Records.Element == TransactionRecordSnapshot,
+              Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        guard let statement = creditCardStatementItem(
+            account: account,
+            records: records,
+            occurrences: occurrences,
+            statementMonth: occurredAt,
+            referenceDate: referenceDate,
+            calendar: calendar
+        ), statement.state == .paid else {
+            return nil
+        }
+
+        return statement
+    }
+
+    static func creditCardAutoPaymentDecision(
+        statement: PlanningCreditCardStatementSnapshot,
+        sourceWalletBalanceMinor: Int64?,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningCreditCardAutoPaymentDecision {
+        guard statement.status == .pending, statement.state != .paid, statement.amountMinor > 0 else {
+            return .alreadyPaid
+        }
+
+        let today = calendar.startOfDay(for: referenceDate)
+        let dueDay = calendar.startOfDay(for: statement.dueDate)
+        guard today >= dueDay else {
+            return .notDue
+        }
+        let lastRetryDay = calendar.date(byAdding: .day, value: 5, to: dueDay) ?? dueDay
+        guard today <= lastRetryDay else {
+            return .notDue
+        }
+
+        guard statement.paymentSourceWalletID != nil, let sourceWalletBalanceMinor else {
+            return .missingLinkedWallet
+        }
+
+        guard sourceWalletBalanceMinor >= statement.amountMinor else {
+            return .insufficientFunds(
+                availableMinor: sourceWalletBalanceMinor,
+                requiredMinor: statement.amountMinor
+            )
+        }
+
+        return .payable
+    }
+
+    fileprivate static func reportingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: TransactionLogic.reportedExpenseAmount(for: record),
+            sourceCurrencyCode: record.sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
+    }
+
+    fileprivate static func reportingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: TransactionLogic.reportedExpenseAmount(for: record),
+            sourceCurrencyCode: record.sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rateIndex: rateIndex
+        ) ?? 0
+    }
+
+    fileprivate static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
+    }
+
+    fileprivate static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rateIndex: rateIndex
+        ) ?? 0
+    }
+
     static func monthsRemaining(
         from selectedMonth: Date,
         to targetDate: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Int {
         let start = startOfMonth(for: selectedMonth, calendar: calendar)
         let targetMonth = startOfMonth(for: targetDate, calendar: calendar)
@@ -638,26 +2636,115 @@ nonisolated enum PlanningLogic {
     }
 
     private static func dueItems(
-        sourceKind: PlanningDueSourceKind,
-        selectedMonth: Date,
-        calendar: Calendar,
+        selectedMonthKey: String,
         builder: (_ monthKey: String) -> [PlanningRecurringDueSnapshot]
     ) -> [PlanningRecurringDueSnapshot] {
-        builder(monthKey(for: selectedMonth, calendar: calendar))
-            .sorted(by: dueSort)
+        builder(selectedMonthKey).sorted(by: dueSort)
     }
 
-    private static func occurrenceRecord(
+    private static func occurrenceMap(
+        for sourceKind: PlanningDueSourceKind,
+        selectedMonthKey: String,
+        occurrences: [PlanningDueOccurrenceSnapshot]
+    ) -> [UUID: PlanningDueOccurrenceSnapshot] {
+        var result: [UUID: PlanningDueOccurrenceSnapshot] = [:]
+        result.reserveCapacity(occurrences.count)
+
+        for occurrence in occurrences where occurrence.sourceKind == sourceKind
+            && occurrence.selectedMonthKey == selectedMonthKey
+            && result[occurrence.sourceID] == nil {
+            result[occurrence.sourceID] = occurrence
+        }
+
+        return result
+    }
+
+    private static func firstOccurrence<Occurrences: Sequence>(
         for sourceKind: PlanningDueSourceKind,
         sourceID: UUID,
-        monthKey: String,
-        occurrences: [PlanningDueOccurrenceSnapshot]
-    ) -> PlanningDueOccurrenceSnapshot? {
-        occurrences.first(where: {
-            $0.sourceKind == sourceKind
-                && $0.sourceID == sourceID
-                && $0.selectedMonthKey == monthKey
-        })
+        selectedMonthKey: String,
+        occurrences: Occurrences
+    ) -> PlanningDueOccurrenceSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        for occurrence in occurrences where occurrence.sourceKind == sourceKind
+            && occurrence.sourceID == sourceID
+            && occurrence.selectedMonthKey == selectedMonthKey {
+            return occurrence
+        }
+
+        return nil
+    }
+
+    private static func makeRecurringBillDueItem(
+        bill: PlanningBillSnapshot,
+        occurrence: PlanningDueOccurrenceSnapshot?,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> PlanningRecurringDueSnapshot? {
+        let window = recurringBillWindow(
+            for: bill,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+        guard let window else { return nil }
+
+        return PlanningRecurringDueSnapshot(
+            id: bill.id,
+            sourceKind: .recurringBill,
+            sourceID: bill.id,
+            name: bill.name,
+            iconSymbolName: bill.iconSymbolName,
+            categorySystemKey: bill.categorySystemKey,
+            categoryName: bill.categoryName,
+            categoryIconSymbolName: bill.categoryIconSymbolName,
+            categoryColorHex: bill.categoryColorHex,
+            amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
+            paymentStartDate: window.paymentStartDate,
+            dueDate: window.dueDate,
+            hasExplicitDueDate: window.hasExplicitDueDate,
+            scheduleKind: bill.scheduleKind,
+            frequencyMonths: bill.frequencyMonths,
+            totalCycles: nil,
+            paymentWalletID: bill.paymentWalletID,
+            currencyCode: bill.currencyCode,
+            status: occurrence?.status ?? .pending,
+            linkedTransactionID: occurrence?.linkedTransactionID,
+            autoPayEnabled: bill.autoPayEnabled,
+            autoPayDate: window.autoPayDate
+        )
+    }
+
+    private static func makeInstallmentDueItem(
+        plan: PlanningInstallmentSnapshot,
+        occurrence: PlanningDueOccurrenceSnapshot?,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> PlanningRecurringDueSnapshot? {
+        guard isScheduledMonth(
+            selectedMonth: selectedMonth,
+            anchorDate: plan.createdAt,
+            frequencyMonths: plan.frequencyMonths,
+            totalCycles: plan.totalCycles,
+            calendar: calendar
+        ) else {
+            return nil
+        }
+
+        return PlanningRecurringDueSnapshot(
+            id: plan.id,
+            sourceKind: .installment,
+            sourceID: plan.id,
+            name: plan.name,
+            iconSymbolName: plan.iconSymbolName,
+            categorySystemKey: .loanRepayment,
+            amountMinor: occurrence?.amountMinorSnapshot ?? plan.amountPerCycleMinor,
+            dueDate: scheduledDate(dueDay: plan.dueDay, selectedMonth: selectedMonth, calendar: calendar),
+            frequencyMonths: plan.frequencyMonths,
+            totalCycles: plan.totalCycles,
+            paymentWalletID: plan.paymentWalletID,
+            currencyCode: plan.currencyCode,
+            status: occurrence?.status ?? .pending,
+            linkedTransactionID: occurrence?.linkedTransactionID
+        )
     }
 
     private static func isScheduledMonth(
@@ -702,25 +2789,6 @@ nonisolated enum PlanningLogic {
         return lhs < rhs
     }
 
-    private static func daysRemainingInMonth(
-        for selectedMonth: Date,
-        referenceDate: Date,
-        calendar: Calendar
-    ) -> Int {
-        let monthEnd = endOfMonth(for: selectedMonth, calendar: calendar)
-        if isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar) {
-            return 0
-        }
-
-        if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
-            let start = calendar.startOfDay(for: referenceDate)
-            return max((calendar.dateComponents([.day], from: start, to: monthEnd).day ?? 0) + 1, 0)
-        }
-
-        let monthStart = startOfMonth(for: selectedMonth, calendar: calendar)
-        return (calendar.dateComponents([.day], from: monthStart, to: monthEnd).day ?? 0) + 1
-    }
-
     private nonisolated static func dueSort<T: DueSortable>(lhs: T, rhs: T) -> Bool {
         if lhs.dueDate != rhs.dueDate {
             return lhs.dueDate < rhs.dueDate
@@ -741,6 +2809,10 @@ private nonisolated protocol DueSortable {
 }
 
 nonisolated extension PlanningCreditCardDueSnapshot: DueSortable {
+    fileprivate var displayName: String { walletName }
+}
+
+nonisolated extension PlanningCreditCardStatementSnapshot: DueSortable {
     fileprivate var displayName: String { walletName }
 }
 

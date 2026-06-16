@@ -4,27 +4,51 @@ import UIKit
 
 struct ManagementCategorySeed {
     let name: String
+    let nameEnglish: String?
+    let nameJapanese: String?
     let kind: TransactionCategoryKind
     let iconSymbolName: String
+    let fallbackSystemName: String
     let iconColorHex: String
+    let pickerGroup: MistiaFinanceIconGroup
     let systemKey: MistiaSystemCategoryKey?
     let startsArchived: Bool
 
     init(
         name: String,
+        nameEnglish: String? = nil,
+        nameJapanese: String? = nil,
         kind: TransactionCategoryKind,
         iconSymbolName: String,
+        fallbackSystemName: String,
         iconColorHex: String,
+        pickerGroup: MistiaFinanceIconGroup,
         systemKey: MistiaSystemCategoryKey? = nil,
         startsArchived: Bool = false
     ) {
         self.name = name
+        self.nameEnglish = nameEnglish
+        self.nameJapanese = nameJapanese
         self.kind = kind
         self.iconSymbolName = iconSymbolName
+        self.fallbackSystemName = fallbackSystemName
         self.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: iconColorHex)
+        self.pickerGroup = pickerGroup
         self.systemKey = systemKey
         self.startsArchived = startsArchived
     }
+}
+
+struct ManagementCategoryParentSeed {
+    let name: String
+    let nameEnglish: String?
+    let nameJapanese: String?
+    let kind: TransactionCategoryKind
+    let iconSymbolName: String
+    let fallbackSystemName: String
+    let iconColorHex: String
+    let pickerGroup: MistiaFinanceIconGroup
+    let systemKey: MistiaSystemCategoryParentKey
 }
 
 struct JapaneseBankPreset: Identifiable, Hashable {
@@ -35,6 +59,7 @@ struct JapaneseBankPreset: Identifiable, Hashable {
 }
 
 enum ManagementDataActionKind: String, Identifiable, CaseIterable {
+    case archivedItems
     case exportData
     case importData
     case backupRestore
@@ -44,19 +69,23 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
 
     var title: String {
         switch self {
+        case .archivedItems:
+            L10n.management.dataAction.archivedItems.title
         case .exportData:
-            mistiaLocalized(vi: "Xuất dữ liệu", en: "Export data", ja: "データを書き出す")
+            L10n.management.dataAction.exportData.title
         case .importData:
-            mistiaLocalized(vi: "Nhập dữ liệu", en: "Import data", ja: "データを取り込む")
+            L10n.management.dataAction.importData.title
         case .backupRestore:
-            mistiaLocalized(vi: "Backup & khôi phục", en: "Backup & restore", ja: "バックアップと復元")
+            L10n.management.dataAction.backupRestore.title
         case .deleteAllData:
-            mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除")
+            L10n.management.dataAction.deleteAllData.title
         }
     }
 
     var iconSymbolName: String {
         switch self {
+        case .archivedItems:
+            "archivebox"
         case .exportData:
             "square.and.arrow.up.fill"
         case .importData:
@@ -70,6 +99,8 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
 
     var tintColor: Color {
         switch self {
+        case .archivedItems:
+            Color(hex: "#A0A0A0")
         case .exportData:
             Color(hex: "#5B7BFF")
         case .importData:
@@ -97,30 +128,39 @@ enum ManagementPresetData {
         JapaneseBankPreset(key: "au_jibun", name: "au Jibun Bank")
     ]
 
-    static let defaultCategorySeeds: [ManagementCategorySeed] = [
-        ManagementCategorySeed(name: "Ăn uống", kind: .expense, iconSymbolName: "fork.knife", iconColorHex: "#FF9F1C", systemKey: .food),
-        ManagementCategorySeed(name: "Đi chơi", kind: .expense, iconSymbolName: "party.popper.fill", iconColorHex: "#F26A5A", systemKey: .entertainment),
-        ManagementCategorySeed(name: "Du lịch", kind: .expense, iconSymbolName: "airplane", iconColorHex: "#5B7BFF", systemKey: .travel),
-        ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#F26A5A", systemKey: .shopping),
-        ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E", systemKey: .transportation),
-        ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#8A8A8E", systemKey: .housing),
-        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "doc.text.fill", iconColorHex: "#FF9F1C", systemKey: .billing),
-        ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F26A5A", systemKey: .health),
-        ManagementCategorySeed(name: "Giáo dục", kind: .expense, iconSymbolName: "book.closed.fill", iconColorHex: "#9A67FF", systemKey: .education),
-        ManagementCategorySeed(name: "Trả góp / vay", kind: .expense, iconSymbolName: "creditcard.and.123", iconColorHex: "#8A8A8E", systemKey: .loanRepayment, startsArchived: true),
-        ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E", systemKey: .salary),
-        ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#FF9F1C", systemKey: .bonus),
-        ManagementCategorySeed(name: "Freelance", kind: .income, iconSymbolName: "laptopcomputer", iconColorHex: "#5B7BFF", systemKey: .freelance),
-        ManagementCategorySeed(name: "Đầu tư", kind: .income, iconSymbolName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF", systemKey: .investment),
-        ManagementCategorySeed(name: "Hoàn tiền", kind: .income, iconSymbolName: "arrow.counterclockwise.circle.fill", iconColorHex: "#8A8A8E", systemKey: .refund),
-        ManagementCategorySeed(name: "Bán hàng", kind: .income, iconSymbolName: "storefront.fill", iconColorHex: "#F26A5A", systemKey: .sales),
-        ManagementCategorySeed(name: "Quà tặng", kind: .income, iconSymbolName: "heart.fill", iconColorHex: "#F26A5A", systemKey: .gift),
-        ManagementCategorySeed(name: "Phụ cấp", kind: .income, iconSymbolName: "wallet.pass.fill", iconColorHex: "#9A67FF", systemKey: .allowance),
-        ManagementCategorySeed(name: "Lãi ngân hàng", kind: .income, iconSymbolName: "building.columns.fill", iconColorHex: "#5B7BFF", systemKey: .bankInterest)
-    ]
+    static let defaultCategoryParentSeeds: [ManagementCategoryParentSeed] =
+        MistiaSystemCategoryParentKey.activeDefaults.map { systemKey in
+            ManagementCategoryParentSeed(
+                name: systemKey.legacyVietnameseName,
+                nameEnglish: systemKey.englishTitle,
+                nameJapanese: systemKey.japaneseTitle,
+                kind: systemKey.kind,
+                iconSymbolName: systemKey.iconSymbolName,
+                fallbackSystemName: systemKey.fallbackSystemName,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
+                pickerGroup: systemKey.pickerGroup,
+                systemKey: systemKey
+            )
+        }
+
+    static let defaultCategorySeeds: [ManagementCategorySeed] =
+        MistiaSystemCategoryKey.activeDefaults.map { systemKey in
+            ManagementCategorySeed(
+                name: systemKey.legacyVietnameseName,
+                nameEnglish: systemKey.englishTitle,
+                nameJapanese: systemKey.japaneseTitle,
+                kind: systemKey.kind,
+                iconSymbolName: systemKey.iconSymbolName,
+                fallbackSystemName: systemKey.fallbackSystemName,
+                iconColorHex: systemKey.iconColorHex,
+                pickerGroup: systemKey.pickerGroup,
+                systemKey: systemKey
+            )
+        }
 }
 
 extension LedgerWallet {
+    @MainActor
     var iconColor: Color {
         Color(hex: iconColorHex)
     }
@@ -131,7 +171,7 @@ extension LedgerWallet {
 
     var subtitleText: String? {
         switch kind {
-        case .cash, .payPay:
+        case .cash, .payPay, .eWallet, .prepaid, .investment, .crypto, .other:
             return nil
         case .bank:
             return institutionDisplayName
@@ -147,24 +187,21 @@ extension LedgerWallet {
             case let (nil, suffix?):
                 return "•••• \(suffix)"
             default:
-                return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード")
+                return L10n.management.management.creditCard2
             }
         }
-    }
-
-    var footnoteText: String? {
-        guard kind == .creditCard, let profile = creditCardProfile else { return nil }
-        return mistiaLocalized(
-            vi: "Chốt sao kê ngày \(profile.statementClosingDay), thanh toán ngày \(profile.paymentDueDay)",
-            en: "Statement closes on day \(profile.statementClosingDay), payment due on day \(profile.paymentDueDay)",
-            ja: "締め日は毎月 \(profile.statementClosingDay) 日、支払日は毎月 \(profile.paymentDueDay) 日です"
-        )
     }
 }
 
 extension TransactionCategory {
+    @MainActor
     var iconColor: Color {
         Color(hex: iconColorHex)
+    }
+
+    var mistiaSystemCategoryParentKey: MistiaSystemCategoryParentKey? {
+        guard let systemKey else { return nil }
+        return MistiaSystemCategoryParentKey(rawValue: systemKey)
     }
 
     var mistiaSystemCategoryKey: MistiaSystemCategoryKey? {
@@ -173,11 +210,35 @@ extension TransactionCategory {
     }
 
     var localizedDisplayName: String {
-        guard let mistiaSystemCategoryKey else { return name }
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let knownDefaultNames = Set(mistiaSystemCategoryKey.knownDefaultNames())
-        guard knownDefaultNames.contains(trimmedName) else { return name }
-        return mistiaSystemCategoryKey.localizedTitle(for: .current)
+        localizedDisplayName(for: .current)
+    }
+
+    func localizedDisplayName(for language: MistiaAppLanguage) -> String {
+        switch language {
+        case .vietnamese:
+            return name
+        case .english:
+            return nonBlank(nameEnglish) ?? fallbackLocalizedSystemName(for: .english)
+        case .japanese:
+            return nonBlank(nameJapanese) ?? fallbackLocalizedSystemName(for: .japanese)
+        }
+    }
+
+    private func fallbackLocalizedSystemName(for language: MistiaAppLanguage) -> String {
+        if let mistiaSystemCategoryParentKey {
+            return mistiaSystemCategoryParentKey.localizedTitle(for: language)
+        }
+        if let mistiaSystemCategoryKey {
+            return mistiaSystemCategoryKey.localizedTitle(for: language)
+        }
+        return name
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 }
 

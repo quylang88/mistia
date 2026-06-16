@@ -3,6 +3,7 @@ import SwiftUI
 enum MistiaBackgroundTone {
     case standard
     case muted
+    case modal
 }
 
 struct MistiaBackgroundView: View {
@@ -24,13 +25,17 @@ struct MistiaBackgroundView: View {
     private var backgroundColor: Color {
         switch (tone, colorScheme) {
         case (.standard, .dark):
-            Color(red: 0.08, green: 0.08, blue: 0.10)
+            Color.black
         case (.standard, .light):
             Color(red: 0.96, green: 0.96, blue: 0.98)
         case (.muted, .dark):
-            Color(red: 0.06, green: 0.06, blue: 0.07)
+            Color.black
         case (.muted, .light):
             Color(red: 0.97, green: 0.97, blue: 0.98)
+        case (.modal, .dark):
+            Color(UIColor.systemGroupedBackground)
+        case (.modal, .light):
+            Color(red: 0.93, green: 0.94, blue: 0.96)
         @unknown default:
             Color(red: 0.96, green: 0.96, blue: 0.98)
         }
@@ -64,6 +69,7 @@ struct MistiaPressableButtonStyle: ButtonStyle {
 
 struct MistiaAvatarBadge: View {
     var initials: String = "QL"
+    var avatarURL: URL?
     var size: CGFloat = 34
     var showsStatus: Bool = false
     @Environment(\.colorScheme) private var colorScheme
@@ -75,28 +81,23 @@ struct MistiaAvatarBadge: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.49, green: 0.34, blue: 0.95),
-                                Color(red: 0.36, green: 0.50, blue: 0.98)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                Circle()
-                    .fill(.white.opacity(colorScheme == .dark ? 0.06 : 0.16))
-                    .padding(size * 0.08)
-                    .blur(radius: size * 0.02)
-
-                Text(initials)
-                    .font(.system(size: size * 0.34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
+                if let avatarURL {
+                    AsyncImage(url: avatarURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        default:
+                            fallbackAvatar
+                        }
+                    }
+                } else {
+                    fallbackAvatar
+                }
             }
             .frame(width: size, height: size)
+            .clipShape(Circle())
             .overlay {
                 Circle()
                     .strokeBorder(ringColor, lineWidth: 0.9)
@@ -118,14 +119,39 @@ struct MistiaAvatarBadge: View {
         }
         .frame(width: size, height: size)
     }
+
+    private var fallbackAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.49, green: 0.34, blue: 0.95),
+                            Color(red: 0.36, green: 0.50, blue: 0.98)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Circle()
+                .fill(.white.opacity(colorScheme == .dark ? 0.06 : 0.16))
+                .padding(size * 0.08)
+                .blur(radius: size * 0.02)
+
+            Text(initials)
+                .font(.system(size: size * 0.34, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+        }
+    }
 }
 
 struct MistiaGlassCard<Content: View>: View {
     let cornerRadius: CGFloat
-    var tint: Color = .white.opacity(0.08)
-    var interactive: Bool = false
-    var padding: CGFloat = 18
-    private let content: Content
+    let tint: Color
+    let interactive: Bool
+    let padding: CGFloat
+    let content: Content
 
     init(
         cornerRadius: CGFloat,
@@ -162,36 +188,7 @@ struct MistiaRoundedGlassBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.clear)
-                        .glassEffect(glassStyle, in: .rect(cornerRadius: cornerRadius))
-                } else {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.08 : 0.22),
-                                .white.opacity(colorScheme == .dark ? 0.03 : 0.06)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.75
-                    )
-            }
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.12 : 0.03),
-                radius: 10,
-                y: 4
-            )
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
     }
 
     @available(iOS 26, *)
@@ -211,22 +208,7 @@ struct MistiaCapsuleGlassBackground: View {
 
     var body: some View {
         Capsule()
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    Capsule()
-                        .fill(.clear)
-                        .glassEffect(glassStyle, in: .capsule)
-                } else {
-                    Capsule()
-                        .fill(.regularMaterial)
-                }
-            }
-            .overlay {
-                Capsule()
-                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.2), lineWidth: 0.7)
-            }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.10 : 0.03), radius: 8, y: 3)
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
     }
 
     @available(iOS 26, *)
@@ -246,22 +228,7 @@ struct MistiaCircleGlassBackground: View {
 
     var body: some View {
         Circle()
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    Circle()
-                        .fill(.clear)
-                        .glassEffect(glassStyle, in: .circle)
-                } else {
-                    Circle()
-                        .fill(.regularMaterial)
-                }
-            }
-            .overlay {
-                Circle()
-                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.10 : 0.22), lineWidth: 0.75)
-            }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.04), radius: 8, y: 4)
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
     }
 
     @available(iOS 26, *)
@@ -279,6 +246,7 @@ struct MistiaTopBar: View {
     let title: String
     var showsLeadingAvatar: Bool = true
     var leadingInitials: String = "QL"
+    var leadingAvatarURL: URL? = nil
     var leadingSystemImage: String? = nil
     var trailingSystemImage: String? = "bell"
     var onLeadingTap: () -> Void = {}
@@ -311,7 +279,7 @@ struct MistiaTopBar: View {
             }
         } else if showsLeadingAvatar {
             MistiaHeaderCircleButton(action: onLeadingTap) {
-                MistiaAvatarBadge(initials: leadingInitials, size: 28)
+                MistiaAvatarBadge(initials: leadingInitials, avatarURL: leadingAvatarURL, size: 28)
             }
         } else {
             Color.clear
@@ -339,9 +307,19 @@ struct MistiaTopBar: View {
     }
 }
 
-private let mistiaHeaderCircleSize: CGFloat = 38
+private let mistiaHeaderCircleSize: CGFloat = 30
 
-private struct MistiaHeaderCircleButton<Content: View>: View {
+struct MistiaCircleGlassButtonLabel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
+            .contentShape(Circle())
+    }
+}
+
+struct MistiaHeaderCircleButton<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let action: () -> Void
     @ViewBuilder let content: Content
@@ -350,17 +328,17 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
         Group {
             if #available(iOS 26.0, *) {
                 Button(action: action) {
-                    content
-                        .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
-                        .contentShape(Circle())
+                    MistiaCircleGlassButtonLabel {
+                        content
+                    }
                 }
                 .buttonStyle(.glass(nativeGlassStyle))
                 .buttonBorderShape(.circle)
             } else {
                 Button(action: action) {
-                    content
-                        .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
-                        .contentShape(Circle())
+                    MistiaCircleGlassButtonLabel {
+                        content
+                    }
                         .background {
                             MistiaCircleGlassBackground(
                                 tint: colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30),
@@ -382,20 +360,138 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
     }
 }
 
-struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
+struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @ViewBuilder let label: Label
+    @ViewBuilder let content: MenuContent
+
+    var body: some View {
+        Group {
+            if #available(iOS 26.0, *) {
+                Menu {
+                    content
+                } label: {
+                    MistiaCircleGlassButtonLabel {
+                        label
+                    }
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(.glass(nativeGlassStyle))
+                .buttonBorderShape(.circle)
+            } else {
+                Menu {
+                    content
+                } label: {
+                    MistiaCircleGlassButtonLabel {
+                        label
+                    }
+                    .background {
+                        MistiaCircleGlassBackground(
+                            tint: colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30),
+                            interactive: true
+                        )
+                    }
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+            }
+        }
+        .hoverEffect(.highlight)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        Glass.regular
+            .interactive()
+    }
+}
+
+struct MistiaAttentionPulseAvatar: View {
+    let initials: String
+    let avatarURL: URL?
+    let size: CGFloat
+    let isActive: Bool
+    var targetScale: CGFloat = 2.2
+    var ringLineWidth: CGFloat = 2.0
+
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var pulseScale: CGFloat = 1
+    @State private var pulseOpacity: Double = 0
+
+    var body: some View {
+        MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
+            .overlay {
+                Circle()
+                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: ringLineWidth)
+                    .scaleEffect(pulseScale)
+                    .allowsHitTesting(false)
+            }
+            .task(id: "\(isActive)-\(accessibilityReduceMotion)") {
+                await runPulseLoop()
+            }
+    }
+
+    private var pulseColor: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    @MainActor
+    private func resetPulse() {
+        pulseScale = 1
+        pulseOpacity = 0
+    }
+
+    private func runPulseLoop() async {
+        resetPulse()
+        guard isActive, !accessibilityReduceMotion else { return }
+
+        while !Task.isCancelled {
+            await MainActor.run {
+                pulseScale = 1
+                pulseOpacity = 0.85
+                withAnimation(.easeOut(duration: 1.6)) {
+                    pulseScale = targetScale
+                    pulseOpacity = 0
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            resetPulse()
+        }
+    }
+}
+
+struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAccessory: View>: View {
+    enum HeaderBehavior {
+        case fixedInset
+        case scrollsThenPins
+    }
+
     let tone: MistiaBackgroundTone
     let title: String
     var embedsInNavigationStack: Bool = true
     var showsLeadingAvatar: Bool = true
+    var isLeadingEnabled: Bool = true
     var leadingInitials: String = "QL"
+    var leadingAvatarURL: URL? = nil
+    var leadingAccessibilityLabel: String? = nil
+    var leadingAvatarAttentionPulse: Bool = false
     var leadingSystemImage: String? = nil
     var trailingSystemImage: String? = "bell"
     var hidesSystemBackButton: Bool = false
     var onLeadingTap: () -> Void = {}
     var onTrailingTap: () -> Void = {}
+    var onRefresh: (() async -> Void)? = nil
     var contentSpacing: CGFloat = 18
     var contentBottomPadding: CGFloat = 150
+    var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline
+    var headerBehavior: HeaderBehavior = .fixedInset
     @ViewBuilder let pinnedHeader: PinnedHeader
+    @ViewBuilder let trailingAccessory: TrailingAccessory
     @ViewBuilder let content: Content
 
     init(
@@ -404,29 +500,45 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         embedsInNavigationStack: Bool = true,
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
+        leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
         onLeadingTap: @escaping () -> Void = {},
         onTrailingTap: @escaping () -> Void = {},
+        onRefresh: (() async -> Void)? = nil,
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
+        @ViewBuilder trailingAccessory: () -> TrailingAccessory,
         @ViewBuilder content: () -> Content
     ) {
         self.tone = tone
         self.title = title
         self.embedsInNavigationStack = embedsInNavigationStack
         self.showsLeadingAvatar = showsLeadingAvatar
+        self.isLeadingEnabled = isLeadingEnabled
         self.leadingInitials = leadingInitials
+        self.leadingAvatarURL = leadingAvatarURL
+        self.leadingAccessibilityLabel = leadingAccessibilityLabel
+        self.leadingAvatarAttentionPulse = leadingAvatarAttentionPulse
         self.leadingSystemImage = leadingSystemImage
         self.trailingSystemImage = trailingSystemImage
         self.hidesSystemBackButton = hidesSystemBackButton
         self.onLeadingTap = onLeadingTap
         self.onTrailingTap = onTrailingTap
+        self.onRefresh = onRefresh
         self.contentSpacing = contentSpacing
         self.contentBottomPadding = contentBottomPadding
+        self.titleDisplayMode = titleDisplayMode
+        self.headerBehavior = headerBehavior
         self.pinnedHeader = pinnedHeader()
+        self.trailingAccessory = trailingAccessory()
         self.content = content()
     }
 
@@ -442,25 +554,52 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         }
     }
 
-    @ViewBuilder
-    private var scrollableContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: contentSpacing) {
-                content
+    private var baseScrollableContent: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            if headerBehavior == .scrollsThenPins, PinnedHeader.self != EmptyView.self {
+                LazyVStack(spacing: contentSpacing, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        content
+                    } header: {
+                        pinnedHeader
+                            .padding(.horizontal, -18)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
+            } else {
+                LazyVStack(spacing: contentSpacing) {
+                    content
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, contentBottomPadding)
         }
         .modifier(MistiaTopScrollEdgeEffect())
         .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private var scrollableContent: some View {
+        if let onRefresh {
+            baseScrollableContent
+                .refreshable {
+                    await onRefresh()
+                }
+        } else {
+            baseScrollableContent
+        }
     }
 
     private var screenContent: some View {
         ZStack {
             MistiaBackgroundView(tone: tone)
 
-            if PinnedHeader.self != EmptyView.self {
+            if PinnedHeader.self != EmptyView.self && headerBehavior == .fixedInset {
                 scrollableContent
                     .safeAreaInset(edge: .top) {
                         pinnedHeader
@@ -472,13 +611,16 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
             }
         }
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(titleDisplayMode)
         .navigationBarBackButtonHidden(hidesSystemBackButton)
         .toolbar {
             leadingToolbarContent
             trailingToolbarContent
         }
         .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
+        .background {
+            MistiaInteractivePopGestureHelper()
+        }
     }
 
     @ToolbarContentBuilder
@@ -493,7 +635,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
 
     @ToolbarContentBuilder
     private var trailingToolbarContent: some ToolbarContent {
-        if trailingSystemImage != nil {
+        if trailingSystemImage != nil || TrailingAccessory.self != EmptyView.self {
             ToolbarItem(placement: .topBarTrailing) {
                 trailingToolbarAccessory
             }
@@ -510,16 +652,38 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(.primary)
             }
+            .disabled(!isLeadingEnabled)
+            .opacity(isLeadingEnabled ? 1 : 0.45)
         } else if showsLeadingAvatar {
-            MistiaHeaderCircleButton(action: onLeadingTap) {
-                MistiaAvatarBadge(initials: leadingInitials, size: 28)
-            }
+            leadingAvatarButton
+        }
+    }
+
+    @ViewBuilder
+    private var leadingAvatarButton: some View {
+        let button = MistiaHeaderCircleButton(action: onLeadingTap) {
+            MistiaAttentionPulseAvatar(
+                initials: leadingInitials,
+                avatarURL: leadingAvatarURL,
+                size: 28,
+                isActive: leadingAvatarAttentionPulse
+            )
+        }
+        .disabled(!isLeadingEnabled)
+        .opacity(isLeadingEnabled ? 1 : 0.45)
+
+        if let leadingAccessibilityLabel {
+            button.accessibilityLabel(Text(leadingAccessibilityLabel))
+        } else {
+            button
         }
     }
 
     @ViewBuilder
     private var trailingToolbarAccessory: some View {
-        if let trailingSystemImage {
+        if TrailingAccessory.self != EmptyView.self {
+            trailingAccessory
+        } else if let trailingSystemImage {
             MistiaHeaderCircleButton(action: onTrailingTap) {
                 Image(systemName: trailingSystemImage)
                     .font(.system(size: 17, weight: .bold))
@@ -530,20 +694,28 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
     }
 }
 
-extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
+extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
     init(
         tone: MistiaBackgroundTone,
         title: String,
         embedsInNavigationStack: Bool = true,
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
+        leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
         onLeadingTap: @escaping () -> Void = {},
         onTrailingTap: @escaping () -> Void = {},
+        onRefresh: (() async -> Void)? = nil,
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
+        @ViewBuilder pinnedHeader: () -> PinnedHeader,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
@@ -552,14 +724,72 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
             embedsInNavigationStack: embedsInNavigationStack,
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
+            leadingAvatarURL: leadingAvatarURL,
+            leadingAccessibilityLabel: leadingAccessibilityLabel,
+            leadingAvatarAttentionPulse: leadingAvatarAttentionPulse,
+            isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
             hidesSystemBackButton: hidesSystemBackButton,
             onLeadingTap: onLeadingTap,
             onTrailingTap: onTrailingTap,
+            onRefresh: onRefresh,
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
+            titleDisplayMode: titleDisplayMode,
+            headerBehavior: headerBehavior,
+            pinnedHeader: pinnedHeader,
+            trailingAccessory: { EmptyView() },
+            content: content
+        )
+    }
+}
+
+extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAccessory == EmptyView {
+    init(
+        tone: MistiaBackgroundTone,
+        title: String,
+        embedsInNavigationStack: Bool = true,
+        showsLeadingAvatar: Bool = true,
+        leadingInitials: String = "QL",
+        leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
+        isLeadingEnabled: Bool = true,
+        leadingSystemImage: String? = nil,
+        trailingSystemImage: String? = "bell",
+        hidesSystemBackButton: Bool = false,
+        onLeadingTap: @escaping () -> Void = {},
+        onTrailingTap: @escaping () -> Void = {},
+        onRefresh: (() async -> Void)? = nil,
+        contentSpacing: CGFloat = 18,
+        contentBottomPadding: CGFloat = 150,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            tone: tone,
+            title: title,
+            embedsInNavigationStack: embedsInNavigationStack,
+            showsLeadingAvatar: showsLeadingAvatar,
+            leadingInitials: leadingInitials,
+            leadingAvatarURL: leadingAvatarURL,
+            leadingAccessibilityLabel: leadingAccessibilityLabel,
+            leadingAvatarAttentionPulse: leadingAvatarAttentionPulse,
+            isLeadingEnabled: isLeadingEnabled,
+            leadingSystemImage: leadingSystemImage,
+            trailingSystemImage: trailingSystemImage,
+            hidesSystemBackButton: hidesSystemBackButton,
+            onLeadingTap: onLeadingTap,
+            onTrailingTap: onTrailingTap,
+            onRefresh: onRefresh,
+            contentSpacing: contentSpacing,
+            contentBottomPadding: contentBottomPadding,
+            titleDisplayMode: titleDisplayMode,
+            headerBehavior: headerBehavior,
             pinnedHeader: { EmptyView() },
+            trailingAccessory: { EmptyView() },
             content: content
         )
     }
@@ -591,5 +821,42 @@ struct MistiaChip: View {
             .background {
                 MistiaCapsuleGlassBackground(tint: tint.opacity(0.18))
             }
+    }
+}
+
+private struct MistiaInteractivePopGestureHelper: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> PopGestureViewController {
+        let controller = PopGestureViewController()
+        controller.coordinator = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: PopGestureViewController, context: Context) {
+        uiViewController.coordinator = context.coordinator
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class PopGestureViewController: UIViewController {
+        var coordinator: Coordinator?
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            if let navigationController = navigationController {
+                // Assert control over the shared navigation controller's delegate
+                navigationController.interactivePopGestureRecognizer?.delegate = coordinator
+                coordinator?.navigationController = navigationController
+            }
+        }
+    }
+
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var navigationController: UINavigationController?
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            return (navigationController?.viewControllers.count ?? 0) > 1
+        }
     }
 }

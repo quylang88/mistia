@@ -7,42 +7,10 @@ struct MistiaBlockCardBackground: View {
     var cornerRadius: CGFloat = 20
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.clear)
-                        .glassEffect(
-                            Glass.regular
-                                .tint(tint)
-                                .interactive(false),
-                            in: .rect(cornerRadius: cornerRadius)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.08 : 0.26),
-                                .white.opacity(colorScheme == .dark ? 0.03 : 0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.14 : 0.035),
-                radius: 10,
-                y: 4
-            )
+        MistiaRoundedGlassBackground(
+            cornerRadius: cornerRadius,
+            tint: tint
+        )
     }
 }
 
@@ -178,3 +146,20 @@ struct MistiaEmptyStateContent: View {
         .padding(.vertical, 14)
     }
 }
+
+struct MistiaMiniBadge: View {
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background {
+                MistiaCapsuleGlassBackground(tint: tint.opacity(0.12))
+            }
+    }
+}
+

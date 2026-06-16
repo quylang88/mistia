@@ -13,11 +13,6 @@ nonisolated enum OverviewCashflowStyle: String, Equatable {
     case neutral
 }
 
-nonisolated enum OverviewStatementKind: String, Equatable {
-    case monthlySummary
-    case creditCard
-}
-
 nonisolated struct OverviewWalletSnapshot: Equatable, Identifiable {
     let id: UUID
     let name: String
@@ -38,6 +33,7 @@ nonisolated struct OverviewCreditCardStatementAccountSnapshot: Equatable, Identi
     let last4: String
     let creditLimitMinor: Int64
     let currentDebtMinor: Int64
+    let availableCreditMinor: Int64
     let statementClosingDay: Int
     let paymentDueDay: Int
     let paymentSourceWalletName: String?
@@ -54,6 +50,9 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let reportingExpenseMinor: Int64?
+    let reportingIncomeMinor: Int64?
+    let sourceCurrencyCode: String?
     let occurredAt: Date
     let createdAt: Date
     let sourceWalletID: UUID?
@@ -64,7 +63,76 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let destinationWalletKind: LedgerWalletKind?
     let categoryID: UUID?
     let categoryName: String?
+    let categoryIconSymbolName: String?  // Icon of transaction category
+    let categoryColorHex: String?
+    let categoryParentID: UUID?
+    let categoryParentName: String?
+    let categoryParentIconSymbolName: String?
+    let categoryParentColorHex: String?
     let counterpartyName: String?
+    let isArchived: Bool
+
+    init(
+        id: UUID,
+        primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype?,
+        debtIntent: TransactionDebtIntent?,
+        entryStatus: TransactionEntryStatus,
+        title: String,
+        note: String?,
+        amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
+        sourceCurrencyCode: String? = nil,
+        occurredAt: Date,
+        createdAt: Date,
+        sourceWalletID: UUID?,
+        sourceWalletName: String?,
+        sourceWalletKind: LedgerWalletKind?,
+        destinationWalletID: UUID?,
+        destinationWalletName: String?,
+        destinationWalletKind: LedgerWalletKind?,
+        categoryID: UUID?,
+        categoryName: String?,
+        categoryIconSymbolName: String?,
+        categoryColorHex: String?,
+        categoryParentID: UUID?,
+        categoryParentName: String?,
+        categoryParentIconSymbolName: String?,
+        categoryParentColorHex: String?,
+        counterpartyName: String?,
+        isArchived: Bool
+    ) {
+        self.id = id
+        self.primaryKind = primaryKind
+        self.transferSubtype = transferSubtype
+        self.debtIntent = debtIntent
+        self.entryStatus = entryStatus
+        self.title = title
+        self.note = note
+        self.amountMinor = amountMinor
+        self.reportingExpenseMinor = reportingExpenseMinor
+        self.reportingIncomeMinor = reportingIncomeMinor
+        self.sourceCurrencyCode = sourceCurrencyCode
+        self.occurredAt = occurredAt
+        self.createdAt = createdAt
+        self.sourceWalletID = sourceWalletID
+        self.sourceWalletName = sourceWalletName
+        self.sourceWalletKind = sourceWalletKind
+        self.destinationWalletID = destinationWalletID
+        self.destinationWalletName = destinationWalletName
+        self.destinationWalletKind = destinationWalletKind
+        self.categoryID = categoryID
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
+        self.categoryParentID = categoryParentID
+        self.categoryParentName = categoryParentName
+        self.categoryParentIconSymbolName = categoryParentIconSymbolName
+        self.categoryParentColorHex = categoryParentColorHex
+        self.counterpartyName = counterpartyName
+        self.isArchived = isArchived
+    }
 }
 
 nonisolated struct OverviewChartPoint: Equatable, Identifiable {
@@ -90,11 +158,74 @@ nonisolated struct OverviewWeekSpendingSnapshot: Equatable, Identifiable {
     }
 }
 
+nonisolated struct OverviewCategorySpendingSlice: Equatable, Identifiable {
+    let id: String
+    let categoryID: UUID?
+    let name: String
+    let iconSymbolName: String
+    let colorHex: String
+    let amountMinor: Int64
+    let childSlices: [OverviewCategorySpendingSlice]
+
+    var canDrillDown: Bool {
+        categoryID != nil && !childSlices.isEmpty
+    }
+
+    var withoutChildren: OverviewCategorySpendingSlice {
+        OverviewCategorySpendingSlice(
+            id: id,
+            categoryID: categoryID,
+            name: name,
+            iconSymbolName: iconSymbolName,
+            colorHex: colorHex,
+            amountMinor: amountMinor,
+            childSlices: []
+        )
+    }
+}
+
+nonisolated struct OverviewCategorySpendingMonthSnapshot: Equatable, Identifiable {
+    let monthStart: Date
+    let title: String
+    let currencyCode: String
+    let slices: [OverviewCategorySpendingSlice]
+
+    var id: String {
+        String(Int(monthStart.timeIntervalSince1970))
+    }
+
+    var totalExpenseMinor: Int64 {
+        slices.reduce(into: Int64.zero) { partialResult, slice in
+            partialResult += slice.amountMinor
+        }
+    }
+
+    var topSlices: [OverviewCategorySpendingSlice] {
+        Array(slices.prefix(3))
+    }
+
+    func drilldownSlices(for categoryID: UUID) -> [OverviewCategorySpendingSlice] {
+        slices.first { $0.categoryID == categoryID }?.childSlices ?? []
+    }
+}
+
+nonisolated struct OverviewMonthlyCashflowSnapshot: Equatable, Identifiable {
+    let monthStart: Date
+    let incomeMinor: Int64
+    let expenseMinor: Int64
+
+    var id: String {
+        String(Int(monthStart.timeIntervalSince1970))
+    }
+}
+
 nonisolated struct OverviewHeroSnapshot: Equatable {
     let totalAssetBalanceMinor: Int64
     let incomeThisMonthMinor: Int64
     let expenseThisMonthMinor: Int64
     let weekPages: [OverviewWeekSpendingSnapshot]
+    let categoryMonthPages: [OverviewCategorySpendingMonthSnapshot]
+    let monthlyCashflowPages: [OverviewMonthlyCashflowSnapshot]
     let currentWeekStart: Date
     let currencyCode: String
 }
@@ -107,8 +238,24 @@ nonisolated struct OverviewBudgetAlertSnapshot: Equatable, Identifiable {
     let limitMinor: Int64
     let currencyCode: String
     let progress: Double
-    let daysRemaining: Int
+    let paceAssessment: PlanningBudgetPaceAssessment
     let tint: OverviewTint
+
+    var health: PlanningBudgetHealth {
+        paceAssessment.health
+    }
+
+    var daysRemaining: Int {
+        paceAssessment.daysRemaining
+    }
+
+    var projectedSpentMinor: Int64 {
+        paceAssessment.projectedSpentMinor
+    }
+
+    var remainingDailyAllowanceMinor: Int64 {
+        paceAssessment.remainingDailyAllowanceMinor
+    }
 
     var progressPercentText: String {
         "\(Int((progress * 100).rounded()))%"
@@ -124,6 +271,11 @@ nonisolated struct OverviewDueAlertSnapshot: Equatable, Identifiable {
     let dayDelta: Int
     let currencyCode: String
     let tint: OverviewTint
+    // Typed routing — avoids string-prefix heuristics downstream
+    let sourceKind: PlanningDueSourceKind
+    let sourceID: UUID?        // walletID for .creditCard, planID for .recurringBill/.installment
+    let dueMonthKey: String
+    let requiresAmountInput: Bool
 }
 
 nonisolated struct OverviewRecentTransactionSnapshot: Equatable, Identifiable {
@@ -134,6 +286,7 @@ nonisolated struct OverviewRecentTransactionSnapshot: Equatable, Identifiable {
     let occurredAt: Date
     let timeLabel: String
     let cashflowStyle: OverviewCashflowStyle
+    let categoryIconSymbolName: String  // Icon of transaction category
 }
 
 nonisolated struct OverviewDashboardSnapshot: Equatable {
@@ -141,73 +294,6 @@ nonisolated struct OverviewDashboardSnapshot: Equatable {
     let budgetAlerts: [OverviewBudgetAlertSnapshot]
     let dueAlerts: [OverviewDueAlertSnapshot]
     let recentTransactions: [OverviewRecentTransactionSnapshot]
-}
-
-nonisolated struct OverviewStatementWalletRow: Equatable, Identifiable {
-    let id: UUID
-    let name: String
-    let kindTitle: String
-    let openingBalanceMinor: Int64
-    let currentBalanceMinor: Int64
-    let currencyCode: String
-}
-
-nonisolated struct OverviewStatementTransactionRow: Equatable, Identifiable {
-    let id: UUID
-    let occurredAt: Date
-    let title: String
-    let kindTitle: String
-    let accountText: String
-    let detailText: String
-    let amountMinor: Int64
-    let currencyCode: String
-    let cashflowStyle: OverviewCashflowStyle
-    let statusTitle: String
-}
-
-nonisolated struct OverviewMonthlyStatementSnapshot: Equatable {
-    let generatedAt: Date
-    let period: DateInterval
-    let totalAssetBalanceMinor: Int64
-    let totalIncomeMinor: Int64
-    let totalExpenseMinor: Int64
-    let netCashflowMinor: Int64
-    let wallets: [OverviewStatementWalletRow]
-    let chartPoints: [OverviewChartPoint]
-    let transactions: [OverviewStatementTransactionRow]
-    let currencyCode: String
-}
-
-nonisolated struct OverviewCreditCardStatementCardSnapshot: Equatable, Identifiable {
-    let id: UUID
-    let walletName: String
-    let iconSymbolName: String
-    let issuerName: String
-    let networkTitle: String
-    let last4: String
-    let creditLimitMinor: Int64
-    let currentDebtMinor: Int64
-    let availableCreditMinor: Int64
-    let utilization: Double
-    let statementClosingDay: Int
-    let paymentDueDay: Int
-    let paymentSourceWalletName: String?
-    let cycle: DateInterval
-    let nextPaymentDate: Date
-    let charges: [OverviewStatementTransactionRow]
-    let payments: [OverviewStatementTransactionRow]
-    let currencyCode: String
-}
-
-nonisolated struct OverviewCreditCardStatementSnapshot: Equatable {
-    let generatedAt: Date
-    let cards: [OverviewCreditCardStatementCardSnapshot]
-}
-
-nonisolated struct OverviewStatementDocument: Equatable {
-    let kind: OverviewStatementKind
-    let filename: String
-    let html: String
 }
 
 nonisolated enum OverviewLogic {
@@ -219,14 +305,21 @@ nonisolated enum OverviewLogic {
         creditCardDues: [PlanningCreditCardDueSnapshot],
         recurringDues: [PlanningRecurringDueSnapshot],
         currencyCode: String,
+        balanceIndex: TransactionWalletBalanceIndex? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
+        familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
+        familySpendingAvailable: Bool = true,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> OverviewDashboardSnapshot {
         OverviewDashboardSnapshot(
             hero: hero(
                 wallets: wallets,
                 transactionRecords: transactionRecords,
+                transactions: transactions,
                 currencyCode: currencyCode,
+                balanceIndex: balanceIndex,
+                exchangeRates: exchangeRates,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
@@ -234,7 +327,10 @@ nonisolated enum OverviewLogic {
                 budgets: budgets,
                 transactionRecords: transactionRecords,
                 referenceDate: referenceDate,
-                calendar: calendar
+                calendar: calendar,
+                exchangeRates: exchangeRates,
+                familyTransactions: familyTransactions,
+                familySpendingAvailable: familySpendingAvailable
             ),
             dueAlerts: dueAlerts(
                 creditCardDues: creditCardDues,
@@ -254,54 +350,48 @@ nonisolated enum OverviewLogic {
     static func hero(
         wallets: [OverviewWalletSnapshot],
         transactionRecords: [TransactionRecordSnapshot],
+        transactions: [OverviewTransactionSnapshot] = [],
         currencyCode: String,
+        balanceIndex: TransactionWalletBalanceIndex? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> OverviewHeroSnapshot {
-        let monthInterval = calendar.dateInterval(of: .month, for: referenceDate)
-
-        let incomeThisMonth = transactionRecords
-            .filter { record in
-                guard record.entryStatus == .posted,
-                      record.primaryKind == .income,
-                      let monthInterval
-                else {
-                    return false
-                }
-
-                return monthInterval.contains(record.occurredAt)
-            }
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
-            }
-
-        let expenseThisMonth = transactionRecords
-            .filter { record in
-                guard record.entryStatus == .posted,
-                      record.primaryKind == .expense,
-                      let monthInterval
-                else {
-                    return false
-                }
-
-                return monthInterval.contains(record.occurredAt)
-            }
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
-            }
+        let monthlyCashflowPages = monthlyCashflowPages(
+            from: transactionRecords,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        let currentMonthCashflow = monthlyCashflowPages.first { $0.monthStart == currentMonthStart }
 
         return OverviewHeroSnapshot(
             totalAssetBalanceMinor: totalAssetBalance(
                 wallets: wallets,
-                transactionRecords: transactionRecords
+                transactionRecords: transactionRecords,
+                balanceIndex: balanceIndex,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
             ),
-            incomeThisMonthMinor: incomeThisMonth,
-            expenseThisMonthMinor: expenseThisMonth,
+            incomeThisMonthMinor: currentMonthCashflow?.incomeMinor ?? 0,
+            expenseThisMonthMinor: currentMonthCashflow?.expenseMinor ?? 0,
             weekPages: weeklySpendingPages(
                 from: transactionRecords,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
+            categoryMonthPages: categorySpendingMonthPages(
+                from: transactions,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates,
+                referenceDate: referenceDate,
+                calendar: calendar
+            ),
+            monthlyCashflowPages: monthlyCashflowPages,
             currentWeekStart: startOfMondayWeek(containing: referenceDate, calendar: calendar),
             currencyCode: currencyCode
         )
@@ -309,34 +399,71 @@ nonisolated enum OverviewLogic {
 
     static func totalAssetBalance(
         wallets: [OverviewWalletSnapshot],
-        transactionRecords: [TransactionRecordSnapshot]
+        transactionRecords: [TransactionRecordSnapshot],
+        balanceIndex: TransactionWalletBalanceIndex? = nil,
+        currencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
     ) -> Int64 {
-        wallets
+        let resolvedBalanceIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
+            wallets: wallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionRecords
+        )
+
+        return wallets
             .filter { $0.kind != .creditCard }
             .reduce(into: Int64.zero) { partialResult, wallet in
-                partialResult += TransactionLogic.effectiveBalance(
+                let balance = resolvedBalanceIndex.balance(
                     for: TransactionWalletSnapshot(
                         id: wallet.id,
                         kind: wallet.kind,
                         openingBalanceMinor: wallet.openingBalanceMinor
-                    ),
-                    records: transactionRecords
+                    )
+                )
+                guard let currencyCode else {
+                    partialResult += balance
+                    return
+                }
+
+                partialResult += reportingAmount(
+                    amountMinor: balance,
+                    sourceCurrencyCode: wallet.currencyCode,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
                 )
             }
     }
 
     static func weeklySpendingPages(
         from transactionRecords: [TransactionRecordSnapshot],
+        currencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewWeekSpendingSnapshot] {
         let currentWeekStart = startOfMondayWeek(containing: referenceDate, calendar: calendar)
         let currentWeekEnd = calendar.date(byAdding: .day, value: 6, to: currentWeekStart) ?? currentWeekStart
+        var dailyTotalsByDay: [Date: Int64] = [:]
+        var earliestExpenseWeekStart: Date?
 
-        let earliestExpenseWeekStart = transactionRecords
-            .filter { $0.entryStatus == .posted && $0.primaryKind == .expense }
-            .map { startOfMondayWeek(containing: $0.occurredAt, calendar: calendar) }
-            .min()
+        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.reportedExpenseAmount(for: record) != 0 {
+            let day = calendar.startOfDay(for: record.occurredAt)
+            dailyTotalsByDay[day, default: 0] += chartSpendingAmount(
+                for: record,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+
+            let weekStart = startOfMondayWeek(containing: record.occurredAt, calendar: calendar)
+            if earliestExpenseWeekStart.map({ weekStart < $0 }) ?? true {
+                earliestExpenseWeekStart = weekStart
+            }
+        }
 
         let firstWeekStart = earliestExpenseWeekStart ?? currentWeekStart
         var weekStart = firstWeekStart
@@ -345,28 +472,13 @@ nonisolated enum OverviewLogic {
         while weekStart <= currentWeekStart {
             let weekInterval = weekInterval(startingAt: weekStart, calendar: calendar)
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
-            let dailyValues: [(date: Date, valueMinor: Int64)] = (0..<7).compactMap { dayOffset in
-                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStart) else {
-                    return nil
-                }
-
-                let nextDay = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-                let total = transactionRecords
-                    .filter { record in
-                        record.entryStatus == .posted
-                            && record.primaryKind == .expense
-                            && record.occurredAt >= day
-                            && record.occurredAt < nextDay
-                    }
-                    .reduce(into: Int64.zero) { partialResult, record in
-                        partialResult += record.amountMinor
-                    }
-
-                return (day, total)
-            }
-
-            let minimum = dailyValues.map(\.valueMinor).min() ?? 0
-            let maximum = dailyValues.map(\.valueMinor).max() ?? 0
+            let dailyValues = dailyChartValues(
+                startingAt: weekStart,
+                count: 7,
+                totalsByDay: dailyTotalsByDay,
+                calendar: calendar
+            )
+            let range = valueRange(for: dailyValues)
             let isCurrentWeek = weekStart == currentWeekStart
 
             pages.append(
@@ -386,8 +498,8 @@ nonisolated enum OverviewLogic {
                             valueMinor: item.valueMinor,
                             intensity: normalizedIntensity(
                                 value: item.valueMinor,
-                                minimum: minimum,
-                                maximum: maximum
+                                minimum: range.minimum,
+                                maximum: range.maximum
                             )
                         )
                     }
@@ -432,31 +544,37 @@ nonisolated enum OverviewLogic {
 
     static func recentSevenDaySpendingChartPoints(
         from transactionRecords: [TransactionRecordSnapshot],
+        currencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewChartPoint] {
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let days = (0..<7).compactMap { offset in
             calendar.date(byAdding: .day, value: -(6 - offset), to: startOfToday)
         }
+        let firstDay = days.first ?? startOfToday
+        let lastDayExclusive = calendar.date(byAdding: .day, value: 1, to: days.last ?? startOfToday) ?? startOfToday
 
-        let values: [(date: Date, valueMinor: Int64)] = days.map { day in
-            let nextDay = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-            let total = transactionRecords
-                .filter { record in
-                    record.entryStatus == .posted
-                        && record.primaryKind == .expense
-                        && record.occurredAt >= day
-                        && record.occurredAt < nextDay
-                }
-                .reduce(into: Int64.zero) { partialResult, record in
-                    partialResult += record.amountMinor
-                }
-            return (day, total)
+        var totalsByDay: [Date: Int64] = [:]
+        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.reportedExpenseAmount(for: record) != 0 {
+            guard record.occurredAt >= firstDay,
+                  record.occurredAt < lastDayExclusive else {
+                continue
+            }
+
+            let day = calendar.startOfDay(for: record.occurredAt)
+            totalsByDay[day, default: 0] += chartSpendingAmount(
+                for: record,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
 
-        let minimum = values.map(\.valueMinor).min() ?? 0
-        let maximum = values.map(\.valueMinor).max() ?? 0
+        let values = days.map { day in
+            (date: day, valueMinor: totalsByDay[day] ?? 0)
+        }
+        let range = valueRange(for: values)
 
         return values.map { item in
             OverviewChartPoint(
@@ -465,37 +583,537 @@ nonisolated enum OverviewLogic {
                 valueMinor: item.valueMinor,
                 intensity: normalizedIntensity(
                     value: item.valueMinor,
-                    minimum: minimum,
-                    maximum: maximum
+                    minimum: range.minimum,
+                    maximum: range.maximum
                 )
             )
         }
+    }
+
+    static func categorySpendingMonthPages(
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [OverviewCategorySpendingMonthSnapshot] {
+        let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        var transactionsByMonth: [Date: [OverviewTransactionSnapshot]] = [:]
+        var earliestExpenseMonthStart: Date?
+
+        for transaction in transactions where isCategorySpendingTransaction(transaction) {
+            let monthStart = PlanningLogic.startOfMonth(for: transaction.occurredAt, calendar: calendar)
+            transactionsByMonth[monthStart, default: []].append(transaction)
+            if earliestExpenseMonthStart.map({ monthStart < $0 }) ?? true {
+                earliestExpenseMonthStart = monthStart
+            }
+        }
+
+        let firstMonthStart = earliestExpenseMonthStart ?? currentMonthStart
+        var monthStart = firstMonthStart
+        var pages: [OverviewCategorySpendingMonthSnapshot] = []
+
+        while monthStart <= currentMonthStart {
+            pages.append(
+                categorySpendingMonth(
+                    monthStart: monthStart,
+                    transactionsInMonth: transactionsByMonth[monthStart] ?? [],
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates,
+                    calendar: calendar
+                )
+            )
+
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+                break
+            }
+            monthStart = nextMonth
+        }
+
+        if pages.isEmpty {
+            return [
+                categorySpendingMonth(
+                    monthStart: currentMonthStart,
+                    transactionsInMonth: transactionsByMonth[currentMonthStart] ?? [],
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates,
+                    calendar: calendar
+                )
+            ]
+        }
+
+        return pages
+    }
+
+    static func monthlyCashflowPages(
+        from transactionRecords: [TransactionRecordSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [OverviewMonthlyCashflowSnapshot] {
+        let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        var totalsByMonth: [Date: (incomeMinor: Int64, expenseMinor: Int64)] = [:]
+        var earliestMonthStart: Date?
+
+        for record in transactionRecords where record.entryStatus == .posted {
+            let incomeMinor = TransactionLogic.reportedIncomeAmount(for: record)
+            let expenseMinor = TransactionLogic.reportedExpenseAmount(for: record)
+            guard incomeMinor != 0 || expenseMinor != 0 else { continue }
+
+            let monthStart = PlanningLogic.startOfMonth(for: record.occurredAt, calendar: calendar)
+            guard monthStart <= currentMonthStart else { continue }
+
+            if earliestMonthStart.map({ monthStart < $0 }) ?? true {
+                earliestMonthStart = monthStart
+            }
+
+            if incomeMinor != 0 {
+                totalsByMonth[monthStart, default: (0, 0)].incomeMinor += reportingAmount(
+                    amountMinor: incomeMinor,
+                    sourceCurrencyCode: record.sourceCurrencyCode,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
+            if expenseMinor != 0 {
+                totalsByMonth[monthStart, default: (0, 0)].expenseMinor += reportingAmount(
+                    amountMinor: expenseMinor,
+                    sourceCurrencyCode: record.sourceCurrencyCode,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
+        }
+
+        let firstMonthStart = earliestMonthStart ?? currentMonthStart
+        var monthStart = firstMonthStart
+        var pages: [OverviewMonthlyCashflowSnapshot] = []
+
+        while monthStart <= currentMonthStart {
+            let totals = totalsByMonth[monthStart] ?? (0, 0)
+            pages.append(
+                OverviewMonthlyCashflowSnapshot(
+                    monthStart: monthStart,
+                    incomeMinor: totals.incomeMinor,
+                    expenseMinor: totals.expenseMinor
+                )
+            )
+
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+                break
+            }
+            monthStart = nextMonth
+        }
+
+        return pages
+    }
+
+    static func categorySpendingMonth(
+        from transactions: [OverviewTransactionSnapshot],
+        selectedMonth: Date,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
+        calendar: Calendar = MistiaCalendar.current
+    ) -> OverviewCategorySpendingMonthSnapshot {
+        let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
+        let monthInterval = calendar.dateInterval(of: .month, for: monthStart)
+        let transactionsInMonth = transactions.filter { transaction in
+            guard isCategorySpendingTransaction(transaction),
+                  let monthInterval
+            else {
+                return false
+            }
+
+            return transaction.occurredAt >= monthInterval.start
+                && transaction.occurredAt < monthInterval.end
+        }
+
+        return categorySpendingMonth(
+            monthStart: monthStart,
+            transactionsInMonth: transactionsInMonth,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates,
+            calendar: calendar
+        )
+    }
+
+    static func categorySpendingInterval(
+        from transactions: [OverviewTransactionSnapshot],
+        interval: DateInterval,
+        title: String,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
+        calendar: Calendar = MistiaCalendar.current
+    ) -> OverviewCategorySpendingMonthSnapshot {
+        let intervalTransactions = transactions.filter { transaction in
+            isCategorySpendingTransaction(transaction)
+                && interval.contains(transaction.occurredAt)
+        }
+
+        return OverviewCategorySpendingMonthSnapshot(
+            monthStart: PlanningLogic.startOfMonth(for: interval.start, calendar: calendar),
+            title: title,
+            currencyCode: currencyCode,
+            slices: categorySpendingSlices(
+                from: intervalTransactions,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+        )
+    }
+
+    private static func categorySpendingMonth(
+        monthStart: Date,
+        transactionsInMonth: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate],
+        calendar: Calendar
+    ) -> OverviewCategorySpendingMonthSnapshot {
+        OverviewCategorySpendingMonthSnapshot(
+            monthStart: monthStart,
+            title: MistiaDateFormatting.monthYearString(for: monthStart, calendar: calendar),
+            currencyCode: currencyCode,
+            slices: categorySpendingSlices(
+                from: transactionsInMonth,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+        )
+    }
+
+    private static func chartSpendingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String?,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        guard let currencyCode else {
+            return TransactionLogic.reportedExpenseAmount(for: record)
+        }
+        return reportingAmount(
+            amountMinor: TransactionLogic.reportedExpenseAmount(for: record),
+            sourceCurrencyCode: record.sourceCurrencyCode,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates
+        )
+    }
+
+    private static func dailyChartValues(
+        startingAt startDay: Date,
+        count: Int,
+        totalsByDay: [Date: Int64],
+        calendar: Calendar
+    ) -> [(date: Date, valueMinor: Int64)] {
+        (0..<count).compactMap { dayOffset in
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: startDay) else {
+                return nil
+            }
+            return (day, totalsByDay[day] ?? 0)
+        }
+    }
+
+    private static func valueRange(
+        for values: [(date: Date, valueMinor: Int64)]
+    ) -> (minimum: Int64, maximum: Int64) {
+        var minimum = values.first?.valueMinor ?? 0
+        var maximum = minimum
+
+        for item in values.dropFirst() {
+            minimum = min(minimum, item.valueMinor)
+            maximum = max(maximum, item.valueMinor)
+        }
+
+        return (minimum, maximum)
+    }
+
+    private static let uncategorizedSpendingSliceID = "uncategorized-expense"
+    private static let uncategorizedSpendingName = L10n.shared.corelogic.overview.uncategorized
+    private static let uncategorizedSpendingIcon = "tray.full.fill"
+    private static let uncategorizedSpendingColorHex = "#8A8A8E"
+
+    private static func isCategorySpendingTransaction(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        guard transaction.entryStatus == .posted, !transaction.isArchived else {
+            return false
+        }
+
+        if let reportingExpenseMinor = transaction.reportingExpenseMinor {
+            return reportingExpenseMinor != 0
+        }
+
+        if isPaidForExpenseDebt(transaction) {
+            return true
+        }
+
+        return transaction.primaryKind == .expense
+            && !isAdjustment(transaction)
+            && !isCreditCardPayment(transaction)
+            && !isInstallmentPayment(transaction)
+    }
+
+    private static func reportedExpenseAmount(
+        for transaction: OverviewTransactionSnapshot
+    ) -> Int64 {
+        if let reportingExpenseMinor = transaction.reportingExpenseMinor {
+            return reportingExpenseMinor
+        }
+        return isCategorySpendingTransaction(transaction) ? transaction.amountMinor : 0
+    }
+
+    private static func isPaidForDebt(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.primaryKind == .transfer
+            && transaction.transferSubtype == .debt
+            && transaction.debtIntent == .borrow
+            && transaction.sourceWalletID == nil
+    }
+
+    private static func isPaidForExpenseDebt(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        isPaidForDebt(transaction)
+            && transaction.categoryID != nil
+            && !isAdjustment(transaction)
+            && !isInstallmentPayment(transaction)
+    }
+
+    private static func isAdjustment(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+            || transaction.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+    }
+
+    private static func isInstallmentPayment(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.categoryID == MistiaSystemCategoryIdentity.canonicalID(for: .loanRepayment)
+    }
+
+    private static func isCreditCardPayment(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        let titleLooksLikeCardPayment = TransactionLogic.isCreditCardPaymentTitle(transaction.title)
+        if transaction.primaryKind == .transfer {
+            guard transaction.transferSubtype == .internalTransfer else { return false }
+            return transaction.destinationWalletKind == .creditCard
+                || (transaction.destinationWalletID != nil && titleLooksLikeCardPayment)
+        }
+
+        return transaction.primaryKind == .expense
+            && transaction.sourceWalletKind != .creditCard
+            && titleLooksLikeCardPayment
+    }
+
+    private static func normalizedCategoryName(_ name: String) -> String {
+        name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+    }
+
+    private static func categoryBranchKey(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        let name = transaction.categoryParentName ?? transaction.categoryName ?? ""
+        let normalized = normalizedCategoryName(name)
+        guard !normalized.isEmpty else {
+            return uncategorizedSpendingSliceID
+        }
+        return "category-name-\(normalized)"
+    }
+
+    private static func categoryChildKey(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        let name = transaction.categoryName ?? ""
+        let normalized = normalizedCategoryName(name)
+        guard !normalized.isEmpty else {
+            return uncategorizedSpendingSliceID
+        }
+        return "category-name-\(normalized)"
+    }
+
+    private static func categorySpendingSlices(
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> [OverviewCategorySpendingSlice] {
+        let groupedByBranch = Dictionary(grouping: transactions) { transaction in
+            categoryBranchKey(for: transaction)
+        }
+
+        return groupedByBranch
+            .map { _, branchTransactions in
+                categoryBranchSlice(
+                    from: branchTransactions,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
+            .sorted(by: categorySliceSort)
+    }
+
+    private static func categoryBranchSlice(
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> OverviewCategorySpendingSlice {
+        guard let template = transactions.first else {
+            return uncategorizedCategorySlice(amountMinor: 0)
+        }
+
+        let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
+            partialResult += reportingAmount(
+                amountMinor: reportedExpenseAmount(for: transaction),
+                sourceCurrencyCode: transaction.sourceCurrencyCode,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+        }
+        let categoryID = template.categoryParentID ?? template.categoryID
+        let childSlices = Dictionary(grouping: transactions) { transaction in
+            categoryChildKey(for: transaction)
+        }
+            .map { _, childTransactions in
+                categoryChildSlice(
+                    from: childTransactions,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
+            .sorted(by: categorySliceSort)
+
+        guard let categoryID else {
+            return uncategorizedCategorySlice(amountMinor: amount, childSlices: childSlices)
+        }
+
+        return OverviewCategorySpendingSlice(
+            id: categorySliceID(for: categoryID),
+            categoryID: categoryID,
+            name: template.categoryParentName ?? template.categoryName ?? uncategorizedSpendingName,
+            iconSymbolName: template.categoryParentIconSymbolName
+                ?? template.categoryIconSymbolName
+                ?? uncategorizedSpendingIcon,
+            colorHex: template.categoryParentColorHex
+                ?? template.categoryColorHex
+                ?? uncategorizedSpendingColorHex,
+            amountMinor: amount,
+            childSlices: childSlices.map(\.withoutChildren)
+        )
+    }
+
+    private static func categoryChildSlice(
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> OverviewCategorySpendingSlice {
+        guard let template = transactions.first else {
+            return uncategorizedCategorySlice(amountMinor: 0)
+        }
+
+        let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
+            partialResult += reportingAmount(
+                amountMinor: reportedExpenseAmount(for: transaction),
+                sourceCurrencyCode: transaction.sourceCurrencyCode,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+        }
+
+        guard let categoryID = template.categoryID else {
+            return uncategorizedCategorySlice(amountMinor: amount)
+        }
+
+        return OverviewCategorySpendingSlice(
+            id: categorySliceID(for: categoryID),
+            categoryID: categoryID,
+            name: template.categoryName ?? uncategorizedSpendingName,
+            iconSymbolName: template.categoryIconSymbolName ?? uncategorizedSpendingIcon,
+            colorHex: template.categoryColorHex ?? uncategorizedSpendingColorHex,
+            amountMinor: amount,
+            childSlices: []
+        )
+    }
+
+    private static func uncategorizedCategorySlice(
+        amountMinor: Int64,
+        childSlices: [OverviewCategorySpendingSlice] = []
+    ) -> OverviewCategorySpendingSlice {
+        OverviewCategorySpendingSlice(
+            id: uncategorizedSpendingSliceID,
+            categoryID: nil,
+            name: uncategorizedSpendingName,
+            iconSymbolName: uncategorizedSpendingIcon,
+            colorHex: uncategorizedSpendingColorHex,
+            amountMinor: amountMinor,
+            childSlices: childSlices.map(\.withoutChildren)
+        )
+    }
+
+    private static func categorySliceID(for categoryID: UUID) -> String {
+        "category-\(categoryID.uuidString.lowercased())"
+    }
+
+    private static func categorySliceSort(
+        lhs: OverviewCategorySpendingSlice,
+        rhs: OverviewCategorySpendingSlice
+    ) -> Bool {
+        if lhs.amountMinor != rhs.amountMinor {
+            return lhs.amountMinor > rhs.amountMinor
+        }
+
+        let nameComparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+        if nameComparison != .orderedSame {
+            return nameComparison == .orderedAscending
+        }
+
+        return lhs.id < rhs.id
     }
 
     static func budgetAlerts(
         budgets: [BudgetPlanSnapshot],
         transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = [],
+        familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
+        familySpendingAvailable: Bool = true,
+        includesStable: Bool = false,
+        maximumCount: Int? = 3
     ) -> [OverviewBudgetAlertSnapshot] {
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
-        let rows = PlanningLogic.budgetRows(
+        let rows = PlanningLogic.budgetBranchRows(
             plans: budgets.filter { !$0.categoryName.isEmpty && $0.monthAnchor == selectedMonth },
             records: transactionRecords,
             selectedMonth: selectedMonth,
             referenceDate: referenceDate,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: exchangeRates,
+            familyTransactions: familyTransactions,
+            familySpendingAvailable: familySpendingAvailable
         )
 
-        return rows
-            .filter { $0.progress > 0.5 }
+        let sortedRows = rows
+            .filter { row in
+                includesStable || row.health != .stable
+            }
             .sorted { lhs, rhs in
+                if lhs.health != rhs.health {
+                    return budgetHealthRank(lhs.health) > budgetHealthRank(rhs.health)
+                }
                 if lhs.progress != rhs.progress {
                     return lhs.progress > rhs.progress
                 }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
-            .prefix(3)
+
+        let visibleRows = maximumCount.map { Array(sortedRows.prefix($0)) } ?? sortedRows
+
+        return visibleRows
             .map { row in
                 OverviewBudgetAlertSnapshot(
                     id: row.id,
@@ -505,11 +1123,8 @@ nonisolated enum OverviewLogic {
                     limitMinor: row.limitMinor,
                     currencyCode: row.currencyCode,
                     progress: row.progress,
-                    daysRemaining: row.daysRemaining,
-                    tint: budgetTint(
-                        progress: row.progress,
-                        daysRemaining: row.daysRemaining
-                    )
+                    paceAssessment: row.paceAssessment,
+                    tint: budgetTint(health: row.health)
                 )
             }
     }
@@ -518,20 +1133,39 @@ nonisolated enum OverviewLogic {
         creditCardDues: [PlanningCreditCardDueSnapshot],
         recurringDues: [PlanningRecurringDueSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewDueAlertSnapshot] {
         let startOfToday = calendar.startOfDay(for: referenceDate)
 
-        let items = creditCardDues
+        struct DueCandidate {
+            let id: String
+            let name: String
+            let iconSymbolName: String
+            let amountMinor: Int64?
+            let dueDate: Date
+            let alertDate: Date
+            let currencyCode: String
+            let sourceKind: PlanningDueSourceKind
+            let sourceID: UUID?
+            let dueMonthKey: String
+            let requiresAmountInput: Bool
+        }
+
+        let items: [DueCandidate] = creditCardDues
             .filter { $0.status == .pending }
             .map {
                 DueCandidate(
                     id: "credit-\($0.walletID.uuidString)",
                     name: $0.walletName,
-                    iconSymbolName: "creditcard.fill",
+                    iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
-                    currencyCode: $0.currencyCode
+                    alertDate: $0.dueDate,
+                    currencyCode: $0.currencyCode,
+                    sourceKind: .creditCard,
+                    sourceID: $0.walletID,
+                    dueMonthKey: PlanningLogic.monthKey(for: $0.statementMonth, calendar: calendar),
+                    requiresAmountInput: false
                 )
             }
             + recurringDues
@@ -543,7 +1177,12 @@ nonisolated enum OverviewLogic {
                     iconSymbolName: $0.iconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
-                    currencyCode: $0.currencyCode
+                    alertDate: startOfToday < calendar.startOfDay(for: $0.paymentStartDate) ? $0.paymentStartDate : $0.dueDate,
+                    currencyCode: $0.currencyCode,
+                    sourceKind: $0.sourceKind,
+                    sourceID: $0.sourceID,
+                    dueMonthKey: PlanningLogic.monthKey(for: $0.paymentStartDate, calendar: calendar),
+                    requiresAmountInput: $0.amountMinor == nil
                 )
             }
 
@@ -552,7 +1191,7 @@ nonisolated enum OverviewLogic {
                 let dayDelta = calendar.dateComponents(
                     [.day],
                     from: startOfToday,
-                    to: calendar.startOfDay(for: item.dueDate)
+                    to: calendar.startOfDay(for: item.alertDate)
                 ).day ?? 0
 
                 guard (0...7).contains(dayDelta) else {
@@ -564,10 +1203,14 @@ nonisolated enum OverviewLogic {
                     name: item.name,
                     iconSymbolName: item.iconSymbolName,
                     amountMinor: item.amountMinor,
-                    dueDate: item.dueDate,
+                    dueDate: item.alertDate,
                     dayDelta: dayDelta,
                     currencyCode: item.currencyCode,
-                    tint: dayDelta <= 3 ? .red : .blue
+                    tint: dayDelta <= 3 ? .red : .blue,
+                    sourceKind: item.sourceKind,
+                    sourceID: item.sourceID,
+                    dueMonthKey: item.dueMonthKey,
+                    requiresAmountInput: item.requiresAmountInput
                 )
             }
             .sorted { lhs, rhs in
@@ -584,25 +1227,31 @@ nonisolated enum OverviewLogic {
         transactions: [OverviewTransactionSnapshot],
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewRecentTransactionSnapshot] {
         transactions
-            .filter { $0.entryStatus == .posted }
+            .filter { $0.entryStatus == .posted && !$0.isArchived }
             .sorted(by: transactionSort)
             .prefix(5)
             .map { transaction in
-                OverviewRecentTransactionSnapshot(
+                let rowCurrencyCode = MistiaCurrencyLogic.normalizedCode(
+                    transaction.sourceCurrencyCode ?? currencyCode
+                )
+                return OverviewRecentTransactionSnapshot(
                     id: transaction.id,
                     title: transaction.title,
                     amountMinor: transaction.amountMinor,
-                    currencyCode: currencyCode,
+                    currencyCode: rowCurrencyCode,
                     occurredAt: transaction.occurredAt,
                     timeLabel: relativeTimeLabel(
                         for: transaction.occurredAt,
                         referenceDate: referenceDate,
                         calendar: calendar
                     ),
-                    cashflowStyle: cashflowStyle(for: transaction)
+                    cashflowStyle: cashflowStyle(for: transaction),
+                    categoryIconSymbolName: transaction.categoryID != nil 
+                        ? categoryIconToken(for: transaction)
+                        : transactionKindIconToken(for: transaction)
                 )
             }
     }
@@ -610,7 +1259,7 @@ nonisolated enum OverviewLogic {
     static func relativeTimeLabel(
         for date: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> String {
         MistiaDateFormatting.relativeTimeLabel(
             for: date,
@@ -619,154 +1268,10 @@ nonisolated enum OverviewLogic {
         )
     }
 
-    static func monthlyStatement(
-        wallets: [OverviewWalletSnapshot],
-        transactionRecords: [TransactionRecordSnapshot],
-        transactions: [OverviewTransactionSnapshot],
-        currencyCode: String,
-        referenceDate: Date = .now,
-        calendar: Calendar = .current
-    ) -> OverviewMonthlyStatementSnapshot {
-        let monthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
-        let monthEnd = calendar.dateInterval(of: .month, for: referenceDate)?.end ?? referenceDate
-        let statementPeriod = DateInterval(start: monthStart, end: min(referenceDate, monthEnd))
-        let chartPoints = recentSevenDaySpendingChartPoints(
-            from: transactionRecords,
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-        let heroSnapshot = hero(
-            wallets: wallets,
-            transactionRecords: transactionRecords,
-            currencyCode: currencyCode,
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-
-        let walletRows = wallets
-            .filter { $0.kind != .creditCard }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
-            .map { wallet in
-                OverviewStatementWalletRow(
-                    id: wallet.id,
-                    name: wallet.name,
-                    kindTitle: wallet.kind.title,
-                    openingBalanceMinor: wallet.openingBalanceMinor,
-                    currentBalanceMinor: TransactionLogic.effectiveBalance(
-                        for: TransactionWalletSnapshot(
-                            id: wallet.id,
-                            kind: wallet.kind,
-                            openingBalanceMinor: wallet.openingBalanceMinor
-                        ),
-                        records: transactionRecords
-                    ),
-                    currencyCode: wallet.currencyCode
-                )
-            }
-
-        let transactionRows = transactions
-            .filter { $0.entryStatus == .posted && contains($0.occurredAt, in: statementPeriod) }
-            .sorted(by: transactionSort)
-            .map { makeStatementRow(from: $0, currencyCode: currencyCode) }
-
-        return OverviewMonthlyStatementSnapshot(
-            generatedAt: referenceDate,
-            period: statementPeriod,
-            totalAssetBalanceMinor: heroSnapshot.totalAssetBalanceMinor,
-            totalIncomeMinor: heroSnapshot.incomeThisMonthMinor,
-            totalExpenseMinor: heroSnapshot.expenseThisMonthMinor,
-            netCashflowMinor: heroSnapshot.incomeThisMonthMinor - heroSnapshot.expenseThisMonthMinor,
-            wallets: walletRows,
-            chartPoints: chartPoints,
-            transactions: transactionRows,
-            currencyCode: currencyCode
-        )
-    }
-
-    static func creditCardStatement(
-        accounts: [OverviewCreditCardStatementAccountSnapshot],
-        transactions: [OverviewTransactionSnapshot],
-        referenceDate: Date = .now,
-        calendar: Calendar = .current
-    ) -> OverviewCreditCardStatementSnapshot {
-        let cards = accounts
-            .sorted {
-                $0.walletName.localizedCaseInsensitiveCompare($1.walletName) == .orderedAscending
-            }
-            .map { account in
-                let cycle = creditCardStatementCycle(
-                    statementClosingDay: account.statementClosingDay,
-                    referenceDate: referenceDate,
-                    calendar: calendar
-                )
-
-                let charges = transactions
-                    .filter {
-                        $0.entryStatus == .posted
-                            && $0.primaryKind == .expense
-                            && $0.sourceWalletID == account.walletID
-                            && contains($0.occurredAt, in: cycle)
-                    }
-                    .sorted(by: transactionSort)
-                    .map { makeStatementRow(from: $0, currencyCode: account.currencyCode) }
-
-                let payments = transactions
-                    .filter {
-                        $0.entryStatus == .posted
-                            && $0.primaryKind == .transfer
-                            && $0.transferSubtype == .internalTransfer
-                            && $0.destinationWalletID == account.walletID
-                            && contains($0.occurredAt, in: cycle)
-                    }
-                    .sorted(by: transactionSort)
-                    .map { makeStatementRow(from: $0, currencyCode: account.currencyCode) }
-
-                let availableCredit = max(account.creditLimitMinor - account.currentDebtMinor, 0)
-                let utilization = account.creditLimitMinor > 0
-                    ? Double(account.currentDebtMinor) / Double(account.creditLimitMinor)
-                    : 0
-
-                return OverviewCreditCardStatementCardSnapshot(
-                    id: account.id,
-                    walletName: account.walletName,
-                    iconSymbolName: account.iconSymbolName,
-                    issuerName: account.issuerName,
-                    networkTitle: account.network.title,
-                    last4: account.last4,
-                    creditLimitMinor: account.creditLimitMinor,
-                    currentDebtMinor: account.currentDebtMinor,
-                    availableCreditMinor: availableCredit,
-                    utilization: utilization,
-                    statementClosingDay: account.statementClosingDay,
-                    paymentDueDay: account.paymentDueDay,
-                    paymentSourceWalletName: account.paymentSourceWalletName,
-                    cycle: cycle,
-                    nextPaymentDate: nextPaymentDate(
-                        paymentDueDay: account.paymentDueDay,
-                        cycleEnd: cycle.end,
-                        calendar: calendar
-                    ),
-                    charges: charges,
-                    payments: payments,
-                    currencyCode: account.currencyCode
-                )
-            }
-
-        return OverviewCreditCardStatementSnapshot(
-            generatedAt: referenceDate,
-            cards: cards
-        )
-    }
-
     static func creditCardStatementCycle(
         statementClosingDay: Int,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> DateInterval {
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let currentClosing = closingDate(
@@ -798,177 +1303,29 @@ nonisolated enum OverviewLogic {
         return DateInterval(start: cycleStart, end: cycleEnd)
     }
 
-    static func renderMonthlyStatement(
-        _ statement: OverviewMonthlyStatementSnapshot
-    ) -> OverviewStatementDocument {
-        let language = MistiaAppLanguage.current
-        let filename = "mistia-sao-ke-tong-hop-\(yearMonthToken(for: statement.period.start)).html"
-        let body = """
-        <div class="hero">
-          <div>
-            <div class="eyebrow">Mistia Statement</div>
-            <h1>\(htmlEscaped(mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリーステートメント", language: language)))</h1>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Kỳ sao kê", en: "Statement period", ja: "対象期間", language: language))): \(htmlEscaped(fullDateString(for: statement.period.start))) - \(htmlEscaped(fullDateString(for: statement.period.end)))</p>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Xuất lúc", en: "Generated at", ja: "出力日時", language: language))) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
-          </div>
-          <div class="hero-amount">\(htmlEscaped(statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode)))</div>
-        </div>
-
-        <div class="grid three">
-          \(summaryCard(title: mistiaLocalized(vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産", language: language), value: statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode), accentClass: "green"))
-          \(summaryCard(title: mistiaLocalized(vi: "Thu tháng này", en: "Income this month", ja: "今月の収入", language: language), value: statement.totalIncomeMinor.formattedCurrency(code: statement.currencyCode), accentClass: "blue"))
-          \(summaryCard(title: mistiaLocalized(vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出", language: language), value: statement.totalExpenseMinor.formattedCurrency(code: statement.currencyCode), accentClass: "red"))
-        </div>
-
-        <div class="grid two">
-          <section class="panel">
-            <div class="panel-header">
-              <h2>\(htmlEscaped(mistiaLocalized(vi: "Chênh lệch dòng tiền", en: "Net cashflow", ja: "キャッシュフロー差額", language: language)))</h2>
-              <span>\(htmlEscaped(statement.netCashflowMinor.formattedCurrency(code: statement.currencyCode)))</span>
-            </div>
-            \(renderChart(points: statement.chartPoints, currencyCode: statement.currencyCode))
-          </section>
-          <section class="panel">
-            <div class="panel-header">
-              <h2>\(htmlEscaped(mistiaLocalized(vi: "Ví tài sản", en: "Asset wallets", ja: "資産ウォレット", language: language)))</h2>
-              <span>\(statement.wallets.count) \(htmlEscaped(mistiaLocalized(vi: "ví", en: "wallets", ja: "件", language: language)))</span>
-            </div>
-            \(renderWalletTable(rows: statement.wallets))
-          </section>
-        </div>
-
-        <section class="panel">
-          <div class="panel-header">
-            <h2>\(htmlEscaped(mistiaLocalized(vi: "Giao dịch tháng hiện tại", en: "Transactions this month", ja: "今月の取引", language: language)))</h2>
-            <span>\(statement.transactions.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
-          </div>
-          \(renderTransactionTable(rows: statement.transactions, emptyMessage: mistiaLocalized(vi: "Chưa có giao dịch nào trong tháng này.", en: "No transactions in this month yet.", ja: "今月の取引はまだありません。", language: language)))
-        </section>
-        """
-
-        return OverviewStatementDocument(
-            kind: .monthlySummary,
-            filename: filename,
-            html: renderDocument(
-                title: mistiaLocalized(vi: "Mistia Sao kê tổng hợp", en: "Mistia Monthly Summary", ja: "Mistia 月次サマリー", language: language),
-                subtitle: mistiaLocalized(vi: "Tổng hợp tài sản, dòng tiền và giao dịch tháng hiện tại", en: "A summary of assets, cashflow, and transactions for the current month", ja: "今月の資産、キャッシュフロー、取引のサマリー", language: language),
-                body: body
-            )
-        )
+    private static func budgetTint(health: PlanningBudgetHealth) -> OverviewTint {
+        switch health {
+        case .stable:
+            .green
+        case .caution:
+            .orange
+        case .exceeded:
+            .red
+        }
     }
 
-    static func renderCreditCardStatement(
-        _ statement: OverviewCreditCardStatementSnapshot
-    ) -> OverviewStatementDocument {
-        let language = MistiaAppLanguage.current
-        let filename = "mistia-sao-ke-the-tin-dung-\(yearMonthToken(for: statement.generatedAt)).html"
-        let sections: String
-
-        if statement.cards.isEmpty {
-            sections = """
-            <section class="panel empty">
-              <h2>\(htmlEscaped(mistiaLocalized(vi: "Chưa có thẻ tín dụng", en: "No credit cards yet", ja: "クレジットカードはまだありません", language: language)))</h2>
-              <p>\(htmlEscaped(mistiaLocalized(vi: "Hiện tại bạn chưa thêm thẻ nào vào Mistia nên không có sao kê để xuất.", en: "You have not added any cards to Mistia yet, so there is no statement to export.", ja: "Mistia にカードがまだ追加されていないため、書き出せる明細がありません。", language: language)))</p>
-            </section>
-            """
-        } else {
-            sections = statement.cards.map { card in
-                """
-                <section class="panel card-panel">
-                  <div class="panel-header">
-                    <div>
-                      <div class="eyebrow">\(htmlEscaped(card.networkTitle)) • •••• \(htmlEscaped(card.last4))</div>
-                      <h2>\(htmlEscaped(card.walletName))</h2>
-                      <p>\(htmlEscaped(card.issuerName.isEmpty ? mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード", language: language) : card.issuerName))</p>
-                    </div>
-                    <div class="badge">\(htmlEscaped(mistiaLocalized(vi: "Tỷ lệ sử dụng", en: "Utilization", ja: "利用率", language: language))) \(htmlEscaped(percentText(card.utilization)))</div>
-                  </div>
-
-                  <div class="grid four">
-                    \(summaryCard(title: mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用残高", language: language), value: card.currentDebtMinor.formattedCurrency(code: card.currencyCode), accentClass: "red"))
-                    \(summaryCard(title: mistiaLocalized(vi: "Hạn mức", en: "Credit limit", ja: "利用限度額", language: language), value: card.creditLimitMinor.formattedCurrency(code: card.currencyCode), accentClass: "blue"))
-                    \(summaryCard(title: mistiaLocalized(vi: "Hạn mức còn lại", en: "Available credit", ja: "利用可能額", language: language), value: card.availableCreditMinor.formattedCurrency(code: card.currencyCode), accentClass: "green"))
-                    \(summaryCard(title: mistiaLocalized(vi: "Ngày thanh toán tiếp theo", en: "Next payment date", ja: "次回支払日", language: language), value: fullDateString(for: card.nextPaymentDate), accentClass: "orange"))
-                  </div>
-
-                  <div class="meta-grid">
-                    <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Kỳ sao kê hiện tại", en: "Current cycle", ja: "現在の締め期間", language: language)))</span>
-                      <strong>\(htmlEscaped(fullDateString(for: card.cycle.start))) - \(htmlEscaped(fullDateString(for: card.cycle.end.addingTimeInterval(-1))))</strong>
-                    </div>
-                    <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日", language: language)))</span>
-                      <strong>\(htmlEscaped(mistiaLocalized(vi: "\(card.statementClosingDay) hằng tháng", en: "Day \(card.statementClosingDay) each month", ja: "毎月 \(card.statementClosingDay) 日", language: language)))</strong>
-                    </div>
-                    <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment due day", ja: "支払日", language: language)))</span>
-                      <strong>\(htmlEscaped(mistiaLocalized(vi: "\(card.paymentDueDay) hằng tháng", en: "Day \(card.paymentDueDay) each month", ja: "毎月 \(card.paymentDueDay) 日", language: language)))</strong>
-                    </div>
-                    <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払い元ウォレット", language: language)))</span>
-                      <strong>\(htmlEscaped(card.paymentSourceWalletName ?? mistiaLocalized(vi: "Chưa cài đặt", en: "Not set", ja: "未設定", language: language)))</strong>
-                    </div>
-                  </div>
-
-                  <div class="grid two">
-                    <section class="subpanel">
-                      <div class="panel-header">
-                        <h3>\(htmlEscaped(mistiaLocalized(vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用", language: language)))</h3>
-                        <span>\(card.charges.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
-                      </div>
-                      \(renderTransactionTable(rows: card.charges, emptyMessage: mistiaLocalized(vi: "Không có chi tiêu nào trong kỳ sao kê này.", en: "There are no charges in this cycle.", ja: "この締め期間の利用はありません。", language: language)))
-                    </section>
-                    <section class="subpanel">
-                      <div class="panel-header">
-                        <h3>\(htmlEscaped(mistiaLocalized(vi: "Thanh toán vào thẻ", en: "Payments to card", ja: "カードへの支払い", language: language)))</h3>
-                        <span>\(card.payments.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
-                      </div>
-                      \(renderTransactionTable(rows: card.payments, emptyMessage: mistiaLocalized(vi: "Chưa có giao dịch thanh toán vào thẻ trong kỳ.", en: "There are no card payments in this cycle.", ja: "この期間のカード支払いはありません。", language: language)))
-                    </section>
-                  </div>
-                </section>
-                """
-            }
-            .joined(separator: "\n")
+    private static func budgetHealthRank(_ health: PlanningBudgetHealth) -> Int {
+        switch health {
+        case .stable:
+            0
+        case .caution:
+            1
+        case .exceeded:
+            2
         }
-
-        let body = """
-        <div class="hero">
-          <div>
-            <div class="eyebrow">Mistia Statement</div>
-            <h1>\(htmlEscaped(mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細", language: language)))</h1>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Bản tổng hợp cho các thẻ đang hoạt động trong Mistia.", en: "A summary of active cards in Mistia.", ja: "Mistia で利用中のカードをまとめた明細です。", language: language)))</p>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Xuất lúc", en: "Generated at", ja: "出力日時", language: language))) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
-          </div>
-          <div class="hero-amount">\(statement.cards.count) \(htmlEscaped(mistiaLocalized(vi: "thẻ", en: "cards", ja: "枚", language: language)))</div>
-        </div>
-        \(sections)
-        """
-
-        return OverviewStatementDocument(
-            kind: .creditCard,
-            filename: filename,
-            html: renderDocument(
-                title: mistiaLocalized(vi: "Mistia Sao kê thẻ tín dụng", en: "Mistia Credit Card Statement", ja: "Mistia クレジットカード明細", language: language),
-                subtitle: mistiaLocalized(vi: "Tổng hợp dư nợ, hạn mức và giao dịch trong kỳ sao kê hiện tại", en: "A summary of debt, credit limits, and transactions in the current cycle", ja: "現在の締め期間における残高、利用枠、取引のサマリー", language: language),
-                body: body
-            )
-        )
     }
 
-    private static func budgetTint(progress: Double, daysRemaining: Int) -> OverviewTint {
-        if progress > 0.9 || daysRemaining <= 5 {
-            return .red
-        }
-
-        if progress > 0.75 || daysRemaining <= 10 {
-            return .orange
-        }
-
-        return .green
-    }
-
-    private static func cashflowStyle(
+    static func cashflowStyle(
         for transaction: OverviewTransactionSnapshot
     ) -> OverviewCashflowStyle {
         switch transaction.primaryKind {
@@ -978,7 +1335,15 @@ nonisolated enum OverviewLogic {
             return .income
         case .transfer:
             switch transaction.transferSubtype {
+            case .familyTransfer:
+                return transaction.destinationWalletID == nil ? .income : .expense
             case .debt:
+                if isPaidForExpenseDebt(transaction) {
+                    return .expense
+                }
+                if isPaidForDebt(transaction) {
+                    return .neutral
+                }
                 switch transaction.debtIntent {
                 case .borrow, .collect:
                     return .income
@@ -993,94 +1358,74 @@ nonisolated enum OverviewLogic {
         }
     }
 
-    private static func makeStatementRow(
-        from transaction: OverviewTransactionSnapshot,
-        currencyCode: String
-    ) -> OverviewStatementTransactionRow {
-        OverviewStatementTransactionRow(
-            id: transaction.id,
-            occurredAt: transaction.occurredAt,
-            title: transaction.title,
-            kindTitle: transactionKindTitle(for: transaction),
-            accountText: statementAccountText(for: transaction),
-            detailText: statementDetailText(for: transaction),
-            amountMinor: transaction.amountMinor,
-            currencyCode: currencyCode,
-            cashflowStyle: cashflowStyle(for: transaction),
-            statusTitle: transaction.entryStatus.title
-        )
+    private static func categoryIconToken(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        // Return category icon if available, otherwise use transaction kind icon
+        transaction.categoryIconSymbolName ?? transactionKindIconToken(for: transaction)
     }
 
-    private static func transactionKindTitle(
+    private static func transactionKindIconToken(
         for transaction: OverviewTransactionSnapshot
     ) -> String {
         switch transaction.primaryKind {
         case .expense:
-            return mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            TransactionPrimaryKind.expense.financeIconToken
         case .income:
-            return mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            TransactionPrimaryKind.income.financeIconToken
+        case .transfer:
+            TransactionPrimaryKind.transfer.financeIconToken
+        }
+    }
+
+    private static func reportingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            for: record,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
+    }
+
+    private static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String?,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
+    }
+
+    static func transactionKindTitle(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        switch transaction.primaryKind {
+        case .expense:
+            return L10n.shared.corelogic.overview.expense
+        case .income:
+            return L10n.shared.corelogic.overview.income
         case .transfer:
             switch transaction.transferSubtype {
             case .internalTransfer:
-                return mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
+                return L10n.shared.corelogic.overview.internalTransfer
+            case .familyTransfer:
+                return L10n.shared.corelogic.financeenums.family
             case .debt:
-                return transaction.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+                return transaction.debtIntent?.title ?? L10n.shared.corelogic.overview.debt
             case .none:
-                return mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+                return L10n.shared.corelogic.overview.transfer
             }
         }
     }
 
-    private static func statementAccountText(
-        for transaction: OverviewTransactionSnapshot
-    ) -> String {
-        switch transaction.primaryKind {
-        case .expense, .income:
-            return transaction.sourceWalletName ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
-        case .transfer:
-            let source = transaction.sourceWalletName ?? mistiaLocalized(vi: "Nguồn", en: "Source", ja: "出金元")
-            let destination = transaction.destinationWalletName ?? mistiaLocalized(vi: "Đích", en: "Destination", ja: "入金先")
-            return "\(source) -> \(destination)"
-        }
-    }
-
-    private static func statementDetailText(
-        for transaction: OverviewTransactionSnapshot
-    ) -> String {
-        switch transaction.primaryKind {
-        case .expense, .income:
-            if let category = transaction.categoryName, !category.isEmpty {
-                return category
-            }
-            return transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "-"
-        case .transfer:
-            if transaction.transferSubtype == .debt {
-                return transaction.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
-            }
-            return transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "-"
-        }
-    }
-
-    private static func nextPaymentDate(
-        paymentDueDay: Int,
-        cycleEnd: Date,
-        calendar: Calendar
-    ) -> Date {
-        let reference = calendar.date(byAdding: .day, value: 1, to: cycleEnd) ?? cycleEnd
-        let referenceMonthStart = PlanningLogic.startOfMonth(for: reference, calendar: calendar)
-        let currentMonthDue = scheduledDay(
-            paymentDueDay,
-            inMonthContaining: referenceMonthStart,
-            calendar: calendar
-        )
-
-        if currentMonthDue >= calendar.startOfDay(for: reference) {
-            return currentMonthDue
-        }
-
-        let nextMonth = calendar.date(byAdding: .month, value: 1, to: referenceMonthStart) ?? referenceMonthStart
-        return scheduledDay(paymentDueDay, inMonthContaining: nextMonth, calendar: calendar)
-    }
 
     private static func closingDate(
         near date: Date,
@@ -1090,7 +1435,7 @@ nonisolated enum OverviewLogic {
         scheduledDay(statementClosingDay, inMonthContaining: date, calendar: calendar)
     }
 
-    private static func scheduledDay(
+    static func scheduledDay(
         _ day: Int,
         inMonthContaining date: Date,
         calendar: Calendar
@@ -1115,7 +1460,7 @@ nonisolated enum OverviewLogic {
 
     static func startOfMondayWeek(
         containing date: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Date {
         let startOfDay = calendar.startOfDay(for: date)
         let weekday = calendar.component(.weekday, from: startOfDay)
@@ -1125,7 +1470,7 @@ nonisolated enum OverviewLogic {
 
     static func weekInterval(
         startingAt weekStart: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> DateInterval {
         let normalizedWeekStart = calendar.startOfDay(for: weekStart)
         let weekEnd = calendar.date(byAdding: .day, value: 7, to: normalizedWeekStart) ?? normalizedWeekStart
@@ -1135,7 +1480,7 @@ nonisolated enum OverviewLogic {
     static func weekRangeTitle(
         for interval: DateInterval,
         isCurrentWeek: Bool,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> String {
         let weekEnd = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
         return MistiaDateFormatting.weekRangeTitle(
@@ -1153,389 +1498,9 @@ nonisolated enum OverviewLogic {
         MistiaDateFormatting.weekdayLabel(for: date, calendar: calendar)
     }
 
-    private static func yearMonthToken(for date: Date) -> String {
-        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: date)
-        return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
-    }
 
-    private static func transactionSort(
-        lhs: OverviewTransactionSnapshot,
-        rhs: OverviewTransactionSnapshot
-    ) -> Bool {
-        if lhs.occurredAt != rhs.occurredAt {
-            return lhs.occurredAt > rhs.occurredAt
-        }
-        return lhs.createdAt > rhs.createdAt
-    }
 
-    private static func contains(
-        _ date: Date,
-        in interval: DateInterval
-    ) -> Bool {
-        date >= interval.start && date < interval.end
-    }
-
-    private static func renderDocument(
-        title: String,
-        subtitle: String,
-        body: String
-    ) -> String {
-        let language = MistiaAppLanguage.current
-        return """
-        <!doctype html>
-        <html lang="\(language.rawValue)">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>\(htmlEscaped(title))</title>
-          <style>
-            :root {
-              color-scheme: light;
-              --bg: #eef2ff;
-              --bg-soft: #f8faff;
-              --panel: rgba(255,255,255,0.78);
-              --panel-strong: rgba(255,255,255,0.92);
-              --text: #14213d;
-              --muted: #5b6480;
-              --line: rgba(91,123,255,0.14);
-              --shadow: 0 24px 60px rgba(28, 34, 65, 0.12);
-              --green: #2daa9e;
-              --orange: #f59b3f;
-              --red: #f45c7e;
-              --blue: #5b7bff;
-            }
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              font-family: "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
-              background:
-                radial-gradient(circle at top left, rgba(91,123,255,0.22), transparent 30%),
-                radial-gradient(circle at top right, rgba(45,170,158,0.18), transparent 28%),
-                linear-gradient(180deg, #f8faff 0%, #edf2ff 100%);
-              color: var(--text);
-            }
-            .page {
-              width: min(1120px, calc(100vw - 40px));
-              margin: 32px auto;
-              padding: 28px;
-              border: 1px solid rgba(255,255,255,0.72);
-              border-radius: 28px;
-              background: rgba(255,255,255,0.62);
-              backdrop-filter: blur(20px);
-              box-shadow: var(--shadow);
-            }
-            .page-title { margin: 0 0 6px; font-size: 30px; }
-            .page-subtitle { margin: 0 0 28px; color: var(--muted); font-size: 15px; }
-            .hero, .panel, .subpanel {
-              background: linear-gradient(180deg, var(--panel-strong), var(--panel));
-              border: 1px solid var(--line);
-              border-radius: 24px;
-              box-shadow: 0 16px 36px rgba(20, 33, 61, 0.08);
-            }
-            .hero {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-end;
-              gap: 20px;
-              padding: 24px;
-              margin-bottom: 20px;
-            }
-            .hero h1, .panel h2, .subpanel h3 { margin: 0; }
-            .hero p { margin: 4px 0 0; color: var(--muted); }
-            .hero-amount {
-              font-size: clamp(28px, 4vw, 46px);
-              font-weight: 700;
-              text-align: right;
-            }
-            .eyebrow {
-              text-transform: uppercase;
-              letter-spacing: 0.16em;
-              font-size: 12px;
-              color: var(--blue);
-              font-weight: 700;
-              margin-bottom: 8px;
-            }
-            .grid {
-              display: grid;
-              gap: 16px;
-              margin-bottom: 20px;
-            }
-            .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-            .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-            .summary-card {
-              padding: 18px 18px 16px;
-              border-radius: 20px;
-              background: rgba(255,255,255,0.64);
-              border: 1px solid rgba(91,123,255,0.12);
-            }
-            .summary-card span {
-              display: block;
-              margin-bottom: 10px;
-              font-size: 12px;
-              text-transform: uppercase;
-              letter-spacing: 0.08em;
-              color: var(--muted);
-            }
-            .summary-card strong {
-              font-size: 22px;
-              line-height: 1.25;
-            }
-            .summary-card.green strong { color: var(--green); }
-            .summary-card.orange strong { color: var(--orange); }
-            .summary-card.red strong { color: var(--red); }
-            .summary-card.blue strong { color: var(--blue); }
-            .panel, .subpanel {
-              padding: 20px;
-            }
-            .subpanel { padding: 18px; }
-            .panel-header {
-              display: flex;
-              align-items: flex-start;
-              justify-content: space-between;
-              gap: 16px;
-              margin-bottom: 18px;
-            }
-            .panel-header span, .panel-header p {
-              color: var(--muted);
-              margin: 4px 0 0;
-            }
-            .chart {
-              display: grid;
-              grid-template-columns: repeat(7, minmax(0, 1fr));
-              gap: 12px;
-              align-items: end;
-              min-height: 220px;
-            }
-            .chart-bar {
-              display: flex;
-              flex-direction: column;
-              justify-content: flex-end;
-              gap: 10px;
-              min-height: 200px;
-            }
-            .chart-fill {
-              border-radius: 16px 16px 10px 10px;
-              min-height: 12px;
-              box-shadow: inset 0 1px 1px rgba(255,255,255,0.2);
-            }
-            .chart-meta strong {
-              display: block;
-              font-size: 13px;
-            }
-            .chart-meta span {
-              color: var(--muted);
-              font-size: 12px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-            th, td {
-              text-align: left;
-              padding: 12px 10px;
-              border-bottom: 1px solid rgba(91,123,255,0.12);
-              vertical-align: top;
-            }
-            th {
-              font-size: 12px;
-              text-transform: uppercase;
-              letter-spacing: 0.08em;
-              color: var(--muted);
-            }
-            td strong {
-              display: block;
-              margin-bottom: 4px;
-            }
-            .amount-income { color: var(--green); font-weight: 700; }
-            .amount-expense { color: var(--red); font-weight: 700; }
-            .amount-neutral { color: var(--blue); font-weight: 700; }
-            .badge {
-              display: inline-flex;
-              align-items: center;
-              padding: 8px 12px;
-              border-radius: 999px;
-              background: rgba(91,123,255,0.10);
-              color: var(--blue);
-              font-weight: 700;
-            }
-            .meta-grid {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 12px;
-              margin: 18px 0 20px;
-            }
-            .meta-item {
-              padding: 14px 16px;
-              border-radius: 18px;
-              background: rgba(255,255,255,0.58);
-              border: 1px solid rgba(91,123,255,0.10);
-            }
-            .meta-item span {
-              display: block;
-              margin-bottom: 6px;
-              color: var(--muted);
-              font-size: 12px;
-            }
-            .empty {
-              text-align: center;
-              padding: 34px 24px;
-            }
-            @media (max-width: 900px) {
-              .grid.two, .grid.three, .grid.four, .meta-grid {
-                grid-template-columns: 1fr;
-              }
-              .hero {
-                flex-direction: column;
-                align-items: flex-start;
-              }
-              .hero-amount {
-                text-align: left;
-              }
-              .chart {
-                gap: 10px;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <main class="page">
-            <h1 class="page-title">\(htmlEscaped(title))</h1>
-            <p class="page-subtitle">\(htmlEscaped(subtitle))</p>
-            \(body)
-          </main>
-        </body>
-        </html>
-        """
-    }
-
-    private static func renderChart(
-        points: [OverviewChartPoint],
-        currencyCode: String
-    ) -> String {
-        let maxValue = max(points.map(\.valueMinor).max() ?? 0, 1)
-
-        let bars = points.map { point in
-            let height = max(Double(point.valueMinor) / Double(maxValue), point.valueMinor > 0 ? 0.12 : 0.04)
-            return """
-            <div class="chart-bar">
-              <div class="chart-fill" style="height: \(Int((height * 160).rounded()))px; background: \(barColor(for: point.intensity));"></div>
-              <div class="chart-meta">
-                <strong>\(htmlEscaped(point.label))</strong>
-                <span>\(htmlEscaped(point.valueMinor.formattedCurrency(code: currencyCode)))</span>
-              </div>
-            </div>
-            """
-        }.joined(separator: "\n")
-
-        return "<div class=\"chart\">\(bars)</div>"
-    }
-
-    private static func renderWalletTable(
-        rows: [OverviewStatementWalletRow]
-    ) -> String {
-        guard !rows.isEmpty else {
-            return "<div class=\"empty\"><p>\(htmlEscaped(mistiaLocalized(vi: "Chưa có ví tài sản nào.", en: "There are no asset wallets yet.", ja: "資産ウォレットはまだありません。")))</p></div>"
-        }
-
-        let body = rows.map { row in
-            """
-            <tr>
-              <td><strong>\(htmlEscaped(row.name))</strong>\(htmlEscaped(row.kindTitle))</td>
-              <td>\(htmlEscaped(row.openingBalanceMinor.formattedCurrency(code: row.currencyCode)))</td>
-              <td>\(htmlEscaped(row.currentBalanceMinor.formattedCurrency(code: row.currencyCode)))</td>
-            </tr>
-            """
-        }.joined(separator: "\n")
-
-        return """
-        <table>
-          <thead>
-            <tr>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Số dư đầu kỳ", en: "Opening balance", ja: "期首残高")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Số dư hiện tại", en: "Current balance", ja: "現在残高")))</th>
-            </tr>
-          </thead>
-          <tbody>
-            \(body)
-          </tbody>
-        </table>
-        """
-    }
-
-    private static func renderTransactionTable(
-        rows: [OverviewStatementTransactionRow],
-        emptyMessage: String
-    ) -> String {
-        guard !rows.isEmpty else {
-            return "<div class=\"empty\"><p>\(htmlEscaped(emptyMessage))</p></div>"
-        }
-
-        let body = rows.map { row in
-            """
-            <tr>
-              <td>\(htmlEscaped(dateTimeString(for: row.occurredAt)))</td>
-              <td><strong>\(htmlEscaped(row.title))</strong>\(htmlEscaped(row.detailText))</td>
-              <td>\(htmlEscaped(row.kindTitle))</td>
-              <td>\(htmlEscaped(row.accountText))</td>
-              <td class="amount-\(row.cashflowStyle.rawValue)">\(htmlEscaped(displayAmount(for: row)))</td>
-              <td>\(htmlEscaped(row.statusTitle))</td>
-            </tr>
-            """
-        }.joined(separator: "\n")
-
-        return """
-        <table>
-          <thead>
-            <tr>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Ngày giờ", en: "Date & time", ja: "日時")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Loại", en: "Type", ja: "種類")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Tài khoản", en: "Account", ja: "口座")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Trạng thái", en: "Status", ja: "状態")))</th>
-            </tr>
-          </thead>
-          <tbody>
-            \(body)
-          </tbody>
-        </table>
-        """
-    }
-
-    private static func displayAmount(
-        for row: OverviewStatementTransactionRow
-    ) -> String {
-        let raw = row.amountMinor.formattedCurrency(code: row.currencyCode)
-        switch row.cashflowStyle {
-        case .income:
-            return "+" + raw
-        case .expense:
-            return "-" + raw
-        case .neutral:
-            return raw
-        }
-    }
-
-    private static func summaryCard(
-        title: String,
-        value: String,
-        accentClass: String
-    ) -> String {
-        """
-        <div class="summary-card \(accentClass)">
-          <span>\(htmlEscaped(title))</span>
-          <strong>\(htmlEscaped(value))</strong>
-        </div>
-        """
-    }
-
-    private static func percentText(_ value: Double) -> String {
-        "\(Int((value * 100).rounded()))%"
-    }
-
-    private static func barColor(for intensity: Double) -> String {
+    static func barColor(for intensity: Double) -> String {
         let clamped = min(max(intensity, 0), 1)
         let start = (red: 45.0, green: 170.0, blue: 158.0)
         let end = (red: 244.0, green: 92.0, blue: 126.0)
@@ -1551,34 +1516,21 @@ nonisolated enum OverviewLogic {
         MistiaDateFormatting.shortDateString(for: date)
     }
 
-    private static func fullDateString(for date: Date) -> String {
-        MistiaDateFormatting.fullDateString(for: date)
+
+    private static func transactionSort(
+        lhs: OverviewTransactionSnapshot,
+        rhs: OverviewTransactionSnapshot
+    ) -> Bool {
+        if lhs.occurredAt != rhs.occurredAt {
+            return lhs.occurredAt > rhs.occurredAt
+        }
+        return lhs.createdAt > rhs.createdAt
     }
 
-    private static func dateTimeString(for date: Date) -> String {
-        MistiaDateFormatting.dateTimeString(for: date)
-    }
-
-    private static func htmlEscaped(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&#39;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-    }
 }
 
-private nonisolated struct DueCandidate: Equatable {
-    let id: String
-    let name: String
-    let iconSymbolName: String
-    let amountMinor: Int64?
-    let dueDate: Date
-    let currencyCode: String
-}
 
-private extension String {
+extension String {
     nonisolated var nonEmpty: String? {
         isEmpty ? nil : self
     }
