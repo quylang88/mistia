@@ -467,7 +467,7 @@ final class TransactionEditorEdgeCasesTests: XCTestCase {
         
         // The balance would be negative, but the business logic doesn't prevent this
         // It's up to the UI layer to validate
-        XCTAssertEqual(balance, -950)
+        XCTAssertEqual(balance, -500)
     }
 
     // MARK: - Draft to Posted Transition

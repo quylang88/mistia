@@ -746,7 +746,7 @@ nonisolated enum FamilyLogic {
                 canInviteMembers: true,
                 canManageMembers: true,
                 canViewTarget: true,
-                canEditTarget: viewerPolicy.canEditOthers && (targetRole != .kid || viewerPolicy.canEditKids),
+                canEditTarget: viewerPolicy.canEditOthers || targetRole == .kid,
                 canViewTargetWallets: true,
                 canViewTargetDebts: true
             )

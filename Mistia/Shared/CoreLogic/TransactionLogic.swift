@@ -1744,6 +1744,10 @@ nonisolated enum TransactionLogic {
     static func isTransactionComplete(_ record: TransactionRecordSnapshot) -> Bool {
         guard record.amountMinor > 0 else { return false }
 
+        if record.entryStatus == .draft {
+            return true
+        }
+
         switch record.primaryKind {
         case .expense:
             return !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
