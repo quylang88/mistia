@@ -263,6 +263,103 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertFalse(outbox.contains(entity: .transaction, recordID: transactionID))
     }
 
+    func testQueuedTransactionCreateUsesSourceWalletOwnerWhenMutationSubjectIsStale() async throws {
+        let viewerUserID = UUID()
+        let memberUserID = UUID()
+        let walletID = UUID()
+        let categoryID = UUID()
+        let transactionID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let wallet = LedgerWallet(
+            id: walletID,
+            name: "Member wallet",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759",
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            remoteVersion: 1
+        )
+        let category = TransactionCategory(
+            id: categoryID,
+            name: "Member meals",
+            kind: .expense,
+            iconSymbolName: "fork.knife",
+            iconColorHex: "#FF8A00",
+            hierarchyRole: .child,
+            isSystem: false,
+            cloudSyncEnabled: true,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            remoteVersion: 1
+        )
+        let transaction = LedgerTransaction(
+            id: transactionID,
+            primaryKind: .expense,
+            title: "Member lunch",
+            amountMinor: 690,
+            occurredAt: updatedAt,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            sourceWallet: wallet,
+            category: category
+        )
+        context.insert(wallet)
+        context.insert(category)
+        context.insert(transaction)
+        context.insert(OwnedRecordScope(entity: .wallet, recordID: walletID, ownerUserID: memberUserID, updatedAt: updatedAt))
+        context.insert(OwnedRecordScope(entity: .category, recordID: categoryID, ownerUserID: memberUserID, updatedAt: updatedAt))
+        context.insert(OwnedRecordScope(entity: .transaction, recordID: transactionID, ownerUserID: viewerUserID, updatedAt: updatedAt))
+        context.insert(
+            TransactionAuditRecord(
+                transactionID: transactionID,
+                createdByUserID: viewerUserID,
+                lastModifiedByUserID: viewerUserID,
+                updatedAt: updatedAt
+            )
+        )
+        try context.save()
+
+        let remoteStore = FamilyConflictRemoteStore()
+        let outbox = MistiaSyncOutbox(
+            defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+            key: "stale-transaction-subject"
+        )
+        let coordinator = SyncCoordinator(
+            modelContainer: container,
+            remoteStore: remoteStore,
+            outbox: outbox,
+            deviceID: UUID()
+        )
+        let mutation = MistiaSyncMutation(
+            entity: .transaction,
+            recordID: transactionID,
+            subjectUserID: viewerUserID,
+            kind: .upsert,
+            modifiedAt: updatedAt,
+            baseVersion: 0
+        )
+        coordinator.queue(mutation)
+
+        let pushed = try await coordinator.pushQueuedMutationsOnly(
+            [mutation],
+            session: makeSession(userID: viewerUserID)
+        )
+
+        XCTAssertTrue(pushed)
+        XCTAssertEqual(remoteStore.createSubjectUserIDs, [memberUserID])
+        let createdTransaction = remoteStore.createdRecords.compactMap { record -> RemoteLedgerTransaction? in
+            guard case .transaction(let row) = record else { return nil }
+            return row
+        }.first
+        XCTAssertEqual(createdTransaction?.userID, memberUserID)
+        XCTAssertEqual(createdTransaction?.createdByUserID, viewerUserID)
+        XCTAssertEqual(remoteStore.familyNotificationEvents.first?.recipientUserID, memberUserID)
+        XCTAssertFalse(outbox.contains(entity: .transaction, recordID: transactionID))
+    }
+
     func testFamilyCloudFirstPushKeepsFinanceSyncedWhenActivityNotificationIsForbidden() async throws {
         let viewerUserID = UUID()
         let memberUserID = UUID()
@@ -429,6 +526,7 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
     var fetchSnapshotCallCount = 0
     var fetchedEntities: [MistiaSyncEntity] = []
     var createdRecords: [MistiaSyncUploadRecord] = []
+    var createSubjectUserIDs: [UUID] = []
     var familyNotificationEvents: [RemoteFamilyActivityNotificationEvent] = []
     var familyNotificationError: Error?
 
@@ -473,6 +571,7 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
         subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
+        createSubjectUserIDs.append(subjectUserID)
         createdRecords.append(record)
         return record
     }

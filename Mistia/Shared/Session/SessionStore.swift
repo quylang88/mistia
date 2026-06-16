@@ -2270,6 +2270,15 @@ final class SessionStore {
         recordID: UUID,
         fallbackSubjectUserID: UUID? = nil
     ) -> UUID? {
+        if entity == .transaction,
+           let transactionOwnerUserID = try? MistiaSyncLocalStore.canonicalTransactionOwnerUserID(
+                recordID: recordID,
+                fallbackUserID: fallbackSubjectUserID,
+                from: modelContainer
+           ) {
+            return transactionOwnerUserID
+        }
+
         if let ownerUserID = try? MistiaRecordOwnershipStore.ownerUserID(
             entity: entity,
             recordID: recordID,
