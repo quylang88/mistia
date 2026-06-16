@@ -57,6 +57,19 @@ final class MistiaLocalizationTests: XCTestCase {
 
     func testDateFormattingUsesLanguageSpecificLocaleProfiles() {
         XCTAssertEqual(
+            MistiaDateFormatting.shortDateString(for: referenceDate, language: .vietnamese),
+            "02/04"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.shortDateString(for: referenceDate, language: .english),
+            "04/02"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.shortDateString(for: referenceDate, language: .japanese),
+            "4月2日"
+        )
+
+        XCTAssertEqual(
             MistiaDateFormatting.fullDateString(for: referenceDate, language: .vietnamese),
             "02/04/2026"
         )
