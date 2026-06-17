@@ -1126,19 +1126,28 @@ nonisolated enum FamilyLogic {
         fallbackSort: (T, T) -> Bool
     ) -> T? {
         let sortedItems = items.sorted(by: fallbackSort)
+        var firstItemByOwner: [UUID: T] = [:]
+        firstItemByOwner.reserveCapacity(sortedItems.count)
+        for item in sortedItems {
+            let ownerUserID = item[keyPath: owner]
+            if firstItemByOwner[ownerUserID] == nil {
+                firstItemByOwner[ownerUserID] = item
+            }
+        }
+
         if let ownerUserID,
-           let ownerItem = sortedItems.first(where: { $0[keyPath: owner] == ownerUserID }) {
+           let ownerItem = firstItemByOwner[ownerUserID] {
             return ownerItem
         }
         if let managerUserID,
-           let managerItem = sortedItems.first(where: { $0[keyPath: owner] == managerUserID }) {
+           let managerItem = firstItemByOwner[managerUserID] {
             return managerItem
         }
         if sortedItems.count == 1 {
             return sortedItems.first
         }
         for memberID in memberOrder {
-            if let memberItem = sortedItems.first(where: { $0[keyPath: owner] == memberID }) {
+            if let memberItem = firstItemByOwner[memberID] {
                 return memberItem
             }
         }

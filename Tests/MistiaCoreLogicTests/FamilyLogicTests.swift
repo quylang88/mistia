@@ -494,6 +494,33 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(managerRows.first?.limitMinor, 300_000)
     }
 
+    func testFamilyBudgetRowsUseMemberOrderWhenOwnerAndManagerHaveNoPlan() {
+        let owner = UUID()
+        let memberA = UUID()
+        let memberB = UUID()
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+
+        let rows = FamilyLogic.familyBudgetRows(
+            plans: [
+                makeBudget(ownerUserID: memberB, categoryName: "Ăn ngoài", limitMinor: 300_000, monthAnchor: selectedMonth),
+                makeBudget(ownerUserID: memberA, categoryName: "Ăn ngoài", limitMinor: 100_000, monthAnchor: selectedMonth)
+            ],
+            transactions: [makeFamilyTransaction(ownerUserID: memberA, categoryName: "Ăn ngoài", amountMinor: 50_000)],
+            selectedMonth: selectedMonth,
+            ownerUserID: owner,
+            budgetManagerUserID: nil,
+            memberOrder: [owner, memberA, memberB],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar,
+            minimumProgress: 0,
+            includesMinimumProgress: true,
+            maximumCount: nil
+        )
+
+        XCTAssertEqual(rows.first?.sourceOwnerUserID, memberA)
+        XCTAssertEqual(rows.first?.limitMinor, 100_000)
+    }
+
     func testFamilyGoalRowsAggregateByNameAndPrioritizeOwnerThenManagerTarget() {
         let owner = UUID()
         let memberA = UUID()
@@ -528,6 +555,27 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(managerRows.first?.sourceOwnerUserID, memberB)
         XCTAssertEqual(managerRows.first?.targetMinor, 900_000)
         XCTAssertEqual(managerRows.first?.currentSavedMinor, 200_000)
+    }
+
+    func testFamilyGoalRowsUseMemberOrderWhenOwnerAndManagerHaveNoGoal() {
+        let owner = UUID()
+        let memberA = UUID()
+        let memberB = UUID()
+        let targetDate = makeDate(year: 2026, month: 12, day: 31)
+
+        let rows = FamilyLogic.familyGoalRows(
+            goals: [
+                makeGoal(ownerUserID: memberB, name: "Du lịch", targetMinor: 900_000, savedMinor: 80_000, targetDate: targetDate),
+                makeGoal(ownerUserID: memberA, name: " du   lịch ", targetMinor: 500_000, savedMinor: 120_000, targetDate: targetDate)
+            ],
+            ownerUserID: owner,
+            goalManagerUserID: nil,
+            memberOrder: [owner, memberA, memberB]
+        )
+
+        XCTAssertEqual(rows.first?.sourceOwnerUserID, memberA)
+        XCTAssertEqual(rows.first?.targetMinor, 500_000)
+        XCTAssertEqual(rows.first?.currentSavedMinor, 200_000)
     }
 
     private func makeDate(
