@@ -733,6 +733,62 @@ nonisolated enum SettlementLogic {
         }
     }
 
+    static func sharedExpenseDefaultCategoryID(
+        from records: [TransactionRecordSnapshot]
+    ) -> UUID? {
+        struct CategoryUsage {
+            var count: Int
+            var newestOccurredAt: Date
+        }
+
+        var usageByCategoryID: [UUID: CategoryUsage] = [:]
+
+        for record in records where isSharedExpenseEventBill(record) {
+            guard let categoryID = record.categoryID else { continue }
+            if var usage = usageByCategoryID[categoryID] {
+                usage.count += 1
+                usage.newestOccurredAt = max(usage.newestOccurredAt, record.occurredAt)
+                usageByCategoryID[categoryID] = usage
+            } else {
+                usageByCategoryID[categoryID] = CategoryUsage(
+                    count: 1,
+                    newestOccurredAt: record.occurredAt
+                )
+            }
+        }
+
+        return usageByCategoryID
+            .max { lhs, rhs in
+                if lhs.value.count != rhs.value.count {
+                    return lhs.value.count < rhs.value.count
+                }
+                if lhs.value.newestOccurredAt != rhs.value.newestOccurredAt {
+                    return lhs.value.newestOccurredAt < rhs.value.newestOccurredAt
+                }
+                return lhs.key.uuidString > rhs.key.uuidString
+            }?
+            .key
+    }
+
+    static func sharedExpensePrincipalReportingOverride(
+        settlementRole: SettlementTransactionRole?,
+        amountMinor: Int64,
+        categoryID: UUID?
+    ) -> SettlementDebtReportingOverride {
+        guard categoryID != nil else {
+            return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        }
+
+        switch settlementRole {
+        case .sharedExpensePayable:
+            return SettlementDebtReportingOverride(expenseMinor: max(amountMinor, 0), incomeMinor: 0)
+        case .sharedExpenseReceivable:
+            return SettlementDebtReportingOverride(expenseMinor: -max(amountMinor, 0), incomeMinor: 0)
+        case .sharedExpensePaid, .sharedExpenseReceipt, .sharedExpensePayment, .resaleReceivable, .resaleReceipt, nil:
+            return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        }
+    }
+
     static func sharedExpensePaidReportingAllocations(
         records: [TransactionRecordSnapshot],
         selfShareMinor: Int64

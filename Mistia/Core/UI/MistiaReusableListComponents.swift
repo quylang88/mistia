@@ -155,6 +155,7 @@ struct MistiaMiniBadge: View {
         Text(title)
             .font(.system(size: 10, weight: .bold, design: .rounded))
             .foregroundStyle(tint)
+            .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background {
@@ -162,4 +163,3 @@ struct MistiaMiniBadge: View {
             }
     }
 }
-

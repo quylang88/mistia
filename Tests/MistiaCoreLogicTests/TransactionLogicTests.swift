@@ -421,6 +421,123 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeMinor, 0)
     }
 
+    func testSharedExpenseDefaultCategoryUsesMostFrequentLinkedBillCategory() {
+        let groupID = UUID()
+        let grocery = UUID()
+        let dining = UUID()
+        let baseDate = Date(timeIntervalSince1970: 1_774_051_200)
+
+        let result = SettlementLogic.sharedExpenseDefaultCategoryID(from: [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: baseDate,
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: grocery
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 2_000,
+                occurredAt: baseDate.addingTimeInterval(60),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: dining
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 3_000,
+                occurredAt: baseDate.addingTimeInterval(120),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: grocery
+            )
+        ])
+
+        XCTAssertEqual(result, grocery)
+    }
+
+    func testSharedExpenseDefaultCategoryBreaksFrequencyTieByNewestBill() {
+        let groupID = UUID()
+        let grocery = UUID()
+        let dining = UUID()
+        let baseDate = Date(timeIntervalSince1970: 1_774_051_200)
+
+        let result = SettlementLogic.sharedExpenseDefaultCategoryID(from: [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: baseDate,
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: grocery
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 2_000,
+                occurredAt: baseDate.addingTimeInterval(60),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: dining
+            )
+        ])
+
+        XCTAssertEqual(result, dining)
+    }
+
+    func testSharedExpenseDefaultCategoryIgnoresUncategorizedBills() {
+        let groupID = UUID()
+        let result = SettlementLogic.sharedExpenseDefaultCategoryID(from: [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: nil
+            )
+        ])
+
+        XCTAssertNil(result)
+    }
+
+    func testSharedExpensePrincipalReportingRequiresCategory() {
+        let categoryID = UUID()
+
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpensePayable,
+                amountMinor: 4_000,
+                categoryID: categoryID
+            ),
+            SettlementDebtReportingOverride(expenseMinor: 4_000, incomeMinor: 0)
+        )
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpenseReceivable,
+                amountMinor: 1_500,
+                categoryID: categoryID
+            ),
+            SettlementDebtReportingOverride(expenseMinor: -1_500, incomeMinor: 0)
+        )
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpensePayable,
+                amountMinor: 4_000,
+                categoryID: nil
+            ),
+            SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        )
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpenseReceivable,
+                amountMinor: 1_500,
+                categoryID: nil
+            ),
+            SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        )
+    }
+
     func testResaleReceivableUsesSalePriceForDebtAndPurchaseCostForWalletReporting() {
         let wallet = TransactionWalletSnapshot(
             id: UUID(),
@@ -1136,6 +1253,7 @@ final class TransactionLogicTests: XCTestCase {
         title: String = "Sample",
         amountMinor: Int64,
         occurredAt: Date,
+        settlementGroupID: UUID? = nil,
         sourceWalletID: UUID? = nil,
         sourceWalletKind: LedgerWalletKind? = nil,
         sourceCurrencyCode: String? = nil,
@@ -1162,6 +1280,7 @@ final class TransactionLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            settlementGroupID: settlementGroupID,
             settlementRole: settlementRole,
             reportingExpenseMinor: reportingExpenseMinor,
             reportingIncomeMinor: reportingIncomeMinor,

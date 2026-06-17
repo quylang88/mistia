@@ -536,6 +536,10 @@ struct TransactionEditorSheet: View {
                     fullEditorContent(renderContext: renderContext)
                         .disabled(areEditorControlsDisabled)
                 }
+
+                if isEventGeneratedSharedExpenseDebtDetail {
+                    eventGeneratedPrincipalCategorySection(renderContext: renderContext)
+                }
             }
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
@@ -634,7 +638,7 @@ struct TransactionEditorSheet: View {
                     category.parentCategory?.localizedDisplayName
                 }
             ) { category in
-                draft.categoryID = category.id
+                handleCategorySelection(category)
             }
         }
         .sheet(item: $receiptImageSource) { source in
@@ -1150,32 +1154,34 @@ struct TransactionEditorSheet: View {
                             }
                             .pickerStyle(.menu)
 
-                            Toggle(L10n.transactions.transactioneditor.countAsExpense, isOn: Binding(
-                                get: { bindableDraft.paidForCountsAsExpense },
-                                set: { isOn in
-                                    bindableDraft.paidForCountsAsExpense = isOn
-                                    if !isOn {
-                                        bindableDraft.categoryID = nil
+                            if !isEventGeneratedSharedExpenseDebtDetail {
+                                Toggle(L10n.transactions.transactioneditor.countAsExpense, isOn: Binding(
+                                    get: { bindableDraft.paidForCountsAsExpense },
+                                    set: { isOn in
+                                        bindableDraft.paidForCountsAsExpense = isOn
+                                        if !isOn {
+                                            bindableDraft.categoryID = nil
+                                        }
                                     }
-                                }
-                            ))
+                                ))
 
-                            if draft.paidForCountsAsExpense {
-                                Button {
-                                    showsCategoryPicker = true
-                                } label: {
-                                    HStack {
-                                        Text(L10n.transactions.transactioneditor.category)
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Text(renderContext.selectedCategoryLabel)
-                                            .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(.tertiary)
+                                if draft.paidForCountsAsExpense {
+                                    Button {
+                                        showsCategoryPicker = true
+                                    } label: {
+                                        HStack {
+                                            Text(L10n.transactions.transactioneditor.category)
+                                                .foregroundStyle(.primary)
+                                            Spacer()
+                                            Text(renderContext.selectedCategoryLabel)
+                                                .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(.tertiary)
+                                        }
                                     }
+                                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                                 }
-                                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                             }
                         } else {
                             Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
@@ -1244,6 +1250,35 @@ struct TransactionEditorSheet: View {
         }
         .disabled(isAdjustment)
     }
+
+    private func eventGeneratedPrincipalCategorySection(
+        renderContext: TransactionEditorRenderContext
+    ) -> some View {
+        Section {
+            Toggle(
+                L10n.transactions.transactioneditor.countAsExpense,
+                isOn: .constant(draft.categoryID != nil)
+            )
+            .disabled(true)
+
+            Button {
+                showsCategoryPicker = true
+            } label: {
+                HStack {
+                    Text(L10n.transactions.transactioneditor.category)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(renderContext.selectedCategoryLabel)
+                        .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+        }
+    }
+
     private var navigationTitle: String {
         if isFamilyTransferDetail {
             return L10n.shared.corelogic.financeenums.family
@@ -3135,6 +3170,74 @@ struct TransactionEditorSheet: View {
             completion: .savedTransaction,
             subjectUserIDOverride: canonicalOwnerUserID
         )
+    }
+
+    private func handleCategorySelection(_ category: TransactionCategory) {
+        draft.categoryID = category.id
+        if isEventGeneratedSharedExpenseDebtDetail {
+            persistEventGeneratedPrincipalCategory(category)
+        }
+    }
+
+    private func persistEventGeneratedPrincipalCategory(_ category: TransactionCategory) {
+        guard let transaction = target.transaction,
+              isEventGeneratedSharedExpenseDebtDetail else {
+            return
+        }
+
+        let now = Date()
+        transaction.category = category
+        let reportingOverride = SettlementLogic.sharedExpensePrincipalReportingOverride(
+            settlementRole: transaction.settlementRole,
+            amountMinor: transaction.amountMinor,
+            categoryID: category.id
+        )
+        transaction.reportingExpenseMinor = reportingOverride.expenseMinor
+        transaction.reportingIncomeMinor = reportingOverride.incomeMinor
+        transaction.updatedAt = now
+        if transaction.debtIntent == .borrow, transaction.sourceWallet == nil {
+            draft.paidForCountsAsExpense = true
+        }
+
+        let ownerUserID = persistenceOwnerUserID(for: transaction)
+        do {
+            let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
+            if let actorUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: transaction.id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+
+            try modelContext.save()
+            onPersistedTransaction(transaction)
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: now,
+                subjectUserIDOverride: ownerUserID
+            )
+            if let ownerUserID,
+               ownerUserID != sessionStore.activeLocalProfileUserID {
+                Task { @MainActor in
+                    _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
+                }
+            }
+        } catch {
+            alertMessage = L10n.transactions.transactioneditor.couldnTSaveThisTransactionRightNow + " \(error.localizedDescription)"
+        }
     }
 
     private func persistReceiptDraftIfNeeded(for transaction: LedgerTransaction) throws {

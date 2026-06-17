@@ -653,6 +653,16 @@ struct SettlementEditorSheet: View {
                     .accessibilityLabel(L10n.common.delete)
                 }
                 .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
+
+                SharedExpenseBillCategoryPickerRow(
+                    selectedCategoryID: bill.category?.id,
+                    selectedCategoryLabel: categoryLabel(for: bill.category?.id),
+                    categories: expenseCategories,
+                    categoryLabel: categoryLabel(for:)
+                ) { categoryID in
+                    updateLinkedBillCategory(bill, categoryID: categoryID)
+                }
+                .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 8, trailing: 14))
             }
 
             ForEach($billRows) { $row in
@@ -667,7 +677,12 @@ struct SettlementEditorSheet: View {
                         exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
                         familyContextStore: familyContextStore,
                         currencyCode: activeCurrencyCode,
+                        categories: expenseCategories,
+                        categoryLabel: categoryLabel(for:),
                         onTap: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
+                        onCategoryChange: { categoryID in
+                            updateDraftBillRowCategory(row.id, categoryID: categoryID)
+                        },
                         onRemove: { removeBillRow(row.id) }
                     )
                 }
@@ -712,6 +727,14 @@ struct SettlementEditorSheet: View {
             return "\(parent.localizedDisplayName) / \(category.localizedDisplayName)"
         }
         return category.localizedDisplayName
+    }
+
+    private func categoryLabel(for categoryID: UUID?) -> String {
+        guard let categoryID,
+              let category = expenseCategories.first(where: { $0.id == categoryID }) else {
+            return L10n.transactions.transactioneditor.chooseCategory
+        }
+        return categoryLabel(for: category)
     }
 
     private func existingTransactionLabel(for transaction: LedgerTransaction) -> String {
@@ -785,6 +808,36 @@ struct SettlementEditorSheet: View {
         billRows[index].mode = .existingExpense
         billRows[index].existingTransactionID = transaction.id
         billRows[index].stagedTransaction = nil
+    }
+
+    private func updateLinkedBillCategory(_ bill: LedgerTransaction, categoryID: UUID?) {
+        let category = categoryID.flatMap { selectedID in
+            expenseCategories.first { $0.id == selectedID }
+        }
+        guard bill.category?.id != category?.id else { return }
+        bill.category = category
+        persistLinkedBillUpdate(bill)
+    }
+
+    private func updateDraftBillRowCategory(_ rowID: UUID, categoryID: UUID?) {
+        guard let index = billRows.firstIndex(where: { $0.id == rowID }) else {
+            return
+        }
+        let category = categoryID.flatMap { selectedID in
+            expenseCategories.first { $0.id == selectedID }
+        }
+
+        switch billRows[index].mode {
+        case .newExpense:
+            billRows[index].stagedTransaction?.category = category
+        case .existingExpense:
+            guard let existingTransactionID = billRows[index].existingTransactionID,
+                  let transaction = transactions.first(where: { $0.id == existingTransactionID }),
+                  transaction.category?.id != category?.id else {
+                return
+            }
+            transaction.category = category
+        }
     }
 
     private func sharedParticipantName(for id: UUID) -> String {
@@ -1917,6 +1970,15 @@ struct SettlementSplitCalculatorSheet: View {
             }
     }
 
+    private var defaultSharedExpensePrincipalCategory: TransactionCategory? {
+        guard let categoryID = SettlementLogic.sharedExpenseDefaultCategoryID(
+            from: linkedBills.map(\.snapshot)
+        ) else {
+            return nil
+        }
+        return linkedBills.compactMap(\.category).first { $0.id == categoryID }
+    }
+
     private var selfPaidMinor: Int64 {
         linkedBills.reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
     }
@@ -2600,6 +2662,7 @@ struct SettlementSplitCalculatorSheet: View {
         let now = Date()
         let ownerUserID = ownerUserID
         let currentSelfID = selfParticipant.id
+        let defaultPrincipalCategory = defaultSharedExpensePrincipalCategory
         var principalTransactions: [LedgerTransaction] = []
         var reconciledPrincipalIDs: Set<UUID> = []
 
@@ -2610,6 +2673,11 @@ struct SettlementSplitCalculatorSheet: View {
             let normalizedKey = TransactionLogic.normalizeCounterpartyName(counterpartyName)
             let debtIntent: TransactionDebtIntent = isReceivable ? .lend : .borrow
             let role: SettlementTransactionRole = isReceivable ? .sharedExpenseReceivable : .sharedExpensePayable
+            let reportingOverride = SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: role,
+                amountMinor: suggestion.amountMinor,
+                categoryID: defaultPrincipalCategory?.id
+            )
             let existingTransaction = existingPrincipalDebt(
                 groupID: group.id,
                 normalizedCounterpartyKey: normalizedKey
@@ -2623,13 +2691,14 @@ struct SettlementSplitCalculatorSheet: View {
                 amountMinor: suggestion.amountMinor,
                 settlementGroupID: group.id,
                 settlementRole: role,
-                reportingExpenseMinor: 0,
-                reportingIncomeMinor: 0,
+                reportingExpenseMinor: reportingOverride.expenseMinor,
+                reportingIncomeMinor: reportingOverride.incomeMinor,
                 sourceCurrencyCode: currencyCode,
                 occurredAt: now,
                 createdAt: now,
                 updatedAt: now,
                 sourceWallet: nil,
+                category: defaultPrincipalCategory,
                 counterpartyName: counterpartyName,
                 normalizedCounterpartyKey: normalizedKey
             )
@@ -2644,11 +2713,12 @@ struct SettlementSplitCalculatorSheet: View {
             transaction.amountMinor = suggestion.amountMinor
             transaction.settlementGroupID = group.id
             transaction.settlementRole = role
-            transaction.reportingExpenseMinor = 0
-            transaction.reportingIncomeMinor = 0
+            transaction.reportingExpenseMinor = reportingOverride.expenseMinor
+            transaction.reportingIncomeMinor = reportingOverride.incomeMinor
             transaction.sourceCurrencyCode = currencyCode
             transaction.sourceWallet = nil
             transaction.destinationWallet = nil
+            transaction.category = defaultPrincipalCategory
             transaction.counterpartyName = counterpartyName
             transaction.normalizedCounterpartyKey = normalizedKey
             transaction.updatedAt = now
@@ -2666,11 +2736,7 @@ struct SettlementSplitCalculatorSheet: View {
             transaction.isArchived = true
         }
 
-        let selfShareMinor = splitResult.participants.first { $0.id == currentSelfID }?.shareMinor ?? selfPaidMinor
-        let billReportingUpdates = applySplitReportingToLinkedBills(
-            selfShareMinor: selfShareMinor,
-            modifiedAt: now
-        )
+        let billReportingUpdates = applyPaidAmountReportingToLinkedBills(modifiedAt: now)
         group.expectedMinor = effectiveSuggestionsForSelf.reduce(Int64(0)) { $0 + $1.amountMinor }
         group.settledMinor = 0
         group.status = principalTransactions.isEmpty ? .settled : .open
@@ -2727,22 +2793,10 @@ struct SettlementSplitCalculatorSheet: View {
         }
     }
 
-    private func applySplitReportingToLinkedBills(
-        selfShareMinor: Int64,
-        modifiedAt: Date
-    ) -> [LedgerTransaction] {
-        let allocationsByID = Dictionary(
-            uniqueKeysWithValues: SettlementLogic.sharedExpensePaidReportingAllocations(
-                records: linkedBills.map(\.snapshot),
-                selfShareMinor: selfShareMinor
-            )
-            .map { ($0.transactionID, $0.reportingExpenseMinor) }
-        )
-
+    private func applyPaidAmountReportingToLinkedBills(modifiedAt: Date) -> [LedgerTransaction] {
         var updatedBills: [LedgerTransaction] = []
         for bill in linkedBills {
-            guard let reportingExpenseMinor = allocationsByID[bill.id] else { continue }
-            bill.reportingExpenseMinor = reportingExpenseMinor
+            bill.reportingExpenseMinor = max(bill.amountMinor, 0)
             bill.reportingIncomeMinor = 0
             bill.updatedAt = modifiedAt
             updatedBills.append(bill)
@@ -2935,31 +2989,47 @@ private struct SharedExpenseBillDraftRow: View {
     let exchangeRateIndex: MistiaExchangeRateIndex
     let familyContextStore: FamilyContextStore
     let currencyCode: String
+    let categories: [TransactionCategory]
+    let categoryLabel: (UUID?) -> String
     let onTap: () -> Void
+    let onCategoryChange: (UUID?) -> Void
     let onRemove: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        VStack(spacing: 0) {
+            Button(action: onTap) {
+                if let transaction = selectedTransaction {
+                    TransactionCashflowRow(
+                        record: transaction.snapshot,
+                        transaction: transaction,
+                        auditRecord: transactionAuditMap[transaction.id],
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        familyContextStore: familyContextStore,
+                        hasFamilyOwnerConflict: false,
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: exchangeRateIndex,
+                        subtitleLineLimit: 1,
+                        showsAuditSubtitle: false
+                    )
+                } else {
+                    placeholderContent
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             if let transaction = selectedTransaction {
-                TransactionCashflowRow(
-                    record: transaction.snapshot,
-                    transaction: transaction,
-                    auditRecord: transactionAuditMap[transaction.id],
-                    walletOwnerMap: walletOwnerMap,
-                    transactionOwnerMap: transactionOwnerMap,
-                    familyContextStore: familyContextStore,
-                    hasFamilyOwnerConflict: false,
-                    primaryCurrencyCode: primaryCurrencyCode,
-                    exchangeRateIndex: exchangeRateIndex,
-                    subtitleLineLimit: 1,
-                    showsAuditSubtitle: false
+                SharedExpenseBillCategoryPickerRow(
+                    selectedCategoryID: transaction.category?.id,
+                    selectedCategoryLabel: categoryLabel(transaction.category?.id),
+                    categories: categories,
+                    categoryLabel: categoryLabel,
+                    onSelect: onCategoryChange
                 )
-            } else {
-                placeholderContent
             }
         }
-        .buttonStyle(.plain)
-        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive, action: onRemove) {
@@ -3020,6 +3090,52 @@ private struct SharedExpenseBillDraftRow: View {
                 .frame(minWidth: 96, alignment: .trailing)
                 .layoutPriority(2)
         }
+    }
+}
+
+private struct SharedExpenseBillCategoryPickerRow: View {
+    let selectedCategoryID: UUID?
+    let selectedCategoryLabel: String
+    let categories: [TransactionCategory]
+    let categoryLabel: (UUID?) -> String
+    let onSelect: (UUID?) -> Void
+
+    var body: some View {
+        Picker(selection: categorySelection) {
+            Text(L10n.transactions.transactioneditor.chooseCategory).tag(Optional<UUID>.none)
+            ForEach(categories) { category in
+                Text(categoryLabel(category.id)).tag(Optional(category.id))
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(L10n.transactions.transactioneditor.category)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Text(selectedCategoryLabel)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(selectedCategoryID == nil ? .tertiary : .secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.top, 2)
+            .padding(.bottom, 10)
+            .contentShape(Rectangle())
+        }
+        .pickerStyle(.menu)
+    }
+
+    private var categorySelection: Binding<UUID?> {
+        Binding(
+            get: { selectedCategoryID },
+            set: onSelect
+        )
     }
 }
 

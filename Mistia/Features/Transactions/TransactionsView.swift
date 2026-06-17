@@ -2197,39 +2197,53 @@ struct TransactionCashflowRow: View {
         transferDestinationAmountText ?? approximatePrimaryAmountText
     }
 
+    private var shouldShowDebtBadge: Bool {
+        record.primaryKind == .transfer && record.transferSubtype == .debt
+    }
+
+    private var shouldShowBadgeRow: Bool {
+        shouldShowDebtBadge || record.settlementGroupID != nil || hasFamilyOwnerConflict
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             TransactionIconTile(icon: icon, tint: iconColor)
 
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                    if record.primaryKind == .transfer, let subtype = record.transferSubtype,
-                       subtype == .debt {
-                        MistiaMiniBadge(
-                            title: subtype.title,
-                            tint: debtIntentTint(record.debtIntent)
-                        )
-                    }
+                if shouldShowBadgeRow {
+                    HStack(spacing: 6) {
+                        if shouldShowDebtBadge {
+                            MistiaMiniBadge(
+                                title: TransactionTransferSubtype.debt.title,
+                                tint: debtIntentTint(record.debtIntent)
+                            )
+                            .fixedSize(horizontal: true, vertical: false)
+                        }
 
-                    if record.settlementGroupID != nil {
-                        MistiaMiniBadge(
-                            title: L10n.transactions.settlement.eventTitle,
-                            tint: MistiaAccent.teal.color
-                        )
-                    }
+                        if record.settlementGroupID != nil {
+                            MistiaMiniBadge(
+                                title: L10n.transactions.settlement.eventTitle,
+                                tint: MistiaAccent.teal.color
+                            )
+                            .fixedSize(horizontal: true, vertical: false)
+                        }
 
-                    if hasFamilyOwnerConflict {
-                        MistiaMiniBadge(
-                            title: L10n.shared.sync.familyOwnerPushConflict.badge,
-                            tint: MistiaAccent.amber.color
-                        )
+                        if hasFamilyOwnerConflict {
+                            MistiaMiniBadge(
+                                title: L10n.shared.sync.familyOwnerPushConflict.badge,
+                                tint: MistiaAccent.amber.color
+                            )
+                            .fixedSize(horizontal: true, vertical: false)
+                        }
                     }
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 Text(subtitle)
