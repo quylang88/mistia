@@ -370,6 +370,11 @@ struct TransactionEditorSheet: View {
 
     private var isEventGeneratedSharedExpenseDebtDetail: Bool {
         guard let transaction = target.transaction else { return false }
+        return TransactionLogic.isEventGeneratedSharedExpenseDebt(transaction.snapshot)
+    }
+
+    private var isEventGeneratedSharedExpenseDebtPrincipalDetail: Bool {
+        guard let transaction = target.transaction else { return false }
         return TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(transaction.snapshot)
     }
 
@@ -533,12 +538,17 @@ struct TransactionEditorSheet: View {
                     quickCaptureContent
                         .disabled(isSaving || isProcessingReceiptImage)
                 } else {
-                    fullEditorContent(renderContext: renderContext)
+                    fullEditorContent(
+                        renderContext: renderContext,
+                        includesTrailingSections: !isEventGeneratedSharedExpenseDebtPrincipalDetail
+                    )
                         .disabled(areEditorControlsDisabled)
                 }
 
-                if isEventGeneratedSharedExpenseDebtDetail {
+                if isEventGeneratedSharedExpenseDebtPrincipalDetail {
                     eventGeneratedPrincipalCategorySection(renderContext: renderContext)
+                    eventGeneratedNotesSection
+                        .disabled(true)
                 }
             }
             .dismissKeyboardOnTap()
@@ -770,7 +780,10 @@ struct TransactionEditorSheet: View {
             }
         }
     }
-    private func fullEditorContent(renderContext: TransactionEditorRenderContext) -> some View {
+    private func fullEditorContent(
+        renderContext: TransactionEditorRenderContext,
+        includesTrailingSections: Bool = true
+    ) -> some View {
         @Bindable var bindableDraft = draft
         let contextRows = transactionContextRows
 
@@ -1224,18 +1237,22 @@ struct TransactionEditorSheet: View {
             }
             }
 
-            if shouldShowNotesSection {
+            if includesTrailingSections && shouldShowNotesSection {
                 Section(L10n.transactions.transactioneditor.notes) {
                     TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
                         .lineLimit(3...5)
                 }
             }
 
-            if shouldShowReceiptSection {
+            if includesTrailingSections && shouldShowReceiptSection {
                 receiptSection
             }
 
-            if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail, !isEventGeneratedSharedExpenseDebtDetail {
+            if includesTrailingSections,
+               let transaction = target.transaction,
+               !transaction.isArchived,
+               !isFamilyTransferDetail,
+               !isEventGeneratedSharedExpenseDebtDetail {
                 MistiaDestructiveActionSection(
                     buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
                     descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
@@ -1254,28 +1271,39 @@ struct TransactionEditorSheet: View {
     private func eventGeneratedPrincipalCategorySection(
         renderContext: TransactionEditorRenderContext
     ) -> some View {
-        Section {
+        Section(L10n.transactions.transactioneditor.eventGeneratedExpenseReportingSection) {
             Toggle(
                 L10n.transactions.transactioneditor.countAsExpense,
                 isOn: .constant(draft.categoryID != nil)
             )
             .disabled(true)
 
-            Button {
-                showsCategoryPicker = true
-            } label: {
-                HStack {
-                    Text(L10n.transactions.transactioneditor.category)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Text(renderContext.selectedCategoryLabel)
-                        .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.tertiary)
+            if draft.categoryID != nil {
+                Button {
+                    showsCategoryPicker = true
+                } label: {
+                    HStack {
+                        Text(L10n.transactions.transactioneditor.category)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(renderContext.selectedCategoryLabel)
+                            .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
             }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+        }
+    }
+
+    private var eventGeneratedNotesSection: some View {
+        @Bindable var bindableDraft = draft
+
+        return Section(L10n.transactions.transactioneditor.notes) {
+            TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
+                .lineLimit(3...5)
         }
     }
 
@@ -3174,14 +3202,14 @@ struct TransactionEditorSheet: View {
 
     private func handleCategorySelection(_ category: TransactionCategory) {
         draft.categoryID = category.id
-        if isEventGeneratedSharedExpenseDebtDetail {
+        if isEventGeneratedSharedExpenseDebtPrincipalDetail {
             persistEventGeneratedPrincipalCategory(category)
         }
     }
 
     private func persistEventGeneratedPrincipalCategory(_ category: TransactionCategory) {
         guard let transaction = target.transaction,
-              isEventGeneratedSharedExpenseDebtDetail else {
+              isEventGeneratedSharedExpenseDebtPrincipalDetail else {
             return
         }
 

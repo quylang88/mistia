@@ -144,6 +144,7 @@ struct TransactionsListSnapshot {
     let transactionAuditMap: [UUID: TransactionAuditRecord]
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
+    let archivedSettlementGroupIDs: Set<UUID>
 
     var hasMoreRows: Bool {
         displayedRecordCount < visibleRecordCount
@@ -237,8 +238,18 @@ struct TransactionsView: View {
     @State private var searchSnapshotCache: TransactionsListSnapshotCache?
 
     private var activeTransactions: [LedgerTransaction] {
-        visibleTransactions
+        let activeVisibleTransactions = visibleTransactions
             .filter { $0.deletedAt == nil && !$0.isArchived }
+        let visibleRecordIDs = Set(
+            SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+                activeVisibleTransactions.map(\.snapshot),
+                archivedEventIDs: archivedSettlementGroupIDs
+            )
+            .map(\.id)
+        )
+
+        return activeVisibleTransactions
+            .filter { visibleRecordIDs.contains($0.id) }
             .sorted {
                 if $0.occurredAt != $1.occurredAt {
                     return $0.occurredAt > $1.occurredAt
@@ -361,6 +372,14 @@ struct TransactionsView: View {
         )
     }
 
+    private var archivedSettlementGroupIDs: Set<UUID> {
+        Set(
+            visibleSettlementGroups
+                .filter { $0.kind == .sharedExpense && $0.isArchived && $0.deletedAt == nil }
+                .map(\.id)
+        )
+    }
+
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {
         TransactionAuditStore.auditMap(from: transactionAuditRecords)
     }
@@ -418,7 +437,8 @@ struct TransactionsView: View {
             ),
             transactionAuditMap: transactionAuditMap,
             walletOwnerMap: walletOwnerMap,
-            transactionOwnerMap: transactionOwnerMap
+            transactionOwnerMap: transactionOwnerMap,
+            archivedSettlementGroupIDs: archivedSettlementGroupIDs
         )
     }
 
@@ -463,7 +483,8 @@ struct TransactionsView: View {
             ),
             transactionAuditMap: transactionAuditMap,
             walletOwnerMap: walletOwnerMap,
-            transactionOwnerMap: transactionOwnerMap
+            transactionOwnerMap: transactionOwnerMap,
+            archivedSettlementGroupIDs: archivedSettlementGroupIDs
         )
     }
 
@@ -889,8 +910,8 @@ struct TransactionsView: View {
 
                         if ongoingEvents.isEmpty && completedEvents.isEmpty {
                             MistiaEmptyStateContent(
-                                title: "Chưa có sự kiện nào",
-                                message: "Các sự kiện chia chi phí sẽ xuất hiện ở đây.",
+                                title: L10n.transactions.settlement.noEventsYet,
+                                message: L10n.transactions.settlement.noEventsYetMessage,
                                 buttonTitle: nil,
                                 accent: MistiaAccent.purple.color,
                                 symbols: ["calendar", "person.2.fill", "receipt.fill", "checkmark.seal.fill"]
@@ -900,13 +921,15 @@ struct TransactionsView: View {
                             if !ongoingEvents.isEmpty {
                                 eventSection(
                                     title: L10n.transactions.settlement.ongoingEvents,
-                                    events: ongoingEvents
+                                    events: ongoingEvents,
+                                    isCompleted: false
                                 )
                             }
                             if !completedEvents.isEmpty {
                                 eventSection(
                                     title: L10n.transactions.settlement.completedEvents,
-                                    events: completedEvents
+                                    events: completedEvents,
+                                    isCompleted: true
                                 )
                             }
                         }
@@ -1421,7 +1444,8 @@ struct TransactionsView: View {
 
     private func eventSection(
         title: String,
-        events: [PreparingSettlementEventSnapshot]
+        events: [PreparingSettlementEventSnapshot],
+        isCompleted: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
@@ -1439,7 +1463,11 @@ struct TransactionsView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                         Button {
-                            preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                            if isCompleted {
+                                settlementEditorTarget = .viewSharedExpense(event.id)
+                            } else {
+                                preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                            }
                         } label: {
                             EventCashflowRow(event: event)
                                 .padding(.horizontal, 14)
@@ -1490,6 +1518,7 @@ struct TransactionsView: View {
                     transactionAuditMap: snapshot.transactionAuditMap,
                     walletOwnerMap: snapshot.walletOwnerMap,
                     transactionOwnerMap: snapshot.transactionOwnerMap,
+                    archivedSettlementGroupIDs: snapshot.archivedSettlementGroupIDs,
                     primaryCurrencyCode: primaryCurrencyCode,
                     exchangeRateIndex: exchangeRateIndex
                 ) { transaction in
@@ -1779,6 +1808,7 @@ struct TransactionsSearchScene: View {
                         transactionAuditMap: transactionAuditMap,
                         walletOwnerMap: walletOwnerMap,
                         transactionOwnerMap: transactionOwnerMap,
+                        archivedSettlementGroupIDs: snapshot.archivedSettlementGroupIDs,
                         primaryCurrencyCode: primaryCurrencyCode,
                         exchangeRateIndex: exchangeRateIndex,
                         showsExpenseMinusSign: showsExpenseMinusSign
@@ -1886,6 +1916,7 @@ struct TransactionSectionCard: View {
     let transactionAuditMap: [UUID: TransactionAuditRecord]
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
+    let archivedSettlementGroupIDs: Set<UUID>
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
     var showsExpenseMinusSign: Bool = true
@@ -1934,6 +1965,7 @@ struct TransactionSectionCard: View {
                                         entity: .transaction,
                                         recordID: transaction.id
                                     ),
+                                    showsSettlementEventBadge: shouldShowSettlementEventBadge(for: row),
                                     primaryCurrencyCode: primaryCurrencyCode,
                                     exchangeRateIndex: exchangeRateIndex,
                                     showsExpenseMinusSign: showsExpenseMinusSign
@@ -1954,6 +1986,11 @@ struct TransactionSectionCard: View {
             }
         }
     }
+
+    private func shouldShowSettlementEventBadge(for record: TransactionRecordSnapshot) -> Bool {
+        guard let settlementGroupID = record.settlementGroupID else { return false }
+        return !archivedSettlementGroupIDs.contains(settlementGroupID)
+    }
 }
 
 struct TransactionCashflowRow: View {
@@ -1966,6 +2003,7 @@ struct TransactionCashflowRow: View {
     let transactionOwnerMap: [UUID: UUID]
     let familyContextStore: FamilyContextStore
     let hasFamilyOwnerConflict: Bool
+    var showsSettlementEventBadge: Bool = true
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
     var showsExpenseMinusSign: Bool = true
@@ -2202,14 +2240,18 @@ struct TransactionCashflowRow: View {
     }
 
     private var shouldShowBadgeRow: Bool {
-        shouldShowDebtBadge || record.settlementGroupID != nil || hasFamilyOwnerConflict
+        shouldShowDebtBadge || hasVisibleSettlementEventBadge || hasFamilyOwnerConflict
+    }
+
+    private var hasVisibleSettlementEventBadge: Bool {
+        showsSettlementEventBadge && record.settlementGroupID != nil
     }
 
     var body: some View {
         HStack(spacing: 12) {
             TransactionIconTile(icon: icon, tint: iconColor)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
@@ -2226,7 +2268,7 @@ struct TransactionCashflowRow: View {
                             .fixedSize(horizontal: true, vertical: false)
                         }
 
-                        if record.settlementGroupID != nil {
+                        if hasVisibleSettlementEventBadge {
                             MistiaMiniBadge(
                                 title: L10n.transactions.settlement.eventTitle,
                                 tint: MistiaAccent.teal.color
@@ -2244,6 +2286,8 @@ struct TransactionCashflowRow: View {
                     }
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 2)
+                    .padding(.bottom, 2)
                 }
 
                 Text(subtitle)
@@ -2251,6 +2295,7 @@ struct TransactionCashflowRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(subtitleLineLimit)
                     .truncationMode(.tail)
+                    .padding(.top, shouldShowBadgeRow ? 0 : 6)
 
                 if showsAuditSubtitle, let auditSubtitle {
                     Text(auditSubtitle)
@@ -2258,6 +2303,7 @@ struct TransactionCashflowRow: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(2)
                         .truncationMode(.tail)
+                        .padding(.top, 2)
                 }
             }
             .layoutPriority(1)
@@ -2776,8 +2822,6 @@ struct DebtSettlementSheet: View {
             group.expectedMinor = max(group.expectedMinor, expected)
             group.settledMinor = settled
             group.status = settled >= max(group.expectedMinor, expected) ? .settled : (settled > 0 ? .partiallySettled : .open)
-            group.isArchived = group.status == .settled
-            group.archivedAt = group.status == .settled ? (group.archivedAt ?? modifiedAt) : nil
             group.updatedAt = modifiedAt
         }
     }

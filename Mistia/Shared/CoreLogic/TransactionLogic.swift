@@ -513,7 +513,7 @@ nonisolated enum SettlementLogic {
         }
 
         return groups
-            .filter { $0.kind == .sharedExpense && (!$0.isArchived || $0.status == .settled) }
+            .filter { $0.kind == .sharedExpense && !$0.isArchived }
             .map { group in
                 let groupParticipants = participantsByGroupID[group.id] ?? []
                 let visibleParticipantNames = groupParticipants
@@ -556,6 +556,23 @@ nonisolated enum SettlementLogic {
     ) -> [PreparingSettlementEventSnapshot] {
         let preparingEventIDs = Set(preparingEvents.map(\.id))
         return allEvents.filter { !preparingEventIDs.contains($0.id) }
+    }
+
+    static func visibleRecordsAfterEventArchiveFiltering(
+        _ records: [TransactionRecordSnapshot],
+        archivedEventIDs: Set<UUID>
+    ) -> [TransactionRecordSnapshot] {
+        guard !archivedEventIDs.isEmpty else { return records }
+
+        return records.filter { record in
+            guard let settlementGroupID = record.settlementGroupID,
+                  archivedEventIDs.contains(settlementGroupID)
+            else {
+                return true
+            }
+
+            return !TransactionLogic.isEventGeneratedSharedExpenseDebt(record)
+        }
     }
 
     static func participantSuggestionRecords(
@@ -1209,6 +1226,22 @@ nonisolated enum TransactionLogic {
     static func isEventGeneratedSharedExpenseDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
         record.settlementGroupID != nil
             && isSharedExpenseDebtPrincipal(record)
+    }
+
+    static func isEventGeneratedSharedExpenseDebt(_ record: TransactionRecordSnapshot) -> Bool {
+        guard record.settlementGroupID != nil,
+              record.primaryKind == .transfer,
+              record.transferSubtype == .debt
+        else {
+            return false
+        }
+
+        switch record.settlementRole {
+        case .sharedExpenseReceivable, .sharedExpensePayable, .sharedExpenseReceipt, .sharedExpensePayment:
+            return true
+        case .sharedExpensePaid, .resaleReceivable, .resaleReceipt, nil:
+            return false
+        }
     }
 
     static func isResaleReceivableDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
