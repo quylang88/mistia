@@ -1,15 +1,6 @@
 {
   "sourceLanguage" : "vi",
   "strings" : {
-    "" : {
-
-    },
-    "-" : {
-
-    },
-    "+" : {
-
-    },
     "app.mistia.loadingYourData" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -745,9 +736,6 @@
           }
         }
       }
-    },
-    "Chi tiêu" : {
-
     },
     "common.appName" : {
       "extractionState" : "stale",
@@ -2220,9 +2208,6 @@
           }
         }
       }
-    },
-    "Date" : {
-
     },
     "family.family.acceptedMember" : {
       "extractionState" : "stale",
@@ -6111,9 +6096,6 @@
         }
       }
     },
-    "Giá trị" : {
-
-    },
     "management.balanceEditor.actualBalanceTitle" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9652,6 +9634,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Đích"
+          }
+        }
+      }
+    },
+    "management.managementarchiveditems.events" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イベント"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sự kiện"
           }
         }
       }
@@ -14922,9 +14927,6 @@
           }
         }
       }
-    },
-    "Ngày" : {
-
     },
     "notifications.creditCard.autoPaymentFailedBody" : {
       "extractionState" : "stale",
@@ -35557,6 +35559,75 @@
         }
       }
     },
+    "transactions.settlement.archiveEvent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive event"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イベントをアーカイブ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu trữ sự kiện"
+          }
+        }
+      }
+    },
+    "transactions.settlement.archiveEventDescription" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event will move to Archived items. Linked expenses stay in Cashflow without the event badge."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イベントはアーカイブ済みアイテムへ移動します。関連する支出はイベントバッジなしで収支に残ります。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sự kiện sẽ được chuyển vào Mục đã lưu trữ. Các thu chi liên kết vẫn ở màn Thu chi nhưng không còn hiển thị badge sự kiện."
+          }
+        }
+      }
+    },
+    "transactions.settlement.archiveEventMessage" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive this event? Linked expenses stay in Cashflow, and event-generated settlement transactions are hidden until the event is restored."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このイベントをアーカイブしますか？関連する支出は収支に残り、イベントから作成された精算取引は復元するまで非表示になります。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu trữ sự kiện này? Các thu chi liên kết vẫn được giữ trong Thu chi, còn các giao dịch thanh toán tự động của sự kiện sẽ được ẩn cho đến khi khôi phục."
+          }
+        }
+      }
+    },
     "transactions.settlement.billCountValue" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36017,6 +36088,29 @@
         }
       }
     },
+    "transactions.settlement.eventDetailsTitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event details"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イベント詳細"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chi tiết sự kiện"
+          }
+        }
+      }
+    },
     "transactions.settlement.eventName" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36105,6 +36199,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chưa có chi tiêu"
+          }
+        }
+      }
+    },
+    "transactions.settlement.noEventsYet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No events yet"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イベントはまだありません"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa có sự kiện nào"
+          }
+        }
+      }
+    },
+    "transactions.settlement.noEventsYetMessage" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Split-expense events will appear here."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "割り勘イベントはここに表示されます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Các sự kiện chia chi phí sẽ xuất hiện ở đây."
           }
         }
       }
@@ -36293,6 +36433,29 @@
         }
       }
     },
+    "transactions.settlement.participantCollectedValue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collected %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 回収済み"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã thu %@"
+          }
+        }
+      }
+    },
     "transactions.settlement.participantName" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36316,6 +36479,52 @@
         }
       }
     },
+    "transactions.settlement.participantPaidValue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paid %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 支払い済み"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã trả %@"
+          }
+        }
+      }
+    },
+    "transactions.settlement.participantRemainingValue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "残り %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Còn lại %@"
+          }
+        }
+      }
+    },
     "transactions.settlement.participants" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36335,6 +36544,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Người tham gia"
+          }
+        }
+      }
+    },
+    "transactions.settlement.participantSettled" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settled"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "精算済み"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã thanh toán xong"
           }
         }
       }
@@ -36483,19 +36715,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This will delete the current event payment progress and return the event to input mode."
+            "value" : "This will delete the settlement payments generated for this event and return it to split-editing mode. Linked cashflow entries will remain unchanged."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "現在のイベントの支払い状況を削除し、入力状態に戻します。"
+            "value" : "このイベント用に作成された精算支払いを削除し、割り勘の編集状態に戻します。関連する収支は変更されません。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hành động này sẽ xóa toàn bộ tiến độ thanh toán của sự kiện hiện tại và đưa về trạng thái nhập liệu."
+            "value" : "Thao tác này sẽ xoá các khoản thanh toán đã tạo từ sự kiện và đưa sự kiện về trạng thái chia lại chi phí. Các thu chi đã liên kết với sự kiện vẫn được giữ nguyên."
           }
         }
       }
@@ -38267,6 +38499,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Khoản vay & cho vay này được tạo từ sự kiện. Dùng Chia lại chi phí trong sự kiện để thay đổi."
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.eventGeneratedExpenseReportingSection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expense reporting"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支出への反映"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ghi nhận chi tiêu"
           }
         }
       }
@@ -40961,9 +41216,6 @@
           }
         }
       }
-    },
-    "Value" : {
-
     }
   },
   "version" : "1.0"

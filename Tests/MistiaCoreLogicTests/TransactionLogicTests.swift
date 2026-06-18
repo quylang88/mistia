@@ -421,6 +421,123 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeMinor, 0)
     }
 
+    func testSharedExpenseDefaultCategoryUsesMostFrequentLinkedBillCategory() {
+        let groupID = UUID()
+        let grocery = UUID()
+        let dining = UUID()
+        let baseDate = Date(timeIntervalSince1970: 1_774_051_200)
+
+        let result = SettlementLogic.sharedExpenseDefaultCategoryID(from: [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: baseDate,
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: grocery
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 2_000,
+                occurredAt: baseDate.addingTimeInterval(60),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: dining
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 3_000,
+                occurredAt: baseDate.addingTimeInterval(120),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: grocery
+            )
+        ])
+
+        XCTAssertEqual(result, grocery)
+    }
+
+    func testSharedExpenseDefaultCategoryBreaksFrequencyTieByNewestBill() {
+        let groupID = UUID()
+        let grocery = UUID()
+        let dining = UUID()
+        let baseDate = Date(timeIntervalSince1970: 1_774_051_200)
+
+        let result = SettlementLogic.sharedExpenseDefaultCategoryID(from: [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: baseDate,
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: grocery
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 2_000,
+                occurredAt: baseDate.addingTimeInterval(60),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: dining
+            )
+        ])
+
+        XCTAssertEqual(result, dining)
+    }
+
+    func testSharedExpenseDefaultCategoryIgnoresUncategorizedBills() {
+        let groupID = UUID()
+        let result = SettlementLogic.sharedExpenseDefaultCategoryID(from: [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+                settlementGroupID: groupID,
+                settlementRole: .sharedExpensePaid,
+                categoryID: nil
+            )
+        ])
+
+        XCTAssertNil(result)
+    }
+
+    func testSharedExpensePrincipalReportingRequiresCategory() {
+        let categoryID = UUID()
+
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpensePayable,
+                amountMinor: 4_000,
+                categoryID: categoryID
+            ),
+            SettlementDebtReportingOverride(expenseMinor: 4_000, incomeMinor: 0)
+        )
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpenseReceivable,
+                amountMinor: 1_500,
+                categoryID: categoryID
+            ),
+            SettlementDebtReportingOverride(expenseMinor: -1_500, incomeMinor: 0)
+        )
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpensePayable,
+                amountMinor: 4_000,
+                categoryID: nil
+            ),
+            SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        )
+        XCTAssertEqual(
+            SettlementLogic.sharedExpensePrincipalReportingOverride(
+                settlementRole: .sharedExpenseReceivable,
+                amountMinor: 1_500,
+                categoryID: nil
+            ),
+            SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        )
+    }
+
     func testResaleReceivableUsesSalePriceForDebtAndPurchaseCostForWalletReporting() {
         let wallet = TransactionWalletSnapshot(
             id: UUID(),
@@ -996,6 +1113,44 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(visible.map(\.id), [matching.id])
     }
 
+    func testTransactionFilterStateMarksAnyVisibleListFilterActive() throws {
+        XCTAssertFalse(TransactionFilterState(timeScope: .allTime, statusScope: .all).hasActiveVisibleListFilter)
+
+        let timeFilter = TransactionFilterState(timeScope: .today, statusScope: .all)
+        XCTAssertTrue(timeFilter.hasActiveVisibleListFilter)
+
+        var walletFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        walletFilter.walletID = UUID()
+        XCTAssertTrue(walletFilter.hasActiveVisibleListFilter)
+
+        var categoryFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        categoryFilter.categoryID = UUID()
+        XCTAssertTrue(categoryFilter.hasActiveVisibleListFilter)
+
+        var transferFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        transferFilter.transferSubtype = .debt
+        XCTAssertTrue(transferFilter.hasActiveVisibleListFilter)
+
+        var personFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        personFilter.counterpartyDebtKey = try XCTUnwrap(TransactionLogic.normalizeCounterpartyName("Ngọc Anh"))
+        XCTAssertTrue(personFilter.hasActiveVisibleListFilter)
+
+        var amountFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        amountFilter.minAmountMinor = 5_000
+        XCTAssertTrue(amountFilter.hasActiveVisibleListFilter)
+
+        let statusFilter = TransactionFilterState(timeScope: .allTime, statusScope: .postedOnly)
+        XCTAssertTrue(statusFilter.hasActiveVisibleListFilter)
+
+        var adjustmentFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        adjustmentFilter.isAdjustmentOnly = true
+        XCTAssertTrue(adjustmentFilter.hasActiveVisibleListFilter)
+
+        var eventFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        eventFilter.isEventOnly = true
+        XCTAssertTrue(eventFilter.hasActiveVisibleListFilter)
+    }
+
     func testTitleSuggestionsPreferPrefixMatchesAndKeepNewestDuplicateTitle() {
         let walletID = UUID()
         let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
@@ -1136,6 +1291,7 @@ final class TransactionLogicTests: XCTestCase {
         title: String = "Sample",
         amountMinor: Int64,
         occurredAt: Date,
+        settlementGroupID: UUID? = nil,
         sourceWalletID: UUID? = nil,
         sourceWalletKind: LedgerWalletKind? = nil,
         sourceCurrencyCode: String? = nil,
@@ -1162,6 +1318,7 @@ final class TransactionLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            settlementGroupID: settlementGroupID,
             settlementRole: settlementRole,
             reportingExpenseMinor: reportingExpenseMinor,
             reportingIncomeMinor: reportingIncomeMinor,

@@ -129,6 +129,18 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("uuid, uuid, uuid, uuid, bigint, bigint, text, text, text, text, timestamptz, text, text, text"))
     }
 
+    func testTransactionCreatorWalletAccessMigrationRestoresCreatorManageBranch() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260616115354_restore_transaction_creator_wallet_access.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("create or replace function public.can_manage_transaction"))
+        XCTAssertTrue(migration.contains("auth.uid() = created_by_user_id"))
+        XCTAssertTrue(migration.contains("public.can_operate_wallet(source_wallet_id)"))
+        XCTAssertTrue(migration.contains("public.has_family_permission_grant(owner_user_id, 'transaction', null, 'edit')"))
+        XCTAssertTrue(migration.contains("grant execute on function public.can_manage_transaction"))
+    }
+
     private func createCurrentV4Store(at storeURL: URL, billID: UUID) throws {
         let schema = Schema(versionedSchema: MistiaSchemaV4.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)

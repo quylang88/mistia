@@ -176,7 +176,7 @@ final class FamilyRLSEdgeCasesTests: XCTestCase {
 
     private func shouldSuppressNoFamilyPermissionError(_ message: String) -> Bool {
         let normalized = message.lowercased()
-        return normalized.contains("permission denied")
+        return (normalized.contains("permission denied") || normalized.contains("row-level security"))
             && (normalized.contains("family_memberships") || normalized.contains("family membership"))
     }
 }

@@ -36,7 +36,7 @@ struct MistiaFooterAddButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let title: String
-    var accent: Color = Color(red: 0.43, green: 0.23, blue: 0.76)
+    var accent: Color = MistiaAccent.tabActive.color
     let action: () -> Void
 
     private var buttonFill: Color {
@@ -44,7 +44,7 @@ struct MistiaFooterAddButton: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        accent
     }
 
     var body: some View {
@@ -85,7 +85,7 @@ struct MistiaEmptyStateContent: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.tabActive.color : accent
     }
 
     private var symbolBackgroundOpacity: Double {
@@ -155,6 +155,7 @@ struct MistiaMiniBadge: View {
         Text(title)
             .font(.system(size: 10, weight: .bold, design: .rounded))
             .foregroundStyle(tint)
+            .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background {
@@ -163,3 +164,40 @@ struct MistiaMiniBadge: View {
     }
 }
 
+struct MistiaSmallIconButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let systemImage: String
+    let accessibilityLabel: String
+    var isEnabled: Bool = true
+    var foregroundColor: Color? = nil
+    var action: () -> Void
+
+    private var foreground: Color {
+        if let foregroundColor {
+            return foregroundColor
+        }
+
+        return colorScheme == .dark ? MistiaAccent.checkmarkPurple.color : MistiaAccent.purple.color
+    }
+
+    private var fill: Color {
+        Color(UIColor.tertiarySystemFill)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(foreground)
+                .frame(width: 30, height: 30)
+                .background {
+                    Circle().fill(fill)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}

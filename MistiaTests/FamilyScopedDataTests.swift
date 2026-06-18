@@ -148,6 +148,75 @@ final class FamilyScopedDataTests: XCTestCase {
         )
     }
 
+    func testArchivedEventFilteringKeepsLinkedBillsButHidesGeneratedDebtRows() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let groupID = UUID()
+        let otherGroupID = UUID()
+        let container = try makeContainer()
+        let sessionStore = makeSessionStore(container: container, userID: selfUserID)
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+
+        let memberWallet = makeWallet(name: "Member cash")
+        let linkedBill = makeTransaction(title: "Dinner", wallet: memberWallet)
+        linkedBill.settlementGroupID = groupID
+        linkedBill.settlementRole = .sharedExpensePaid
+
+        let generatedDebt = LedgerTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            title: "Split payable",
+            amountMinor: 4_000,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpensePayable,
+            sourceWallet: memberWallet
+        )
+
+        let otherEventGeneratedDebt = LedgerTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            title: "Other split payable",
+            amountMinor: 5_000,
+            settlementGroupID: otherGroupID,
+            settlementRole: .sharedExpensePayable,
+            sourceWallet: memberWallet
+        )
+
+        let scopes = [
+            OwnedRecordScope(entity: .wallet, recordID: memberWallet.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: linkedBill.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: generatedDebt.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: otherEventGeneratedDebt.id, ownerUserID: memberUserID)
+        ]
+        let transactions = [linkedBill, generatedDebt, otherEventGeneratedDebt]
+
+        familyContextStore.activeContext = FamilyContext(scope: .member(userID: memberUserID))
+
+        XCTAssertEqual(
+            visibleHistoryIDs(
+                transactions,
+                audits: [],
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore,
+                archivedEventIDs: [groupID]
+            ),
+            [linkedBill.id, otherEventGeneratedDebt.id]
+        )
+        XCTAssertEqual(
+            visibleFinancialIDs(
+                transactions,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore,
+                archivedEventIDs: [groupID]
+            ),
+            [linkedBill.id, otherEventGeneratedDebt.id]
+        )
+    }
+
     func testCategoryUseRequestRequiresBothRequesterAndOwnerCloudSyncHistory() throws {
         let selfUserID = UUID()
         let memberUserID = UUID()
@@ -211,14 +280,16 @@ final class FamilyScopedDataTests: XCTestCase {
         audits: [TransactionAuditRecord],
         scopes: [OwnedRecordScope],
         familyContextStore: FamilyContextStore,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        archivedEventIDs: Set<UUID> = []
     ) -> [UUID] {
         FamilyScopedData.visibleTransactionsForHistory(
             transactions,
             audits: audits,
             scopes: scopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedEventIDs
         ).map(\.id)
     }
 
@@ -226,13 +297,15 @@ final class FamilyScopedDataTests: XCTestCase {
         _ transactions: [LedgerTransaction],
         scopes: [OwnedRecordScope],
         familyContextStore: FamilyContextStore,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        archivedEventIDs: Set<UUID> = []
     ) -> [UUID] {
         FamilyScopedData.visibleTransactionsForFinancial(
             transactions,
             scopes: scopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedEventIDs
         ).map(\.id)
     }
 

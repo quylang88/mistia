@@ -46,13 +46,20 @@ final class SettlementLogicTests: XCTestCase {
     }
 
 
-    func testAllEventSnapshotsIncludeArchivedSettledEvents() {
+    func testAllEventSnapshotsExcludeArchivedEventsButIncludeCompletedEvents() {
         let activePreparingID = UUID(uuidString: "00000000-0000-0000-0000-00000000D001")!
-        let archivedSettledID = UUID(uuidString: "00000000-0000-0000-0000-00000000D002")!
-        let archivedPreparingID = UUID(uuidString: "00000000-0000-0000-0000-00000000D003")!
+        let completedID = UUID(uuidString: "00000000-0000-0000-0000-00000000D002")!
+        let archivedSettledID = UUID(uuidString: "00000000-0000-0000-0000-00000000D003")!
+        let archivedPreparingID = UUID(uuidString: "00000000-0000-0000-0000-00000000D004")!
         let now = Date(timeIntervalSince1970: 1_778_400_000)
         let groups = [
             settlementGroupSnapshot(id: activePreparingID, status: .preparing, title: "Active preparing", now: now),
+            settlementGroupSnapshot(
+                id: completedID,
+                status: .settled,
+                title: "Completed",
+                now: now
+            ),
             settlementGroupSnapshot(
                 id: archivedSettledID,
                 status: .settled,
@@ -85,8 +92,8 @@ final class SettlementLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(allEvents.map(\.id), [activePreparingID, archivedSettledID])
-        XCTAssertEqual(completedEvents.map(\.id), [archivedSettledID])
+        XCTAssertEqual(allEvents.map(\.id), [activePreparingID, completedID])
+        XCTAssertEqual(completedEvents.map(\.id), [completedID])
     }
 
     func testPreparingEventSummarizesLinkedBillsAndVisibleParticipants() {
@@ -172,6 +179,179 @@ final class SettlementLogicTests: XCTestCase {
         XCTAssertEqual(events.first?.participantNames, ["Linh", "Mai"])
         XCTAssertEqual(events.first?.note, "Train and food")
         XCTAssertEqual(events.first?.lastUpdatedAt, later)
+    }
+
+    func testArchivedEventFilteringHidesGeneratedDebtButKeepsLinkedBills() {
+        let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E101")!
+        let otherGroupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E102")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let linkedExpense = settlementExpenseRecord(
+            groupID: groupID,
+            title: "Dinner",
+            amountMinor: 12_000,
+            occurredAt: now
+        )
+        let linkedPaidOnBehalf = paidOnBehalfEventBillRecord(
+            groupID: groupID,
+            amountMinor: 3_000,
+            occurredAt: now.addingTimeInterval(60)
+        )
+        let generatedReceivable = sharedExpenseDebtPrincipalRecord(
+            groupID: groupID,
+            debtIntent: .lend,
+            amountMinor: 4_000,
+            occurredAt: now.addingTimeInterval(120)
+        )
+        let generatedPayment = sharedExpenseDebtSettlementRecord(
+            groupID: groupID,
+            debtIntent: .collect,
+            amountMinor: 4_000,
+            reportingExpenseMinor: 0,
+            occurredAt: now.addingTimeInterval(180)
+        )
+        let otherEventDebt = sharedExpenseDebtPrincipalRecord(
+            groupID: otherGroupID,
+            debtIntent: .borrow,
+            amountMinor: 5_000,
+            occurredAt: now.addingTimeInterval(240)
+        )
+
+        let visibleRecords = SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+            [linkedExpense, linkedPaidOnBehalf, generatedReceivable, generatedPayment, otherEventDebt],
+            archivedEventIDs: [groupID]
+        )
+
+        XCTAssertEqual(visibleRecords.map(\.id), [linkedExpense.id, linkedPaidOnBehalf.id, otherEventDebt.id])
+    }
+
+    func testArchivedSharedExpenseEventIDsDriveFilteringAndRestoreWhenEmpty() {
+        let archivedGroupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E201")!
+        let activeGroupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E202")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let groups = [
+            settlementGroupSnapshot(
+                id: archivedGroupID,
+                status: .settled,
+                title: "Archived trip",
+                now: now,
+                isArchived: true,
+                archivedAt: now
+            ),
+            settlementGroupSnapshot(
+                id: activeGroupID,
+                status: .settled,
+                title: "Active trip",
+                now: now
+            )
+        ]
+        let linkedExpense = settlementExpenseRecord(
+            groupID: archivedGroupID,
+            title: "Dinner",
+            amountMinor: 12_000,
+            occurredAt: now
+        )
+        let generatedPayment = sharedExpenseDebtSettlementRecord(
+            groupID: archivedGroupID,
+            debtIntent: .collect,
+            amountMinor: 4_000,
+            reportingExpenseMinor: 0,
+            occurredAt: now.addingTimeInterval(60)
+        )
+        let activeGeneratedDebt = sharedExpenseDebtPrincipalRecord(
+            groupID: activeGroupID,
+            debtIntent: .borrow,
+            amountMinor: 5_000,
+            occurredAt: now.addingTimeInterval(120)
+        )
+        let records = [linkedExpense, generatedPayment, activeGeneratedDebt]
+
+        let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(from: groups)
+        let filtered = SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+            records,
+            archivedEventIDs: archivedEventIDs
+        )
+        let restored = SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+            records,
+            archivedEventIDs: []
+        )
+
+        XCTAssertEqual(archivedEventIDs, [archivedGroupID])
+        XCTAssertEqual(filtered.map(\.id), [linkedExpense.id, activeGeneratedDebt.id])
+        XCTAssertEqual(restored.map(\.id), records.map(\.id))
+    }
+
+    func testArchivedEventFilteredRecordsDoNotAffectSummaryOrWalletBalance() {
+        let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E301")!
+        let walletID = UUID(uuidString: "00000000-0000-0000-0000-00000000E302")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let wallet = TransactionWalletSnapshot(
+            id: walletID,
+            kind: .cash,
+            openingBalanceMinor: 100_000
+        )
+        let linkedExpense = TransactionRecordSnapshot(
+            id: UUID(uuidString: "00000000-0000-0000-0000-00000000E303")!,
+            primaryKind: .expense,
+            transferSubtype: nil,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: "Dinner",
+            note: nil,
+            amountMinor: 12_000,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpensePaid,
+            reportingExpenseMinor: nil,
+            reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            occurredAt: now,
+            createdAt: now,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: UUID(),
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+        let generatedReceipt = TransactionRecordSnapshot(
+            id: UUID(uuidString: "00000000-0000-0000-0000-00000000E304")!,
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .collect,
+            entryStatus: .posted,
+            title: "Expense reimbursement",
+            note: nil,
+            amountMinor: 4_000,
+            settlementGroupID: groupID,
+            settlementRole: .sharedExpenseReceipt,
+            reportingExpenseMinor: -4_000,
+            reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            occurredAt: now.addingTimeInterval(60),
+            createdAt: now.addingTimeInterval(60),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: nil,
+            counterpartyName: "Linh",
+            normalizedCounterpartyKey: "linh"
+        )
+
+        let filteredRecords = SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+            [linkedExpense, generatedReceipt],
+            archivedEventIDs: [groupID]
+        )
+        let summary = TransactionLogic.summary(for: filteredRecords)
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [wallet],
+            records: filteredRecords
+        )
+
+        XCTAssertEqual(filteredRecords.map(\.id), [linkedExpense.id])
+        XCTAssertEqual(summary.expenseMinor, 12_000)
+        XCTAssertEqual(summary.incomeMinor, 0)
+        XCTAssertEqual(balanceIndex.balance(for: wallet), 88_000)
     }
 
     func testParticipantSuggestionRecordsUseOnlyCurrentOwnerTransactions() {

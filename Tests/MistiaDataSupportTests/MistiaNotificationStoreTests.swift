@@ -5,6 +5,16 @@ import XCTest
 
 @MainActor
 final class MistiaNotificationStoreTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.set(true, forKey: "mistia.notifications.group.family.enabled")
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: "mistia.notifications.group.family.enabled")
+        super.tearDown()
+    }
+
     func testRemoteMergeKeepsLocalReadStateWhenCloudStillUnread() throws {
         let currentUserID = UUID()
         let otherUserID = UUID()

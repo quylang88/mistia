@@ -274,7 +274,7 @@ struct TransactionEditorSheet: View {
     }
     private var linkedEvent: SettlementGroup? {
         guard let groupID = target.transaction?.settlementGroupID else { return nil }
-        return storedSettlementGroups.first { $0.id == groupID }
+        return storedSettlementGroups.first { $0.id == groupID && !$0.isArchived && $0.deletedAt == nil }
     }
     @State private var showsCategoryPicker = false
     @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
@@ -369,6 +369,11 @@ struct TransactionEditorSheet: View {
     }
 
     private var isEventGeneratedSharedExpenseDebtDetail: Bool {
+        guard let transaction = target.transaction else { return false }
+        return TransactionLogic.isEventGeneratedSharedExpenseDebt(transaction.snapshot)
+    }
+
+    private var isEventGeneratedSharedExpenseDebtPrincipalDetail: Bool {
         guard let transaction = target.transaction else { return false }
         return TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(transaction.snapshot)
     }
@@ -533,8 +538,17 @@ struct TransactionEditorSheet: View {
                     quickCaptureContent
                         .disabled(isSaving || isProcessingReceiptImage)
                 } else {
-                    fullEditorContent(renderContext: renderContext)
+                    fullEditorContent(
+                        renderContext: renderContext,
+                        includesTrailingSections: !isEventGeneratedSharedExpenseDebtPrincipalDetail
+                    )
                         .disabled(areEditorControlsDisabled)
+                }
+
+                if isEventGeneratedSharedExpenseDebtPrincipalDetail {
+                    eventGeneratedPrincipalCategorySection(renderContext: renderContext)
+                    eventGeneratedNotesSection
+                        .disabled(true)
                 }
             }
             .dismissKeyboardOnTap()
@@ -634,7 +648,7 @@ struct TransactionEditorSheet: View {
                     category.parentCategory?.localizedDisplayName
                 }
             ) { category in
-                draft.categoryID = category.id
+                handleCategorySelection(category)
             }
         }
         .sheet(item: $receiptImageSource) { source in
@@ -766,7 +780,10 @@ struct TransactionEditorSheet: View {
             }
         }
     }
-    private func fullEditorContent(renderContext: TransactionEditorRenderContext) -> some View {
+    private func fullEditorContent(
+        renderContext: TransactionEditorRenderContext,
+        includesTrailingSections: Bool = true
+    ) -> some View {
         @Bindable var bindableDraft = draft
         let contextRows = transactionContextRows
 
@@ -1150,32 +1167,34 @@ struct TransactionEditorSheet: View {
                             }
                             .pickerStyle(.menu)
 
-                            Toggle(L10n.transactions.transactioneditor.countAsExpense, isOn: Binding(
-                                get: { bindableDraft.paidForCountsAsExpense },
-                                set: { isOn in
-                                    bindableDraft.paidForCountsAsExpense = isOn
-                                    if !isOn {
-                                        bindableDraft.categoryID = nil
+                            if !isEventGeneratedSharedExpenseDebtDetail {
+                                Toggle(L10n.transactions.transactioneditor.countAsExpense, isOn: Binding(
+                                    get: { bindableDraft.paidForCountsAsExpense },
+                                    set: { isOn in
+                                        bindableDraft.paidForCountsAsExpense = isOn
+                                        if !isOn {
+                                            bindableDraft.categoryID = nil
+                                        }
                                     }
-                                }
-                            ))
+                                ))
 
-                            if draft.paidForCountsAsExpense {
-                                Button {
-                                    showsCategoryPicker = true
-                                } label: {
-                                    HStack {
-                                        Text(L10n.transactions.transactioneditor.category)
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Text(renderContext.selectedCategoryLabel)
-                                            .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(.tertiary)
+                                if draft.paidForCountsAsExpense {
+                                    Button {
+                                        showsCategoryPicker = true
+                                    } label: {
+                                        HStack {
+                                            Text(L10n.transactions.transactioneditor.category)
+                                                .foregroundStyle(.primary)
+                                            Spacer()
+                                            Text(renderContext.selectedCategoryLabel)
+                                                .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(.tertiary)
+                                        }
                                     }
+                                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                                 }
-                                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                             }
                         } else {
                             Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
@@ -1218,18 +1237,22 @@ struct TransactionEditorSheet: View {
             }
             }
 
-            if shouldShowNotesSection {
+            if includesTrailingSections && shouldShowNotesSection {
                 Section(L10n.transactions.transactioneditor.notes) {
                     TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
                         .lineLimit(3...5)
                 }
             }
 
-            if shouldShowReceiptSection {
+            if includesTrailingSections && shouldShowReceiptSection {
                 receiptSection
             }
 
-            if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail, !isEventGeneratedSharedExpenseDebtDetail {
+            if includesTrailingSections,
+               let transaction = target.transaction,
+               !transaction.isArchived,
+               !isFamilyTransferDetail,
+               !isEventGeneratedSharedExpenseDebtDetail {
                 MistiaDestructiveActionSection(
                     buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
                     descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
@@ -1244,6 +1267,46 @@ struct TransactionEditorSheet: View {
         }
         .disabled(isAdjustment)
     }
+
+    private func eventGeneratedPrincipalCategorySection(
+        renderContext: TransactionEditorRenderContext
+    ) -> some View {
+        Section(L10n.transactions.transactioneditor.eventGeneratedExpenseReportingSection) {
+            Toggle(
+                L10n.transactions.transactioneditor.countAsExpense,
+                isOn: .constant(draft.categoryID != nil)
+            )
+            .disabled(true)
+
+            if draft.categoryID != nil {
+                Button {
+                    showsCategoryPicker = true
+                } label: {
+                    HStack {
+                        Text(L10n.transactions.transactioneditor.category)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(renderContext.selectedCategoryLabel)
+                            .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+            }
+        }
+    }
+
+    private var eventGeneratedNotesSection: some View {
+        @Bindable var bindableDraft = draft
+
+        return Section(L10n.transactions.transactioneditor.notes) {
+            TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
+                .lineLimit(3...5)
+        }
+    }
+
     private var navigationTitle: String {
         if isFamilyTransferDetail {
             return L10n.shared.corelogic.financeenums.family
@@ -1689,7 +1752,21 @@ struct TransactionEditorSheet: View {
             audits: transactionAuditRecords,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedSettlementGroupIDs
+        )
+    }
+
+    private var archivedSettlementGroupIDs: Set<UUID> {
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
             sessionStore: sessionStore
+        )
+        return SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
         )
     }
 
@@ -3135,6 +3212,74 @@ struct TransactionEditorSheet: View {
             completion: .savedTransaction,
             subjectUserIDOverride: canonicalOwnerUserID
         )
+    }
+
+    private func handleCategorySelection(_ category: TransactionCategory) {
+        draft.categoryID = category.id
+        if isEventGeneratedSharedExpenseDebtPrincipalDetail {
+            persistEventGeneratedPrincipalCategory(category)
+        }
+    }
+
+    private func persistEventGeneratedPrincipalCategory(_ category: TransactionCategory) {
+        guard let transaction = target.transaction,
+              isEventGeneratedSharedExpenseDebtPrincipalDetail else {
+            return
+        }
+
+        let now = Date()
+        transaction.category = category
+        let reportingOverride = SettlementLogic.sharedExpensePrincipalReportingOverride(
+            settlementRole: transaction.settlementRole,
+            amountMinor: transaction.amountMinor,
+            categoryID: category.id
+        )
+        transaction.reportingExpenseMinor = reportingOverride.expenseMinor
+        transaction.reportingIncomeMinor = reportingOverride.incomeMinor
+        transaction.updatedAt = now
+        if transaction.debtIntent == .borrow, transaction.sourceWallet == nil {
+            draft.paidForCountsAsExpense = true
+        }
+
+        let ownerUserID = persistenceOwnerUserID(for: transaction)
+        do {
+            let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
+            if let actorUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: transaction.id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+
+            try modelContext.save()
+            onPersistedTransaction(transaction)
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: now,
+                subjectUserIDOverride: ownerUserID
+            )
+            if let ownerUserID,
+               ownerUserID != sessionStore.activeLocalProfileUserID {
+                Task { @MainActor in
+                    _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
+                }
+            }
+        } catch {
+            alertMessage = L10n.transactions.transactioneditor.couldnTSaveThisTransactionRightNow + " \(error.localizedDescription)"
+        }
     }
 
     private func persistReceiptDraftIfNeeded(for transaction: LedgerTransaction) throws {

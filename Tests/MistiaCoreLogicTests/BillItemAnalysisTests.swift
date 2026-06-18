@@ -90,7 +90,7 @@ final class BillItemAnalysisTests: XCTestCase {
         }
         """)
 
-        let components = Calendar.current.dateComponents(
+        let components = Calendar(identifier: .gregorian).dateComponents(
             [.year, .month, .day, .hour, .minute],
             from: try XCTUnwrap(result.occurredAt)
         )
@@ -719,6 +719,7 @@ final class BillItemAnalysisTests: XCTestCase {
         categoryID: UUID?,
         lineType: BillItemLineType = .purchase,
         amountMinor: Int64 = 100,
+        selectedQuantity: Int = 1,
         merchantName: String? = "Store",
         occurredAt: Date? = nil,
         isCreated: Bool = false
@@ -729,6 +730,7 @@ final class BillItemAnalysisTests: XCTestCase {
             categoryID: categoryID,
             lineType: lineType,
             amountMinor: amountMinor,
+            selectedQuantity: selectedQuantity,
             merchantName: merchantName,
             occurredAt: occurredAt,
             isCreated: isCreated

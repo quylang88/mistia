@@ -118,6 +118,7 @@ private struct ManagementRenderSnapshotCacheKey: Hashable {
     let walletSignature: MistiaCollectionChangeSignature
     let categorySignature: MistiaCollectionChangeSignature
     let transactionSignature: MistiaCollectionChangeSignature
+    let settlementGroupSignature: MistiaCollectionChangeSignature
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
 }
@@ -152,6 +153,8 @@ struct ManagementView: View {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
     })
     private var postedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var storedSettlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
@@ -205,10 +208,19 @@ struct ManagementView: View {
             entity: .category,
             scopeSnapshot: scopeSnapshot
         )
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopeSnapshot: scopeSnapshot
+        )
+        let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
+        )
         let visiblePostedTransactions = FamilyScopedData.visibleTransactionsForHistory(
             postedTransactions,
             audits: transactionAuditRecords,
-            scopeSnapshot: scopeSnapshot
+            scopeSnapshot: scopeSnapshot,
+            archivedEventIDs: archivedEventIDs
         )
         let activeWallets = visibleWallets
             .filter { !$0.isArchived }
@@ -291,6 +303,13 @@ struct ManagementView: View {
             ),
             transactionSignature: MistiaCollectionChangeSignature.make(
                 postedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            settlementGroupSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementGroups,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
                 isArchived: \.isArchived,
@@ -1356,7 +1375,7 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var badgeForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.tabActive.color : accent
     }
 
     private var buttonFill: Color {
@@ -1364,7 +1383,7 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.tabActive.color : accent
     }
 
     var body: some View {
@@ -1683,7 +1702,7 @@ private struct ManagementFooterAddButton: View {
     let action: () -> Void
 
     var body: some View {
-        MistiaFooterAddButton(title: title, accent: accent, action: action)
+        MistiaFooterAddButton(title: title, accent: MistiaAccent.tabActive.color, action: action)
     }
 }
 

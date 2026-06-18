@@ -68,7 +68,8 @@ actor MistiaSyncPersistenceWorker {
 
     func applySnapshot(
         _ snapshot: MistiaRemoteSnapshot,
-        protectedRecordIDs: Set<String>
+        protectedRecordIDs: Set<String>,
+        preserveLocalNewerRows: Bool = false
     ) throws {
         let signpostID = MistiaPerformanceSignpost.begin("Snapshot Apply")
         defer { MistiaPerformanceSignpost.end("Snapshot Apply", id: signpostID) }
@@ -76,6 +77,7 @@ actor MistiaSyncPersistenceWorker {
             snapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: protectedRecordIDs,
+            preserveLocalNewerRows: preserveLocalNewerRows,
             in: modelContainer
         )
     }
@@ -586,16 +588,17 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
+        let subjectUserID = localRecord.userID
         try await ensureRemoteCategoryDependenciesExistIfNeeded(
             for: localRecord,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         )
 
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         )
 
@@ -603,7 +606,7 @@ final class SyncCoordinator {
             try await persistenceWorker.applyRemoteRecord(remoteRecord)
             try await createFamilyActivityNotificationIfNeeded(
                 for: remoteRecord,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 action: remoteRecord.deletedAt == nil
                     ? (mutation.baseVersion == 0 ? .created : .updated)
                     : .deleted,
@@ -624,7 +627,7 @@ final class SyncCoordinator {
                     remoteRecord: remoteRecord ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: 1),
                     baseVersion: mutation.baseVersion,
                     remoteVersion: remoteRecord?.syncVersion ?? 1,
-                    subjectUserID: mutation.subjectUserID,
+                    subjectUserID: subjectUserID,
                     session: session
                 )
                 outbox.remove(mutation)
@@ -633,13 +636,13 @@ final class SyncCoordinator {
 
             let created = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 session: session
             )
             try await persistenceWorker.applyRemoteRecord(created)
             try await createFamilyActivityNotificationIfNeeded(
                 for: created,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 action: .created,
                 session: session
             )
@@ -650,7 +653,7 @@ final class SyncCoordinator {
         guard let remoteRecord else {
             _ = try await forcePushLocalRecord(
                 localRecord,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 remoteVersion: mutation.baseVersion,
                 session: session
             )
@@ -667,7 +670,7 @@ final class SyncCoordinator {
                 remoteRecord: remoteRecord,
                 baseVersion: mutation.baseVersion,
                 remoteVersion: remoteRecord.syncVersion,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 session: session
             )
             outbox.remove(mutation)
@@ -683,7 +686,7 @@ final class SyncCoordinator {
                 remoteRecord: remoteRecord,
                 baseVersion: mutation.baseVersion,
                 remoteVersion: remoteRecord.syncVersion,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 session: session
             )
             outbox.remove(mutation)
@@ -693,13 +696,13 @@ final class SyncCoordinator {
         if let updated = try await remoteStore.conditionalUpdate(
             localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID),
             expectedVersion: mutation.baseVersion,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         ) {
             try await persistenceWorker.applyRemoteRecord(updated)
             try await createFamilyActivityNotificationIfNeeded(
                 for: updated,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 action: .updated,
                 session: session
             )
@@ -710,7 +713,7 @@ final class SyncCoordinator {
         let latestRemote = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
 
@@ -722,7 +725,7 @@ final class SyncCoordinator {
             remoteRecord: latestRemote,
             baseVersion: mutation.baseVersion,
             remoteVersion: latestRemote.syncVersion,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         )
         outbox.remove(mutation)
@@ -737,11 +740,12 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
+        let subjectUserID = localRecord.userID
 
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         )
 
@@ -765,7 +769,7 @@ final class SyncCoordinator {
                 remoteRecord: remoteRecord,
                 baseVersion: mutation.baseVersion,
                 remoteVersion: remoteRecord.syncVersion,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 session: session
             )
             outbox.remove(mutation)
@@ -775,7 +779,7 @@ final class SyncCoordinator {
         if let deletedRecord = try await remoteStore.conditionalDelete(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             expectedVersion: mutation.baseVersion,
             modifiedAt: mutation.modifiedAt,
             deviceID: deviceID,
@@ -784,7 +788,7 @@ final class SyncCoordinator {
             try await persistenceWorker.applyRemoteRecord(deletedRecord)
             try await createFamilyActivityNotificationIfNeeded(
                 for: deletedRecord,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 action: .deleted,
                 session: session
             )
@@ -795,7 +799,7 @@ final class SyncCoordinator {
         let latestRemote = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
 
@@ -813,7 +817,7 @@ final class SyncCoordinator {
             remoteRecord: latestRemote,
             baseVersion: mutation.baseVersion,
             remoteVersion: latestRemote.syncVersion,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         )
         outbox.remove(mutation)
@@ -828,10 +832,11 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
+        let subjectUserID = localRecord.userID
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         )
 
@@ -851,7 +856,7 @@ final class SyncCoordinator {
 
             let created = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 session: session
             )
             try await persistenceWorker.applyRemoteRecord(
@@ -860,7 +865,7 @@ final class SyncCoordinator {
             )
             try await createFamilyActivityNotificationIfNeeded(
                 for: created,
-                subjectUserID: mutation.subjectUserID,
+                subjectUserID: subjectUserID,
                 action: .created,
                 session: session
             )
@@ -879,7 +884,7 @@ final class SyncCoordinator {
         guard let updated = try await remoteStore.conditionalUpdate(
             localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID),
             expectedVersion: mutation.baseVersion,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         ) else {
             throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
@@ -891,7 +896,7 @@ final class SyncCoordinator {
         )
         try await createFamilyActivityNotificationIfNeeded(
             for: updated,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             action: .updated,
             session: session
         )
@@ -907,11 +912,12 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
+        let subjectUserID = localRecord.userID
 
         guard let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             session: session
         ) else {
             outbox.remove(mutation)
@@ -934,7 +940,7 @@ final class SyncCoordinator {
         guard let deletedRecord = try await remoteStore.conditionalDelete(
             entity: mutation.entity,
             recordID: localRecord.id,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             expectedVersion: mutation.baseVersion,
             modifiedAt: mutation.modifiedAt,
             deviceID: deviceID,
@@ -949,7 +955,7 @@ final class SyncCoordinator {
         )
         try await createFamilyActivityNotificationIfNeeded(
             for: deletedRecord,
-            subjectUserID: mutation.subjectUserID,
+            subjectUserID: subjectUserID,
             action: .deleted,
             session: session
         )
@@ -1488,9 +1494,14 @@ final class SyncCoordinator {
             return fingerprint
         }
 
+        // preserveLocalNewerRows: true guards against a stale snapshot overwriting
+        // a record that was just successfully pushed (e.g. unarchiving an event).
+        // The pushed record already has applyRemoteRecord applied with the server's
+        // newer updatedAt, so any snapshot row with an older timestamp is skipped.
         try await persistenceWorker.applySnapshot(
             snapshot,
-            protectedRecordIDs: queuedMutationIDs()
+            protectedRecordIDs: queuedMutationIDs(),
+            preserveLocalNewerRows: true
         )
         lastSnapshotFingerprint = fingerprint
         return fingerprint

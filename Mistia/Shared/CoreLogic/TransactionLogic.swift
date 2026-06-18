@@ -207,6 +207,19 @@ struct TransactionFilterState: Equatable {
     var minAmountMinor: Int64?
     var maxAmountMinor: Int64?
     var searchText = ""
+
+    var hasActiveVisibleListFilter: Bool {
+        isAdjustmentOnly
+            || isEventOnly
+            || timeScope != .allTime
+            || walletID != nil
+            || categoryID != nil
+            || transferSubtype != nil
+            || counterpartyDebtKey != nil
+            || statusScope != .all
+            || minAmountMinor != nil
+            || maxAmountMinor != nil
+    }
 }
 
 struct TransactionSummarySnapshot: Equatable {
@@ -513,7 +526,7 @@ nonisolated enum SettlementLogic {
         }
 
         return groups
-            .filter { $0.kind == .sharedExpense && (!$0.isArchived || $0.status == .settled) }
+            .filter { $0.kind == .sharedExpense && !$0.isArchived }
             .map { group in
                 let groupParticipants = participantsByGroupID[group.id] ?? []
                 let visibleParticipantNames = groupParticipants
@@ -556,6 +569,33 @@ nonisolated enum SettlementLogic {
     ) -> [PreparingSettlementEventSnapshot] {
         let preparingEventIDs = Set(preparingEvents.map(\.id))
         return allEvents.filter { !preparingEventIDs.contains($0.id) }
+    }
+
+    static func visibleRecordsAfterEventArchiveFiltering(
+        _ records: [TransactionRecordSnapshot],
+        archivedEventIDs: Set<UUID>
+    ) -> [TransactionRecordSnapshot] {
+        guard !archivedEventIDs.isEmpty else { return records }
+
+        return records.filter { record in
+            guard let settlementGroupID = record.settlementGroupID,
+                  archivedEventIDs.contains(settlementGroupID)
+            else {
+                return true
+            }
+
+            return !TransactionLogic.isEventGeneratedSharedExpenseDebt(record)
+        }
+    }
+
+    static func archivedSharedExpenseEventIDs(
+        from groups: [SettlementGroupRecordSnapshot]
+    ) -> Set<UUID> {
+        Set(
+            groups
+                .filter { $0.kind == .sharedExpense && $0.isArchived }
+                .map(\.id)
+        )
     }
 
     static func participantSuggestionRecords(
@@ -729,6 +769,62 @@ nonisolated enum SettlementLogic {
     ) -> SettlementDebtReportingOverride {
         switch settlementIntent {
         case .collect, .repay, .lend, .borrow:
+            return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        }
+    }
+
+    static func sharedExpenseDefaultCategoryID(
+        from records: [TransactionRecordSnapshot]
+    ) -> UUID? {
+        struct CategoryUsage {
+            var count: Int
+            var newestOccurredAt: Date
+        }
+
+        var usageByCategoryID: [UUID: CategoryUsage] = [:]
+
+        for record in records where isSharedExpenseEventBill(record) {
+            guard let categoryID = record.categoryID else { continue }
+            if var usage = usageByCategoryID[categoryID] {
+                usage.count += 1
+                usage.newestOccurredAt = max(usage.newestOccurredAt, record.occurredAt)
+                usageByCategoryID[categoryID] = usage
+            } else {
+                usageByCategoryID[categoryID] = CategoryUsage(
+                    count: 1,
+                    newestOccurredAt: record.occurredAt
+                )
+            }
+        }
+
+        return usageByCategoryID
+            .max { lhs, rhs in
+                if lhs.value.count != rhs.value.count {
+                    return lhs.value.count < rhs.value.count
+                }
+                if lhs.value.newestOccurredAt != rhs.value.newestOccurredAt {
+                    return lhs.value.newestOccurredAt < rhs.value.newestOccurredAt
+                }
+                return lhs.key.uuidString > rhs.key.uuidString
+            }?
+            .key
+    }
+
+    static func sharedExpensePrincipalReportingOverride(
+        settlementRole: SettlementTransactionRole?,
+        amountMinor: Int64,
+        categoryID: UUID?
+    ) -> SettlementDebtReportingOverride {
+        guard categoryID != nil else {
+            return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        }
+
+        switch settlementRole {
+        case .sharedExpensePayable:
+            return SettlementDebtReportingOverride(expenseMinor: max(amountMinor, 0), incomeMinor: 0)
+        case .sharedExpenseReceivable:
+            return SettlementDebtReportingOverride(expenseMinor: -max(amountMinor, 0), incomeMinor: 0)
+        case .sharedExpensePaid, .sharedExpenseReceipt, .sharedExpensePayment, .resaleReceivable, .resaleReceipt, nil:
             return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
         }
     }
@@ -1153,6 +1249,22 @@ nonisolated enum TransactionLogic {
     static func isEventGeneratedSharedExpenseDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
         record.settlementGroupID != nil
             && isSharedExpenseDebtPrincipal(record)
+    }
+
+    static func isEventGeneratedSharedExpenseDebt(_ record: TransactionRecordSnapshot) -> Bool {
+        guard record.settlementGroupID != nil,
+              record.primaryKind == .transfer,
+              record.transferSubtype == .debt
+        else {
+            return false
+        }
+
+        switch record.settlementRole {
+        case .sharedExpenseReceivable, .sharedExpensePayable, .sharedExpenseReceipt, .sharedExpensePayment:
+            return true
+        case .sharedExpensePaid, .resaleReceivable, .resaleReceipt, nil:
+            return false
+        }
     }
 
     static func isResaleReceivableDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
@@ -1743,6 +1855,10 @@ nonisolated enum TransactionLogic {
 
     static func isTransactionComplete(_ record: TransactionRecordSnapshot) -> Bool {
         guard record.amountMinor > 0 else { return false }
+
+        if record.entryStatus == .draft {
+            return true
+        }
 
         switch record.primaryKind {
         case .expense:

@@ -262,6 +262,13 @@ nonisolated enum MistiaSyncLocalStore {
             guard let transaction = try fetchTransaction(id: mutation.recordID, context) else {
                 return nil
             }
+            guard let ownerUserID = try canonicalTransactionOwnerUserID(
+                for: transaction,
+                fallbackUserID: subjectUserID,
+                context: context
+            ) else {
+                return nil
+            }
             let auditRecord = try TransactionAuditStore.fetch(
                 transactionID: transaction.id,
                 context: context
@@ -269,7 +276,7 @@ nonisolated enum MistiaSyncLocalStore {
             return .transaction(
                 RemoteLedgerTransaction(
                     local: transaction,
-                    userID: subjectUserID,
+                    userID: ownerUserID,
                     auditRecord: auditRecord
                 )
             )
@@ -316,6 +323,22 @@ nonisolated enum MistiaSyncLocalStore {
             }
             return .dueOccurrence(RemoteDueOccurrenceRecord(local: record, userID: subjectUserID))
         }
+    }
+
+    static func canonicalTransactionOwnerUserID(
+        recordID: UUID,
+        fallbackUserID: UUID?,
+        from container: ModelContainer
+    ) throws -> UUID? {
+        let context = ModelContext(container)
+        guard let transaction = try fetchTransaction(id: recordID, context) else {
+            return fallbackUserID
+        }
+        return try canonicalTransactionOwnerUserID(
+            for: transaction,
+            fallbackUserID: fallbackUserID,
+            context: context
+        )
     }
 
     static func exportCategoryRecord(
@@ -1580,17 +1603,13 @@ nonisolated enum MistiaSyncLocalStore {
             return false
         }
 
-        guard
-            preserveLocalNewerRows,
-            let record,
-            record.deletedAt != nil,
-            row.deletedAt == nil,
-            record.updatedAt > row.updatedAt
-        else {
-            return true
+        if preserveLocalNewerRows,
+           let record,
+           record.updatedAt > row.updatedAt {
+            return false
         }
 
-        return false
+        return true
     }
 
     private static func upsertWallet(
@@ -2959,6 +2978,31 @@ nonisolated enum MistiaSyncLocalStore {
     ) -> UUID? {
         guard let walletID else { return nil }
         return ownerMap[walletID]
+    }
+
+    private static func canonicalTransactionOwnerUserID(
+        for transaction: LedgerTransaction,
+        fallbackUserID: UUID?,
+        context: ModelContext
+    ) throws -> UUID? {
+        let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [.wallet, .transaction]
+        )
+        let walletOwnerMap = ownerMaps[.wallet]
+        let transactionOwnerMap = ownerMaps[.transaction]
+
+        return ownerUserID(
+            forWalletID: transaction.sourceWallet?.id,
+            ownerMap: walletOwnerMap
+        )
+            ?? ownerUserID(
+                forWalletID: transaction.destinationWallet?.id,
+                ownerMap: walletOwnerMap
+            )
+            ?? transactionOwnerMap[transaction.id]
+            ?? fallbackUserID
     }
 }
 

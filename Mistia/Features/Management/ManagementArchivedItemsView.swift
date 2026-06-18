@@ -10,6 +10,7 @@ private enum ArchivedItemSelection: Hashable {
     case transaction(UUID)
     case wallet(UUID)
     case category(UUID)
+    case settlementGroup(UUID)
 }
 
 private struct ArchivedSyncMutation {
@@ -17,6 +18,7 @@ private struct ArchivedSyncMutation {
     let id: UUID
     let updatedAt: Date
     let subjectUserIDOverride: UUID?
+    let action: ArchivedMutationAction
 }
 
 private struct CategoryDeleteBlockers {
@@ -44,6 +46,119 @@ private struct ArchivedTransactionDescriptor {
     let amountTint: Color
 }
 
+private struct ManagementArchivedItemsSnapshot {
+    let activeTransactions: [LedgerTransaction]
+    let archivedTransactions: [LedgerTransaction]
+    let archivedWallets: [LedgerWallet]
+    let archivedCategories: [TransactionCategory]
+    let archivedSettlementGroups: [SettlementGroup]
+    let eventSubtitleByGroupID: [UUID: String]
+    let settlementParticipantsByGroupID: [UUID: [SettlementParticipant]]
+    let transactionsBySettlementGroupID: [UUID: [LedgerTransaction]]
+    let categoryDeleteBlockersByID: [UUID: CategoryDeleteBlockers]
+    let ownerMaps: MistiaRecordOwnerMaps
+    let availableSelections: Set<ArchivedItemSelection>
+
+    private let archivedTransactionsByID: [UUID: LedgerTransaction]
+    private let archivedWalletsByID: [UUID: LedgerWallet]
+    private let archivedCategoriesByID: [UUID: TransactionCategory]
+    private let archivedSettlementGroupsByID: [UUID: SettlementGroup]
+
+    init(
+        activeTransactions: [LedgerTransaction],
+        archivedTransactions: [LedgerTransaction],
+        archivedWallets: [LedgerWallet],
+        archivedCategories: [TransactionCategory],
+        archivedSettlementGroups: [SettlementGroup],
+        eventSubtitleByGroupID: [UUID: String],
+        settlementParticipantsByGroupID: [UUID: [SettlementParticipant]],
+        transactionsBySettlementGroupID: [UUID: [LedgerTransaction]],
+        categoryDeleteBlockersByID: [UUID: CategoryDeleteBlockers],
+        ownerMaps: MistiaRecordOwnerMaps,
+        buildsLookupIndexes: Bool = true
+    ) {
+        self.activeTransactions = activeTransactions
+        self.archivedTransactions = archivedTransactions
+        self.archivedWallets = archivedWallets
+        self.archivedCategories = archivedCategories
+        self.archivedSettlementGroups = archivedSettlementGroups
+        self.eventSubtitleByGroupID = eventSubtitleByGroupID
+        self.settlementParticipantsByGroupID = settlementParticipantsByGroupID
+        self.transactionsBySettlementGroupID = transactionsBySettlementGroupID
+        self.categoryDeleteBlockersByID = categoryDeleteBlockersByID
+        self.ownerMaps = ownerMaps
+        self.archivedTransactionsByID = buildsLookupIndexes
+            ? Dictionary(uniqueKeysWithValues: archivedTransactions.map { ($0.id, $0) })
+            : [:]
+        self.archivedWalletsByID = buildsLookupIndexes
+            ? Dictionary(uniqueKeysWithValues: archivedWallets.map { ($0.id, $0) })
+            : [:]
+        self.archivedCategoriesByID = buildsLookupIndexes
+            ? Dictionary(uniqueKeysWithValues: archivedCategories.map { ($0.id, $0) })
+            : [:]
+        self.archivedSettlementGroupsByID = buildsLookupIndexes
+            ? Dictionary(uniqueKeysWithValues: archivedSettlementGroups.map { ($0.id, $0) })
+            : [:]
+
+        var selections = Set<ArchivedItemSelection>()
+        selections.reserveCapacity(
+            archivedTransactions.count
+                + archivedWallets.count
+                + archivedCategories.count
+                + archivedSettlementGroups.count
+        )
+        for transaction in archivedTransactions {
+            selections.insert(.transaction(transaction.id))
+        }
+        for wallet in archivedWallets {
+            selections.insert(.wallet(wallet.id))
+        }
+        for category in archivedCategories {
+            selections.insert(.category(category.id))
+        }
+        for group in archivedSettlementGroups {
+            selections.insert(.settlementGroup(group.id))
+        }
+        self.availableSelections = selections
+    }
+
+    var hasArchivedItems: Bool {
+        !availableSelections.isEmpty
+    }
+
+    func archivedTransaction(id: UUID) -> LedgerTransaction? {
+        archivedTransactionsByID[id]
+    }
+
+    func archivedWallet(id: UUID) -> LedgerWallet? {
+        archivedWalletsByID[id]
+    }
+
+    func archivedCategory(id: UUID) -> TransactionCategory? {
+        archivedCategoriesByID[id]
+    }
+
+    func archivedSettlementGroup(id: UUID) -> SettlementGroup? {
+        archivedSettlementGroupsByID[id]
+    }
+}
+
+private struct CategoryDeleteBlockerCounts {
+    var transactionCount = 0
+    var billCount = 0
+    var currentBudgetCount = 0
+    var childCategoryCount = 0
+
+    var snapshot: CategoryDeleteBlockers {
+        CategoryDeleteBlockers(
+            transactionCount: transactionCount,
+            billCount: billCount,
+            currentBudgetCount: currentBudgetCount,
+            childCategoryCount: childCategoryCount
+        )
+    }
+}
+
 struct ManagementArchivedItemsView: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Environment(MistiaUIState.self) private var uiState
@@ -68,6 +183,12 @@ struct ManagementArchivedItemsView: View {
     @Query(filter: #Predicate<TransactionCategory> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedCategories: [TransactionCategory]
 
+    @Query(filter: #Predicate<SettlementGroup> { $0.isArchived == true && $0.deletedAt == nil }, sort: \SettlementGroup.occurredAt, order: .reverse)
+    private var archivedSettlementGroups: [SettlementGroup]
+
+    @Query
+    private var allSettlementParticipants: [SettlementParticipant]
+
     @Query
     private var allCategories: [TransactionCategory]
 
@@ -88,16 +209,6 @@ struct ManagementArchivedItemsView: View {
     @State private var viewID = UUID()
     @State private var alertMessage: String?
 
-    private var availableSelections: Set<ArchivedItemSelection> {
-        Set(ownArchivedTransactions.map { .transaction($0.id) })
-            .union(ownArchivedWallets.map { .wallet($0.id) })
-            .union(ownArchivedCategories.map { .category($0.id) })
-    }
-
-    private var hasArchivedItems: Bool {
-        !availableSelections.isEmpty
-    }
-
     private var hasSelection: Bool {
         !selectedItems.isEmpty
     }
@@ -110,59 +221,9 @@ struct ManagementArchivedItemsView: View {
         sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
     }
 
-    private var transactionOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-    }
-
-    private var walletOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-    }
-
-    private var categoryOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-    }
-
-    private var ownActiveTransactions: [LedgerTransaction] {
-        MistiaRecordOwnershipStore.visibleRecords(
-            activeTransactions,
-            entity: .transaction,
-            ownerMap: transactionOwnerMap,
-            subjectUserID: selfUserID,
-            signedInUserID: sessionStore.signedInUserID
-        )
-    }
-
-    private var ownArchivedTransactions: [LedgerTransaction] {
-        MistiaRecordOwnershipStore.visibleRecords(
-            archivedTransactions,
-            entity: .transaction,
-            ownerMap: transactionOwnerMap,
-            subjectUserID: selfUserID,
-            signedInUserID: sessionStore.signedInUserID
-        )
-    }
-
-    private var ownArchivedWallets: [LedgerWallet] {
-        MistiaRecordOwnershipStore.visibleRecords(
-            archivedWallets,
-            entity: .wallet,
-            ownerMap: walletOwnerMap,
-            subjectUserID: selfUserID,
-            signedInUserID: sessionStore.signedInUserID
-        )
-    }
-
-    private var ownArchivedCategories: [TransactionCategory] {
-        MistiaRecordOwnershipStore.visibleRecords(
-            archivedCategories,
-            entity: .category,
-            ownerMap: categoryOwnerMap,
-            subjectUserID: selfUserID,
-            signedInUserID: sessionStore.signedInUserID
-        )
-    }
-
     var body: some View {
+        let snapshot = makeArchivedSnapshot()
+
         MistiaPinnedTopBarScaffold(
             tone: isModalPresentation ? .modal : .standard,
             title: navigationTitle,
@@ -177,9 +238,9 @@ struct ManagementArchivedItemsView: View {
         ) {
             EmptyView()
         } trailingAccessory: {
-            trailingToolbarAccessory
+            trailingToolbarAccessory(hasArchivedItems: snapshot.hasArchivedItems)
         } content: {
-            archivedContent
+            archivedContent(snapshot)
         }
         .onChange(of: isSelecting, initial: true) { _, newValue in
             uiState.requestTabBarHidden(newValue, id: viewID)
@@ -219,7 +280,7 @@ struct ManagementArchivedItemsView: View {
                 Text(alertMessage)
             }
         }
-        .onChange(of: availableSelections, initial: true) { _, newValue in
+        .onChange(of: snapshot.availableSelections, initial: true) { _, newValue in
             selectedItems = selectedItems.intersection(newValue)
 
             if newValue.isEmpty {
@@ -228,9 +289,173 @@ struct ManagementArchivedItemsView: View {
         }
     }
 
+    private func makeArchivedSnapshot(
+        includesMutationIndexes: Bool = false
+    ) -> ManagementArchivedItemsSnapshot {
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [
+                .transaction,
+                .wallet,
+                .category,
+                .settlementGroup,
+                .settlementParticipant
+            ]
+        )
+        let activeTransactions = includesMutationIndexes
+            ? MistiaRecordOwnershipStore.visibleRecords(
+                self.activeTransactions,
+                entity: .transaction,
+                ownerMap: ownerMaps[.transaction],
+                subjectUserID: selfUserID,
+                signedInUserID: sessionStore.signedInUserID
+            )
+            : []
+        let archivedTransactions = MistiaRecordOwnershipStore.visibleRecords(
+            self.archivedTransactions,
+            entity: .transaction,
+            ownerMap: ownerMaps[.transaction],
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+        .filter { !TransactionLogic.isEventGeneratedSharedExpenseDebt($0.snapshot) }
+        let archivedWallets = MistiaRecordOwnershipStore.visibleRecords(
+            self.archivedWallets,
+            entity: .wallet,
+            ownerMap: ownerMaps[.wallet],
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+        let archivedCategories = MistiaRecordOwnershipStore.visibleRecords(
+            self.archivedCategories,
+            entity: .category,
+            ownerMap: ownerMaps[.category],
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+        let archivedSettlementGroups = MistiaRecordOwnershipStore.visibleRecords(
+            self.archivedSettlementGroups,
+            entity: .settlementGroup,
+            ownerMap: ownerMaps[.settlementGroup],
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+        .filter { $0.kind == .sharedExpense }
+        let settlementParticipantsByGroupID = (includesMutationIndexes || !archivedSettlementGroups.isEmpty)
+            ? makeSettlementParticipantsByGroupID()
+            : [:]
+        let transactionsBySettlementGroupID = includesMutationIndexes
+            ? makeTransactionsBySettlementGroupID()
+            : [:]
+        let categoryDeleteBlockersByID = includesMutationIndexes
+            ? makeCategoryDeleteBlockersByID()
+            : [:]
+
+        return ManagementArchivedItemsSnapshot(
+            activeTransactions: activeTransactions,
+            archivedTransactions: archivedTransactions,
+            archivedWallets: archivedWallets,
+            archivedCategories: archivedCategories,
+            archivedSettlementGroups: archivedSettlementGroups,
+            eventSubtitleByGroupID: makeArchivedEventSubtitles(
+                for: archivedSettlementGroups,
+                settlementParticipantsByGroupID: settlementParticipantsByGroupID
+            ),
+            settlementParticipantsByGroupID: settlementParticipantsByGroupID,
+            transactionsBySettlementGroupID: transactionsBySettlementGroupID,
+            categoryDeleteBlockersByID: categoryDeleteBlockersByID,
+            ownerMaps: ownerMaps,
+            buildsLookupIndexes: includesMutationIndexes
+        )
+    }
+
+    private func makeSettlementParticipantsByGroupID() -> [UUID: [SettlementParticipant]] {
+        var participantsByGroupID: [UUID: [SettlementParticipant]] = [:]
+        for participant in allSettlementParticipants where participant.deletedAt == nil {
+            participantsByGroupID[participant.groupID, default: []].append(participant)
+        }
+        return participantsByGroupID
+    }
+
+    private func makeTransactionsBySettlementGroupID() -> [UUID: [LedgerTransaction]] {
+        var transactionsByGroupID: [UUID: [LedgerTransaction]] = [:]
+        for transaction in allTransactions where transaction.deletedAt == nil {
+            guard let groupID = transaction.settlementGroupID else { continue }
+            transactionsByGroupID[groupID, default: []].append(transaction)
+        }
+        return transactionsByGroupID
+    }
+
+    private func makeArchivedEventSubtitles(
+        for groups: [SettlementGroup],
+        settlementParticipantsByGroupID: [UUID: [SettlementParticipant]]
+    ) -> [UUID: String] {
+        guard !groups.isEmpty else { return [:] }
+
+        let groupIDs = Set(groups.map(\.id))
+        var eventBillCountByGroupID: [UUID: Int] = [:]
+        for transaction in allTransactions {
+            guard let groupID = transaction.settlementGroupID,
+                  groupIDs.contains(groupID),
+                  SettlementLogic.isSharedExpenseEventBill(transaction) else {
+                continue
+            }
+            eventBillCountByGroupID[groupID, default: 0] += 1
+        }
+
+        var subtitles: [UUID: String] = [:]
+        subtitles.reserveCapacity(groups.count)
+        for group in groups {
+            let participantNames = (settlementParticipantsByGroupID[group.id] ?? [])
+                .filter { !$0.isSelf }
+                .sorted {
+                    if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                    return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+                }
+                .map(\.displayName)
+                .prefix(3)
+                .joined(separator: ", ")
+            subtitles[group.id] = archivedEventSubtitle(
+                participantNames: participantNames,
+                billCount: eventBillCountByGroupID[group.id] ?? 0
+            )
+        }
+        return subtitles
+    }
+
+    private func makeCategoryDeleteBlockersByID() -> [UUID: CategoryDeleteBlockers] {
+        let currentMonth = PlanningLogic.startOfMonth(for: .now)
+        var countsByCategoryID: [UUID: CategoryDeleteBlockerCounts] = [:]
+
+        for transaction in allTransactions where transaction.deletedAt == nil {
+            guard let categoryID = transaction.category?.id else { continue }
+            countsByCategoryID[categoryID, default: CategoryDeleteBlockerCounts()].transactionCount += 1
+        }
+
+        for bill in allBills where bill.deletedAt == nil {
+            guard let categoryID = bill.category?.id else { continue }
+            countsByCategoryID[categoryID, default: CategoryDeleteBlockerCounts()].billCount += 1
+        }
+
+        for budget in allBudgets where budget.deletedAt == nil && !budget.isArchived {
+            guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == currentMonth,
+                  let categoryID = budget.category?.id else {
+                continue
+            }
+            countsByCategoryID[categoryID, default: CategoryDeleteBlockerCounts()].currentBudgetCount += 1
+        }
+
+        for category in allCategories where category.deletedAt == nil {
+            guard let parentCategoryID = category.parentCategory?.id else { continue }
+            countsByCategoryID[parentCategoryID, default: CategoryDeleteBlockerCounts()].childCategoryCount += 1
+        }
+
+        return countsByCategoryID.mapValues(\.snapshot)
+    }
+
     @ViewBuilder
-    private var archivedContent: some View {
-        if !hasArchivedItems {
+    private func archivedContent(_ snapshot: ManagementArchivedItemsSnapshot) -> some View {
+        if !snapshot.hasArchivedItems {
             VStack(spacing: 16) {
                 Spacer()
                     .frame(height: 80)
@@ -252,12 +477,37 @@ struct ManagementArchivedItemsView: View {
                 .padding(.horizontal, 32)
             }
         } else {
-            if !ownArchivedTransactions.isEmpty {
+            if !snapshot.archivedSettlementGroups.isEmpty {
+                ManagementSection(
+                    title: L10n.management.managementarchiveditems.events,
+                    titleColor: sectionLabelColor
+                ) {
+                    ForEach(snapshot.archivedSettlementGroups) { group in
+                        ArchivedDetailRow(
+                            title: group.title,
+                            subtitle: snapshot.eventSubtitleByGroupID[group.id] ?? archivedEventSubtitle(
+                                participantNames: "",
+                                billCount: 0
+                            ),
+                            icon: "mistia.settlement.event",
+                            iconTint: MistiaAccent.teal.color,
+                            archivedAt: group.archivedAt,
+                            isSelecting: isSelecting,
+                            isSelected: selectedItems.contains(.settlementGroup(group.id)),
+                            onToggleSelection: { toggleSelection(.settlementGroup(group.id)) },
+                            onRestore: { restoreSelections([.settlementGroup(group.id)]) },
+                            onDelete: { deleteSelections([.settlementGroup(group.id)]) }
+                        )
+                    }
+                }
+            }
+
+            if !snapshot.archivedTransactions.isEmpty {
                 ManagementSection(
                     title: L10n.management.managementarchiveditems.transactions,
                     titleColor: sectionLabelColor
                 ) {
-                    ForEach(ownArchivedTransactions) { transaction in
+                    ForEach(snapshot.archivedTransactions) { transaction in
                         ArchivedTransactionRow(
                             descriptor: descriptor(for: transaction),
                             archivedAt: transaction.archivedAt,
@@ -271,12 +521,12 @@ struct ManagementArchivedItemsView: View {
                 }
             }
 
-            if !ownArchivedWallets.isEmpty {
+            if !snapshot.archivedWallets.isEmpty {
                 ManagementSection(
                     title: L10n.management.managementarchiveditems.wallets,
                     titleColor: sectionLabelColor
                 ) {
-                    ForEach(ownArchivedWallets) { wallet in
+                    ForEach(snapshot.archivedWallets) { wallet in
                         ArchivedDetailRow(
                             title: wallet.name,
                             subtitle: "\(wallet.kind.title) • \(wallet.currencyCode)",
@@ -293,12 +543,12 @@ struct ManagementArchivedItemsView: View {
                 }
             }
 
-            if !ownArchivedCategories.isEmpty {
+            if !snapshot.archivedCategories.isEmpty {
                 ManagementSection(
                     title: L10n.management.managementarchiveditems.categories,
                     titleColor: sectionLabelColor
                 ) {
-                    ForEach(ownArchivedCategories) { category in
+                    ForEach(snapshot.archivedCategories) { category in
                         ArchivedDetailRow(
                             title: category.name,
                             subtitle: categorySubtitle(for: category),
@@ -318,7 +568,7 @@ struct ManagementArchivedItemsView: View {
     }
 
     @ViewBuilder
-    private var trailingToolbarAccessory: some View {
+    private func trailingToolbarAccessory(hasArchivedItems: Bool) -> some View {
         if isSelecting {
             MistiaHeaderCircleButton(action: exitSelectionMode) {
                 Image(systemName: "xmark")
@@ -344,6 +594,13 @@ struct ManagementArchivedItemsView: View {
         }
 
         return category.kind.title
+    }
+
+    private func archivedEventSubtitle(participantNames: String, billCount: Int) -> String {
+        let participantText = participantNames.isEmpty
+            ? L10n.transactions.settlement.noParticipantsYet
+            : participantNames
+        return "\(participantText) • \(L10n.transactions.settlement.billCountValue(String(billCount)))"
     }
 
     private func descriptor(for transaction: LedgerTransaction) -> ArchivedTransactionDescriptor {
@@ -546,31 +803,54 @@ struct ManagementArchivedItemsView: View {
     ) -> Bool {
         let now = Date.now
         var mutations: [ArchivedSyncMutation] = []
+        let snapshot = makeArchivedSnapshot(includesMutationIndexes: true)
 
         do {
             for selection in selections {
                 switch selection {
                 case .transaction(let id):
-                    guard let transaction = ownArchivedTransactions.first(where: { $0.id == id }) else { continue }
+                    guard let transaction = snapshot.archivedTransaction(id: id) else { continue }
                     try prepareTransactionMutation(
                         transaction,
                         action: action,
                         at: now,
+                        snapshot: snapshot,
                         mutations: &mutations
                     )
                 case .wallet(let id):
-                    guard let wallet = ownArchivedWallets.first(where: { $0.id == id }) else { continue }
-                    prepareWalletMutation(wallet, action: action, at: now, mutations: &mutations)
+                    guard let wallet = snapshot.archivedWallet(id: id) else { continue }
+                    prepareWalletMutation(
+                        wallet,
+                        action: action,
+                        at: now,
+                        snapshot: snapshot,
+                        mutations: &mutations
+                    )
                 case .category(let id):
-                    guard let category = ownArchivedCategories.first(where: { $0.id == id }) else { continue }
-                    try prepareCategoryMutation(category, action: action, at: now, mutations: &mutations)
+                    guard let category = snapshot.archivedCategory(id: id) else { continue }
+                    try prepareCategoryMutation(
+                        category,
+                        action: action,
+                        at: now,
+                        snapshot: snapshot,
+                        mutations: &mutations
+                    )
+                case .settlementGroup(let id):
+                    guard let group = snapshot.archivedSettlementGroup(id: id) else { continue }
+                    try prepareSettlementGroupMutation(
+                        group,
+                        action: action,
+                        at: now,
+                        snapshot: snapshot,
+                        mutations: &mutations
+                    )
                 }
             }
 
             try modelContext.save()
 
             for mutation in mutations {
-                switch action {
+                switch mutation.action {
                 case .restore:
                     sessionStore.recordUpsert(
                         entity: mutation.entity,
@@ -599,11 +879,12 @@ struct ManagementArchivedItemsView: View {
         _ transaction: LedgerTransaction,
         action: ArchivedMutationAction,
         at date: Date,
+        snapshot: ManagementArchivedItemsSnapshot,
         mutations: inout [ArchivedSyncMutation]
     ) throws {
         if action == .restore && isCreditCardPayment(transaction) {
             let calendar = MistiaCalendar.current
-            let isDuplicate = ownActiveTransactions.contains { tx in
+            let isDuplicate = snapshot.activeTransactions.contains { tx in
                 tx.id != transaction.id &&
                 tx.destinationWallet?.id == transaction.destinationWallet?.id &&
                 calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
@@ -641,7 +922,8 @@ struct ManagementArchivedItemsView: View {
                 entity: .transaction,
                 id: transaction.id,
                 updatedAt: transaction.updatedAt,
-                subjectUserIDOverride: transactionOwnerUserID(for: transaction)
+                subjectUserIDOverride: transactionOwnerUserID(for: transaction, ownerMaps: snapshot.ownerMaps),
+                action: action
             )
         )
     }
@@ -650,6 +932,7 @@ struct ManagementArchivedItemsView: View {
         _ wallet: LedgerWallet,
         action: ArchivedMutationAction,
         at date: Date,
+        snapshot: ManagementArchivedItemsSnapshot,
         mutations: inout [ArchivedSyncMutation]
     ) {
         switch action {
@@ -666,7 +949,8 @@ struct ManagementArchivedItemsView: View {
                 entity: .wallet,
                 id: wallet.id,
                 updatedAt: wallet.updatedAt,
-                subjectUserIDOverride: walletOwnerUserID(for: wallet)
+                subjectUserIDOverride: walletOwnerUserID(for: wallet, ownerMaps: snapshot.ownerMaps),
+                action: action
             )
         )
     }
@@ -675,10 +959,11 @@ struct ManagementArchivedItemsView: View {
         _ category: TransactionCategory,
         action: ArchivedMutationAction,
         at date: Date,
+        snapshot: ManagementArchivedItemsSnapshot,
         mutations: inout [ArchivedSyncMutation]
     ) throws {
         if action == .delete {
-            let blockers = categoryDeleteBlockers(for: category)
+            let blockers = categoryDeleteBlockers(for: category, snapshot: snapshot)
             guard blockers.isEmpty else {
                 alertMessage = L10n.management.managementarchiveditems.categoryDeleteBlockedWithCounts(
                     String(describing: blockers.transactionCount),
@@ -704,34 +989,135 @@ struct ManagementArchivedItemsView: View {
                 entity: .category,
                 id: category.id,
                 updatedAt: category.updatedAt,
-                subjectUserIDOverride: categoryOwnerUserID(for: category)
+                subjectUserIDOverride: categoryOwnerUserID(for: category, ownerMaps: snapshot.ownerMaps),
+                action: action
             )
         )
     }
 
-    private func categoryDeleteBlockers(for category: TransactionCategory) -> CategoryDeleteBlockers {
-        let currentMonth = PlanningLogic.startOfMonth(for: .now)
-        let transactionCount = allTransactions.filter {
-            $0.deletedAt == nil && $0.category?.id == category.id
-        }.count
-        let billCount = allBills.filter {
-            $0.deletedAt == nil && $0.category?.id == category.id
-        }.count
-        let currentBudgetCount = allBudgets.filter {
-            $0.deletedAt == nil
-                && !$0.isArchived
-                && PlanningLogic.startOfMonth(for: $0.monthAnchor) == currentMonth
-                && $0.category?.id == category.id
-        }.count
-        let childCategoryCount = allCategories.filter {
-            $0.deletedAt == nil && $0.parentCategory?.id == category.id
-        }.count
+    private func prepareSettlementGroupMutation(
+        _ group: SettlementGroup,
+        action: ArchivedMutationAction,
+        at date: Date,
+        snapshot: ManagementArchivedItemsSnapshot,
+        mutations: inout [ArchivedSyncMutation]
+    ) throws {
+        let ownerUserID = settlementGroupOwnerUserID(for: group, ownerMaps: snapshot.ownerMaps)
 
-        return CategoryDeleteBlockers(
-            transactionCount: transactionCount,
-            billCount: billCount,
-            currentBudgetCount: currentBudgetCount,
-            childCategoryCount: childCategoryCount
+        switch action {
+        case .restore:
+            group.isArchived = false
+            group.archivedAt = nil
+            group.updatedAt = date
+            mutations.append(
+                ArchivedSyncMutation(
+                    entity: .settlementGroup,
+                    id: group.id,
+                    updatedAt: group.updatedAt,
+                    subjectUserIDOverride: ownerUserID,
+                    action: .restore
+                )
+            )
+        case .delete:
+            let participants = snapshot.settlementParticipantsByGroupID[group.id] ?? []
+            let groupTransactions = snapshot.transactionsBySettlementGroupID[group.id] ?? []
+            let actorUserID = sessionStore.activeLocalProfileUserID
+
+            group.markDeleted(at: date)
+            mutations.append(
+                ArchivedSyncMutation(
+                    entity: .settlementGroup,
+                    id: group.id,
+                    updatedAt: group.updatedAt,
+                    subjectUserIDOverride: ownerUserID,
+                    action: .delete
+                )
+            )
+
+            for participant in participants {
+                participant.markDeleted(at: date)
+                mutations.append(
+                    ArchivedSyncMutation(
+                        entity: .settlementParticipant,
+                        id: participant.id,
+                        updatedAt: participant.updatedAt,
+                        subjectUserIDOverride: settlementParticipantOwnerUserID(
+                            for: participant,
+                            fallback: ownerUserID,
+                            ownerMaps: snapshot.ownerMaps
+                        ),
+                        action: .delete
+                    )
+                )
+            }
+
+            for transaction in groupTransactions {
+                if transaction.settlementRole == .sharedExpensePaid {
+                    transaction.settlementGroupID = nil
+                    transaction.settlementObligationID = nil
+                    transaction.settlementRoleRawValue = nil
+                    transaction.reportingExpenseMinor = nil
+                    transaction.reportingIncomeMinor = nil
+                    transaction.updatedAt = date
+                    if let actorUserID {
+                        try TransactionAuditStore.touch(
+                            transactionID: transaction.id,
+                            actorUserID: actorUserID,
+                            fallbackCreatedByUserID: actorUserID,
+                            updatedAt: date,
+                            context: modelContext
+                        )
+                    }
+                    mutations.append(
+                        ArchivedSyncMutation(
+                            entity: .transaction,
+                            id: transaction.id,
+                            updatedAt: transaction.updatedAt,
+                            subjectUserIDOverride: transactionOwnerUserID(
+                                for: transaction,
+                                ownerMaps: snapshot.ownerMaps
+                            ),
+                            action: .restore
+                        )
+                    )
+                } else if TransactionLogic.isEventGeneratedSharedExpenseDebt(transaction.snapshot) {
+                    transaction.markDeleted(at: date)
+                    transaction.isArchived = true
+                    if let actorUserID {
+                        try TransactionAuditStore.touch(
+                            transactionID: transaction.id,
+                            actorUserID: actorUserID,
+                            fallbackCreatedByUserID: actorUserID,
+                            updatedAt: date,
+                            context: modelContext
+                        )
+                    }
+                    mutations.append(
+                        ArchivedSyncMutation(
+                            entity: .transaction,
+                            id: transaction.id,
+                            updatedAt: transaction.updatedAt,
+                            subjectUserIDOverride: transactionOwnerUserID(
+                                for: transaction,
+                                ownerMaps: snapshot.ownerMaps
+                            ),
+                            action: .delete
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private func categoryDeleteBlockers(
+        for category: TransactionCategory,
+        snapshot: ManagementArchivedItemsSnapshot
+    ) -> CategoryDeleteBlockers {
+        snapshot.categoryDeleteBlockersByID[category.id] ?? CategoryDeleteBlockers(
+            transactionCount: 0,
+            billCount: 0,
+            currentBudgetCount: 0,
+            childCategoryCount: 0
         )
     }
 
@@ -739,19 +1125,43 @@ struct ManagementArchivedItemsView: View {
         TransactionLogic.isCreditCardPayment(transaction.snapshot)
     }
 
-    private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
-        transactionOwnerMap[transaction.id]
-            ?? transaction.sourceWallet.flatMap(walletOwnerUserID(for:))
-            ?? transaction.destinationWallet.flatMap(walletOwnerUserID(for:))
+    private func transactionOwnerUserID(
+        for transaction: LedgerTransaction,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) -> UUID? {
+        ownerMaps[.transaction][transaction.id]
+            ?? transaction.sourceWallet.flatMap { walletOwnerUserID(for: $0, ownerMaps: ownerMaps) }
+            ?? transaction.destinationWallet.flatMap { walletOwnerUserID(for: $0, ownerMaps: ownerMaps) }
             ?? selfUserID
     }
 
-    private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
-        walletOwnerMap[wallet.id] ?? selfUserID
+    private func walletOwnerUserID(
+        for wallet: LedgerWallet,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) -> UUID? {
+        ownerMaps[.wallet][wallet.id] ?? selfUserID
     }
 
-    private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
-        categoryOwnerMap[category.id] ?? selfUserID
+    private func categoryOwnerUserID(
+        for category: TransactionCategory,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) -> UUID? {
+        ownerMaps[.category][category.id] ?? selfUserID
+    }
+
+    private func settlementGroupOwnerUserID(
+        for group: SettlementGroup,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) -> UUID? {
+        ownerMaps[.settlementGroup][group.id] ?? group.organizerUserID ?? selfUserID
+    }
+
+    private func settlementParticipantOwnerUserID(
+        for participant: SettlementParticipant,
+        fallback: UUID?,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) -> UUID? {
+        ownerMaps[.settlementParticipant][participant.id] ?? fallback ?? selfUserID
     }
 }
 

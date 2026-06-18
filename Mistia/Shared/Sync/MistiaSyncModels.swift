@@ -455,6 +455,48 @@ nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
         syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
         lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(id, forKey: .id)
+        try container.encode(primaryKindRawValue, forKey: .primaryKindRawValue)
+        try container.encode(transferSubtypeRawValue, forKey: .transferSubtypeRawValue)
+        try container.encode(debtIntentRawValue, forKey: .debtIntentRawValue)
+        try container.encode(entryStatusRawValue, forKey: .entryStatusRawValue)
+        try container.encode(title, forKey: .title)
+        try container.encode(note, forKey: .note)
+        try container.encode(amountMinor, forKey: .amountMinor)
+        try container.encode(sourceCurrencyCode, forKey: .sourceCurrencyCode)
+        try container.encode(destinationCurrencyCode, forKey: .destinationCurrencyCode)
+        try container.encode(destinationAmountMinor, forKey: .destinationAmountMinor)
+        try container.encode(reportingCurrencyCode, forKey: .reportingCurrencyCode)
+        try container.encode(reportingAmountMinor, forKey: .reportingAmountMinor)
+        try container.encode(conversionModeRawValue, forKey: .conversionModeRawValue)
+        try container.encode(exchangeRateDecimalString, forKey: .exchangeRateDecimalString)
+        try container.encode(exchangeRateProvider, forKey: .exchangeRateProvider)
+        try container.encode(exchangeRateDate, forKey: .exchangeRateDate)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(createdByUserID, forKey: .createdByUserID)
+        try container.encode(lastModifiedByUserID, forKey: .lastModifiedByUserID)
+        try container.encode(counterpartyName, forKey: .counterpartyName)
+        try container.encode(normalizedCounterpartyKey, forKey: .normalizedCounterpartyKey)
+        try container.encode(settlementGroupID, forKey: .settlementGroupID)
+        try container.encode(settlementObligationID, forKey: .settlementObligationID)
+        try container.encode(settlementRoleRawValue, forKey: .settlementRoleRawValue)
+        try container.encode(reportingExpenseMinor, forKey: .reportingExpenseMinor)
+        try container.encode(reportingIncomeMinor, forKey: .reportingIncomeMinor)
+        try container.encode(sourceWalletID, forKey: .sourceWalletID)
+        try container.encode(destinationWalletID, forKey: .destinationWalletID)
+        try container.encode(categoryID, forKey: .categoryID)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(isArchived, forKey: .isArchived)
+        try container.encode(archivedAt, forKey: .archivedAt)
+        try container.encode(syncVersion, forKey: .syncVersion)
+        try container.encode(lastModifiedByDeviceID, forKey: .lastModifiedByDeviceID)
+    }
 }
 
 nonisolated struct RemoteSettlementGroup: MistiaRemoteRow {
@@ -1397,6 +1439,8 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
                 "\(row.settledMinor)",
                 row.organizerUserID?.uuidString.lowercased() ?? "",
                 row.note ?? "",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
                 Self.dateString(row.deletedAt)
             ].joined(separator: "|")
         case .settlementParticipant(let row):

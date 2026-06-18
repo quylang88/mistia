@@ -58,7 +58,11 @@ struct MistiaCurrencyInputField: View {
             .frame(maxWidth: .infinity, alignment: multilineTextAlignment.frameAlignment)
 
             if showsCalculatorButton {
-                Button {
+                MistiaSmallIconButton(
+                    systemImage: "plus.forwardslash.minus",
+                    accessibilityLabel: L10n.shared.amountCalculator.openCalculator,
+                    isEnabled: isEnabled
+                ) {
                     UIApplication.shared.sendAction(
                         #selector(UIResponder.resignFirstResponder),
                         to: nil,
@@ -66,20 +70,7 @@ struct MistiaCurrencyInputField: View {
                         for: nil
                     )
                     isCalculatorPresented = true
-                } label: {
-                    Image(systemName: "plus.forwardslash.minus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                        .frame(width: 30, height: 30)
-                        .background {
-                            Circle()
-                                .fill(Color(UIColor.tertiarySystemFill))
-                        }
                 }
-                .buttonStyle(.plain)
-                .disabled(!isEnabled)
-                .opacity(isEnabled ? 1 : 0.4)
-                .accessibilityLabel(L10n.shared.amountCalculator.openCalculator)
             }
         }
         .sheet(isPresented: $isCalculatorPresented) {

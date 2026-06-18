@@ -139,7 +139,7 @@ final class MistiaLocalizationTests: XCTestCase {
                 language: .vietnamese,
                 calendar: gregorianCalendar
             ),
-            "12:00 ngày 2 tháng 4, năm 2026"
+            "12:00 ngày 2 tháng 4, 2026"
         )
         XCTAssertEqual(
             MistiaDateFormatting.dateTimeString(

@@ -189,7 +189,7 @@ struct MistiaAccountDevice: Codable, Equatable, Identifiable {
         return localizedModel.isEmpty ? "iPhone" : localizedModel
     }
 
-    private static func currentModelIdentifier() -> String {
+    private nonisolated static func currentModelIdentifier() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
         let mirror = Mirror(reflecting: systemInfo.machine)

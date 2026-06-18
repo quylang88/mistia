@@ -20,6 +20,7 @@ enum MistiaAccent: String, Codable {
     case debtRepay // Màu trả nợ
     case lightPurple // Màu tím nhạt cho text thêm hoặc dark mode highlight
     case checkmarkPurple // Màu tím nhạt cho checkmark/button
+    case tabActive // Màu active tab sáng dùng cho nút thêm mới
 
     var color: Color {
         switch self {
@@ -67,6 +68,9 @@ enum MistiaAccent: String, Codable {
         case .checkmarkPurple:
             // Màu tím nhạt cho checkmark/button
             Color(red: 0.88, green: 0.78, blue: 1.0)
+        case .tabActive:
+            // Màu active tab ở dark mode
+            Color(red: 0.90, green: 0.74, blue: 1.00)
         }
     }
 }

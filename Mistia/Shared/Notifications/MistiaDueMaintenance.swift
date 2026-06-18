@@ -65,26 +65,64 @@ struct MistiaDueMaintenanceSnapshot {
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
+        let storedSettlementGroups = (try? modelContext.fetch(
+            FetchDescriptor<SettlementGroup>(
+                predicate: #Predicate { $0.deletedAt == nil }
+            )
+        )) ?? []
         let ownershipScopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
 
         let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
             from: ownershipScopes,
-            entities: [.wallet, .transaction, .dueOccurrenceRecord, .recurringBillPlan, .budgetPlan]
+            entities: [.wallet, .transaction, .dueOccurrenceRecord, .recurringBillPlan, .budgetPlan, .settlementGroup]
         )
         let walletOwnerMap = ownerMaps[.wallet]
         let transactionOwnerMap = ownerMaps[.transaction]
         let occurrenceOwnerMap = ownerMaps[.dueOccurrenceRecord]
         let billOwnerMap = ownerMaps[.recurringBillPlan]
         let budgetOwnerMap = ownerMaps[.budgetPlan]
+        let settlementGroupOwnerMap = ownerMaps[.settlementGroup]
+        let scopeSnapshot = familyContextStore.map {
+            FamilyScopedData.ScopeSnapshot(
+                scopes: ownershipScopes,
+                familyContextStore: $0,
+                sessionStore: sessionStore
+            )
+        }
 
         let activeWallets = storedWallets.filter {
             (walletOwnerMap[$0.id] ?? activeUserID) == activeUserID
         }
-        let activeTransactions = storedTransactions.filter { transaction in
+        let activeSettlementGroups: [SettlementGroup]
+        if let scopeSnapshot {
+            activeSettlementGroups = FamilyScopedData.visible(
+                storedSettlementGroups,
+                entity: .settlementGroup,
+                scopeSnapshot: scopeSnapshot
+            )
+        } else {
+            activeSettlementGroups = storedSettlementGroups.filter {
+                (settlementGroupOwnerMap[$0.id] ?? $0.organizerUserID ?? activeUserID) == activeUserID
+            }
+        }
+        let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(
+            from: activeSettlementGroups.map(\.recordSnapshot)
+        )
+        let scopedActiveTransactions = storedTransactions.filter { transaction in
             let walletOwnerUserID = transaction.sourceWallet.flatMap { walletOwnerMap[$0.id] }
                 ?? transaction.destinationWallet.flatMap { walletOwnerMap[$0.id] }
             let ownerUserID = transactionOwnerMap[transaction.id] ?? walletOwnerUserID ?? activeUserID
             return ownerUserID == activeUserID
+        }
+        let activeTransactionIDs = Set(
+            SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+                scopedActiveTransactions.map(\.planningRecordSnapshot),
+                archivedEventIDs: archivedEventIDs
+            )
+            .map(\.id)
+        )
+        let activeTransactions = scopedActiveTransactions.filter {
+            activeTransactionIDs.contains($0.id)
         }
         let activeOccurrences = storedOccurrences.filter { occurrence in
             let sourceOwnerUserID: UUID?
@@ -109,17 +147,20 @@ struct MistiaDueMaintenanceSnapshot {
         let familyBudgetSpendingAvailable = familyContextStore?.family != nil
             && (familyContextStore?.members.count ?? 0) >= 2
         let familyBudgetTransactions: [FamilyAggregateTransactionSnapshot]
-        if let familyContextStore, familyBudgetSpendingAvailable {
-            let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
-                scopes: ownershipScopes,
-                familyContextStore: familyContextStore,
-                sessionStore: sessionStore
+        if let familyContextStore, let scopeSnapshot, familyBudgetSpendingAvailable {
+            let familyMemberUserIDs = Set(familyContextStore.members.map(\.userID))
+            let familyArchivedEventIDs = FamilyScopedData.archivedSharedExpenseEventIDsForCurrentFamily(
+                from: storedSettlementGroups,
+                scopeSnapshot: scopeSnapshot,
+                familyMemberUserIDs: familyMemberUserIDs,
+                signedInUserID: activeUserID
             )
             familyBudgetTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
                 from: storedTransactions,
                 scopeSnapshot: scopeSnapshot,
-                familyMemberUserIDs: Set(familyContextStore.members.map(\.userID)),
-                signedInUserID: activeUserID
+                familyMemberUserIDs: familyMemberUserIDs,
+                signedInUserID: activeUserID,
+                archivedEventIDs: familyArchivedEventIDs
             )
         } else {
             familyBudgetTransactions = []
