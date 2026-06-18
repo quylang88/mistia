@@ -68,7 +68,8 @@ actor MistiaSyncPersistenceWorker {
 
     func applySnapshot(
         _ snapshot: MistiaRemoteSnapshot,
-        protectedRecordIDs: Set<String>
+        protectedRecordIDs: Set<String>,
+        preserveLocalNewerRows: Bool = false
     ) throws {
         let signpostID = MistiaPerformanceSignpost.begin("Snapshot Apply")
         defer { MistiaPerformanceSignpost.end("Snapshot Apply", id: signpostID) }
@@ -76,6 +77,7 @@ actor MistiaSyncPersistenceWorker {
             snapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: protectedRecordIDs,
+            preserveLocalNewerRows: preserveLocalNewerRows,
             in: modelContainer
         )
     }
@@ -1492,9 +1494,14 @@ final class SyncCoordinator {
             return fingerprint
         }
 
+        // preserveLocalNewerRows: true guards against a stale snapshot overwriting
+        // a record that was just successfully pushed (e.g. unarchiving an event).
+        // The pushed record already has applyRemoteRecord applied with the server's
+        // newer updatedAt, so any snapshot row with an older timestamp is skipped.
         try await persistenceWorker.applySnapshot(
             snapshot,
-            protectedRecordIDs: queuedMutationIDs()
+            protectedRecordIDs: queuedMutationIDs(),
+            preserveLocalNewerRows: true
         )
         lastSnapshotFingerprint = fingerprint
         return fingerprint
