@@ -1,15 +1,6 @@
 {
   "sourceLanguage" : "vi",
   "strings" : {
-    "" : {
-
-    },
-    "-" : {
-
-    },
-    "+" : {
-
-    },
     "app.mistia.loadingYourData" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -745,9 +736,6 @@
           }
         }
       }
-    },
-    "Chi tiêu" : {
-
     },
     "common.appName" : {
       "extractionState" : "stale",
@@ -2220,9 +2208,6 @@
           }
         }
       }
-    },
-    "Date" : {
-
     },
     "family.family.acceptedMember" : {
       "extractionState" : "stale",
@@ -6110,9 +6095,6 @@
           }
         }
       }
-    },
-    "Giá trị" : {
-
     },
     "management.balanceEditor.actualBalanceTitle" : {
       "extractionState" : "stale",
@@ -14945,9 +14927,6 @@
           }
         }
       }
-    },
-    "Ngày" : {
-
     },
     "notifications.creditCard.autoPaymentFailedBody" : {
       "extractionState" : "stale",
@@ -41237,9 +41216,6 @@
           }
         }
       }
-    },
-    "Value" : {
-
     }
   },
   "version" : "1.0"

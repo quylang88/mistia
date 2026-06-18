@@ -805,16 +805,6 @@ struct SettlementEditorSheet: View {
                     .accessibilityLabel(L10n.common.delete)
                 }
                 .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
-
-                SharedExpenseBillCategoryPickerRow(
-                    selectedCategoryID: bill.category?.id,
-                    selectedCategoryLabel: categoryLabel(for: bill.category?.id),
-                    categories: expenseCategories,
-                    categoryLabel: categoryLabel(for:)
-                ) { categoryID in
-                    updateLinkedBillCategory(bill, categoryID: categoryID)
-                }
-                .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 8, trailing: 14))
             }
 
             ForEach($billRows) { $row in
@@ -829,12 +819,7 @@ struct SettlementEditorSheet: View {
                         exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
                         familyContextStore: familyContextStore,
                         currencyCode: activeCurrencyCode,
-                        categories: expenseCategories,
-                        categoryLabel: categoryLabel(for:),
                         onTap: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
-                        onCategoryChange: { categoryID in
-                            updateDraftBillRowCategory(row.id, categoryID: categoryID)
-                        },
                         onRemove: { removeBillRow(row.id) }
                     )
                 }
@@ -1015,36 +1000,6 @@ struct SettlementEditorSheet: View {
         billRows[index].mode = .existingExpense
         billRows[index].existingTransactionID = transaction.id
         billRows[index].stagedTransaction = nil
-    }
-
-    private func updateLinkedBillCategory(_ bill: LedgerTransaction, categoryID: UUID?) {
-        let category = categoryID.flatMap { selectedID in
-            expenseCategories.first { $0.id == selectedID }
-        }
-        guard bill.category?.id != category?.id else { return }
-        bill.category = category
-        persistLinkedBillUpdate(bill)
-    }
-
-    private func updateDraftBillRowCategory(_ rowID: UUID, categoryID: UUID?) {
-        guard let index = billRows.firstIndex(where: { $0.id == rowID }) else {
-            return
-        }
-        let category = categoryID.flatMap { selectedID in
-            expenseCategories.first { $0.id == selectedID }
-        }
-
-        switch billRows[index].mode {
-        case .newExpense:
-            billRows[index].stagedTransaction?.category = category
-        case .existingExpense:
-            guard let existingTransactionID = billRows[index].existingTransactionID,
-                  let transaction = transactions.first(where: { $0.id == existingTransactionID }),
-                  transaction.category?.id != category?.id else {
-                return
-            }
-            transaction.category = category
-        }
     }
 
     private func sharedParticipantName(for id: UUID) -> String {
@@ -3369,48 +3324,32 @@ private struct SharedExpenseBillDraftRow: View {
     let exchangeRateIndex: MistiaExchangeRateIndex
     let familyContextStore: FamilyContextStore
     let currencyCode: String
-    let categories: [TransactionCategory]
-    let categoryLabel: (UUID?) -> String
     let onTap: () -> Void
-    let onCategoryChange: (UUID?) -> Void
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onTap) {
-                if let transaction = selectedTransaction {
-                    TransactionCashflowRow(
-                        record: transaction.snapshot,
-                        transaction: transaction,
-                        auditRecord: transactionAuditMap[transaction.id],
-                        walletOwnerMap: walletOwnerMap,
-                        transactionOwnerMap: transactionOwnerMap,
-                        familyContextStore: familyContextStore,
-                        hasFamilyOwnerConflict: false,
-                        showsSettlementEventBadge: false,
-                        primaryCurrencyCode: primaryCurrencyCode,
-                        exchangeRateIndex: exchangeRateIndex,
-                        subtitleLineLimit: 1,
-                        showsAuditSubtitle: false
-                    )
-                } else {
-                    placeholderContent
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
+        Button(action: onTap) {
             if let transaction = selectedTransaction {
-                SharedExpenseBillCategoryPickerRow(
-                    selectedCategoryID: transaction.category?.id,
-                    selectedCategoryLabel: categoryLabel(transaction.category?.id),
-                    categories: categories,
-                    categoryLabel: categoryLabel,
-                    onSelect: onCategoryChange
+                TransactionCashflowRow(
+                    record: transaction.snapshot,
+                    transaction: transaction,
+                    auditRecord: transactionAuditMap[transaction.id],
+                    walletOwnerMap: walletOwnerMap,
+                    transactionOwnerMap: transactionOwnerMap,
+                    familyContextStore: familyContextStore,
+                    hasFamilyOwnerConflict: false,
+                    showsSettlementEventBadge: false,
+                    primaryCurrencyCode: primaryCurrencyCode,
+                    exchangeRateIndex: exchangeRateIndex,
+                    subtitleLineLimit: 1,
+                    showsAuditSubtitle: false
                 )
+            } else {
+                placeholderContent
             }
         }
+        .buttonStyle(.plain)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive, action: onRemove) {
@@ -3471,52 +3410,6 @@ private struct SharedExpenseBillDraftRow: View {
                 .frame(minWidth: 96, alignment: .trailing)
                 .layoutPriority(2)
         }
-    }
-}
-
-private struct SharedExpenseBillCategoryPickerRow: View {
-    let selectedCategoryID: UUID?
-    let selectedCategoryLabel: String
-    let categories: [TransactionCategory]
-    let categoryLabel: (UUID?) -> String
-    let onSelect: (UUID?) -> Void
-
-    var body: some View {
-        Picker(selection: categorySelection) {
-            Text(L10n.transactions.transactioneditor.chooseCategory).tag(Optional<UUID>.none)
-            ForEach(categories) { category in
-                Text(categoryLabel(category.id)).tag(Optional(category.id))
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text(L10n.transactions.transactioneditor.category)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 8)
-
-                Text(selectedCategoryLabel)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(selectedCategoryID == nil ? .tertiary : .secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.top, 2)
-            .padding(.bottom, 10)
-            .contentShape(Rectangle())
-        }
-        .pickerStyle(.menu)
-    }
-
-    private var categorySelection: Binding<UUID?> {
-        Binding(
-            get: { selectedCategoryID },
-            set: onSelect
-        )
     }
 }
 
