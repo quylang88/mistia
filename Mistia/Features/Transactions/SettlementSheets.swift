@@ -24,6 +24,11 @@ struct PreparingSettlementEventSheetTarget: Identifiable, Hashable {
     var id: UUID { groupID }
 }
 
+private struct SharedExpenseTransactionSearchState {
+    let snapshot: TransactionsListSnapshot
+    let transactionsByID: [UUID: LedgerTransaction]
+}
+
 struct PreparingSettlementCompactChip: View {
     let event: PreparingSettlementEventSnapshot
     var showsIcon: Bool = true
@@ -240,12 +245,6 @@ struct SettlementEditorSheet: View {
                     return transaction.sourceWallet != nil && transaction.category != nil
                 }
                 return transaction.category != nil
-            }
-            .sorted {
-                if $0.occurredAt != $1.occurredAt {
-                    return $0.occurredAt > $1.occurredAt
-                }
-                return $0.updatedAt > $1.updatedAt
             }
     }
 
@@ -639,14 +638,7 @@ struct SettlementEditorSheet: View {
         }
         .sheet(item: $billSearchTarget, onDismiss: removeIncompleteBillRows) { target in
             SharedExpenseTransactionSearchSheet(
-                transactions: attachableExpenseTransactions.filter { transaction in
-                    !billRows.contains {
-                        $0.id != target.rowID && $0.existingTransactionID == transaction.id
-                    }
-                },
-                transactionsByID: Dictionary(
-                    uniqueKeysWithValues: attachableExpenseTransactions.map { ($0.id, $0) }
-                ),
+                transactions: existingExpenseSearchTransactions(excludingDraftRowID: target.rowID),
                 transactionAuditMap: transactionAuditMap,
                 walletOwnerMap: walletOwnerMap,
                 transactionOwnerMap: transactionOwnerMap,
@@ -811,7 +803,7 @@ struct SettlementEditorSheet: View {
                 if row.hasContent {
                     SharedExpenseBillDraftRow(
                         row: $row,
-                        existingTransactions: attachableExpenseTransactions,
+                        selectedTransaction: selectedDraftTransaction(for: row),
                         transactionAuditMap: transactionAuditMap,
                         walletOwnerMap: walletOwnerMap,
                         transactionOwnerMap: transactionOwnerMap,
@@ -1000,6 +992,31 @@ struct SettlementEditorSheet: View {
         billRows[index].mode = .existingExpense
         billRows[index].existingTransactionID = transaction.id
         billRows[index].stagedTransaction = nil
+    }
+
+    private func existingExpenseSearchTransactions(excludingDraftRowID rowID: UUID) -> [LedgerTransaction] {
+        let alreadySelectedTransactionIDs = Set(
+            billRows.compactMap { row -> UUID? in
+                guard row.id != rowID else { return nil }
+                return row.existingTransactionID
+            }
+        )
+        guard !alreadySelectedTransactionIDs.isEmpty else {
+            return attachableExpenseTransactions
+        }
+        return attachableExpenseTransactions.filter { !alreadySelectedTransactionIDs.contains($0.id) }
+    }
+
+    private func selectedDraftTransaction(for row: SharedExpenseBillDraft) -> LedgerTransaction? {
+        switch row.mode {
+        case .newExpense:
+            return row.stagedTransaction
+        case .existingExpense:
+            guard let existingTransactionID = row.existingTransactionID else {
+                return nil
+            }
+            return transactions.first { $0.id == existingTransactionID }
+        }
     }
 
     private func sharedParticipantName(for id: UUID) -> String {
@@ -1948,7 +1965,6 @@ private struct SharedExpenseTransactionSearchSheet: View {
     @State private var isSearchPresented = false
 
     let transactions: [LedgerTransaction]
-    let transactionsByID: [UUID: LedgerTransaction]
     let transactionAuditMap: [UUID: TransactionAuditRecord]
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
@@ -1956,10 +1972,14 @@ private struct SharedExpenseTransactionSearchSheet: View {
     let exchangeRateIndex: MistiaExchangeRateIndex
     let onSelect: (LedgerTransaction) -> Void
 
-    private var snapshot: TransactionsListSnapshot? {
+    private var searchState: SharedExpenseTransactionSearchState {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let records = filteredTransactions(searchText: trimmed).map(\.snapshot)
-        return TransactionsListSnapshot(
+        let displayedTransactions = filteredTransactions(searchText: trimmed)
+        let records = displayedTransactions.map(\.snapshot)
+        let displayedTransactionsByID = Dictionary(
+            uniqueKeysWithValues: displayedTransactions.map { ($0.id, $0) }
+        )
+        let snapshot = TransactionsListSnapshot(
             activeTransactionCount: transactions.count,
             visibleRecordCount: records.count,
             displayedRecordCount: records.count,
@@ -1973,20 +1993,26 @@ private struct SharedExpenseTransactionSearchSheet: View {
                 from: records,
                 assumesSortedByRecency: true
             ),
-            transactionsByID: transactionsByID,
+            transactionsByID: displayedTransactionsByID,
             transactionAuditMap: transactionAuditMap,
             walletOwnerMap: walletOwnerMap,
             transactionOwnerMap: transactionOwnerMap,
             archivedSettlementGroupIDs: []
         )
+        return SharedExpenseTransactionSearchState(
+            snapshot: snapshot,
+            transactionsByID: displayedTransactionsByID
+        )
     }
 
     var body: some View {
+        let state = searchState
+
         NavigationStack {
             TransactionsSearchScene(
                 searchText: searchText,
-                snapshot: snapshot,
-                transactionsByID: transactionsByID,
+                snapshot: state.snapshot,
+                transactionsByID: state.transactionsByID,
                 transactionAuditMap: transactionAuditMap,
                 walletOwnerMap: walletOwnerMap,
                 transactionOwnerMap: transactionOwnerMap,
@@ -3316,7 +3342,7 @@ private struct SettlementEventExpenseEmptyState: View {
 private struct SharedExpenseBillDraftRow: View {
     @Binding var row: SharedExpenseBillDraft
 
-    let existingTransactions: [LedgerTransaction]
+    let selectedTransaction: LedgerTransaction?
     let transactionAuditMap: [UUID: TransactionAuditRecord]
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
@@ -3358,23 +3384,6 @@ private struct SharedExpenseBillDraftRow: View {
             .accessibilityLabel(L10n.common.delete)
         }
         .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
-    }
-
-    private var selectedStagedTransaction: LedgerTransaction? {
-        row.stagedTransaction
-    }
-
-    private var selectedExistingTransaction: LedgerTransaction? {
-        existingTransactions.first(where: { $0.id == row.existingTransactionID })
-    }
-
-    private var selectedTransaction: LedgerTransaction? {
-        switch row.mode {
-        case .newExpense:
-            selectedStagedTransaction
-        case .existingExpense:
-            selectedExistingTransaction
-        }
     }
 
     private var placeholderContent: some View {
