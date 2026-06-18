@@ -1,6 +1,15 @@
 {
   "sourceLanguage" : "vi",
   "strings" : {
+    "" : {
+
+    },
+    "-" : {
+
+    },
+    "+" : {
+
+    },
     "app.mistia.loadingYourData" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -736,6 +745,9 @@
           }
         }
       }
+    },
+    "Chi tiêu" : {
+
     },
     "common.appName" : {
       "extractionState" : "stale",
@@ -2208,6 +2220,9 @@
           }
         }
       }
+    },
+    "Date" : {
+
     },
     "family.family.acceptedMember" : {
       "extractionState" : "stale",
@@ -6096,6 +6111,9 @@
         }
       }
     },
+    "Giá trị" : {
+
+    },
     "management.balanceEditor.actualBalanceTitle" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9523,29 +9541,6 @@
         }
       }
     },
-    "management.managementarchiveditems.events" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Events"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "イベント"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sự kiện"
-          }
-        }
-      }
-    },
     "management.managementarchiveditems.categoryDeleteBlockedWithCounts" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9657,6 +9652,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Đích"
+          }
+        }
+      }
+    },
+    "management.managementarchiveditems.events" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イベント"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sự kiện"
           }
         }
       }
@@ -14927,6 +14945,9 @@
           }
         }
       }
+    },
+    "Ngày" : {
+
     },
     "notifications.creditCard.autoPaymentFailedBody" : {
       "extractionState" : "stale",
@@ -36433,29 +36454,6 @@
         }
       }
     },
-    "transactions.settlement.participantName" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Name"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "名前"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tên"
-          }
-        }
-      }
-    },
     "transactions.settlement.participantCollectedValue" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36475,6 +36473,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Đã thu %@"
+          }
+        }
+      }
+    },
+    "transactions.settlement.participantName" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名前"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tên"
           }
         }
       }
@@ -36525,29 +36546,6 @@
         }
       }
     },
-    "transactions.settlement.participantSettled" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settled"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "精算済み"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Đã thanh toán xong"
-          }
-        }
-      }
-    },
     "transactions.settlement.participants" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -36567,6 +36565,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Người tham gia"
+          }
+        }
+      }
+    },
+    "transactions.settlement.participantSettled" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settled"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "精算済み"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã thanh toán xong"
           }
         }
       }
@@ -41216,6 +41237,9 @@
           }
         }
       }
+    },
+    "Value" : {
+
     }
   },
   "version" : "1.0"

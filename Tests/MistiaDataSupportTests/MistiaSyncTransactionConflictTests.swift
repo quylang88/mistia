@@ -102,6 +102,83 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         XCTAssertEqual(conflicts.first?.recordID, transactionID)
     }
 
+    func testOlderRemoteArchivedSettlementGroupDoesNotOverrideNewerLocalRestore() throws {
+        let userID = UUID()
+        let groupID = UUID()
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let remoteUpdatedAt = makeDate(year: 2026, month: 7, day: 10)
+        let localUpdatedAt = remoteUpdatedAt.addingTimeInterval(3_600)
+        let archivedAt = remoteUpdatedAt.addingTimeInterval(120)
+        let group = SettlementGroup(
+            id: groupID,
+            kind: .sharedExpense,
+            status: .preparing,
+            title: "Trip",
+            currencyCode: "JPY",
+            occurredAt: remoteUpdatedAt,
+            totalMinor: 12_000,
+            expectedMinor: 0,
+            settledMinor: 0,
+            organizerUserID: userID,
+            createdAt: remoteUpdatedAt,
+            updatedAt: localUpdatedAt,
+            remoteVersion: 1,
+            isArchived: false,
+            archivedAt: nil
+        )
+        context.insert(group)
+        try context.save()
+
+        let staleRemoteSnapshot = MistiaRemoteSnapshot(
+            wallets: [],
+            creditCardProfiles: [],
+            categories: [],
+            settlementGroups: [
+                RemoteSettlementGroup(
+                    userID: userID,
+                    id: groupID,
+                    kindRawValue: SettlementKind.sharedExpense.rawValue,
+                    statusRawValue: SettlementStatus.preparing.rawValue,
+                    title: "Trip",
+                    currencyCode: "JPY",
+                    occurredAt: remoteUpdatedAt,
+                    totalMinor: 12_000,
+                    expectedMinor: 0,
+                    settledMinor: 0,
+                    organizerUserID: userID,
+                    note: nil,
+                    createdAt: remoteUpdatedAt,
+                    updatedAt: remoteUpdatedAt,
+                    deletedAt: nil,
+                    isArchived: true,
+                    archivedAt: archivedAt,
+                    syncVersion: 2,
+                    lastModifiedByDeviceID: nil
+                )
+            ],
+            transactions: [],
+            budgetPlans: [],
+            savingsGoals: [],
+            recurringBillPlans: [],
+            installmentPlans: [],
+            dueOccurrences: []
+        )
+
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            staleRemoteSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            preserveLocalNewerRows: true,
+            in: container
+        )
+
+        let restoredGroup = try XCTUnwrap(try ModelContext(container).fetch(FetchDescriptor<SettlementGroup>()).first)
+        XCTAssertFalse(restoredGroup.isArchived)
+        XCTAssertNil(restoredGroup.archivedAt)
+        XCTAssertEqual(restoredGroup.updatedAt, localUpdatedAt)
+    }
+
     func testRecurringBillPauseFieldsRoundTripThroughSyncSnapshot() throws {
         let userID = UUID()
         let billID = UUID()

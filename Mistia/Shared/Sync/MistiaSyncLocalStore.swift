@@ -1603,17 +1603,13 @@ nonisolated enum MistiaSyncLocalStore {
             return false
         }
 
-        guard
-            preserveLocalNewerRows,
-            let record,
-            record.deletedAt != nil,
-            row.deletedAt == nil,
-            record.updatedAt > row.updatedAt
-        else {
-            return true
+        if preserveLocalNewerRows,
+           let record,
+           record.updatedAt > row.updatedAt {
+            return false
         }
 
-        return false
+        return true
     }
 
     private static func upsertWallet(
