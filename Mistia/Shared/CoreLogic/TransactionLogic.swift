@@ -207,6 +207,19 @@ struct TransactionFilterState: Equatable {
     var minAmountMinor: Int64?
     var maxAmountMinor: Int64?
     var searchText = ""
+
+    var hasActiveVisibleListFilter: Bool {
+        isAdjustmentOnly
+            || isEventOnly
+            || timeScope != .allTime
+            || walletID != nil
+            || categoryID != nil
+            || transferSubtype != nil
+            || counterpartyDebtKey != nil
+            || statusScope != .all
+            || minAmountMinor != nil
+            || maxAmountMinor != nil
+    }
 }
 
 struct TransactionSummarySnapshot: Equatable {

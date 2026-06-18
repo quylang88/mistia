@@ -400,9 +400,9 @@ struct TransactionsView: View {
         )
         let displayedRecords = page.displayedRecords
         let displayedRecordIDs = Set(displayedRecords.map(\.id))
-        let openDebtPositions = TransactionLogic.openDebtPositions(
-            from: debtRecords(from: records)
-        )
+        let openDebtPositions = selectedSegment == nil && !effectiveFilters.hasActiveVisibleListFilter
+            ? TransactionLogic.openDebtPositions(from: debtRecords(from: records))
+            : []
 
         return TransactionsListSnapshot(
             activeTransactionCount: activeTransactions.count,

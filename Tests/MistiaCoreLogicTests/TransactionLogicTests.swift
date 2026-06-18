@@ -1113,6 +1113,44 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(visible.map(\.id), [matching.id])
     }
 
+    func testTransactionFilterStateMarksAnyVisibleListFilterActive() throws {
+        XCTAssertFalse(TransactionFilterState(timeScope: .allTime, statusScope: .all).hasActiveVisibleListFilter)
+
+        let timeFilter = TransactionFilterState(timeScope: .today, statusScope: .all)
+        XCTAssertTrue(timeFilter.hasActiveVisibleListFilter)
+
+        var walletFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        walletFilter.walletID = UUID()
+        XCTAssertTrue(walletFilter.hasActiveVisibleListFilter)
+
+        var categoryFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        categoryFilter.categoryID = UUID()
+        XCTAssertTrue(categoryFilter.hasActiveVisibleListFilter)
+
+        var transferFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        transferFilter.transferSubtype = .debt
+        XCTAssertTrue(transferFilter.hasActiveVisibleListFilter)
+
+        var personFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        personFilter.counterpartyDebtKey = try XCTUnwrap(TransactionLogic.normalizeCounterpartyName("Ngọc Anh"))
+        XCTAssertTrue(personFilter.hasActiveVisibleListFilter)
+
+        var amountFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        amountFilter.minAmountMinor = 5_000
+        XCTAssertTrue(amountFilter.hasActiveVisibleListFilter)
+
+        let statusFilter = TransactionFilterState(timeScope: .allTime, statusScope: .postedOnly)
+        XCTAssertTrue(statusFilter.hasActiveVisibleListFilter)
+
+        var adjustmentFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        adjustmentFilter.isAdjustmentOnly = true
+        XCTAssertTrue(adjustmentFilter.hasActiveVisibleListFilter)
+
+        var eventFilter = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+        eventFilter.isEventOnly = true
+        XCTAssertTrue(eventFilter.hasActiveVisibleListFilter)
+    }
+
     func testTitleSuggestionsPreferPrefixMatchesAndKeepNewestDuplicateTitle() {
         let walletID = UUID()
         let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
