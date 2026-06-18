@@ -2287,6 +2287,7 @@ struct TransactionCashflowRow: View {
                     }
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .offset(x: -8)
                     .padding(.top, 2)
                     .padding(.bottom, 2)
                 }

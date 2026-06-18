@@ -1943,18 +1943,22 @@ private struct OverviewDayTransactionRow: View {
             MistiaFinanceIconView(icon: iconName, fallbackColor: amountColor, size: 34)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(titleText)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                Text(titleText)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-                    if shouldShowSettlementEventBadge {
+                if shouldShowSettlementEventBadge {
+                    HStack(spacing: 6) {
                         MistiaMiniBadge(
                             title: L10n.transactions.settlement.eventTitle,
                             tint: MistiaAccent.teal.color
                         )
+                        .fixedSize(horizontal: true, vertical: false)
                     }
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .offset(x: -8)
                 }
 
                 Text(subtitleText)
