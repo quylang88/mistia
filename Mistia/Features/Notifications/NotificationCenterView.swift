@@ -187,6 +187,27 @@ enum NotificationCenterGroupID: String, CaseIterable, Identifiable {
             .mint
         }
     }
+
+    var fluentAssetName: String {
+        switch self {
+        case .actionRequests:
+            "ic_fluent_clipboard_task_24_color"
+        case .access:
+            "ic_fluent_lock_shield_24_color"
+        case .familyCashflow:
+            "ic_fluent_people_sync_24_color"
+        case .familyData:
+            "ic_fluent_people_team_24_color"
+        case .bills:
+            "ic_fluent_calendar_clock_24_color"
+        case .creditCards:
+            "ic_fluent_credit_card_clock_24_filled"
+        case .wallets:
+            "ic_fluent_savings_24_color"
+        case .budgets:
+            "ic_fluent_data_pie_24_color"
+        }
+    }
 }
 
 struct NotificationCenterGroupSummary: Identifiable {
@@ -211,6 +232,11 @@ private struct NotificationCenterGroupedRows {
 struct NotificationCenterDaySection: Identifiable {
     let id: Date
     let rows: [AppNotificationRecord]
+}
+
+struct NotificationCenterDetailSection: Identifiable {
+    let id: Date
+    let rows: [NotificationCenterDetailRowSnapshot]
 }
 
 enum NotificationCenterIconSnapshot {
@@ -249,6 +275,13 @@ struct NotificationCenterDetailItem: Identifiable {
 }
 
 enum NotificationCenterDisplayText {
+    private enum FamilyActivityAction: String {
+        case created
+        case updated
+        case deleted
+        case familyTransfer = "family_transfer"
+    }
+
     static func permissionResponseBody(approve: Bool) -> String {
         approve
             ? L10n.notifications.notificationcenter.permissionRequestApprovedBody
@@ -259,17 +292,113 @@ enum NotificationCenterDisplayText {
         actorName: String,
         walletName: String?,
         amountText: String?,
-        fallbackBody: String
+        fallbackBody: String,
+        language: MistiaAppLanguage = .current
     ) -> String {
-        guard let walletName = nonBlank(walletName),
-              let amountText = nonBlank(amountText) else {
-            return fallbackBody
+        let actorName = nonBlank(actorName)
+            ?? L10n.notifications.notificationcenter.aMember(language: language)
+        let walletName = nonBlank(walletName)
+        let amountText = nonBlank(amountText)
+
+        if let walletName, let amountText {
+            return L10n.notifications.notificationcenter.valueJustTransferredValueIntoYourValue(
+                String(describing: actorName),
+                String(describing: amountText),
+                String(describing: walletName),
+                language: language
+            )
         }
 
-        return L10n.notifications.notificationcenter.valueJustTransferredValueIntoYourValue(
+        if let walletName {
+            return L10n.notifications.notificationcenter.valueJustTransferredMoneyIntoYourValue(
+                String(describing: actorName),
+                String(describing: walletName),
+                language: language
+            )
+        }
+
+        if let amountText {
+            return L10n.notifications.notificationcenter.valueJustTransferredValueToYou(
+                String(describing: actorName),
+                String(describing: amountText),
+                language: language
+            )
+        }
+
+        return L10n.notifications.notificationcenter.valueSentMoneyToYou(
             String(describing: actorName),
-            String(describing: amountText),
-            String(describing: walletName)
+            language: language
+        )
+    }
+
+    static func familyActivityTitle(
+        resourceType: MistiaFamilyNotificationResourceType?,
+        actionRaw: String?,
+        isMemberJoin: Bool,
+        fallbackTitle: String,
+        language: MistiaAppLanguage = .current
+    ) -> String {
+        if isMemberJoin {
+            return L10n.notifications.notificationcenter.newMember(language: language)
+        }
+
+        guard let actionRaw,
+              let action = FamilyActivityAction(rawValue: actionRaw)
+        else {
+            return nonBlank(fallbackTitle)
+                ?? L10n.shared.sync.mistiasynccoordinator.familyActivity(language: language)
+        }
+
+        if action == .familyTransfer {
+            return L10n.transactions.generatedTitle.familyTransferReceived(language: language)
+        }
+
+        switch (resourceType, action) {
+        case (.transaction, .created):
+            return L10n.shared.sync.mistiasynccoordinator.newTransaction(language: language)
+        case (.transaction, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.transactionUpdated(language: language)
+        case (.transaction, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.transactionDeleted(language: language)
+        case (.category, .created), (.category, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.categoryUpdated(language: language)
+        case (.category, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.categoryDeleted(language: language)
+        case (.wallet, .created), (.wallet, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.walletUpdated(language: language)
+        case (.wallet, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.walletDeleted(language: language)
+        case (.budget, .created), (.budget, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.budgetUpdated(language: language)
+        case (.budget, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.budgetDeleted(language: language)
+        case (.goal, .created), (.goal, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.goalUpdated(language: language)
+        case (.goal, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.goalDeleted(language: language)
+        case (.bill, .created), (.bill, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.billUpdated(language: language)
+        case (.bill, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.billDeleted(language: language)
+        case (.installment, .created), (.installment, .updated):
+            return L10n.shared.sync.mistiasynccoordinator.installmentUpdated(language: language)
+        case (.installment, .deleted):
+            return L10n.shared.sync.mistiasynccoordinator.installmentDeleted(language: language)
+        default:
+            return L10n.shared.sync.mistiasynccoordinator.familyActivity(language: language)
+        }
+    }
+
+    static func memberJoinedBody(
+        actorName: String,
+        fallbackBody: String,
+        language: MistiaAppLanguage = .current
+    ) -> String {
+        let actorName = nonBlank(actorName)
+            ?? L10n.notifications.notificationcenter.aMember(language: language)
+        return L10n.notifications.notificationcenter.valueJoinedTheFamily(
+            String(describing: actorName),
+            language: language
         )
     }
 
@@ -417,10 +546,10 @@ enum NotificationCenterGrouping {
             }
     }
 
-    private static func detailSections(
+    static func detailSections(
         for rows: [NotificationCenterDetailRowSnapshot],
         calendar: Calendar
-    ) -> [(id: Date, rows: [NotificationCenterDetailRowSnapshot])] {
+    ) -> [NotificationCenterDetailSection] {
         var rowsByDay: [Date: [NotificationCenterDetailRowSnapshot]] = [:]
         rowsByDay.reserveCapacity(rows.count)
 
@@ -429,7 +558,7 @@ enum NotificationCenterGrouping {
         }
 
         return rowsByDay.keys.sorted(by: newestDayFirst).map { day in
-            (
+            NotificationCenterDetailSection(
                 id: day,
                 rows: (rowsByDay[day] ?? []).sorted(by: newestDetailRowFirst)
             )
@@ -494,20 +623,20 @@ struct NotificationCenterGroupRoute: Identifiable {
     let id: NotificationCenterGroupID
     let title: String
     let unreadRowIDs: [UUID]
-    let detailItems: [NotificationCenterDetailItem]
+    let detailSections: [NotificationCenterDetailSection]
     let resourceIndex: NotificationCenterResourceIndex
 
     init(
         id: NotificationCenterGroupID,
         title: String,
         unreadRowIDs: [UUID],
-        detailItems: [NotificationCenterDetailItem],
+        detailSections: [NotificationCenterDetailSection],
         resourceIndex: NotificationCenterResourceIndex
     ) {
         self.id = id
         self.title = title
         self.unreadRowIDs = unreadRowIDs
-        self.detailItems = detailItems
+        self.detailSections = detailSections
         self.resourceIndex = resourceIndex
     }
 }
@@ -750,26 +879,22 @@ struct NotificationCenterView: View {
         metadataIndex: NotificationCenterMetadataIndex
     ) -> some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(group.id.accentColor)
-
-                Image(systemName: group.id.systemImage)
-                    .font(.system(size: 22, weight: .bold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.white)
-            }
+            Image(group.id.fluentAssetName)
+                .resizable()
+                .renderingMode(.original)
+                .scaledToFit()
+                .frame(width: 34, height: 34)
             .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(group.id.title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(groupTitleColor)
                     .lineLimit(1)
 
                 Text(notificationTitle(for: group.latestRow, metadataIndex: metadataIndex))
-                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(groupDetailColor)
                     .lineLimit(1)
             }
 
@@ -940,21 +1065,16 @@ struct NotificationCenterView: View {
             )
         } else {
             let config = iconConfig(for: row)
-            ZStack {
-                Circle()
-                    .fill(config.color.opacity(0.12))
-
-                if let assetName = config.assetName {
-                    Image(assetName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                        .foregroundStyle(config.color)
-                } else {
-                    Image(systemName: config.systemImage ?? "bell.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(config.color)
-                }
+            if let assetName = config.assetName {
+                Image(assetName)
+                    .resizable()
+                    .renderingMode(.original)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: config.systemImage ?? "bell.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(config.color)
             }
         }
     }
@@ -1006,17 +1126,17 @@ struct NotificationCenterView: View {
     private func iconConfig(for row: AppNotificationRecord) -> IconConfig {
         switch row.kind {
         case .dueSoon, .billPaymentRequired, .billOverdue:
-            return IconConfig(systemImage: "calendar.badge.clock", color: .orange)
+            return IconConfig(assetName: "ic_fluent_calendar_clock_24_color", color: .orange)
         case .budgetWarning:
-            return IconConfig(systemImage: "chart.pie.fill", color: .mint)
+            return IconConfig(assetName: "ic_fluent_data_pie_24_color", color: .mint)
         case .creditCardStatementReady:
-            return IconConfig(systemImage: "doc.text.fill", color: notificationPurpleAccent)
+            return IconConfig(assetName: "ic_fluent_document_text_24_color", color: notificationPurpleAccent)
         case .creditCardAutoPaymentFailed, .billAutoPaymentFailed:
-            return IconConfig(systemImage: "exclamationmark.triangle.fill", color: .red)
+            return IconConfig(assetName: "ic_fluent_document_lock_24_color", color: .red)
         case .creditCardAutoPaymentSucceeded, .billAutoPaymentSucceeded:
             return IconConfig(systemImage: "checkmark.circle.fill", color: .green)
         case .lowWallet:
-            return IconConfig(systemImage: "tray.and.arrow.down.fill", color: .orange)
+            return IconConfig(assetName: "ic_fluent_savings_24_color", color: .orange)
         case .permissionRequestReceived, .familyTransactionRequestReceived:
             return IconConfig(assetName: "ic_fluent_shield_checkmark_24_color", color: notificationPurpleAccent)
         case .permissionRequestApproved,
@@ -1024,16 +1144,16 @@ struct NotificationCenterView: View {
             return IconConfig(assetName: "ic_fluent_checkmark_circle_24_color", color: .green)
         case .permissionRequestRejected,
              .familyTransactionRequestRejected:
-            return IconConfig(systemImage: "xmark.circle.fill", color: .red)
+            return IconConfig(assetName: "ic_fluent_document_lock_24_color", color: .red)
         case .permissionRevoked,
              .permissionPolicyChanged:
             return IconConfig(assetName: "ic_fluent_lock_shield_24_color", color: notificationPurpleAccent)
         case .familyActivity:
-            return IconConfig(assetName: "ic_fluent_people_team_24_color", color: .blue)
+            return IconConfig(assetName: "ic_fluent_people_sync_24_color", color: .blue)
         case .accessIssue:
-            return IconConfig(systemImage: "lock.fill", color: .red)
+            return IconConfig(assetName: "ic_fluent_lock_shield_24_color", color: .red)
         case .familyPlaceholder:
-            return IconConfig(systemImage: "bell.fill", color: .secondary)
+            return IconConfig(assetName: "ic_fluent_megaphone_loud_24_color", color: .secondary)
         }
     }
 
@@ -1178,7 +1298,7 @@ struct NotificationCenterView: View {
                 metadataIndex: metadataIndex
             )
         }
-        let detailItems = NotificationCenterGrouping.detailItems(
+        let detailSections = NotificationCenterGrouping.detailSections(
             for: detailRows,
             calendar: calendar
         )
@@ -1187,7 +1307,7 @@ struct NotificationCenterView: View {
             id: group.id,
             title: group.id.title,
             unreadRowIDs: unreadRowIDs,
-            detailItems: detailItems,
+            detailSections: detailSections,
             resourceIndex: resourceIndex
         )
     }
@@ -1384,7 +1504,7 @@ struct NotificationCenterView: View {
             } else if row.actionState == .rejected {
                 return resolvedPermissionRequestTitle(for: row, approve: false)
             }
-            return row.title
+            return pendingPermissionRequestTitle(for: row)
             
         case .permissionRequestApproved, .familyTransactionRequestApproved:
             let resource = row.resourceType?.localizedName ?? L10n.notifications.notificationcenter.access
@@ -1411,9 +1531,13 @@ struct NotificationCenterView: View {
             return L10n.notifications.notificationcenter.revokedValueAccess(String(describing: resource))
             
         case .familyActivity:
-            if let metadata = metadataIndex.stringMetadata(for: row),
-               metadata["joined_user_id"] != nil || metadata["invite_id"] != nil {
-                return L10n.notifications.notificationcenter.newMember
+            if let metadata = metadataIndex.stringMetadata(for: row) {
+                return NotificationCenterDisplayText.familyActivityTitle(
+                    resourceType: row.resourceType,
+                    actionRaw: metadata["action"],
+                    isMemberJoin: isMemberJoinNotification(metadata),
+                    fallbackTitle: row.title
+                )
             }
             return row.title
 
@@ -1434,7 +1558,11 @@ struct NotificationCenterView: View {
             } else if row.actionState == .rejected {
                 return resolvedPermissionRequestBody(approve: false)
             }
-            return row.body
+            return pendingPermissionRequestBody(
+                for: row,
+                resourceIndex: resourceIndex,
+                metadataIndex: metadataIndex
+            )
             
         case .permissionRequestApproved, .permissionRequestRejected,
              .familyTransactionRequestApproved, .familyTransactionRequestRejected:
@@ -1478,9 +1606,11 @@ struct NotificationCenterView: View {
                 ?? L10n.notifications.notificationcenter.aMember
             
             if let metadata = metadataIndex.stringMetadata(for: row) {
-                if metadata["joined_user_id"] != nil || metadata["invite_id"] != nil {
-                    // This is a join notification. Use backend body which is already good.
-                    return row.body
+                if isMemberJoinNotification(metadata) {
+                    return NotificationCenterDisplayText.memberJoinedBody(
+                        actorName: actorName,
+                        fallbackBody: row.body
+                    )
                 }
                 
                 if let actionRaw = metadata["action"] {
@@ -1556,6 +1686,45 @@ struct NotificationCenterView: View {
         return nil
     }
 
+    private func pendingPermissionRequestTitle(for row: AppNotificationRecord) -> String {
+        let resource = row.resourceType?.localizedName ?? L10n.notifications.notificationcenter.access
+        let scope = row.permissionScope?.localizedActionName ?? ""
+
+        if !scope.isEmpty {
+            return L10n.shared.family.familycontext.requestToValueValue(
+                String(describing: scope),
+                String(describing: resource)
+            )
+        }
+
+        return row.title
+    }
+
+    private func pendingPermissionRequestBody(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
+    ) -> String {
+        let scope = row.permissionScope?.localizedActionName ?? ""
+        guard !scope.isEmpty else {
+            return row.body
+        }
+
+        let requesterName = permissionRequesterName(for: row)
+        let resourceName = resolvedResourceName(
+            for: row,
+            resourceIndex: resourceIndex,
+            metadataIndex: metadataIndex
+        ) ?? row.resourceType?.localizedName
+            ?? L10n.notifications.notificationcenter.access
+
+        return L10n.shared.family.familycontext.valueWantsToValueYourValue(
+            String(describing: requesterName),
+            String(describing: scope),
+            String(describing: resourceName)
+        )
+    }
+
     private func resolvedPermissionRequestTitle(for row: AppNotificationRecord, approve: Bool) -> String {
         let name = permissionRequesterName(for: row)
         let action = approve
@@ -1605,6 +1774,12 @@ struct NotificationCenterView: View {
         return amountMinor.formattedCurrency(code: currencyCode)
     }
 
+    private func isMemberJoinNotification(_ metadata: [String: String]) -> Bool {
+        metadata["joined_user_id"] != nil
+            || metadata["invite_id"] != nil
+            || metadata["member_user_id"] != nil
+    }
+
     private func actionHint(for row: AppNotificationRecord) -> String? {
         if row.opensCreditCardStatement {
             return L10n.notifications.notificationcenter.tapToOpenTheStatementAndPay
@@ -1652,6 +1827,14 @@ struct NotificationCenterView: View {
 
     private var notificationPurpleAccent: Color {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    private var groupTitleColor: Color {
+        colorScheme == .dark ? .primary.opacity(0.96) : .primary
+    }
+
+    private var groupDetailColor: Color {
+        colorScheme == .dark ? .primary.opacity(0.72) : .secondary
     }
 
     private func billPlan(

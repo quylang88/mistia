@@ -21,6 +21,14 @@ struct NotificationGroupDetailScreen: View {
         colorScheme == .dark ? .white.opacity(0.11) : .black.opacity(0.07)
     }
 
+    private var rowTitleColor: Color {
+        colorScheme == .dark ? .primary.opacity(0.96) : .primary
+    }
+
+    private var rowBodyColor: Color {
+        colorScheme == .dark ? .primary.opacity(0.76) : .secondary
+    }
+
     init(
         _ route: NotificationCenterGroupRoute,
         calendar: Calendar,
@@ -59,9 +67,9 @@ struct NotificationGroupDetailScreen: View {
 
     private var list: some View {
         List {
-            ForEach(route.detailItems) { item in
-                itemView(item)
-                    .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+            ForEach(route.detailSections) { section in
+                dayBlock(section)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 10, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
@@ -71,22 +79,32 @@ struct NotificationGroupDetailScreen: View {
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
     }
 
-    @ViewBuilder
-    private func itemView(_ item: NotificationCenterDetailItem) -> some View {
-        switch item.kind {
-        case .dayHeader(let day):
-            dayHeader(day)
-        case .row(let row):
-            rowView(row)
-        }
-    }
-
     private func dayHeader(_ day: Date) -> some View {
         Text(sectionTitle(for: day))
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 4)
-            .padding(.top, 8)
+    }
+
+    private func dayBlock(_ section: NotificationCenterDetailSection) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            dayHeader(section.id)
+
+            VStack(spacing: 0) {
+                ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
+                    rowView(row)
+
+                    if index < section.rows.count - 1 {
+                        Divider()
+                            .padding(.leading, 62)
+                    }
+                }
+            }
+            .background(
+                Color(UIColor.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+        }
     }
 
     private func rowView(_ row: NotificationCenterDetailRowSnapshot) -> some View {
@@ -97,13 +115,13 @@ struct NotificationGroupDetailScreen: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(row.title)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(rowTitleColor)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(row.body)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(rowBodyColor)
                     .fixedSize(horizontal: false, vertical: true)
 
                 actions(for: row)
@@ -118,11 +136,7 @@ struct NotificationGroupDetailScreen: View {
             }
         }
         .padding(14)
-        .background(
-            Color(UIColor.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contentShape(Rectangle())
         .onTapGesture {
             onRowTap(row.id, route.resourceIndex)
         }
@@ -200,26 +214,16 @@ struct NotificationGroupDetailScreen: View {
                 fallbackColor: Color(hex: colorHex),
                 size: 32
             )
-        case .asset(let name, let color):
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-
-                Image(name)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
-                    .foregroundStyle(color)
-            }
+        case .asset(let name, _):
+            Image(name)
+                .resizable()
+                .renderingMode(.original)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 28, height: 28)
         case .symbol(let systemImage, let color):
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(color)
-            }
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(color)
         }
     }
 }

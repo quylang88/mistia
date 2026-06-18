@@ -1679,11 +1679,29 @@ nonisolated enum L10n {
             static func thisMember(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.thisMember", vi: "thành viên", en: "this member", ja: "このメンバー", language: language) }
             static var updated: String { L10n.tr("notifications.notificationcenter.updated", vi: "vừa cập nhật", en: "updated", ja: "更新") }
             static func updated(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.updated", vi: "vừa cập nhật", en: "updated", ja: "更新", language: language) }
+            static func valueJoinedTheFamily(_ value: String) -> String {
+                L10n.format("notifications.notificationcenter.valueJoinedTheFamily", vi: "%@ vừa tham gia gia đình.", en: "%@ joined the family.", ja: "%@がファミリーに参加しました。", value)
+            }
+            static func valueJoinedTheFamily(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("notifications.notificationcenter.valueJoinedTheFamily", vi: "%@ vừa tham gia gia đình.", en: "%@ joined the family.", ja: "%@がファミリーに参加しました。", language: language, value)
+            }
+            static func valueJustTransferredMoneyIntoYourValue(_ arg1: String, _ arg2: String) -> String {
+                L10n.format("notifications.notificationcenter.valueJustTransferredMoneyIntoYourValue", vi: "%@ vừa chuyển tiền vào %@ của bạn.", en: "%@ just transferred money into your %@.", ja: "%@があなたの%@へ送金しました。", arg1, arg2)
+            }
+            static func valueJustTransferredMoneyIntoYourValue(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
+                L10n.format("notifications.notificationcenter.valueJustTransferredMoneyIntoYourValue", vi: "%@ vừa chuyển tiền vào %@ của bạn.", en: "%@ just transferred money into your %@.", ja: "%@があなたの%@へ送金しました。", language: language, arg1, arg2)
+            }
             static func valueJustTransferredValueIntoYourValue(_ arg1: String, _ arg2: String, _ arg3: String) -> String {
                 L10n.format("notifications.notificationcenter.valueJustTransferredValueIntoYourValue", vi: "%@ vừa chuyển %@ vào %@ của bạn.", en: "%@ just transferred %@ into your %@.", ja: "%@が%@をあなたの%@へ送金しました。", arg1, arg2, arg3)
             }
             static func valueJustTransferredValueIntoYourValue(_ arg1: String, _ arg2: String, _ arg3: String, language: MistiaAppLanguage) -> String {
                 L10n.format("notifications.notificationcenter.valueJustTransferredValueIntoYourValue", vi: "%@ vừa chuyển %@ vào %@ của bạn.", en: "%@ just transferred %@ into your %@.", ja: "%@が%@をあなたの%@へ送金しました。", language: language, arg1, arg2, arg3)
+            }
+            static func valueJustTransferredValueToYou(_ arg1: String, _ arg2: String) -> String {
+                L10n.format("notifications.notificationcenter.valueJustTransferredValueToYou", vi: "%@ vừa chuyển %@ cho bạn.", en: "%@ just transferred %@ to you.", ja: "%@が%@をあなたへ送金しました。", arg1, arg2)
+            }
+            static func valueJustTransferredValueToYou(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
+                L10n.format("notifications.notificationcenter.valueJustTransferredValueToYou", vi: "%@ vừa chuyển %@ cho bạn.", en: "%@ just transferred %@ to you.", ja: "%@が%@をあなたへ送金しました。", language: language, arg1, arg2)
             }
             static func valueRequestValue(_ arg1: String, _ arg2: String) -> String {
                 L10n.format("notifications.notificationcenter.valueRequestValue", vi: "Yêu cầu %@ %@", en: "%@ request %@", ja: "%@のリクエスト%@", arg1, arg2)
@@ -1696,6 +1714,12 @@ nonisolated enum L10n {
             }
             static func valueRevokedYourAccessToValueValue(_ arg1: String, _ arg2: String, _ arg3: String, language: MistiaAppLanguage) -> String {
                 L10n.format("notifications.notificationcenter.valueRevokedYourAccessToValueValue", vi: "%@ đã thu hồi quyền sử dụng %@ (%@) của bạn.", en: "%@ revoked your access to %@ (%@).", ja: "%@があなたの%@ (%@) の使用権限を取り消しました。", language: language, arg1, arg2, arg3)
+            }
+            static func valueSentMoneyToYou(_ value: String) -> String {
+                L10n.format("notifications.notificationcenter.valueSentMoneyToYou", vi: "%@ vừa chuyển tiền cho bạn.", en: "%@ sent money to you.", ja: "%@があなたへ送金しました。", value)
+            }
+            static func valueSentMoneyToYou(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("notifications.notificationcenter.valueSentMoneyToYou", vi: "%@ vừa chuyển tiền cho bạn.", en: "%@ sent money to you.", ja: "%@があなたへ送金しました。", language: language, value)
             }
             static func valueUnreadNotifications(_ value: String) -> String {
                 L10n.format("notifications.notificationcenter.valueUnreadNotifications", vi: "%@ thông báo chưa đọc", en: "%@ unread notifications", ja: "未読通知 %@ 件", value)

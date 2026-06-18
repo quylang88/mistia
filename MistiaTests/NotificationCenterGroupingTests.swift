@@ -136,6 +136,36 @@ final class NotificationCenterGroupingTests: XCTestCase {
         XCTAssertEqual(renderedRowKeys.first, "newest")
     }
 
+    func testDetailSectionsGroupRowsByNewestDayWithNewestRowsFirst() throws {
+        let newest = notification(
+            key: "newest",
+            createdAt: makeDate(year: 2026, month: 5, day: 24, hour: 18),
+            kind: .creditCardStatementReady,
+            resourceType: .card
+        )
+        let oldest = notification(
+            key: "oldest",
+            createdAt: makeDate(year: 2026, month: 5, day: 23, hour: 8),
+            kind: .creditCardAutoPaymentFailed,
+            resourceType: .card
+        )
+        let middle = notification(
+            key: "middle",
+            createdAt: makeDate(year: 2026, month: 5, day: 24, hour: 9),
+            kind: .creditCardAutoPaymentSucceeded,
+            resourceType: .card
+        )
+
+        let sections = NotificationCenterGrouping.detailSections(
+            for: [newest, oldest, middle].map(detailSnapshot),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(sections.count, 2)
+        XCTAssertEqual(sections[0].rows.map(\.key), ["newest", "middle"])
+        XCTAssertEqual(sections[1].rows.map(\.key), ["oldest"])
+    }
+
     func testPermissionResponseApprovedBodySummarizesUserVisibleResult() {
         XCTAssertEqual(
             NotificationCenterDisplayText.permissionResponseBody(approve: true),
@@ -167,6 +197,12 @@ final class NotificationCenterGroupingTests: XCTestCase {
     }
 
     func testFamilyTransferReceivedBodyFallsBackToServerBodyWhenAmountIsMissing() {
+        MistiaAppLanguage.persist(.english)
+        defer {
+            UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
+        }
+
         XCTAssertEqual(
             NotificationCenterDisplayText.familyTransferReceivedBody(
                 actorName: "Linh",
@@ -174,7 +210,41 @@ final class NotificationCenterGroupingTests: XCTestCase {
                 amountText: nil,
                 fallbackBody: "Linh đã chuyển tiền vào ví của bạn."
             ),
-            "Linh đã chuyển tiền vào ví của bạn."
+            "Linh just transferred money into your Ví chính."
+        )
+    }
+
+    func testFamilyActivityTitleUsesCurrentAppLanguageInsteadOfStoredTitle() {
+        MistiaAppLanguage.persist(.english)
+        defer {
+            UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
+        }
+
+        XCTAssertEqual(
+            NotificationCenterDisplayText.familyActivityTitle(
+                resourceType: .transaction,
+                actionRaw: "created",
+                isMemberJoin: false,
+                fallbackTitle: "Thu chi mới"
+            ),
+            L10n.shared.sync.mistiasynccoordinator.newTransaction
+        )
+    }
+
+    func testFamilyMemberJoinBodyUsesCurrentAppLanguageInsteadOfStoredBody() {
+        MistiaAppLanguage.persist(.english)
+        defer {
+            UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
+        }
+
+        XCTAssertEqual(
+            NotificationCenterDisplayText.memberJoinedBody(
+                actorName: "Linh",
+                fallbackBody: "Linh vừa tham gia gia đình."
+            ),
+            "Linh joined the family."
         )
     }
 

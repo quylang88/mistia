@@ -15917,6 +15917,52 @@
         }
       }
     },
+    "notifications.notificationcenter.valueJoinedTheFamily" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ joined the family."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@がファミリーに参加しました。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ vừa tham gia gia đình."
+          }
+        }
+      }
+    },
+    "notifications.notificationcenter.valueJustTransferredMoneyIntoYourValue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ just transferred money into your %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@があなたの%@へ送金しました。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ vừa chuyển tiền vào %@ của bạn."
+          }
+        }
+      }
+    },
     "notifications.notificationcenter.valueJustTransferredValueIntoYourValue" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15936,6 +15982,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ vừa chuyển %@ vào %@ của bạn."
+          }
+        }
+      }
+    },
+    "notifications.notificationcenter.valueJustTransferredValueToYou" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ just transferred %@ to you."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@が%@をあなたへ送金しました。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ vừa chuyển %@ cho bạn."
           }
         }
       }
@@ -15982,6 +16051,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ đã thu hồi quyền sử dụng %@ (%@) của bạn."
+          }
+        }
+      }
+    },
+    "notifications.notificationcenter.valueSentMoneyToYou" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sent money to you."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@があなたへ送金しました。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ vừa chuyển tiền cho bạn."
           }
         }
       }
