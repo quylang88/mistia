@@ -1271,12 +1271,22 @@ struct TransactionEditorSheet: View {
     private func eventGeneratedPrincipalCategorySection(
         renderContext: TransactionEditorRenderContext
     ) -> some View {
-        Section(L10n.transactions.transactioneditor.eventGeneratedExpenseReportingSection) {
+        @Bindable var bindableDraft = draft
+        return Section(L10n.transactions.transactioneditor.eventGeneratedExpenseReportingSection) {
             Toggle(
                 L10n.transactions.transactioneditor.countAsExpense,
-                isOn: .constant(draft.categoryID != nil)
+                isOn: Binding(
+                    get: { bindableDraft.categoryID != nil },
+                    set: { isOn in
+                        if isOn {
+                            showsCategoryPicker = true
+                        } else {
+                            bindableDraft.categoryID = nil
+                            persistEventGeneratedPrincipalCategory(nil)
+                        }
+                    }
+                )
             )
-            .disabled(true)
 
             if draft.categoryID != nil {
                 Button {
@@ -3221,7 +3231,7 @@ struct TransactionEditorSheet: View {
         }
     }
 
-    private func persistEventGeneratedPrincipalCategory(_ category: TransactionCategory) {
+    private func persistEventGeneratedPrincipalCategory(_ category: TransactionCategory?) {
         guard let transaction = target.transaction,
               isEventGeneratedSharedExpenseDebtPrincipalDetail else {
             return
@@ -3232,7 +3242,7 @@ struct TransactionEditorSheet: View {
         let reportingOverride = SettlementLogic.sharedExpensePrincipalReportingOverride(
             settlementRole: transaction.settlementRole,
             amountMinor: transaction.amountMinor,
-            categoryID: category.id
+            categoryID: category?.id
         )
         transaction.reportingExpenseMinor = reportingOverride.expenseMinor
         transaction.reportingIncomeMinor = reportingOverride.incomeMinor
