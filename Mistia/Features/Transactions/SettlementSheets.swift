@@ -786,6 +786,7 @@ struct SettlementEditorSheet: View {
                         transactionOwnerMap: transactionOwnerMap,
                         familyContextStore: familyContextStore,
                         hasFamilyOwnerConflict: false,
+                        showsSettlementEventBadge: false,
                         primaryCurrencyCode: primaryCurrencyCode,
                         exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
                         subtitleLineLimit: 1,
@@ -892,6 +893,7 @@ struct SettlementEditorSheet: View {
                     transactionOwnerMap: transactionOwnerMap,
                     familyContextStore: familyContextStore,
                     hasFamilyOwnerConflict: false,
+                    showsSettlementEventBadge: false,
                     primaryCurrencyCode: primaryCurrencyCode,
                     exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
                     subtitleLineLimit: 1,
@@ -2129,12 +2131,15 @@ private struct ParticipantSettlementProgressRow: View {
         progress.displayName
     }
     
-    private var subtitle: String {
+    private var statusText: String {
         if !progress.hasDebt {
             return L10n.transactions.settlement.participantSettled
         }
         if progress.isSettled {
-            return L10n.transactions.settlement.participantSettled
+            let paidFormatted = progress.paidAmount.formattedCurrency(code: currencyCode)
+            return isReceivable
+                ? L10n.transactions.settlement.participantCollectedValue(String(describing: paidFormatted))
+                : L10n.transactions.settlement.participantPaidValue(String(describing: paidFormatted))
         }
         
         let paidFormatted = progress.paidAmount.formattedCurrency(code: currencyCode)
@@ -2147,9 +2152,9 @@ private struct ParticipantSettlementProgressRow: View {
         return "\(paidText) • \(remainingText)"
     }
     
-    private var amountText: String {
+    private var remainingText: String? {
         if !progress.hasDebt || progress.isSettled {
-            return L10n.transactions.settlement.settled
+            return nil
         }
         let remainingFormatted = progress.remainingAmount.formattedCurrency(code: currencyCode)
         return isReceivable ? "+\(remainingFormatted)" : "-\(remainingFormatted)"
@@ -2164,23 +2169,29 @@ private struct ParticipantSettlementProgressRow: View {
             )
             
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+
+                    Text(statusText)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(amountColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+
+                if let remainingText {
+                    Text(remainingText)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             
             Spacer(minLength: 12)
-            
-            Text(amountText)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(amountColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
         }
         .contentShape(Rectangle())
     }
@@ -2204,7 +2215,7 @@ private struct SharedExpenseReadOnlyParticipantRow: View {
         return progress.isReceivable ? TransactionDebtIntent.lend.financeIconToken : TransactionDebtIntent.borrow.financeIconToken
     }
 
-    private var subtitle: String {
+    private var statusText: String {
         guard progress.hasDebt else {
             return L10n.transactions.settlement.participantSettled
         }
@@ -2214,9 +2225,9 @@ private struct SharedExpenseReadOnlyParticipantRow: View {
             : L10n.transactions.settlement.participantPaidValue(String(describing: paidText))
     }
 
-    private var amountText: String {
-        guard progress.hasDebt else {
-            return L10n.transactions.settlement.settled
+    private var remainingText: String? {
+        guard progress.hasDebt && !progress.isSettled else {
+            return nil
         }
         return progress.remainingAmount.formattedCurrency(code: currencyCode)
     }
@@ -2230,24 +2241,29 @@ private struct SharedExpenseReadOnlyParticipantRow: View {
             )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(progress.displayName)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(progress.displayName)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
 
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    Text(statusText)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(amountColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+
+                if let remainingText {
+                    Text(remainingText)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 12)
-
-            Text(amountText)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(amountColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
         }
         .contentShape(Rectangle())
     }
@@ -3371,6 +3387,7 @@ private struct SharedExpenseBillDraftRow: View {
                         transactionOwnerMap: transactionOwnerMap,
                         familyContextStore: familyContextStore,
                         hasFamilyOwnerConflict: false,
+                        showsSettlementEventBadge: false,
                         primaryCurrencyCode: primaryCurrencyCode,
                         exchangeRateIndex: exchangeRateIndex,
                         subtitleLineLimit: 1,
