@@ -36,7 +36,7 @@ struct MistiaFooterAddButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let title: String
-    var accent: Color = Color(red: 0.43, green: 0.23, blue: 0.76)
+    var accent: Color = MistiaAccent.tabActive.color
     let action: () -> Void
 
     private var buttonFill: Color {
@@ -44,7 +44,7 @@ struct MistiaFooterAddButton: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? MistiaAccent.lightPurple.color : accent
+        accent
     }
 
     var body: some View {
@@ -85,7 +85,7 @@ struct MistiaEmptyStateContent: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.tabActive.color : accent
     }
 
     private var symbolBackgroundOpacity: Double {
@@ -170,10 +170,15 @@ struct MistiaSmallIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
     var isEnabled: Bool = true
+    var foregroundColor: Color? = nil
     var action: () -> Void
 
     private var foreground: Color {
-        colorScheme == .dark ? MistiaAccent.checkmarkPurple.color : MistiaAccent.purple.color
+        if let foregroundColor {
+            return foregroundColor
+        }
+
+        return colorScheme == .dark ? MistiaAccent.checkmarkPurple.color : MistiaAccent.purple.color
     }
 
     private var fill: Color {

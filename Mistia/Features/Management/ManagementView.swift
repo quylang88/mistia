@@ -1375,7 +1375,7 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var badgeForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.tabActive.color : accent
     }
 
     private var buttonFill: Color {
@@ -1383,7 +1383,7 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.tabActive.color : accent
     }
 
     var body: some View {
@@ -1702,7 +1702,7 @@ private struct ManagementFooterAddButton: View {
     let action: () -> Void
 
     var body: some View {
-        MistiaFooterAddButton(title: title, accent: accent, action: action)
+        MistiaFooterAddButton(title: title, accent: MistiaAccent.tabActive.color, action: action)
     }
 }
 

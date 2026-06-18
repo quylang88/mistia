@@ -3252,7 +3252,7 @@ private struct PlanningFooterAddButton: View {
     let action: () -> Void
 
     var body: some View {
-        MistiaFooterAddButton(title: title, accent: MistiaAccent.purple.color, action: action)
+        MistiaFooterAddButton(title: title, action: action)
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
     }

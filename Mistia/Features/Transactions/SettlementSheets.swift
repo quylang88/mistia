@@ -745,6 +745,7 @@ struct SettlementEditorSheet: View {
             MistiaSmallIconButton(
                 systemImage: "plus",
                 accessibilityLabel: accessibilityLabel,
+                foregroundColor: MistiaAccent.tabActive.color,
                 action: action
             )
         }
@@ -840,7 +841,7 @@ struct SettlementEditorSheet: View {
 
             MistiaFooterAddButton(
                 title: L10n.transactions.settlement.addExpense,
-                accent: MistiaAccent.purple.color
+                accent: MistiaAccent.tabActive.color
             ) {
                 showingBillAddOptions = true
             }
@@ -2952,7 +2953,8 @@ struct SettlementSplitCalculatorSheet: View {
                     Spacer()
                     MistiaSmallIconButton(
                         systemImage: "plus",
-                        accessibilityLabel: L10n.transactions.settlement.addParticipant
+                        accessibilityLabel: L10n.transactions.settlement.addParticipant,
+                        foregroundColor: MistiaAccent.tabActive.color
                     ) {
                         additionalRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
                     }
