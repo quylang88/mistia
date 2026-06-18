@@ -581,12 +581,18 @@ struct SettlementEditorSheet: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     if isReadOnlyEventDetail {
-                        MistiaSmallIconButton(
-                            systemImage: "arrow.uturn.left",
-                            accessibilityLabel: L10n.transactions.settlement.resetSplitAction
-                        ) {
+                        Button {
                             showsResetConfirmation = true
+                        } label: {
+                            Image(systemName: "arrow.uturn.left")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                                .frame(width: 30, height: 30)
                         }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(MistiaAccent.purple.color)
+                        .accessibilityLabel(L10n.transactions.settlement.resetSplitAction)
                     } else {
                         Button {
                             save()
