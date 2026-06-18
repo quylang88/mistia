@@ -9,14 +9,19 @@ enum FamilyScopedData {
         init(
             scopes: [OwnedRecordScope],
             familyContextStore: FamilyContextStore,
-            sessionStore: SessionStore
+            sessionStore: SessionStore,
+            entities requestedEntities: Set<MistiaSyncEntity>? = nil
         ) {
             self.subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
             self.signedInUserID = sessionStore.activeLocalProfileUserID
 
             var latestOwners: [MistiaSyncEntity: [UUID: (ownerUserID: UUID, updatedAt: Date)]] = [:]
+            latestOwners.reserveCapacity(requestedEntities?.count ?? 0)
             for scope in scopes {
                 let entity = scope.entity
+                if let requestedEntities, !requestedEntities.contains(entity) {
+                    continue
+                }
                 if let existing = latestOwners[entity]?[scope.recordID],
                    existing.updatedAt > scope.updatedAt {
                     continue
@@ -46,7 +51,8 @@ enum FamilyScopedData {
             scopeSnapshot: ScopeSnapshot(
                 scopes: scopes,
                 familyContextStore: familyContextStore,
-                sessionStore: sessionStore
+                sessionStore: sessionStore,
+                entities: [entity]
             )
         )
     }
@@ -116,7 +122,8 @@ enum FamilyScopedData {
             scopeSnapshot: ScopeSnapshot(
                 scopes: scopes,
                 familyContextStore: familyContextStore,
-                sessionStore: sessionStore
+                sessionStore: sessionStore,
+                entities: [.wallet, .transaction]
             ),
             archivedEventIDs: archivedEventIDs
         )
@@ -159,7 +166,8 @@ enum FamilyScopedData {
             scopeSnapshot: ScopeSnapshot(
                 scopes: scopes,
                 familyContextStore: familyContextStore,
-                sessionStore: sessionStore
+                sessionStore: sessionStore,
+                entities: [.wallet, .transaction]
             ),
             archivedEventIDs: archivedEventIDs
         )

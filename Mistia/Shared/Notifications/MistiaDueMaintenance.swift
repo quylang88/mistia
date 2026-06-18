@@ -86,7 +86,8 @@ struct MistiaDueMaintenanceSnapshot {
             FamilyScopedData.ScopeSnapshot(
                 scopes: ownershipScopes,
                 familyContextStore: $0,
-                sessionStore: sessionStore
+                sessionStore: sessionStore,
+                entities: [.wallet, .transaction, .settlementGroup]
             )
         }
 

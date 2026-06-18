@@ -289,19 +289,11 @@ struct PlanningView: View {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
     }
 
-    private var transactionSnapshots: [TransactionRecordSnapshot] {
-        visibleTransactions.map(\.planningRecordSnapshot)
-    }
-
     private var appExchangeRates: [MistiaExchangeRate] {
         _ = currencyRateMode
         _ = manualJPYToVNDRate
         _ = cachedCurrencyRatesData
         return MistiaCurrencySettings.rates()
-    }
-
-    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        visibleOccurrences.map(\.planningSnapshot)
     }
 
     private var activeAlert: PlanningAlertPresentation? {
@@ -320,16 +312,22 @@ struct PlanningView: View {
         return nil
     }
 
-    private func makeScopeSnapshot() -> FamilyScopedData.ScopeSnapshot {
+    private func makeScopeSnapshot(
+        entities: Set<MistiaSyncEntity>? = nil
+    ) -> FamilyScopedData.ScopeSnapshot {
         FamilyScopedData.ScopeSnapshot(
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            entities: entities
         )
     }
 
     private func budgetRenderSnapshot() -> PlanningBudgetRenderSnapshot {
-        let scopeSnapshot = makeScopeSnapshot()
+        let scopeSnapshot = makeScopeSnapshot(
+            entities: [.budgetPlan, .wallet, .transaction, .settlementGroup]
+        )
+        let archivedEventIDs = archivedSettlementGroupIDs(scopeSnapshot: scopeSnapshot)
         let visibleBudgets = FamilyScopedData.visible(
             storedBudgets,
             entity: .budgetPlan,
@@ -338,7 +336,7 @@ struct PlanningView: View {
         let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
             scopeSnapshot: scopeSnapshot,
-            archivedEventIDs: archivedSettlementGroupIDs
+            archivedEventIDs: archivedEventIDs
         )
         let familyArchivedEventIDs = FamilyScopedData.archivedSharedExpenseEventIDsForCurrentFamily(
             from: storedSettlementGroups,
@@ -386,7 +384,7 @@ struct PlanningView: View {
     }
 
     private func goalRenderSnapshot() -> PlanningGoalRenderSnapshot {
-        let scopeSnapshot = makeScopeSnapshot()
+        let scopeSnapshot = makeScopeSnapshot(entities: [.savingsGoal])
         let visibleGoals = FamilyScopedData.visible(
             storedGoals,
             entity: .savingsGoal,
@@ -411,11 +409,21 @@ struct PlanningView: View {
     }
 
     private func dueRenderSnapshot() -> PlanningDueRenderSnapshot {
-        let scopeSnapshot = makeScopeSnapshot()
+        let scopeSnapshot = makeScopeSnapshot(
+            entities: [
+                .wallet,
+                .transaction,
+                .settlementGroup,
+                .dueOccurrenceRecord,
+                .recurringBillPlan,
+                .installmentPlan
+            ]
+        )
+        let archivedEventIDs = archivedSettlementGroupIDs(scopeSnapshot: scopeSnapshot)
         let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
             scopeSnapshot: scopeSnapshot,
-            archivedEventIDs: archivedSettlementGroupIDs
+            archivedEventIDs: archivedEventIDs
         )
         let visibleOccurrences = FamilyScopedData.visible(
             storedOccurrences,
@@ -492,6 +500,19 @@ struct PlanningView: View {
             bills: recurringBillDueItems,
             pausedBills: pausedBills,
             installments: installmentDueItems
+        )
+    }
+
+    private func archivedSettlementGroupIDs(
+        scopeSnapshot: FamilyScopedData.ScopeSnapshot
+    ) -> Set<UUID> {
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopeSnapshot: scopeSnapshot
+        )
+        return SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
         )
     }
 
@@ -738,245 +759,10 @@ struct PlanningView: View {
         return Set(familyContextStore.members.map(\.userID))
     }
 
-    private var activeBudgetPlans: [BudgetPlanSnapshot] {
-        PlanningLogic.resolvingFamilySpendingCategoryScopes(
-            plans: visibleBudgets
-                .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
-                .map { $0.planningSnapshot(calendar: calendar) },
-            categoryScopes: familyBudgetSpendingCategoryScopes
-        )
-    }
-
     private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
         storedCategories
             .filter { $0.deletedAt == nil && !$0.isArchived }
             .map(\.planningFamilyBudgetSpendingScope)
-    }
-
-    private var budgetRows: [PlanningBudgetBranchRowSnapshot] {
-        let scopeSnapshot = makeScopeSnapshot()
-        let familyArchivedEventIDs = FamilyScopedData.archivedSharedExpenseEventIDsForCurrentFamily(
-            from: storedSettlementGroups,
-            scopeSnapshot: scopeSnapshot,
-            familyMemberUserIDs: currentFamilyMemberUserIDs,
-            signedInUserID: sessionStore.activeLocalProfileUserID
-        )
-        let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
-            from: storedTransactions,
-            scopeSnapshot: scopeSnapshot,
-            familyMemberUserIDs: currentFamilyMemberUserIDs,
-            signedInUserID: sessionStore.activeLocalProfileUserID,
-            archivedEventIDs: familyArchivedEventIDs
-        )
-        let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
-            isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
-            familyContextStore: familyContextStore
-        )
-
-        return PlanningLogic.budgetBranchRows(
-            plans: activeBudgetPlans,
-            records: transactionSnapshots,
-            selectedMonth: selectedMonth,
-            referenceDate: .now,
-            calendar: calendar,
-            exchangeRates: appExchangeRates,
-            familyTransactions: usesAggregateFamilyBudgetSpending ? familyTransactions : [],
-            familySpendingAvailable: usesAggregateFamilyBudgetSpending
-        )
-    }
-
-    private var budgetSummary: PlanningBudgetSummarySnapshot {
-        PlanningLogic.budgetSummary(
-            from: budgetRows,
-            reportingCurrencyCode: currencyCode,
-            exchangeRates: appExchangeRates
-        )
-    }
-
-    private var activeGoals: [SavingsGoalSnapshot] {
-        visibleGoals
-            .filter { !$0.isArchived }
-            .map(\.planningSnapshot)
-    }
-
-    private var goalRows: [PlanningGoalRowSnapshot] {
-        PlanningLogic.goalRows(
-            goals: activeGoals,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        )
-    }
-
-    private var goalSummary: PlanningGoalSummarySnapshot {
-        PlanningLogic.goalSummary(
-            from: goalRows,
-            reportingCurrencyCode: currencyCode,
-            exchangeRates: appExchangeRates
-        )
-    }
-
-    private var creditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        let balanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: visibleWallets.map {
-                TransactionWalletSnapshot(
-                    id: $0.id,
-                    kind: $0.kind,
-                    openingBalanceMinor: $0.openingBalanceMinor
-                )
-            },
-            records: transactionSnapshots
-        )
-        return visibleWallets.compactMap { $0.planningCreditCardSnapshot(balanceIndex: balanceIndex) }
-    }
-
-    private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
-        PlanningLogic.creditCardDueItems(
-            accounts: creditCardAccounts,
-            records: transactionSnapshots,
-            occurrences: occurrenceSnapshots,
-            selectedMonth: selectedMonth,
-            referenceDate: .now,
-            calendar: calendar
-        )
-    }
-
-    private var creditCardStatementDueItems: [PlanningCreditCardStatementSnapshot] {
-        PlanningLogic.creditCardStatementsDue(
-            in: selectedMonth,
-            accounts: creditCardAccounts,
-            records: transactionSnapshots,
-            occurrences: occurrenceSnapshots,
-            referenceDate: .now,
-            calendar: calendar
-        )
-    }
-
-    private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
-        PlanningLogic.recurringBillDueItems(
-            bills: storedBills
-                .filter { visibleBillIDs.contains($0.id) }
-                .filter { !$0.isArchived }
-                .map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        )
-    }
-
-    private var installmentDueItems: [PlanningRecurringDueSnapshot] {
-        PlanningLogic.installmentDueItems(
-            plans: storedInstallments
-                .filter { visibleInstallmentIDs.contains($0.id) }
-                .filter { !$0.isArchived }
-                .map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        )
-    }
-
-    private var visibleBudgets: [BudgetPlan] {
-        FamilyScopedData.visible(
-            storedBudgets,
-            entity: .budgetPlan,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleGoals: [SavingsGoal] {
-        FamilyScopedData.visible(
-            storedGoals,
-            entity: .savingsGoal,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleBills: [RecurringBillPlan] {
-        FamilyScopedData.visible(
-            storedBills,
-            entity: .recurringBillPlan,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleBillIDs: Set<UUID> {
-        Set(visibleBills.map(\.id))
-    }
-
-    private var visibleInstallments: [InstallmentPlan] {
-        FamilyScopedData.visible(
-            storedInstallments,
-            entity: .installmentPlan,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleInstallmentIDs: Set<UUID> {
-        Set(visibleInstallments.map(\.id))
-    }
-
-    private var visibleOccurrences: [DueOccurrenceRecord] {
-        FamilyScopedData.visible(
-            storedOccurrences,
-            entity: .dueOccurrenceRecord,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleWallets: [LedgerWallet] {
-        FamilyScopedData.visible(
-            storedWallets,
-            entity: .wallet,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleCategories: [TransactionCategory] {
-        FamilyScopedData.visible(
-            storedCategories,
-            entity: .category,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleTransactions: [LedgerTransaction] {
-        FamilyScopedData.visibleTransactionsForFinancial(
-            storedTransactions,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore,
-            archivedEventIDs: archivedSettlementGroupIDs
-        )
-    }
-
-    private var archivedSettlementGroupIDs: Set<UUID> {
-        SettlementLogic.archivedSharedExpenseEventIDs(
-            from: visibleSettlementGroups.map(\.recordSnapshot)
-        )
-    }
-
-    private var visibleSettlementGroups: [SettlementGroup] {
-        FamilyScopedData.visible(
-            storedSettlementGroups,
-            entity: .settlementGroup,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
     }
 
     private var selectedSubjectUserID: UUID? {
@@ -1001,18 +787,6 @@ struct PlanningView: View {
 
     private var installmentOwnerMap: [UUID: UUID] {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
-    }
-
-    private var dueSummary: PlanningDueSummarySnapshot {
-        PlanningLogic.dueSummary(
-            creditStatements: creditCardStatementDueItems,
-            recurring: recurringBillDueItems + installmentDueItems,
-            selectedMonth: selectedMonth,
-            reportingCurrencyCode: currencyCode,
-            exchangeRates: appExchangeRates,
-            referenceDate: .now,
-            calendar: calendar
-        )
     }
 
     var body: some View {

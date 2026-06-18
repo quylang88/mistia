@@ -196,7 +196,8 @@ struct ManagementView: View {
         let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            entities: [.wallet, .category, .settlementGroup, .transaction]
         )
         let visibleWallets = FamilyScopedData.visible(
             storedWallets,

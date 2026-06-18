@@ -177,7 +177,17 @@ struct OverviewView: View {
         let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            entities: [
+                .wallet,
+                .transaction,
+                .settlementGroup,
+                .budgetPlan,
+                .installmentPlan,
+                .recurringBillPlan,
+                .dueOccurrenceRecord,
+                .settlementParticipant
+            ]
         )
         let visibleSettlementGroups = FamilyScopedData.visible(
             storedSettlementGroups,
