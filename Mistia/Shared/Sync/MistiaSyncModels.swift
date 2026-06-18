@@ -1439,6 +1439,8 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
                 "\(row.settledMinor)",
                 row.organizerUserID?.uuidString.lowercased() ?? "",
                 row.note ?? "",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
                 Self.dateString(row.deletedAt)
             ].joined(separator: "|")
         case .settlementParticipant(let row):

@@ -416,6 +416,110 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertFalse(outbox.contains(entity: .wallet, recordID: walletID))
     }
 
+    func testRestoredArchivedEventPushesUnarchivedStateToRemote() async throws {
+        let userID = UUID()
+        let groupID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let archivedAt = updatedAt.addingTimeInterval(-600)
+        let container = try makeCurrentContainer()
+        let context = ModelContext(container)
+        let group = SettlementGroup(
+            id: groupID,
+            kind: .sharedExpense,
+            status: .preparing,
+            title: "Trip",
+            currencyCode: "JPY",
+            occurredAt: updatedAt,
+            totalMinor: 12_000,
+            expectedMinor: 0,
+            settledMinor: 0,
+            organizerUserID: userID,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            remoteVersion: 2,
+            isArchived: false,
+            archivedAt: nil
+        )
+        context.insert(group)
+        context.insert(OwnedRecordScope(entity: .settlementGroup, recordID: groupID, ownerUserID: userID, updatedAt: updatedAt))
+        try context.save()
+
+        let remoteArchived = RemoteSettlementGroup(
+            userID: userID,
+            id: groupID,
+            kindRawValue: SettlementKind.sharedExpense.rawValue,
+            statusRawValue: SettlementStatus.preparing.rawValue,
+            title: "Trip",
+            currencyCode: "JPY",
+            occurredAt: updatedAt,
+            totalMinor: 12_000,
+            expectedMinor: 0,
+            settledMinor: 0,
+            organizerUserID: userID,
+            note: nil,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            deletedAt: nil,
+            isArchived: true,
+            archivedAt: archivedAt,
+            syncVersion: 2,
+            lastModifiedByDeviceID: nil
+        )
+        let remoteStore = FamilyConflictRemoteStore(remoteRecord: .settlementGroup(remoteArchived))
+        remoteStore.shouldReturnConditionalUpdateRecord = true
+        let mutation = MistiaSyncMutation(
+            entity: .settlementGroup,
+            recordID: groupID,
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: updatedAt,
+            baseVersion: 2
+        )
+        let localRecord = try XCTUnwrap(
+            MistiaSyncLocalStore.exportRecord(
+                for: mutation,
+                from: container
+            )
+        )
+        guard case .settlementGroup(let localGroupRecord) = localRecord else {
+            return XCTFail("Expected local settlement group export")
+        }
+        XCTAssertFalse(localGroupRecord.isArchived)
+        XCTAssertNil(localGroupRecord.archivedAt)
+        XCTAssertNotEqual(localRecord.payloadFingerprint, MistiaSyncUploadRecord.settlementGroup(remoteArchived).payloadFingerprint)
+        let outbox = MistiaSyncOutbox(
+            defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+            key: "restored-event-pushes-unarchived"
+        )
+        let coordinator = SyncCoordinator(
+            modelContainer: container,
+            remoteStore: remoteStore,
+            outbox: outbox,
+            deviceID: UUID()
+        )
+        coordinator.queue(mutation)
+
+        let pushed = try await coordinator.pushQueuedMutationsOnly(
+            [mutation],
+            session: makeSession(userID: userID)
+        )
+
+        XCTAssertTrue(pushed)
+        XCTAssertEqual(remoteStore.conditionalUpdatedRecords.count, 1)
+        guard case .settlementGroup(let pushedGroup) = remoteStore.conditionalUpdatedRecords.first else {
+            return XCTFail("Expected settlement group update")
+        }
+        XCTAssertFalse(pushedGroup.isArchived)
+        XCTAssertNil(pushedGroup.archivedAt)
+        XCTAssertEqual(pushedGroup.syncVersion, 3)
+        XCTAssertFalse(outbox.contains(entity: .settlementGroup, recordID: groupID))
+
+        let localGroup = try XCTUnwrap(try ModelContext(container).fetch(FetchDescriptor<SettlementGroup>()).first)
+        XCTAssertFalse(localGroup.isArchived)
+        XCTAssertNil(localGroup.archivedAt)
+        XCTAssertEqual(localGroup.remoteVersion, 3)
+    }
+
     private func remoteWallet(
         id: UUID,
         userID: UUID,
@@ -463,6 +567,12 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
 
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV1.self)
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func makeCurrentContainer() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
@@ -527,6 +637,8 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
     var fetchedEntities: [MistiaSyncEntity] = []
     var createdRecords: [MistiaSyncUploadRecord] = []
     var createSubjectUserIDs: [UUID] = []
+    var conditionalUpdatedRecords: [MistiaSyncUploadRecord] = []
+    var shouldReturnConditionalUpdateRecord = false
     var familyNotificationEvents: [RemoteFamilyActivityNotificationEvent] = []
     var familyNotificationError: Error?
 
@@ -583,7 +695,8 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord? {
         conditionalUpdateCalled = true
-        return nil
+        conditionalUpdatedRecords.append(record)
+        return shouldReturnConditionalUpdateRecord ? record : nil
     }
 
     func conditionalDelete(
