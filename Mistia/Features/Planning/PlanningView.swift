@@ -189,6 +189,7 @@ private struct PlanningBudgetRenderSnapshotCacheKey: Hashable {
     let budgetSignature: MistiaCollectionChangeSignature
     let categorySignature: MistiaCollectionChangeSignature
     let transactionSignature: MistiaCollectionChangeSignature
+    let settlementGroupSignature: MistiaCollectionChangeSignature
 }
 
 private struct PlanningGoalRenderSnapshotCacheKey: Hashable {
@@ -199,6 +200,7 @@ private struct PlanningGoalRenderSnapshotCacheKey: Hashable {
 private struct PlanningDueRenderSnapshotCacheKey: Hashable {
     let base: PlanningRenderSnapshotBaseCacheKey
     let transactionSignature: MistiaCollectionChangeSignature
+    let settlementGroupSignature: MistiaCollectionChangeSignature
     let occurrenceSignature: MistiaCollectionChangeSignature
     let walletSignature: MistiaCollectionChangeSignature
     let billSignature: MistiaCollectionChangeSignature
@@ -255,6 +257,8 @@ struct PlanningView: View {
     private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var storedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var storedSettlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
@@ -333,13 +337,21 @@ struct PlanningView: View {
         )
         let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
-            scopeSnapshot: scopeSnapshot
+            scopeSnapshot: scopeSnapshot,
+            archivedEventIDs: archivedSettlementGroupIDs
+        )
+        let familyArchivedEventIDs = FamilyScopedData.archivedSharedExpenseEventIDsForCurrentFamily(
+            from: storedSettlementGroups,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: currentFamilyMemberUserIDs,
+            signedInUserID: sessionStore.activeLocalProfileUserID
         )
         let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
             from: storedTransactions,
             scopeSnapshot: scopeSnapshot,
             familyMemberUserIDs: currentFamilyMemberUserIDs,
-            signedInUserID: sessionStore.activeLocalProfileUserID
+            signedInUserID: sessionStore.activeLocalProfileUserID,
+            archivedEventIDs: familyArchivedEventIDs
         )
         let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
             isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
@@ -402,7 +414,8 @@ struct PlanningView: View {
         let scopeSnapshot = makeScopeSnapshot()
         let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
-            scopeSnapshot: scopeSnapshot
+            scopeSnapshot: scopeSnapshot,
+            archivedEventIDs: archivedSettlementGroupIDs
         )
         let visibleOccurrences = FamilyScopedData.visible(
             storedOccurrences,
@@ -620,6 +633,13 @@ struct PlanningView: View {
                 deletedAt: \.deletedAt,
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
+            ),
+            settlementGroupSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementGroups,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             )
         )
     }
@@ -642,6 +662,13 @@ struct PlanningView: View {
             base: renderSnapshotBaseCacheKey,
             transactionSignature: MistiaCollectionChangeSignature.make(
                 storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            settlementGroupSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementGroups,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
                 isArchived: \.isArchived,
@@ -728,11 +755,18 @@ struct PlanningView: View {
 
     private var budgetRows: [PlanningBudgetBranchRowSnapshot] {
         let scopeSnapshot = makeScopeSnapshot()
+        let familyArchivedEventIDs = FamilyScopedData.archivedSharedExpenseEventIDsForCurrentFamily(
+            from: storedSettlementGroups,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: currentFamilyMemberUserIDs,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
         let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
             from: storedTransactions,
             scopeSnapshot: scopeSnapshot,
             familyMemberUserIDs: currentFamilyMemberUserIDs,
-            signedInUserID: sessionStore.activeLocalProfileUserID
+            signedInUserID: sessionStore.activeLocalProfileUserID,
+            archivedEventIDs: familyArchivedEventIDs
         )
         let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
             isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
@@ -922,6 +956,23 @@ struct PlanningView: View {
     private var visibleTransactions: [LedgerTransaction] {
         FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedSettlementGroupIDs
+        )
+    }
+
+    private var archivedSettlementGroupIDs: Set<UUID> {
+        SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
+        )
+    }
+
+    private var visibleSettlementGroups: [SettlementGroup] {
+        FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore

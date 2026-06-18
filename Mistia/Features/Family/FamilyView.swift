@@ -434,6 +434,7 @@ private struct FamilyOverviewDataCacheKey: Hashable {
     let billsSignature: MistiaCollectionChangeSignature
     let installmentsSignature: MistiaCollectionChangeSignature
     let occurrencesSignature: MistiaCollectionChangeSignature
+    let settlementGroupSignature: MistiaCollectionChangeSignature
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
 }
@@ -2016,6 +2017,8 @@ private struct FamilyOverviewDataHost: View {
     private var storedInstallments: [InstallmentPlan]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var storedSettlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
@@ -2026,6 +2029,7 @@ private struct FamilyOverviewDataHost: View {
     @State private var billsSignatureCache = GenericSignatureCache<RecurringBillPlan>()
     @State private var installmentsSignatureCache = GenericSignatureCache<InstallmentPlan>()
     @State private var occurrencesSignatureCache = GenericSignatureCache<DueOccurrenceRecord>()
+    @State private var settlementGroupsSignatureCache = GenericSignatureCache<SettlementGroup>()
     @State private var ownershipSignatureCache = GenericSignatureCache<OwnedRecordScope>()
     @State private var auditSignatureCache = GenericSignatureCache<TransactionAuditRecord>()
 
@@ -2050,7 +2054,8 @@ private struct FamilyOverviewDataHost: View {
                 .savingsGoal,
                 .recurringBillPlan,
                 .installmentPlan,
-                .dueOccurrenceRecord
+                .dueOccurrenceRecord,
+                .settlementGroup
             ]
         )
         let walletOwnerMap = ownerMaps[.wallet]
@@ -2060,6 +2065,7 @@ private struct FamilyOverviewDataHost: View {
         let billOwnerMap = ownerMaps[.recurringBillPlan]
         let installmentOwnerMap = ownerMaps[.installmentPlan]
         let occurrenceOwnerMap = ownerMaps[.dueOccurrenceRecord]
+        let settlementGroupOwnerMap = ownerMaps[.settlementGroup]
         let transactionAuditMap = TransactionAuditStore.auditMap(from: transactionAuditRecords)
         let visibleWallets = visibleForFamilyOverview(
             storedWallets,
@@ -2068,13 +2074,32 @@ private struct FamilyOverviewDataHost: View {
             familyMemberUserIDs: familyMemberUserIDs
         )
         .filter { !$0.isArchived }
-        let visibleTransactions = visibleForFamilyOverview(
+        let visibleSettlementGroups = visibleForFamilyOverview(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            ownerMap: settlementGroupOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
+        )
+        let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
+        )
+        let scopedVisibleTransactions = visibleForFamilyOverview(
             storedTransactions,
             entity: .transaction,
             ownerMap: transactionOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
         .filter { !$0.isArchived }
+        let visibleTransactionIDs = Set(
+            SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+                scopedVisibleTransactions.map(\.planningRecordSnapshot),
+                archivedEventIDs: archivedEventIDs
+            )
+            .map(\.id)
+        )
+        let visibleTransactions = scopedVisibleTransactions.filter {
+            visibleTransactionIDs.contains($0.id)
+        }
         let visibleBudgets = visibleForFamilyOverview(
             storedBudgets,
             entity: .budgetPlan,
@@ -2312,6 +2337,16 @@ private struct FamilyOverviewDataHost: View {
             )
         }
 
+        let settlementGroupsSig = settlementGroupsSignatureCache.signature(for: storedSettlementGroups) {
+            MistiaCollectionChangeSignature.make(
+                storedSettlementGroups,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
         let ownershipSig = ownershipSignatureCache.signature(for: ownershipScopes) {
             MistiaCollectionChangeSignature.make(
                 ownershipScopes,
@@ -2352,6 +2387,7 @@ private struct FamilyOverviewDataHost: View {
             billsSignature: billsSig,
             installmentsSignature: installmentsSig,
             occurrencesSignature: occurrencesSig,
+            settlementGroupSignature: settlementGroupsSig,
             ownershipSignature: ownershipSig,
             auditSignature: auditSig
         )

@@ -107,7 +107,8 @@ enum FamilyScopedData {
         audits: [TransactionAuditRecord],
         scopes: [OwnedRecordScope],
         familyContextStore: FamilyContextStore,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        archivedEventIDs: Set<UUID> = []
     ) -> [LedgerTransaction] {
         visibleTransactionsForHistory(
             transactions,
@@ -116,22 +117,24 @@ enum FamilyScopedData {
                 scopes: scopes,
                 familyContextStore: familyContextStore,
                 sessionStore: sessionStore
-            )
+            ),
+            archivedEventIDs: archivedEventIDs
         )
     }
 
     static func visibleTransactionsForHistory(
         _ transactions: [LedgerTransaction],
         audits _: [TransactionAuditRecord],
-        scopeSnapshot: ScopeSnapshot
+        scopeSnapshot: ScopeSnapshot,
+        archivedEventIDs: Set<UUID> = []
     ) -> [LedgerTransaction] {
         guard let subjectUserID = scopeSnapshot.subjectUserID else {
-            return transactions
+            return archivedEventFilteredTransactions(transactions, archivedEventIDs: archivedEventIDs)
         }
 
         let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
-        return transactions.filter { transaction in
+        let scopedTransactions = transactions.filter { transaction in
             guard transaction.deletedAt == nil, !transaction.isArchived else {
                 return false
             }
@@ -141,13 +144,15 @@ enum FamilyScopedData {
                 walletOwnerMap: walletOwnerMap
             ) == subjectUserID
         }
+        return archivedEventFilteredTransactions(scopedTransactions, archivedEventIDs: archivedEventIDs)
     }
 
     static func visibleTransactionsForFinancial(
         _ transactions: [LedgerTransaction],
         scopes: [OwnedRecordScope],
         familyContextStore: FamilyContextStore,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        archivedEventIDs: Set<UUID> = []
     ) -> [LedgerTransaction] {
         visibleTransactionsForFinancial(
             transactions,
@@ -155,21 +160,23 @@ enum FamilyScopedData {
                 scopes: scopes,
                 familyContextStore: familyContextStore,
                 sessionStore: sessionStore
-            )
+            ),
+            archivedEventIDs: archivedEventIDs
         )
     }
 
     static func visibleTransactionsForFinancial(
         _ transactions: [LedgerTransaction],
-        scopeSnapshot: ScopeSnapshot
+        scopeSnapshot: ScopeSnapshot,
+        archivedEventIDs: Set<UUID> = []
     ) -> [LedgerTransaction] {
         guard let subjectUserID = scopeSnapshot.subjectUserID else {
-            return transactions
+            return archivedEventFilteredTransactions(transactions, archivedEventIDs: archivedEventIDs)
         }
 
         let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
-        return transactions.filter { transaction in
+        let scopedTransactions = transactions.filter { transaction in
             guard transaction.deletedAt == nil, !transaction.isArchived else {
                 return false
             }
@@ -179,19 +186,21 @@ enum FamilyScopedData {
                 walletOwnerMap: walletOwnerMap
             ) == subjectUserID
         }
+        return archivedEventFilteredTransactions(scopedTransactions, archivedEventIDs: archivedEventIDs)
     }
 
     static func visibleTransactionsForCurrentFamilyFinancial(
         _ transactions: [LedgerTransaction],
         scopeSnapshot: ScopeSnapshot,
         familyMemberUserIDs: Set<UUID>,
-        signedInUserID: UUID?
+        signedInUserID: UUID?,
+        archivedEventIDs: Set<UUID> = []
     ) -> [LedgerTransaction] {
         guard !familyMemberUserIDs.isEmpty else { return [] }
 
         let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
-        return transactions.filter { transaction in
+        let scopedTransactions = transactions.filter { transaction in
             guard transaction.deletedAt == nil, !transaction.isArchived else {
                 return false
             }
@@ -203,13 +212,15 @@ enum FamilyScopedData {
             guard let ownerUserID else { return false }
             return familyMemberUserIDs.contains(ownerUserID)
         }
+        return archivedEventFilteredTransactions(scopedTransactions, archivedEventIDs: archivedEventIDs)
     }
 
     static func familyBudgetTransactionSnapshots(
         from transactions: [LedgerTransaction],
         scopeSnapshot: ScopeSnapshot,
         familyMemberUserIDs: Set<UUID>,
-        signedInUserID: UUID?
+        signedInUserID: UUID?,
+        archivedEventIDs: Set<UUID> = []
     ) -> [FamilyAggregateTransactionSnapshot] {
         let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
@@ -217,7 +228,8 @@ enum FamilyScopedData {
             transactions,
             scopeSnapshot: scopeSnapshot,
             familyMemberUserIDs: familyMemberUserIDs,
-            signedInUserID: signedInUserID
+            signedInUserID: signedInUserID,
+            archivedEventIDs: archivedEventIDs
         )
         .map { transaction in
             let record = transaction.planningRecordSnapshot
@@ -240,6 +252,41 @@ enum FamilyScopedData {
                 isInstallmentPayment: TransactionLogic.isInstallmentPayment(record)
             )
         }
+    }
+
+    static func archivedSharedExpenseEventIDsForCurrentFamily(
+        from groups: [SettlementGroup],
+        scopeSnapshot: ScopeSnapshot,
+        familyMemberUserIDs: Set<UUID>,
+        signedInUserID: UUID?
+    ) -> Set<UUID> {
+        guard !familyMemberUserIDs.isEmpty else { return [] }
+
+        let groupOwnerMap = scopeSnapshot.ownerMap(for: .settlementGroup)
+        let familyGroups = groups.filter { group in
+            guard group.deletedAt == nil else { return false }
+            let ownerUserID = groupOwnerMap[group.id] ?? group.organizerUserID ?? signedInUserID
+            guard let ownerUserID else { return false }
+            return familyMemberUserIDs.contains(ownerUserID)
+        }
+        return SettlementLogic.archivedSharedExpenseEventIDs(
+            from: familyGroups.map(\.recordSnapshot)
+        )
+    }
+
+    private static func archivedEventFilteredTransactions(
+        _ transactions: [LedgerTransaction],
+        archivedEventIDs: Set<UUID>
+    ) -> [LedgerTransaction] {
+        guard !archivedEventIDs.isEmpty else { return transactions }
+        let visibleRecordIDs = Set(
+            SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+                transactions.map(\.snapshot),
+                archivedEventIDs: archivedEventIDs
+            )
+            .map(\.id)
+        )
+        return transactions.filter { visibleRecordIDs.contains($0.id) }
     }
 
     private static func transactionOwnerUserID(

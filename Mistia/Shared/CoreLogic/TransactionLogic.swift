@@ -575,6 +575,16 @@ nonisolated enum SettlementLogic {
         }
     }
 
+    static func archivedSharedExpenseEventIDs(
+        from groups: [SettlementGroupRecordSnapshot]
+    ) -> Set<UUID> {
+        Set(
+            groups
+                .filter { $0.kind == .sharedExpense && $0.isArchived }
+                .map(\.id)
+        )
+    }
+
     static func participantSuggestionRecords(
         from records: [TransactionRecordSnapshot],
         transactionOwnerMap: [UUID: UUID],

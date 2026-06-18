@@ -328,7 +328,8 @@ struct TransactionsView: View {
             audits: transactionAuditRecords,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedSettlementGroupIDs
         )
     }
 
@@ -373,10 +374,10 @@ struct TransactionsView: View {
     }
 
     private var archivedSettlementGroupIDs: Set<UUID> {
-        Set(
-            visibleSettlementGroups
-                .filter { $0.kind == .sharedExpense && $0.isArchived && $0.deletedAt == nil }
-                .map(\.id)
+        SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups
+                .filter { $0.deletedAt == nil }
+                .map(\.recordSnapshot)
         )
     }
 

@@ -179,15 +179,31 @@ struct OverviewView: View {
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopeSnapshot: scopeSnapshot
+        )
+        let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
+        )
         let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
-            scopeSnapshot: scopeSnapshot
+            scopeSnapshot: scopeSnapshot,
+            archivedEventIDs: archivedEventIDs
+        )
+        let familyArchivedEventIDs = FamilyScopedData.archivedSharedExpenseEventIDsForCurrentFamily(
+            from: storedSettlementGroups,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: currentFamilyMemberUserIDs,
+            signedInUserID: sessionStore.activeLocalProfileUserID
         )
         let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
             from: storedTransactions,
             scopeSnapshot: scopeSnapshot,
             familyMemberUserIDs: currentFamilyMemberUserIDs,
-            signedInUserID: sessionStore.activeLocalProfileUserID
+            signedInUserID: sessionStore.activeLocalProfileUserID,
+            archivedEventIDs: familyArchivedEventIDs
         )
         let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
             isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
@@ -216,11 +232,6 @@ struct OverviewView: View {
         let visibleOccurrences = FamilyScopedData.visible(
             storedOccurrences,
             entity: .dueOccurrenceRecord,
-            scopeSnapshot: scopeSnapshot
-        )
-        let visibleSettlementGroups = FamilyScopedData.visible(
-            storedSettlementGroups,
-            entity: .settlementGroup,
             scopeSnapshot: scopeSnapshot
         )
         let visibleSettlementParticipants = FamilyScopedData.visible(
@@ -593,7 +604,14 @@ struct OverviewView: View {
             storedTransactions,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedSettlementGroupIDs
+        )
+    }
+
+    private var archivedSettlementGroupIDs: Set<UUID> {
+        SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
         )
     }
 
@@ -637,6 +655,16 @@ struct OverviewView: View {
         FamilyScopedData.visible(
             storedOccurrences,
             entity: .dueOccurrenceRecord,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleSettlementGroups: [SettlementGroup] {
+        FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
@@ -750,6 +778,7 @@ struct OverviewView: View {
                 day: selection.date,
                 transactions: renderSnapshot.postedExpenseTransactionsByDay[selection.date] ?? [],
                 currencyCode: currencyCode,
+                archivedSettlementGroupIDs: archivedSettlementGroupIDs,
                 onSelectTransaction: presentEditorFromDaySheet
             )
             .presentationDetents([.medium, .large])
@@ -1739,6 +1768,7 @@ private struct OverviewDayTransactionsSheet: View {
     let day: Date
     let transactions: [LedgerTransaction]
     let currencyCode: String
+    let archivedSettlementGroupIDs: Set<UUID>
     let onSelectTransaction: (LedgerTransaction) -> Void
 
     private var totalMinor: Int64 {
@@ -1801,7 +1831,8 @@ private struct OverviewDayTransactionsSheet: View {
                                     } label: {
                                         OverviewDayTransactionRow(
                                             transaction: transaction,
-                                            currencyCode: currencyCode
+                                            currencyCode: currencyCode,
+                                            archivedSettlementGroupIDs: archivedSettlementGroupIDs
                                         )
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 12)
@@ -1865,6 +1896,7 @@ private struct OverviewDaySummaryMetric: View {
 private struct OverviewDayTransactionRow: View {
     let transaction: LedgerTransaction
     let currencyCode: String
+    let archivedSettlementGroupIDs: Set<UUID>
 
     private var titleText: String {
         let trimmed = transaction.localizedTransactionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1901,6 +1933,11 @@ private struct OverviewDayTransactionRow: View {
         MistiaAccent.expense.color
     }
 
+    private var shouldShowSettlementEventBadge: Bool {
+        guard let settlementGroupID = transaction.settlementGroupID else { return false }
+        return !archivedSettlementGroupIDs.contains(settlementGroupID)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             MistiaFinanceIconView(icon: iconName, fallbackColor: amountColor, size: 34)
@@ -1912,7 +1949,7 @@ private struct OverviewDayTransactionRow: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    if transaction.settlementGroupID != nil {
+                    if shouldShowSettlementEventBadge {
                         MistiaMiniBadge(
                             title: L10n.transactions.settlement.eventTitle,
                             tint: MistiaAccent.teal.color

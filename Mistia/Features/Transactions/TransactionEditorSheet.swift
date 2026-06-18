@@ -274,7 +274,7 @@ struct TransactionEditorSheet: View {
     }
     private var linkedEvent: SettlementGroup? {
         guard let groupID = target.transaction?.settlementGroupID else { return nil }
-        return storedSettlementGroups.first { $0.id == groupID }
+        return storedSettlementGroups.first { $0.id == groupID && !$0.isArchived && $0.deletedAt == nil }
     }
     @State private var showsCategoryPicker = false
     @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
@@ -1752,7 +1752,21 @@ struct TransactionEditorSheet: View {
             audits: transactionAuditRecords,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
+            sessionStore: sessionStore,
+            archivedEventIDs: archivedSettlementGroupIDs
+        )
+    }
+
+    private var archivedSettlementGroupIDs: Set<UUID> {
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
             sessionStore: sessionStore
+        )
+        return SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups.map(\.recordSnapshot)
         )
     }
 

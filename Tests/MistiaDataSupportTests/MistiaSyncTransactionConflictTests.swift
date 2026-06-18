@@ -312,6 +312,86 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         XCTAssertEqual(restoredTransaction.reportingIncomeMinor, 0)
     }
 
+    func testArchivedEventSyncHidesGeneratedRowsWithoutArchivingTransactions() throws {
+        let userID = UUID()
+        let groupID = UUID()
+        let sourceContainer = try makeContainer()
+        let sourceContext = ModelContext(sourceContainer)
+        let wallet = makeWallet()
+        let occurredAt = makeDate(year: 2026, month: 7, day: 10)
+        let archivedAt = occurredAt.addingTimeInterval(600)
+        let group = SettlementGroup(
+            id: groupID,
+            kind: .sharedExpense,
+            status: .settled,
+            title: "Dinner split",
+            currencyCode: "JPY",
+            occurredAt: occurredAt,
+            totalMinor: 10_000,
+            expectedMinor: 4_000,
+            settledMinor: 0,
+            organizerUserID: userID,
+            createdAt: occurredAt,
+            updatedAt: archivedAt,
+            isArchived: true,
+            archivedAt: archivedAt
+        )
+        let linkedBill = makeTransaction(
+            title: "Dinner",
+            amountMinor: 10_000,
+            occurredAt: occurredAt,
+            updatedAt: occurredAt,
+            wallet: wallet
+        )
+        linkedBill.settlementGroupID = groupID
+        linkedBill.settlementRole = .sharedExpensePaid
+        let generatedDebt = makeTransaction(
+            title: "Split payable",
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 4_000,
+            occurredAt: occurredAt.addingTimeInterval(60),
+            updatedAt: occurredAt.addingTimeInterval(60),
+            wallet: wallet
+        )
+        generatedDebt.settlementGroupID = groupID
+        generatedDebt.settlementRole = .sharedExpensePayable
+
+        sourceContext.insert(wallet)
+        sourceContext.insert(group)
+        sourceContext.insert(linkedBill)
+        sourceContext.insert(generatedDebt)
+        try sourceContext.save()
+
+        let snapshot = try MistiaSyncLocalStore.exportSnapshot(for: userID, from: sourceContainer)
+        XCTAssertEqual(snapshot.settlementGroups.first?.isArchived, true)
+        XCTAssertEqual(snapshot.transactions.count, 2)
+        XCTAssertTrue(snapshot.transactions.allSatisfy { !$0.isArchived })
+
+        let targetContainer = try makeContainer()
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            snapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            in: targetContainer
+        )
+
+        let targetContext = ModelContext(targetContainer)
+        let restoredGroup = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementGroup>()).first)
+        let restoredTransactions = try targetContext.fetch(FetchDescriptor<LedgerTransaction>())
+        let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(from: [restoredGroup.recordSnapshot])
+        let visibleRecords = SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
+            restoredTransactions.map(\.snapshot),
+            archivedEventIDs: archivedEventIDs
+        )
+
+        XCTAssertTrue(restoredGroup.isArchived)
+        XCTAssertEqual(restoredTransactions.count, 2)
+        XCTAssertTrue(restoredTransactions.allSatisfy { !$0.isArchived })
+        XCTAssertEqual(visibleRecords.map(\.id), [linkedBill.id])
+    }
+
     func testDiagnosticSettlementRoles() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
