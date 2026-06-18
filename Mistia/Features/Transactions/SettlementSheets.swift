@@ -2189,13 +2189,6 @@ private struct SharedExpenseReadOnlyParticipantRow: View {
         return progress.isReceivable ? MistiaAccent.debtLend.color : MistiaAccent.debtBorrow.color
     }
 
-    private var icon: String {
-        if !progress.hasDebt || progress.isSettled {
-            return "checkmark.circle.fill"
-        }
-        return progress.isReceivable ? TransactionDebtIntent.lend.financeIconToken : TransactionDebtIntent.borrow.financeIconToken
-    }
-
     private var statusText: String {
         guard progress.hasDebt else {
             return L10n.transactions.settlement.participantSettled
@@ -2214,38 +2207,36 @@ private struct SharedExpenseReadOnlyParticipantRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            MistiaFinanceIconView(
-                icon: icon,
-                fallbackColor: amountColor,
-                size: 34
-            )
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(progress.displayName)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(progress.displayName)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .layoutPriority(1)
+                Spacer(minLength: 12)
 
-                    Text(statusText)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(amountColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
+                Text(statusText)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(amountColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .multilineTextAlignment(.trailing)
+            }
 
-                if let remainingText {
+            if let remainingText {
+                HStack {
+                    Spacer(minLength: 12)
                     Text(remainingText)
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .multilineTextAlignment(.trailing)
                 }
             }
-
-            Spacer(minLength: 12)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 }
