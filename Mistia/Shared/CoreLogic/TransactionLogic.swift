@@ -301,6 +301,60 @@ nonisolated struct SettlementDebtReportingOverride: Equatable {
     let incomeMinor: Int64
 }
 
+nonisolated struct EventGeneratedExpenseReportingDraft: Equatable {
+    let originalCategoryID: UUID?
+    var countsAsExpense: Bool
+    var categoryID: UUID?
+
+    init(
+        originalCategoryID: UUID?,
+        countsAsExpense: Bool,
+        categoryID: UUID?
+    ) {
+        self.originalCategoryID = originalCategoryID
+        self.countsAsExpense = countsAsExpense
+        self.categoryID = categoryID
+    }
+
+    var effectiveCategoryID: UUID? {
+        countsAsExpense ? categoryID : nil
+    }
+
+    var requiresCategorySelection: Bool {
+        countsAsExpense && categoryID == nil
+    }
+
+    var hasChanges: Bool {
+        countsAsExpense != (originalCategoryID != nil)
+            || effectiveCategoryID != originalCategoryID
+    }
+
+    mutating func setCountsAsExpense(_ isOn: Bool) {
+        countsAsExpense = isOn
+        if isOn {
+            categoryID = categoryID ?? originalCategoryID
+        } else {
+            categoryID = nil
+        }
+    }
+
+    mutating func selectCategory(_ categoryID: UUID) {
+        self.categoryID = categoryID
+        countsAsExpense = true
+    }
+
+    func reportingOverride(
+        settlementRole: SettlementTransactionRole?,
+        amountMinor: Int64
+    ) -> SettlementDebtReportingOverride {
+        SettlementLogic.sharedExpensePrincipalReportingOverride(
+            settlementRole: settlementRole,
+            amountMinor: amountMinor,
+            categoryID: effectiveCategoryID
+        )
+    }
+}
+
 nonisolated struct SettlementDebtPaymentAllocation: Equatable {
     let settlementGroupID: UUID?
     let settlementRole: SettlementTransactionRole?

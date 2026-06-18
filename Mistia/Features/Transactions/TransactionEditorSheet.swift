@@ -378,6 +378,23 @@ struct TransactionEditorSheet: View {
         return TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(transaction.snapshot)
     }
 
+    private var eventGeneratedExpenseReportingDraft: EventGeneratedExpenseReportingDraft? {
+        guard let transaction = target.transaction,
+              isEventGeneratedSharedExpenseDebtPrincipalDetail else {
+            return nil
+        }
+
+        return EventGeneratedExpenseReportingDraft(
+            originalCategoryID: transaction.category?.id,
+            countsAsExpense: draft.paidForCountsAsExpense,
+            categoryID: draft.categoryID
+        )
+    }
+
+    private var hasEventGeneratedExpenseReportingChanges: Bool {
+        eventGeneratedExpenseReportingDraft?.hasChanges ?? false
+    }
+
     private var transactionContextRows: [TransactionEditorContextRowData] {
         [transactionTypeContextRow, linkedEventContextRow].compactMap(\.self)
     }
@@ -462,7 +479,11 @@ struct TransactionEditorSheet: View {
     }
 
     private var hasUnsavedChangesForDismissal: Bool {
-        guard !isLockedByStatement, !isFamilyTransferDetail, !isEventGeneratedSharedExpenseDebtDetail else { return false }
+        guard !isLockedByStatement, !isFamilyTransferDetail else { return false }
+        if isEventGeneratedSharedExpenseDebtPrincipalDetail {
+            return hasEventGeneratedExpenseReportingChanges
+        }
+        guard !isEventGeneratedSharedExpenseDebtDetail else { return false }
 
         let receiptChanged = receiptDraft?.isChanged == true || shouldDeleteReceiptOnSave
         if target.transaction == nil {
@@ -479,6 +500,8 @@ struct TransactionEditorSheet: View {
         let isReadOnlyDetail = isLockedByStatement || isFamilyTransferDetail || isEventGeneratedSharedExpenseDebtDetail
         let areEditorControlsDisabled = isReadOnlyDetail || isSaving || isProcessingReceiptImage
         let renderContext = makeRenderContext()
+        let showsSaveButton = shouldShowSaveButton
+        let isSaveDisabled = isSaveButtonDisabled
 
         NavigationStack {
             Form {
@@ -526,7 +549,7 @@ struct TransactionEditorSheet: View {
                                 .background(transactionEditorDebtIntentTint(draft.debtIntent).opacity(0.12))
                                 .clipShape(Circle())
 
-                            Text(L10n.transactions.transactioneditor.eventGeneratedDebtReadOnlyNotice)
+                            Text(eventGeneratedDebtNoticeText)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
@@ -563,7 +586,7 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    if !isAdjustment && !isLockedByStatement && !isFamilyTransferDetail && !isEventGeneratedSharedExpenseDebtDetail {
+                    if showsSaveButton {
                         Button {
                             save()
                         } label: {
@@ -575,14 +598,16 @@ struct TransactionEditorSheet: View {
                             } else {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                                    .foregroundStyle(saveButtonForeground)
                                     .frame(width: 30, height: 30)
                             }
                         }
                         .buttonStyle(.glassProminent)
                         .buttonBorderShape(.circle)
-                        .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
-                        .disabled(isSaving || isProcessingReceiptImage)
+                        .tint(saveButtonTint)
+                        .disabled(isSaveDisabled)
+                        .opacity(isSaveDisabled ? 0.45 : 1)
+                        .accessibilityLabel(L10n.common.save)
                     }
                 }
             }
@@ -1271,14 +1296,27 @@ struct TransactionEditorSheet: View {
     private func eventGeneratedPrincipalCategorySection(
         renderContext: TransactionEditorRenderContext
     ) -> some View {
-        Section(L10n.transactions.transactioneditor.eventGeneratedExpenseReportingSection) {
+        @Bindable var bindableDraft = draft
+
+        return Section(L10n.transactions.transactioneditor.eventGeneratedExpenseReportingSection) {
             Toggle(
                 L10n.transactions.transactioneditor.countAsExpense,
-                isOn: .constant(draft.categoryID != nil)
+                isOn: Binding(
+                    get: { bindableDraft.paidForCountsAsExpense },
+                    set: { isOn in
+                        var reportingDraft = EventGeneratedExpenseReportingDraft(
+                            originalCategoryID: target.transaction?.category?.id,
+                            countsAsExpense: bindableDraft.paidForCountsAsExpense,
+                            categoryID: bindableDraft.categoryID
+                        )
+                        reportingDraft.setCountsAsExpense(isOn)
+                        bindableDraft.paidForCountsAsExpense = reportingDraft.countsAsExpense
+                        bindableDraft.categoryID = reportingDraft.categoryID
+                    }
+                )
             )
-            .disabled(true)
 
-            if draft.categoryID != nil {
+            if draft.paidForCountsAsExpense {
                 Button {
                     showsCategoryPicker = true
                 } label: {
@@ -1319,6 +1357,44 @@ struct TransactionEditorSheet: View {
         }
 
         return L10n.transactions.transactioneditor.editTransaction
+    }
+
+    private var eventGeneratedDebtNoticeText: String {
+        isEventGeneratedSharedExpenseDebtPrincipalDetail
+            ? L10n.transactions.transactioneditor.eventGeneratedDebtReportingEditableNotice
+            : L10n.transactions.transactioneditor.eventGeneratedDebtReadOnlyNotice
+    }
+
+    private var shouldShowSaveButton: Bool {
+        guard !isAdjustment, !isLockedByStatement, !isFamilyTransferDetail else {
+            return false
+        }
+
+        if isEventGeneratedSharedExpenseDebtDetail {
+            return isEventGeneratedSharedExpenseDebtPrincipalDetail
+        }
+
+        return true
+    }
+
+    private var isSaveButtonDisabled: Bool {
+        if isSaving || isProcessingReceiptImage {
+            return true
+        }
+
+        if isEventGeneratedSharedExpenseDebtPrincipalDetail {
+            return !hasEventGeneratedExpenseReportingChanges
+        }
+
+        return false
+    }
+
+    private var saveButtonForeground: Color {
+        isSaveButtonDisabled ? .secondary : MistiaAccent.checkmarkPurple.color
+    }
+
+    private var saveButtonTint: Color {
+        isSaveButtonDisabled ? Color.secondary.opacity(0.18) : accentColor
     }
 
     private var headerTitle: String {
@@ -2202,7 +2278,11 @@ struct TransactionEditorSheet: View {
     private func save() {
         guard !isSaving else { return }
         guard !isFamilyTransferDetail else { return }
-        guard !isEventGeneratedSharedExpenseDebtDetail else { return }
+        if isEventGeneratedSharedExpenseDebtDetail {
+            guard isEventGeneratedSharedExpenseDebtPrincipalDetail else { return }
+            saveEventGeneratedPrincipalReportingChanges()
+            return
+        }
         if draft.primaryKind == .transfer {
             let subtype = draft.transferSubtype ?? .internalTransfer
             if let prompt = transferPermissionPrompt(for: subtype) {
@@ -3215,31 +3295,57 @@ struct TransactionEditorSheet: View {
     }
 
     private func handleCategorySelection(_ category: TransactionCategory) {
-        draft.categoryID = category.id
         if isEventGeneratedSharedExpenseDebtPrincipalDetail {
-            persistEventGeneratedPrincipalCategory(category)
+            var reportingDraft = EventGeneratedExpenseReportingDraft(
+                originalCategoryID: target.transaction?.category?.id,
+                countsAsExpense: draft.paidForCountsAsExpense,
+                categoryID: draft.categoryID
+            )
+            reportingDraft.selectCategory(category.id)
+            draft.paidForCountsAsExpense = reportingDraft.countsAsExpense
+            draft.categoryID = reportingDraft.categoryID
+        } else {
+            draft.categoryID = category.id
         }
     }
 
-    private func persistEventGeneratedPrincipalCategory(_ category: TransactionCategory) {
+    private func saveEventGeneratedPrincipalReportingChanges() {
         guard let transaction = target.transaction,
               isEventGeneratedSharedExpenseDebtPrincipalDetail else {
             return
         }
 
+        var reportingDraft = EventGeneratedExpenseReportingDraft(
+            originalCategoryID: transaction.category?.id,
+            countsAsExpense: draft.paidForCountsAsExpense,
+            categoryID: draft.categoryID
+        )
+        guard reportingDraft.hasChanges else { return }
+        let category: TransactionCategory?
+        if reportingDraft.countsAsExpense {
+            guard !reportingDraft.requiresCategorySelection,
+                  let selectedCategory else {
+                alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
+                return
+            }
+            category = selectedCategory
+            reportingDraft.categoryID = selectedCategory.id
+        } else {
+            category = nil
+        }
+
+        isSaving = true
+        defer { isSaving = false }
+
         let now = Date()
         transaction.category = category
-        let reportingOverride = SettlementLogic.sharedExpensePrincipalReportingOverride(
+        let reportingOverride = reportingDraft.reportingOverride(
             settlementRole: transaction.settlementRole,
-            amountMinor: transaction.amountMinor,
-            categoryID: category.id
+            amountMinor: transaction.amountMinor
         )
         transaction.reportingExpenseMinor = reportingOverride.expenseMinor
         transaction.reportingIncomeMinor = reportingOverride.incomeMinor
         transaction.updatedAt = now
-        if transaction.debtIntent == .borrow, transaction.sourceWallet == nil {
-            draft.paidForCountsAsExpense = true
-        }
 
         let ownerUserID = persistenceOwnerUserID(for: transaction)
         do {
@@ -3271,6 +3377,8 @@ struct TransactionEditorSheet: View {
                 modifiedAt: now,
                 subjectUserIDOverride: ownerUserID
             )
+            onComplete(.savedTransaction)
+            dismiss()
             if let ownerUserID,
                ownerUserID != sessionStore.activeLocalProfileUserID {
                 Task { @MainActor in
@@ -4106,9 +4214,13 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.paidForCurrencyCode = MistiaCurrencyLogic.normalizedCode(
                 transaction.sourceCurrencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
             )
-            self.paidForCountsAsExpense = transaction.debtIntent == .borrow
-                && transaction.sourceWallet == nil
-                && transaction.category != nil
+            if TransactionLogic.isEventGeneratedSharedExpenseDebtPrincipal(transaction.snapshot) {
+                self.paidForCountsAsExpense = transaction.category != nil
+            } else {
+                self.paidForCountsAsExpense = transaction.debtIntent == .borrow
+                    && transaction.sourceWallet == nil
+                    && transaction.category != nil
+            }
             self.title = transaction.title
             self.amountText = "\(transaction.amountMinor)"
             self.purchaseCostText = transaction.settlementRole == .resaleReceivable

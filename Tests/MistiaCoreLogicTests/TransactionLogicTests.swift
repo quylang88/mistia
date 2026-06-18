@@ -538,6 +538,51 @@ final class TransactionLogicTests: XCTestCase {
         )
     }
 
+    func testEventGeneratedExpenseReportingDraftTracksToggleCategoryAndDirtyState() {
+        let originalCategoryID = UUID()
+        let updatedCategoryID = UUID()
+
+        var draft = EventGeneratedExpenseReportingDraft(
+            originalCategoryID: originalCategoryID,
+            countsAsExpense: true,
+            categoryID: originalCategoryID
+        )
+        XCTAssertFalse(draft.hasChanges)
+        XCTAssertFalse(draft.requiresCategorySelection)
+
+        draft.setCountsAsExpense(false)
+        XCTAssertFalse(draft.countsAsExpense)
+        XCTAssertNil(draft.effectiveCategoryID)
+        XCTAssertTrue(draft.hasChanges)
+        XCTAssertEqual(
+            draft.reportingOverride(settlementRole: .sharedExpensePayable, amountMinor: 4_000),
+            SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        )
+
+        draft.setCountsAsExpense(true)
+        XCTAssertEqual(draft.effectiveCategoryID, originalCategoryID)
+        XCTAssertFalse(draft.hasChanges)
+
+        draft.selectCategory(updatedCategoryID)
+        XCTAssertTrue(draft.countsAsExpense)
+        XCTAssertEqual(draft.effectiveCategoryID, updatedCategoryID)
+        XCTAssertTrue(draft.hasChanges)
+        XCTAssertEqual(
+            draft.reportingOverride(settlementRole: .sharedExpensePayable, amountMinor: 4_000),
+            SettlementDebtReportingOverride(expenseMinor: 4_000, incomeMinor: 0)
+        )
+
+        var uncategorizedDraft = EventGeneratedExpenseReportingDraft(
+            originalCategoryID: nil,
+            countsAsExpense: false,
+            categoryID: nil
+        )
+        uncategorizedDraft.setCountsAsExpense(true)
+        XCTAssertTrue(uncategorizedDraft.hasChanges)
+        XCTAssertTrue(uncategorizedDraft.requiresCategorySelection)
+        XCTAssertNil(uncategorizedDraft.effectiveCategoryID)
+    }
+
     func testResaleReceivableUsesSalePriceForDebtAndPurchaseCostForWalletReporting() {
         let wallet = TransactionWalletSnapshot(
             id: UUID(),

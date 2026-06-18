@@ -38503,6 +38503,29 @@
         }
       }
     },
+    "transactions.transactioneditor.eventGeneratedDebtReportingEditableNotice" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This loan entry was generated from an event. Only Expense reporting can be edited here; the amount and people are managed in the event."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この貸し借りはイベントから作成されました。ここでは支出への反映のみ編集でき、金額と参加者はイベントで管理されます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khoản vay & cho vay này được tạo từ sự kiện. Chỉ phần Ghi nhận chi tiêu có thể chỉnh ở đây; số tiền và người liên quan được quản lý trong sự kiện."
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.eventGeneratedExpenseReportingSection" : {
       "extractionState" : "stale",
       "localizations" : {
