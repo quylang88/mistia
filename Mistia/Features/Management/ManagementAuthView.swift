@@ -358,7 +358,8 @@ struct ManagementAccountView: View {
                         subtitle: nil,
                         value: syncSettingsValue,
                         badge: dataManagementBadgeText,
-                        badgeAccent: .purple
+                        badgeAccent: .purple,
+                        usesDarkReadableIconStyle: true
                     ) {
                         destination = .syncSettings
                     }
@@ -1687,12 +1688,17 @@ private struct ManagementProfileNavigationRow: View {
     var badgeAccent: MistiaAccent? = nil
     var isLoading: Bool = false
     var isDisabled: Bool = false
+    var usesDarkReadableIconStyle: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(alignment: subtitle == nil ? .center : .top, spacing: 12) {
-                ManagementProfileIconTile(icon: icon, accent: accent)
+                ManagementProfileIconTile(
+                    icon: icon,
+                    accent: accent,
+                    usesDarkReadableStyle: usesDarkReadableIconStyle
+                )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -1887,17 +1893,37 @@ private struct ManagementProfilePrimaryActionButton: View {
 }
 
 private struct ManagementProfileIconTile: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let icon: String
     let accent: MistiaAccent
+
+    var usesDarkReadableStyle: Bool = false
+
+    private var fill: Color {
+        if usesDarkReadableStyle && colorScheme == .dark {
+            return Color(UIColor.tertiarySystemFill)
+        }
+
+        return accent.color.opacity(0.15)
+    }
+
+    private var foreground: Color {
+        if usesDarkReadableStyle && colorScheme == .dark {
+            return MistiaAccent.lightPurple.color
+        }
+
+        return accent.color
+    }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(accent.color.opacity(0.15))
+                .fill(fill)
 
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(accent.color)
+                .foregroundStyle(foreground)
         }
         .frame(width: 32, height: 32)
     }
@@ -2651,6 +2677,14 @@ private struct ManagementEditProfileView: View {
         L10n.management.managementauth.learnHowMistiaUsesPersonalInformation
     }
 
+    private var photoButtonForeground: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : accent
+    }
+
+    private var photoButtonFill: Color {
+        colorScheme == .dark ? Color(UIColor.tertiarySystemFill) : accent.opacity(0.16)
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -2684,10 +2718,10 @@ private struct ManagementEditProfileView: View {
                     } label: {
                         Text(L10n.management.managementauth.changePhoto)
                             .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(accent)
+                            .foregroundStyle(photoButtonForeground)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(accent.opacity(0.16), in: Capsule())
+                            .background(photoButtonFill, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .disabled(!sessionStore.canPerformRemoteActions)

@@ -128,7 +128,10 @@ struct ManagementWalletEditorSheet: View {
                                 Text(effectiveBalance.formattedCurrency(code: draft.currencyCode))
                                     .foregroundStyle(.secondary)
 
-                                ManagementBalanceEditButton {
+                                MistiaSmallIconButton(
+                                    systemImage: "pencil",
+                                    accessibilityLabel: L10n.management.management.editBalance
+                                ) {
                                     showsBalanceAdjustment = true
                                 }
                             }
@@ -1438,63 +1441,6 @@ private struct ManagementEditorIconPreview: View {
 
     var body: some View {
         MistiaFinanceIconView(icon: symbolName, fallbackColor: color, size: size)
-    }
-}
-
-private struct ManagementBalanceEditButton: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let action: () -> Void
-
-    private var accent: Color {
-        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
-    }
-
-    var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                Button(action: action) {
-                    label
-                        .foregroundStyle(accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.capsule)
-                .controlSize(.small)
-                .tint(accent)
-            } else {
-                Button(action: action) {
-                    label
-                        .foregroundStyle(accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background {
-                            MistiaCapsuleGlassBackground(
-                                tint: accent.opacity(colorScheme == .dark ? 0.18 : 0.12),
-                                interactive: true
-                            )
-                        }
-                        .overlay {
-                            Capsule()
-                                .strokeBorder(accent.opacity(colorScheme == .dark ? 0.22 : 0.16), lineWidth: 0.8)
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .accessibilityLabel(L10n.management.management.editBalance)
-    }
-
-    private var label: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "pencil")
-                .font(.system(size: 11.5, weight: .bold, design: .rounded))
-
-            Text(L10n.management.management.edit)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-        }
-        .lineLimit(1)
-        .fixedSize()
     }
 }
 

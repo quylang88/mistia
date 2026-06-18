@@ -581,17 +581,12 @@ struct SettlementEditorSheet: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     if isReadOnlyEventDetail {
-                        Button {
+                        MistiaSmallIconButton(
+                            systemImage: "arrow.uturn.left",
+                            accessibilityLabel: L10n.transactions.settlement.resetSplitAction
+                        ) {
                             showsResetConfirmation = true
-                        } label: {
-                            Image(systemName: "arrow.uturn.left")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                                .frame(width: 30, height: 30)
                         }
-                        .buttonStyle(.glassProminent)
-                        .buttonBorderShape(.circle)
-                        .tint(MistiaAccent.purple.color)
                     } else {
                         Button {
                             save()
@@ -606,6 +601,7 @@ struct SettlementEditorSheet: View {
                         .tint(MistiaAccent.purple.color)
                         .disabled(isSaveDisabled)
                         .opacity(isSaveDisabled ? 0.45 : 1)
+                        .accessibilityLabel(L10n.common.save)
                     }
                 }
             }
@@ -656,19 +652,6 @@ struct SettlementEditorSheet: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
-        }
-        .confirmationDialog(
-            L10n.transactions.settlement.addExpenseToEvent,
-            isPresented: $showingBillAddOptions,
-            titleVisibility: .visible
-        ) {
-            Button(L10n.transactions.settlement.addNewExpense) {
-                beginAddingBill(mode: .newExpense)
-            }
-            Button(L10n.transactions.settlement.chooseExistingExpense) {
-                beginAddingBill(mode: .existingExpense)
-            }
-            Button(L10n.common.cancel, role: .cancel) {}
         }
     }
 
@@ -753,12 +736,11 @@ struct SettlementEditorSheet: View {
         HStack {
             Text(title)
             Spacer()
-            Button(action: action) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 17, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel)
+            MistiaSmallIconButton(
+                systemImage: "plus",
+                accessibilityLabel: accessibilityLabel,
+                action: action
+            )
         }
     }
 
@@ -774,6 +756,13 @@ struct SettlementEditorSheet: View {
                 symbols: ["receipt.fill", "wallet.pass.fill", "person.2.fill", "plus"]
             ) {
                 showingBillAddOptions = true
+            }
+            .confirmationDialog(
+                L10n.transactions.settlement.addExpenseToEvent,
+                isPresented: $showingBillAddOptions,
+                titleVisibility: .visible
+            ) {
+                addExpenseConfirmationActions
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             .listRowBackground(Color.clear)
@@ -849,9 +838,29 @@ struct SettlementEditorSheet: View {
             ) {
                 showingBillAddOptions = true
             }
+            .confirmationDialog(
+                L10n.transactions.settlement.addExpenseToEvent,
+                isPresented: $showingBillAddOptions,
+                titleVisibility: .visible
+            ) {
+                addExpenseConfirmationActions
+            }
             .padding(.vertical, 10)
             .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
         }
+    }
+
+    @ViewBuilder
+    private var addExpenseConfirmationActions: some View {
+        Button(L10n.transactions.settlement.addNewExpense) {
+            beginAddingBill(mode: .newExpense)
+        }
+
+        Button(L10n.transactions.settlement.chooseExistingExpense) {
+            beginAddingBill(mode: .existingExpense)
+        }
+
+        Button(L10n.common.cancel, role: .cancel) {}
     }
 
     @ViewBuilder
@@ -2038,12 +2047,11 @@ private struct SharedExpenseTransactionSearchSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
+                    MistiaSmallIconButton(
+                        systemImage: "xmark",
+                        accessibilityLabel: L10n.transactions.transactions.close
+                    ) {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -2588,19 +2596,13 @@ struct SettlementSplitCalculatorSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if !isFinalized {
-                        Button {
+                        MistiaSmallIconButton(
+                            systemImage: "checkmark",
+                            accessibilityLabel: L10n.common.save,
+                            isEnabled: canFinalizeSplit
+                        ) {
                             finalizeSplit()
-                        } label: {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                                .frame(width: 30, height: 30)
                         }
-                        .buttonStyle(.glassProminent)
-                        .buttonBorderShape(.circle)
-                        .tint(MistiaAccent.purple.color)
-                        .disabled(!canFinalizeSplit)
-                        .opacity(canFinalizeSplit ? 1 : 0.45)
                     }
                 }
             }
@@ -2648,20 +2650,23 @@ struct SettlementSplitCalculatorSheet: View {
                     .foregroundStyle(MistiaAccent.expense.color)
             }
 
-            Button {
+            smallIconActionRow(
+                title: L10n.management.management.edit,
+                systemImage: "pencil",
+                accessibilityLabel: L10n.management.management.edit,
+                isEnabled: !isFinalized
+            ) {
                 onEdit(target.groupID)
                 dismiss()
-            } label: {
-                Label(L10n.management.management.edit, systemImage: "pencil")
             }
-            .disabled(isFinalized)
-            .opacity(isFinalized ? 0.45 : 1)
 
             if isFinalized {
-                Button(role: .destructive) {
+                smallIconActionRow(
+                    title: L10n.transactions.settlement.recalculateSplit,
+                    systemImage: "arrow.counterclockwise",
+                    accessibilityLabel: L10n.transactions.settlement.recalculateSplit
+                ) {
                     showsResetConfirmation = true
-                } label: {
-                    Label(L10n.transactions.settlement.recalculateSplit, systemImage: "arrow.counterclockwise")
                 }
             }
         }
@@ -2731,16 +2736,38 @@ struct SettlementSplitCalculatorSheet: View {
             }
 
             if !debtAmountTextsBySuggestionID.isEmpty {
-                Button {
+                smallIconActionRow(
+                    title: L10n.transactions.settlement.recalculateSplit,
+                    systemImage: "arrow.counterclockwise",
+                    accessibilityLabel: L10n.transactions.settlement.recalculateSplit
+                ) {
                     resetDebtAmountsToAutomatic()
-                } label: {
-                    Label(
-                        L10n.transactions.settlement.recalculateSplit,
-                        systemImage: "arrow.counterclockwise"
-                    )
                 }
             }
         }
+    }
+
+    private func smallIconActionRow(
+        title: String,
+        systemImage: String,
+        accessibilityLabel: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .foregroundStyle(isEnabled ? .primary : .secondary)
+
+            Spacer()
+
+            MistiaSmallIconButton(
+                systemImage: systemImage,
+                accessibilityLabel: accessibilityLabel,
+                isEnabled: isEnabled,
+                action: action
+            )
+        }
+        .opacity(isEnabled ? 1 : 0.45)
     }
 
     private var summaryCard: some View {
@@ -2757,14 +2784,13 @@ struct SettlementSplitCalculatorSheet: View {
                             .foregroundStyle(MistiaAccent.expense.color)
                     }
                     Spacer()
-                    Button {
+                    MistiaSmallIconButton(
+                        systemImage: "pencil",
+                        accessibilityLabel: L10n.management.management.edit
+                    ) {
                         onEdit(target.groupID)
                         dismiss()
-                    } label: {
-                        Label(L10n.management.management.edit, systemImage: "pencil")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
                     }
-                    .buttonStyle(.bordered)
                 }
 
                 Text(L10n.transactions.settlement.selfPaidLocked)
@@ -2918,13 +2944,12 @@ struct SettlementSplitCalculatorSheet: View {
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
                     Spacer()
-                    Button {
+                    MistiaSmallIconButton(
+                        systemImage: "plus",
+                        accessibilityLabel: L10n.transactions.settlement.addParticipant
+                    ) {
                         additionalRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20, weight: .bold))
                     }
-                    .buttonStyle(.plain)
                 }
 
                 ForEach(splitResult.participants) { participant in
@@ -3621,23 +3646,13 @@ private struct SharedExpenseSuggestionActionRow: View {
                     .minimumScaleFactor(0.72)
             }
 
-            Button(action: isEditing ? onSave : onEdit) {
-                Image(systemName: isEditing ? "checkmark" : "pencil")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                    .frame(width: 30, height: 30)
-                    .background {
-                        Circle()
-                            .fill(Color(UIColor.tertiarySystemFill))
-                    }
-            }
-            .buttonStyle(.plain)
-            .disabled(isAnotherRowEditing)
-            .opacity(isAnotherRowEditing ? 0.4 : 1)
-            .accessibilityLabel(
-                isEditing
+            MistiaSmallIconButton(
+                systemImage: isEditing ? "checkmark" : "pencil",
+                accessibilityLabel: isEditing
                     ? L10n.transactions.settlement.saveDebtAmount(name)
-                    : L10n.transactions.settlement.editDebtAmount(name)
+                    : L10n.transactions.settlement.editDebtAmount(name),
+                isEnabled: !isAnotherRowEditing,
+                action: isEditing ? onSave : onEdit
             )
         }
         .contentShape(Rectangle())

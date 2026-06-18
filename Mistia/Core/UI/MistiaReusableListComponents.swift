@@ -44,7 +44,7 @@ struct MistiaFooterAddButton: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : accent
     }
 
     var body: some View {
@@ -161,5 +161,38 @@ struct MistiaMiniBadge: View {
             .background {
                 MistiaCapsuleGlassBackground(tint: tint.opacity(0.12))
             }
+    }
+}
+
+struct MistiaSmallIconButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let systemImage: String
+    let accessibilityLabel: String
+    var isEnabled: Bool = true
+    var action: () -> Void
+
+    private var foreground: Color {
+        colorScheme == .dark ? MistiaAccent.checkmarkPurple.color : MistiaAccent.purple.color
+    }
+
+    private var fill: Color {
+        Color(UIColor.tertiarySystemFill)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(foreground)
+                .frame(width: 30, height: 30)
+                .background {
+                    Circle().fill(fill)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
