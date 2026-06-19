@@ -126,6 +126,37 @@ final class OverviewAggregationPerformanceTests: XCTestCase {
         )
     }
 
+    func testOverviewActionContextKeepsArchivedAndOwnerLookupsInSnapshot() {
+        let transactionID = UUID()
+        let transactionOwnerID = UUID()
+        let fallbackOwnerID = UUID()
+        let archivedGroupID = UUID()
+
+        let context = OverviewActionContext(
+            archivedSettlementGroupIDs: [archivedGroupID],
+            transactionOwnerMap: [transactionID: transactionOwnerID]
+        )
+
+        XCTAssertTrue(context.isSettlementGroupArchived(archivedGroupID))
+        XCTAssertFalse(context.isSettlementGroupArchived(UUID()))
+        XCTAssertEqual(
+            context.ownerUserID(
+                forTransactionID: transactionID,
+                selectedSubjectUserID: fallbackOwnerID,
+                activeLocalProfileUserID: nil
+            ),
+            transactionOwnerID
+        )
+        XCTAssertEqual(
+            context.ownerUserID(
+                forTransactionID: UUID(),
+                selectedSubjectUserID: fallbackOwnerID,
+                activeLocalProfileUserID: nil
+            ),
+            fallbackOwnerID
+        )
+    }
+
     private func transactionRecord(
         primaryKind: TransactionPrimaryKind = .expense,
         amountMinor: Int64,

@@ -76,11 +76,31 @@ private enum OverviewAlertPresentation: Identifiable {
     }
 }
 
+struct OverviewActionContext {
+    let archivedSettlementGroupIDs: Set<UUID>
+    let transactionOwnerMap: [UUID: UUID]
+
+    func isSettlementGroupArchived(_ groupID: UUID) -> Bool {
+        archivedSettlementGroupIDs.contains(groupID)
+    }
+
+    func ownerUserID(
+        forTransactionID transactionID: UUID,
+        selectedSubjectUserID: UUID?,
+        activeLocalProfileUserID: UUID?
+    ) -> UUID? {
+        transactionOwnerMap[transactionID]
+            ?? selectedSubjectUserID
+            ?? activeLocalProfileUserID
+    }
+}
+
 private struct OverviewRenderSnapshot {
     let dashboard: OverviewDashboardSnapshot
     let transactionsByID: [UUID: LedgerTransaction]
     let postedExpenseTransactionsByDay: [Date: [LedgerTransaction]]
     let preparingSettlementEvents: [PreparingSettlementEventSnapshot]
+    let actionContext: OverviewActionContext
 }
 
 private struct OverviewRenderSnapshotCache {
@@ -189,6 +209,7 @@ struct OverviewView: View {
                 .settlementParticipant
             ]
         )
+        let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
         let visibleSettlementGroups = FamilyScopedData.visible(
             storedSettlementGroups,
             entity: .settlementGroup,
@@ -341,7 +362,11 @@ struct OverviewView: View {
             dashboard: dashboard,
             transactionsByID: transactionsByID,
             postedExpenseTransactionsByDay: expenseTransactionsByDay,
-            preparingSettlementEvents: preparingSettlementEvents
+            preparingSettlementEvents: preparingSettlementEvents,
+            actionContext: OverviewActionContext(
+                archivedSettlementGroupIDs: archivedEventIDs,
+                transactionOwnerMap: transactionOwnerMap
+            )
         )
     }
 
@@ -483,19 +508,6 @@ struct OverviewView: View {
         return Set(familyContextStore.members.map(\.userID))
     }
 
-    private var transactionsByID: [UUID: LedgerTransaction] {
-        Dictionary(
-            visibleTransactions
-                .filter { $0.deletedAt == nil && !$0.isArchived }
-                .map { ($0.id, $0) },
-            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
-        )
-    }
-
-    private var transactionOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-    }
-
     private var activeAlert: OverviewAlertPresentation? {
         if let permissionPrompt {
             return .permission(permissionPrompt)
@@ -504,71 +516,6 @@ struct OverviewView: View {
             return .info(infoAlert)
         }
         return nil
-    }
-
-    private var transactionRecords: [TransactionRecordSnapshot] {
-        visibleTransactions.map(\.planningRecordSnapshot)
-    }
-
-    private var overviewTransactions: [OverviewTransactionSnapshot] {
-        visibleTransactions.map(\.overviewSnapshot)
-    }
-
-    private var walletSnapshots: [OverviewWalletSnapshot] {
-        visibleWallets.compactMap(\.overviewWalletSnapshot)
-    }
-
-    private var activeBudgetPlans: [BudgetPlanSnapshot] {
-        visibleBudgets
-            .filter {
-                !$0.isArchived
-                    && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
-            }
-            .map { $0.planningSnapshot(calendar: calendar) }
-    }
-
-    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        visibleOccurrences.map(\.planningSnapshot)
-    }
-
-    private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        let balanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: walletSnapshots.map {
-                TransactionWalletSnapshot(
-                    id: $0.id,
-                    kind: $0.kind,
-                    openingBalanceMinor: $0.openingBalanceMinor
-                )
-            },
-            records: transactionRecords
-        )
-        return visibleWallets.compactMap { $0.planningCreditCardSnapshot(balanceIndex: balanceIndex) }
-    }
-
-    private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
-        PlanningLogic.creditCardDueItems(
-            accounts: planningCreditCardAccounts,
-            records: transactionRecords,
-            occurrences: occurrenceSnapshots,
-            selectedMonth: currentMonth,
-            referenceDate: .now,
-            calendar: calendar
-        )
-    }
-
-    private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
-        recurringBillDueItems(around: currentMonth)
-    }
-
-    private func recurringBillDueItems(around month: Date) -> [PlanningRecurringDueSnapshot] {
-        let billSnapshots = visibleBills
-            .filter { !$0.isArchived }
-            .map(\.planningSnapshot)
-        return recurringBillDueItems(
-            around: month,
-            billSnapshots: billSnapshots,
-            occurrenceSnapshots: occurrenceSnapshots
-        )
     }
 
     private func recurringBillDueItems(
@@ -588,132 +535,16 @@ struct OverviewView: View {
             }
     }
 
-    private var installmentDueItems: [PlanningRecurringDueSnapshot] {
-        PlanningLogic.installmentDueItems(
-            plans: visibleInstallments
-                .filter { !$0.isArchived }
-                .map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: currentMonth,
-            calendar: calendar
-        )
-    }
-
-    private var visibleWallets: [LedgerWallet] {
-        FamilyScopedData.visible(
-            storedWallets,
-            entity: .wallet,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleTransactions: [LedgerTransaction] {
-        FamilyScopedData.visibleTransactionsForFinancial(
-            storedTransactions,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore,
-            archivedEventIDs: archivedSettlementGroupIDs
-        )
-    }
-
-    private var archivedSettlementGroupIDs: Set<UUID> {
-        SettlementLogic.archivedSharedExpenseEventIDs(
-            from: visibleSettlementGroups.map(\.recordSnapshot)
-        )
-    }
-
-    private var visibleBudgets: [BudgetPlan] {
-        FamilyScopedData.visible(
-            storedBudgets,
-            entity: .budgetPlan,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
     private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
         storedCategories
             .filter { $0.deletedAt == nil && !$0.isArchived }
             .map(\.planningFamilyBudgetSpendingScope)
     }
 
-    private var visibleBills: [RecurringBillPlan] {
-        FamilyScopedData.visible(
-            storedBills,
-            entity: .recurringBillPlan,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleInstallments: [InstallmentPlan] {
-        FamilyScopedData.visible(
-            storedInstallments,
-            entity: .installmentPlan,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleOccurrences: [DueOccurrenceRecord] {
-        FamilyScopedData.visible(
-            storedOccurrences,
-            entity: .dueOccurrenceRecord,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleSettlementGroups: [SettlementGroup] {
-        FamilyScopedData.visible(
-            storedSettlementGroups,
-            entity: .settlementGroup,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var dashboardSnapshot: OverviewDashboardSnapshot {
-        OverviewLogic.dashboard(
-            wallets: walletSnapshots,
-            transactionRecords: transactionRecords,
-            transactions: overviewTransactions,
-            budgets: activeBudgetPlans,
-            creditCardDues: creditCardDueItems,
-            recurringDues: recurringBillDueItems + installmentDueItems,
-            currencyCode: currencyCode,
-            exchangeRates: appExchangeRates,
-            referenceDate: .now,
-            calendar: calendar
-        )
-    }
-
-    private var postedExpenseTransactionsByDay: [Date: [LedgerTransaction]] {
-        Dictionary(
-            grouping: visibleTransactions.filter { transaction in
-                transaction.deletedAt == nil
-                    && !transaction.isArchived
-                    && transaction.entryStatus == .posted
-                    && TransactionLogic.isExpenseSpending(transaction.planningRecordSnapshot)
-            },
-            by: { calendar.startOfDay(for: $0.occurredAt) }
-        )
-        .mapValues { transactions in
-            transactions.sorted(by: sortTransactionsByRecency)
-        }
-    }
-
     var body: some View {
         let snapshotKey = renderSnapshotCacheKey
         let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
+        let actionContext = renderSnapshot.actionContext
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
         let preparingEvents = renderSnapshot.preparingSettlementEvents
 
@@ -766,7 +597,7 @@ struct OverviewView: View {
                 }
                 RecentTransactionsSection(rows: renderSnapshot.dashboard.recentTransactions) { row in
                     guard let transaction = renderSnapshot.transactionsByID[row.id] else { return }
-                    presentEditor(for: transaction)
+                    presentEditor(for: transaction, actionContext: actionContext)
                 }
             }
             .navigationDestination(item: $destination) { route in
@@ -788,8 +619,10 @@ struct OverviewView: View {
                 day: selection.date,
                 transactions: renderSnapshot.postedExpenseTransactionsByDay[selection.date] ?? [],
                 currencyCode: currencyCode,
-                archivedSettlementGroupIDs: archivedSettlementGroupIDs,
-                onSelectTransaction: presentEditorFromDaySheet
+                archivedSettlementGroupIDs: actionContext.archivedSettlementGroupIDs,
+                onSelectTransaction: { transaction in
+                    presentEditorFromDaySheet(transaction, actionContext: actionContext)
+                }
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.hidden)
@@ -872,40 +705,57 @@ struct OverviewView: View {
         selectedExpenseDay = OverviewExpenseDaySelection(date: day)
     }
 
-    private func presentEditor(for transaction: LedgerTransaction) {
-        guard canEditTransaction(transaction) else {
-            presentTransactionEditPermissionPrompt(transaction)
+    private func presentEditor(
+        for transaction: LedgerTransaction,
+        actionContext: OverviewActionContext
+    ) {
+        guard canEditTransaction(transaction, actionContext: actionContext) else {
+            presentTransactionEditPermissionPrompt(transaction, actionContext: actionContext)
             return
         }
         editorTarget = TransactionEditorTarget(transaction: transaction)
     }
 
-    private func presentEditorFromDaySheet(_ transaction: LedgerTransaction) {
+    private func presentEditorFromDaySheet(
+        _ transaction: LedgerTransaction,
+        actionContext: OverviewActionContext
+    ) {
         selectedExpenseDay = nil
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            if canEditTransaction(transaction) {
+            if canEditTransaction(transaction, actionContext: actionContext) {
                 editorTarget = TransactionEditorTarget(transaction: transaction)
             } else {
-                presentTransactionEditPermissionPrompt(transaction)
+                presentTransactionEditPermissionPrompt(transaction, actionContext: actionContext)
             }
         }
     }
 
-    private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
-        transactionOwnerMap[transaction.id]
-            ?? familyContextStore.selectedSubjectUserID
-            ?? sessionStore.activeLocalProfileUserID
+    private func transactionOwnerUserID(
+        for transaction: LedgerTransaction,
+        actionContext: OverviewActionContext
+    ) -> UUID? {
+        actionContext.ownerUserID(
+            forTransactionID: transaction.id,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID
+        )
     }
 
-    private func canEditTransaction(_ transaction: LedgerTransaction) -> Bool {
-        guard let ownerUserID = transactionOwnerUserID(for: transaction) else { return false }
+    private func canEditTransaction(
+        _ transaction: LedgerTransaction,
+        actionContext: OverviewActionContext
+    ) -> Bool {
+        guard let ownerUserID = transactionOwnerUserID(for: transaction, actionContext: actionContext) else { return false }
         return ownerUserID == sessionStore.activeLocalProfileUserID
             || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .transaction)
     }
 
-    private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction) {
-        guard let ownerUserID = transactionOwnerUserID(for: transaction),
+    private func presentTransactionEditPermissionPrompt(
+        _ transaction: LedgerTransaction,
+        actionContext: OverviewActionContext
+    ) {
+        guard let ownerUserID = transactionOwnerUserID(for: transaction, actionContext: actionContext),
               ownerUserID != sessionStore.activeLocalProfileUserID else { return }
         let isPending = familyContextStore.hasPendingPermissionRequest(
             ownerUserID: ownerUserID,

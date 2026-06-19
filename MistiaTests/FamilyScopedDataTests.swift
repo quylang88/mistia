@@ -217,6 +217,33 @@ final class FamilyScopedDataTests: XCTestCase {
         )
     }
 
+    func testWalletPickerAccessCanReusePrebuiltOwnerMaps() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let sessionStore = makeSessionStore(container: container, userID: selfUserID)
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+        let memberWallet = makeWallet(name: "Member wallet")
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: [
+                OwnedRecordScope(
+                    entity: .wallet,
+                    recordID: memberWallet.id,
+                    ownerUserID: memberUserID
+                )
+            ],
+            entities: [.wallet]
+        )
+
+        let access = MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownerMaps: ownerMaps
+        )
+
+        XCTAssertEqual(access.walletOwnerUserID(for: memberWallet), memberUserID)
+    }
+
     func testCategoryUseRequestRequiresBothRequesterAndOwnerCloudSyncHistory() throws {
         let selfUserID = UUID()
         let memberUserID = UUID()

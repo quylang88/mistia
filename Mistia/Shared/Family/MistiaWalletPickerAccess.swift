@@ -10,9 +10,21 @@ struct MistiaWalletPickerAccess {
         familyContextStore: FamilyContextStore,
         ownershipScopes: [OwnedRecordScope]
     ) {
+        self.init(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownerMaps: MistiaRecordOwnershipStore.ownerMaps(from: ownershipScopes, entities: [.wallet])
+        )
+    }
+
+    init(
+        sessionStore: SessionStore,
+        familyContextStore: FamilyContextStore,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) {
         self.sessionStore = sessionStore
         self.familyContextStore = familyContextStore
-        self.walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        self.walletOwnerMap = ownerMaps[.wallet]
     }
 
     var currentSelfUserID: UUID? {

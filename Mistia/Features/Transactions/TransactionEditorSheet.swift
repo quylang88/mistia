@@ -1422,10 +1422,18 @@ struct TransactionEditorSheet: View {
     }
 
     private func makeRenderContext() -> TransactionEditorRenderContext {
-        let access = walletPickerAccess
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [.wallet, .category, .transaction]
+        )
+        let access = MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownerMaps: ownerMaps
+        )
         let currentSelfUserID = access.currentSelfUserID
-        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let categoryOwnerMap = ownerMaps[.category]
+        let transactionOwnerMap = ownerMaps[.transaction]
         let selectedSourceWallet = storedWallets.first(where: { $0.id == draft.sourceWalletID })
         let selectedDestinationWallet = storedWallets.first(where: { $0.id == draft.destinationWalletID })
 
