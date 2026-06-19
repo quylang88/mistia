@@ -16,6 +16,9 @@ final class MistiaSettingsResetSupportTests: XCTestCase {
         defaults.set(UUID().uuidString, forKey: MistiaSettingsResetSupport.StorageKey.mistiaShortcutMemberUserID)
         defaults.set(true, forKey: MistiaSettingsResetSupport.StorageKey.notificationsEnabled)
         defaults.set(true, forKey: MistiaSettingsResetSupport.StorageKey.notificationsGroupFamilyEnabled)
+        defaults.set(true, forKey: MistiaSettingsResetSupport.StorageKey.appLockEnabled)
+        defaults.set("pin4", forKey: MistiaSettingsResetSupport.StorageKey.appLockSecretKind)
+        defaults.set(true, forKey: MistiaSettingsResetSupport.StorageKey.appLockBiometricEnabled)
         defaults.set("vi", forKey: MistiaAppLanguage.userDefaultsKey)
         defaults.set("vi", forKey: MistiaAppLanguage.backupUserDefaultsKey)
 
@@ -42,6 +45,9 @@ final class MistiaSettingsResetSupportTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.mistiaShortcutMemberUserID))
         XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.notificationsEnabled))
         XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.notificationsGroupFamilyEnabled))
+        XCTAssertFalse(defaults.bool(forKey: MistiaSettingsResetSupport.StorageKey.appLockEnabled))
+        XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.appLockSecretKind))
+        XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.appLockBiometricEnabled))
         XCTAssertEqual(defaults.string(forKey: MistiaAppLanguage.userDefaultsKey), "ja")
         XCTAssertEqual(defaults.string(forKey: MistiaAppLanguage.backupUserDefaultsKey), "ja")
 

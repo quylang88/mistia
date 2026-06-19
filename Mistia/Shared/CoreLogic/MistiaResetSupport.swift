@@ -14,6 +14,9 @@ enum MistiaSettingsResetSupport {
         static let cachedRatesData = "mistia.settings.currency.cached-rates.data"
         static let lastAutoRateRefreshAt = "mistia.settings.currency.last-auto-refresh-at"
         static let syncAutoEnabled = "mistia.sync.auto.enabled"
+        static let appLockEnabled = "mistia.appLock.enabled"
+        static let appLockSecretKind = "mistia.appLock.secret-kind"
+        static let appLockBiometricEnabled = "mistia.appLock.biometric.enabled"
         static let notificationsEnabled = "mistia.notifications.enabled"
         static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"
         static let notificationsGroupRemindersEnabled = "mistia.notifications.group.reminders.enabled"
@@ -39,6 +42,9 @@ enum MistiaSettingsResetSupport {
         defaults.removeObject(forKey: StorageKey.cachedRatesData)
         defaults.removeObject(forKey: StorageKey.lastAutoRateRefreshAt)
         defaults.set(false, forKey: StorageKey.syncAutoEnabled)
+        defaults.set(false, forKey: StorageKey.appLockEnabled)
+        defaults.removeObject(forKey: StorageKey.appLockSecretKind)
+        defaults.removeObject(forKey: StorageKey.appLockBiometricEnabled)
         defaults.set(false, forKey: StorageKey.mistiaShortcutEnabled)
         defaults.removeObject(forKey: StorageKey.mistiaShortcutKind)
         defaults.removeObject(forKey: StorageKey.mistiaShortcutMemberUserID)

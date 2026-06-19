@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaAppLockController.self) private var appLockController
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
     @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
@@ -123,8 +124,8 @@ struct SettingsView: View {
                     title: L10n.settings.security.title,
                     icon: "lock.shield.fill",
                     accent: .mint,
-                    value: nil,
-                    action: .placeholder
+                    value: securityStatusText,
+                    action: .openSecurity
                 )
             ]
         )
@@ -132,6 +133,12 @@ struct SettingsView: View {
 
     private var notificationStatusText: String {
         notificationsEnabled
+            ? L10n.common.on
+            : L10n.common.off
+    }
+
+    private var securityStatusText: String {
+        appLockController.isEnabled
             ? L10n.common.on
             : L10n.common.off
     }
@@ -257,6 +264,8 @@ struct SettingsView: View {
                 CurrencySettingsView()
             case .notifications:
                 NotificationsSettingsView()
+            case .security:
+                SecuritySettingsView()
             case .backupRestore:
                 ManagementBackupRestoreView()
             case .archivedItems:
@@ -282,6 +291,8 @@ struct SettingsView: View {
             destination = .currency
         case .openNotifications:
             destination = .notifications
+        case .openSecurity:
+            destination = .security
         case .openBackupRestore:
             destination = .backupRestore
         case .openArchivedItems:
@@ -1507,6 +1518,7 @@ private enum SettingsRowAction {
     case openLanguage
     case openCurrency
     case openNotifications
+    case openSecurity
     case openBackupRestore
     case openArchivedItems
     case openShortcut
@@ -1519,6 +1531,7 @@ private enum SettingsDestination: String, Identifiable {
     case language
     case currency
     case notifications
+    case security
     case backupRestore
     case archivedItems
     case shortcut

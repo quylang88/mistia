@@ -11,6 +11,7 @@ struct MistiaApp: App {
     @State private var sessionStore: SessionStore
     @State private var familyContextStore: FamilyContextStore
     @State private var uiState = MistiaUIState()
+    @State private var appLockController = MistiaAppLockController()
     @State private var deferredStartupWorkTask: Task<Void, Never>?
 
     init() {
@@ -41,6 +42,15 @@ struct MistiaApp: App {
                     ContentView()
                 }
             }
+                .overlay {
+                    if !sessionStore.isAuthTransitioning,
+                       !sessionStore.isBootstrapping,
+                       launchState.issue == nil,
+                       appLockController.shouldPresentLock {
+                        MistiaAppLockScreen()
+                            .environment(appLockController)
+                    }
+                }
                 .id(appRootIdentity)
                 .preferredColorScheme(appearanceMode.colorScheme)
                 .environment(\.locale, appLanguage.locale)
@@ -48,6 +58,7 @@ struct MistiaApp: App {
                 .environment(sessionStore)
                 .environment(familyContextStore)
                 .environment(uiState)
+                .environment(appLockController)
                 .onOpenURL { url in
                     if !GIDSignIn.sharedInstance.handle(url) {
                         _ = familyContextStore.handleInviteURL(url)
@@ -92,6 +103,7 @@ struct MistiaApp: App {
                         }
                     case .background:
                         sessionStore.handleSceneDidEnterBackground()
+                        appLockController.lockIfNeeded()
                     default:
                         break
                     }

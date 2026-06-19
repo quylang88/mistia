@@ -2663,6 +2663,88 @@ nonisolated enum L10n {
         }
 
         nonisolated enum security {
+
+            nonisolated enum appLock {
+                static var description: String { L10n.tr("settings.security.appLock.description", vi: "Yêu cầu mã của app khi mở lại Mistia hoặc quay lại từ nền.", en: "Require an app code when Mistia opens or returns from the background.", ja: "Mistiaを開くとき、またはバックグラウンドから戻るときにアプリのコードを要求します。") }
+                static func description(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.appLock.description", vi: "Yêu cầu mã của app khi mở lại Mistia hoặc quay lại từ nền.", en: "Require an app code when Mistia opens or returns from the background.", ja: "Mistiaを開くとき、またはバックグラウンドから戻るときにアプリのコードを要求します。", language: language) }
+                static var title: String { L10n.tr("settings.security.appLock.title", vi: "Khóa app", en: "App lock", ja: "アプリロック") }
+                static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.appLock.title", vi: "Khóa app", en: "App lock", ja: "アプリロック", language: language) }
+            }
+
+            nonisolated enum biometric {
+                static var description: String { L10n.tr("settings.security.biometric.description", vi: "Face ID/Touch ID chỉ bật sau khi đã có PIN 4 số để dự phòng.", en: "Face ID or Touch ID can be enabled only after a 4-digit PIN is set as backup.", ja: "Face IDまたはTouch IDは、バックアップ用の4桁PINを設定した後にのみ有効にできます。") }
+                static func description(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.description", vi: "Face ID/Touch ID chỉ bật sau khi đã có PIN 4 số để dự phòng.", en: "Face ID or Touch ID can be enabled only after a 4-digit PIN is set as backup.", ja: "Face IDまたはTouch IDは、バックアップ用の4桁PINを設定した後にのみ有効にできます。", language: language) }
+                static var faceID: String { L10n.tr("settings.security.biometric.faceID", vi: "Face ID", en: "Face ID", ja: "Face ID") }
+                static func faceID(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.faceID", vi: "Face ID", en: "Face ID", ja: "Face ID", language: language) }
+                static var generic: String { L10n.tr("settings.security.biometric.generic", vi: "Sinh trắc học", en: "Biometric unlock", ja: "生体認証ロック解除") }
+                static func generic(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.generic", vi: "Sinh trắc học", en: "Biometric unlock", ja: "生体認証ロック解除", language: language) }
+                static var opticID: String { L10n.tr("settings.security.biometric.opticID", vi: "Optic ID", en: "Optic ID", ja: "Optic ID") }
+                static func opticID(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.opticID", vi: "Optic ID", en: "Optic ID", ja: "Optic ID", language: language) }
+                static var touchID: String { L10n.tr("settings.security.biometric.touchID", vi: "Touch ID", en: "Touch ID", ja: "Touch ID") }
+                static func touchID(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.touchID", vi: "Touch ID", en: "Touch ID", ja: "Touch ID", language: language) }
+                static var unavailable: String { L10n.tr("settings.security.biometric.unavailable", vi: "Thiết bị này chưa có Face ID hoặc Touch ID khả dụng.", en: "Face ID or Touch ID is not available on this device.", ja: "このデバイスではFace IDまたはTouch IDを利用できません。") }
+                static func unavailable(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.unavailable", vi: "Thiết bị này chưa có Face ID hoặc Touch ID khả dụng.", en: "Face ID or Touch ID is not available on this device.", ja: "このデバイスではFace IDまたはTouch IDを利用できません。", language: language) }
+            }
+
+            nonisolated enum forgotCode {
+                static var description: String { L10n.tr("settings.security.forgotCode.description", vi: "Tùy chọn khôi phục sẽ được bổ sung sau.", en: "Recovery options will be added later.", ja: "復旧オプションは今後追加されます。") }
+                static func description(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.forgotCode.description", vi: "Tùy chọn khôi phục sẽ được bổ sung sau.", en: "Recovery options will be added later.", ja: "復旧オプションは今後追加されます。", language: language) }
+                static var title: String { L10n.tr("settings.security.forgotCode.title", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？") }
+                static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.forgotCode.title", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？", language: language) }
+            }
+
+            nonisolated enum secretKind {
+
+                nonisolated enum customPassword {
+                    static var subtitle: String { L10n.tr("settings.security.secretKind.customPassword.subtitle", vi: "Dùng mật khẩu riêng cho app.", en: "Use a custom app password.", ja: "アプリ専用のパスワードを使います。") }
+                    static func subtitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.customPassword.subtitle", vi: "Dùng mật khẩu riêng cho app.", en: "Use a custom app password.", ja: "アプリ専用のパスワードを使います。", language: language) }
+                    static var title: String { L10n.tr("settings.security.secretKind.customPassword.title", vi: "Mật khẩu tùy chỉnh", en: "Custom password", ja: "カスタムパスワード") }
+                    static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.customPassword.title", vi: "Mật khẩu tùy chỉnh", en: "Custom password", ja: "カスタムパスワード", language: language) }
+                }
+
+                nonisolated enum pin4 {
+                    static var subtitle: String { L10n.tr("settings.security.secretKind.pin4.subtitle", vi: "Nhanh để mở khóa hằng ngày.", en: "Fast for everyday unlocks.", ja: "毎日のロック解除をすばやく行えます。") }
+                    static func subtitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.pin4.subtitle", vi: "Nhanh để mở khóa hằng ngày.", en: "Fast for everyday unlocks.", ja: "毎日のロック解除をすばやく行えます。", language: language) }
+                    static var title: String { L10n.tr("settings.security.secretKind.pin4.title", vi: "PIN 4 số", en: "4-digit PIN", ja: "4桁PIN") }
+                    static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.pin4.title", vi: "PIN 4 số", en: "4-digit PIN", ja: "4桁PIN", language: language) }
+                }
+
+                nonisolated enum pin6 {
+                    static var subtitle: String { L10n.tr("settings.security.secretKind.pin6.subtitle", vi: "Thêm hai số cho lớp bảo vệ chặt hơn.", en: "Add two digits for stronger protection.", ja: "2桁追加して保護を強化します。") }
+                    static func subtitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.pin6.subtitle", vi: "Thêm hai số cho lớp bảo vệ chặt hơn.", en: "Add two digits for stronger protection.", ja: "2桁追加して保護を強化します。", language: language) }
+                    static var title: String { L10n.tr("settings.security.secretKind.pin6.title", vi: "PIN 6 số", en: "6-digit PIN", ja: "6桁PIN") }
+                    static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.pin6.title", vi: "PIN 6 số", en: "6-digit PIN", ja: "6桁PIN", language: language) }
+                }
+                static var title: String { L10n.tr("settings.security.secretKind.title", vi: "Kiểu mã khóa", en: "Code type", ja: "コードの種類") }
+                static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.secretKind.title", vi: "Kiểu mã khóa", en: "Code type", ja: "コードの種類", language: language) }
+            }
+
+            nonisolated enum status {
+                static var biometricDisabledMessage: String { L10n.tr("settings.security.status.biometricDisabledMessage", vi: "Mở khóa sinh trắc học đã tắt. Bạn vẫn có thể dùng mã của app.", en: "Biometric unlock is off. You can still use the app code.", ja: "生体認証ロック解除はオフです。引き続きアプリのコードを使えます。") }
+                static func biometricDisabledMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricDisabledMessage", vi: "Mở khóa sinh trắc học đã tắt. Bạn vẫn có thể dùng mã của app.", en: "Biometric unlock is off. You can still use the app code.", ja: "生体認証ロック解除はオフです。引き続きアプリのコードを使えます。", language: language) }
+                static var biometricDisabledTitle: String { L10n.tr("settings.security.status.biometricDisabledTitle", vi: "Đã tắt sinh trắc học", en: "Biometric unlock off", ja: "生体認証がオフになりました") }
+                static func biometricDisabledTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricDisabledTitle", vi: "Đã tắt sinh trắc học", en: "Biometric unlock off", ja: "生体認証がオフになりました", language: language) }
+                static var biometricEnabledMessage: String { L10n.tr("settings.security.status.biometricEnabledMessage", vi: "Bạn có thể mở khóa Mistia bằng sinh trắc học hoặc mã dự phòng.", en: "You can unlock Mistia with biometrics or your backup code.", ja: "生体認証またはバックアップコードでMistiaをロック解除できます。") }
+                static func biometricEnabledMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricEnabledMessage", vi: "Bạn có thể mở khóa Mistia bằng sinh trắc học hoặc mã dự phòng.", en: "You can unlock Mistia with biometrics or your backup code.", ja: "生体認証またはバックアップコードでMistiaをロック解除できます。", language: language) }
+                static var biometricEnabledTitle: String { L10n.tr("settings.security.status.biometricEnabledTitle", vi: "Đã bật sinh trắc học", en: "Biometric unlock on", ja: "生体認証がオンになりました") }
+                static func biometricEnabledTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricEnabledTitle", vi: "Đã bật sinh trắc học", en: "Biometric unlock on", ja: "生体認証がオンになりました", language: language) }
+                static var changedMessage: String { L10n.tr("settings.security.status.changedMessage", vi: "Mã khóa mới sẽ được dùng từ lần khóa tiếp theo.", en: "The new code will be used from the next lock.", ja: "次回のロックから新しいコードが使われます。") }
+                static func changedMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.changedMessage", vi: "Mã khóa mới sẽ được dùng từ lần khóa tiếp theo.", en: "The new code will be used from the next lock.", ja: "次回のロックから新しいコードが使われます。", language: language) }
+                static var changedTitle: String { L10n.tr("settings.security.status.changedTitle", vi: "Đã cập nhật mã khóa", en: "Code updated", ja: "コードを更新しました") }
+                static func changedTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.changedTitle", vi: "Đã cập nhật mã khóa", en: "Code updated", ja: "コードを更新しました", language: language) }
+                static var disabledMessage: String { L10n.tr("settings.security.status.disabledMessage", vi: "Mistia sẽ không yêu cầu mã khi mở lại app.", en: "Mistia will no longer ask for a code when the app opens again.", ja: "Mistiaを再度開くときにコードは要求されません。") }
+                static func disabledMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.disabledMessage", vi: "Mistia sẽ không yêu cầu mã khi mở lại app.", en: "Mistia will no longer ask for a code when the app opens again.", ja: "Mistiaを再度開くときにコードは要求されません。", language: language) }
+                static var disabledTitle: String { L10n.tr("settings.security.status.disabledTitle", vi: "Đã tắt khóa app", en: "App lock off", ja: "アプリロックがオフになりました") }
+                static func disabledTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.disabledTitle", vi: "Đã tắt khóa app", en: "App lock off", ja: "アプリロックがオフになりました", language: language) }
+                static var enabledMessage: String { L10n.tr("settings.security.status.enabledMessage", vi: "Mistia sẽ khóa khi mở app hoặc quay lại từ nền.", en: "Mistia will lock when the app opens or returns from the background.", ja: "アプリを開くとき、またはバックグラウンドから戻るときにMistiaがロックされます。") }
+                static func enabledMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.enabledMessage", vi: "Mistia sẽ khóa khi mở app hoặc quay lại từ nền.", en: "Mistia will lock when the app opens or returns from the background.", ja: "アプリを開くとき、またはバックグラウンドから戻るときにMistiaがロックされます。", language: language) }
+                static var enabledTitle: String { L10n.tr("settings.security.status.enabledTitle", vi: "Đã bật khóa app", en: "App lock on", ja: "アプリロックがオンになりました") }
+                static func enabledTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.enabledTitle", vi: "Đã bật khóa app", en: "App lock on", ja: "アプリロックがオンになりました", language: language) }
+                static var errorTitle: String { L10n.tr("settings.security.status.errorTitle", vi: "Không thể cập nhật", en: "Unable to update", ja: "更新できません") }
+                static func errorTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.errorTitle", vi: "Không thể cập nhật", en: "Unable to update", ja: "更新できません", language: language) }
+                static var unavailableTitle: String { L10n.tr("settings.security.status.unavailableTitle", vi: "Không khả dụng", en: "Unavailable", ja: "利用できません") }
+                static func unavailableTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.unavailableTitle", vi: "Không khả dụng", en: "Unavailable", ja: "利用できません", language: language) }
+            }
             static var title: String { L10n.tr("settings.security.title", vi: "Bảo mật", en: "Security", ja: "セキュリティ") }
             static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.title", vi: "Bảo mật", en: "Security", ja: "セキュリティ", language: language) }
         }
@@ -2764,6 +2846,77 @@ nonisolated enum L10n {
             static func resultTooLarge(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.resultTooLarge", vi: "Kết quả quá lớn", en: "Result is too large", ja: "結果が大きすぎます", language: language) }
             static var title: String { L10n.tr("shared.amountCalculator.title", vi: "Máy tính", en: "Calculator", ja: "計算機") }
             static func title(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.title", vi: "Máy tính", en: "Calculator", ja: "計算機", language: language) }
+        }
+
+        nonisolated enum appLock {
+            static var biometricReason: String { L10n.tr("shared.appLock.biometricReason", vi: "Mở khóa Mistia", en: "Unlock Mistia", ja: "Mistiaをロック解除") }
+            static func biometricReason(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.biometricReason", vi: "Mở khóa Mistia", en: "Unlock Mistia", ja: "Mistiaをロック解除", language: language) }
+            static var codeMismatch: String { L10n.tr("shared.appLock.codeMismatch", vi: "Mã xác nhận chưa khớp.", en: "The confirmation code does not match.", ja: "確認コードが一致しません。") }
+            static func codeMismatch(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.codeMismatch", vi: "Mã xác nhận chưa khớp.", en: "The confirmation code does not match.", ja: "確認コードが一致しません。", language: language) }
+            static var confirmPassword: String { L10n.tr("shared.appLock.confirmPassword", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを確認") }
+            static func confirmPassword(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.confirmPassword", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを確認", language: language) }
+            static var confirmPasswordPlaceholder: String { L10n.tr("shared.appLock.confirmPasswordPlaceholder", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力") }
+            static func confirmPasswordPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.confirmPasswordPlaceholder", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力", language: language) }
+            static var confirmPin: String { L10n.tr("shared.appLock.confirmPin", vi: "Nhập lại PIN", en: "Confirm PIN", ja: "PINを確認") }
+            static func confirmPin(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.confirmPin", vi: "Nhập lại PIN", en: "Confirm PIN", ja: "PINを確認", language: language) }
+            static var continueButton: String { L10n.tr("shared.appLock.continueButton", vi: "Tiếp tục", en: "Continue", ja: "続ける") }
+            static func continueButton(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.continueButton", vi: "Tiếp tục", en: "Continue", ja: "続ける", language: language) }
+            static var createPassword: String { L10n.tr("shared.appLock.createPassword", vi: "Tạo mật khẩu", en: "Create password", ja: "パスワードを作成") }
+            static func createPassword(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.createPassword", vi: "Tạo mật khẩu", en: "Create password", ja: "パスワードを作成", language: language) }
+            static var createPin4: String { L10n.tr("shared.appLock.createPin4", vi: "Tạo PIN 4 số", en: "Create a 4-digit PIN", ja: "4桁PINを作成") }
+            static func createPin4(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.createPin4", vi: "Tạo PIN 4 số", en: "Create a 4-digit PIN", ja: "4桁PINを作成", language: language) }
+            static var createPin6: String { L10n.tr("shared.appLock.createPin6", vi: "Tạo PIN 6 số", en: "Create a 6-digit PIN", ja: "6桁PINを作成") }
+            static func createPin6(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.createPin6", vi: "Tạo PIN 6 số", en: "Create a 6-digit PIN", ja: "6桁PINを作成", language: language) }
+            static var enterCurrentCodeTitle: String { L10n.tr("shared.appLock.enterCurrentCodeTitle", vi: "Xác thực hiện tại", en: "Authenticate first", ja: "先に認証") }
+            static func enterCurrentCodeTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterCurrentCodeTitle", vi: "Xác thực hiện tại", en: "Authenticate first", ja: "先に認証", language: language) }
+            static var enterPassword: String { L10n.tr("shared.appLock.enterPassword", vi: "Nhập mật khẩu", en: "Enter password", ja: "パスワードを入力") }
+            static func enterPassword(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPassword", vi: "Nhập mật khẩu", en: "Enter password", ja: "パスワードを入力", language: language) }
+            static var enterPin4: String { L10n.tr("shared.appLock.enterPin4", vi: "Nhập PIN 4 số", en: "Enter 4-digit PIN", ja: "4桁PINを入力") }
+            static func enterPin4(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPin4", vi: "Nhập PIN 4 số", en: "Enter 4-digit PIN", ja: "4桁PINを入力", language: language) }
+            static var enterPin6: String { L10n.tr("shared.appLock.enterPin6", vi: "Nhập PIN 6 số", en: "Enter 6-digit PIN", ja: "6桁PINを入力") }
+            static func enterPin6(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPin6", vi: "Nhập PIN 6 số", en: "Enter 6-digit PIN", ja: "6桁PINを入力", language: language) }
+            static var forgotCode: String { L10n.tr("shared.appLock.forgotCode", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？") }
+            static func forgotCode(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.forgotCode", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？", language: language) }
+            static var passwordHelper: String { L10n.tr("shared.appLock.passwordHelper", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。") }
+            static func passwordHelper(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordHelper", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。", language: language) }
+            static var passwordPlaceholder: String { L10n.tr("shared.appLock.passwordPlaceholder", vi: "Mật khẩu", en: "Password", ja: "パスワード") }
+            static func passwordPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordPlaceholder", vi: "Mật khẩu", en: "Password", ja: "パスワード", language: language) }
+            static var passwordValidation: String { L10n.tr("shared.appLock.passwordValidation", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。") }
+            static func passwordValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordValidation", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。", language: language) }
+            static var pin4Validation: String { L10n.tr("shared.appLock.pin4Validation", vi: "PIN cần đủ 4 số.", en: "PIN must be exactly 4 digits.", ja: "PINは4桁の数字にしてください。") }
+            static func pin4Validation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pin4Validation", vi: "PIN cần đủ 4 số.", en: "PIN must be exactly 4 digits.", ja: "PINは4桁の数字にしてください。", language: language) }
+            static var pin6Validation: String { L10n.tr("shared.appLock.pin6Validation", vi: "PIN cần đủ 6 số.", en: "PIN must be exactly 6 digits.", ja: "PINは6桁の数字にしてください。") }
+            static func pin6Validation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pin6Validation", vi: "PIN cần đủ 6 số.", en: "PIN must be exactly 6 digits.", ja: "PINは6桁の数字にしてください。", language: language) }
+            static var pinHelper: String { L10n.tr("shared.appLock.pinHelper", vi: "Dùng bàn phím số để nhập mã.", en: "Use the number pad to enter your code.", ja: "数字キーパッドでコードを入力します。") }
+            static func pinHelper(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pinHelper", vi: "Dùng bàn phím số để nhập mã.", en: "Use the number pad to enter your code.", ja: "数字キーパッドでコードを入力します。", language: language) }
+            static var setupPasswordTitle: String { L10n.tr("shared.appLock.setupPasswordTitle", vi: "Đặt mật khẩu app", en: "Set app password", ja: "アプリパスワードを設定") }
+            static func setupPasswordTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPasswordTitle", vi: "Đặt mật khẩu app", en: "Set app password", ja: "アプリパスワードを設定", language: language) }
+            static var setupPin4Title: String { L10n.tr("shared.appLock.setupPin4Title", vi: "Đặt PIN 4 số", en: "Set 4-digit PIN", ja: "4桁PINを設定") }
+            static func setupPin4Title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPin4Title", vi: "Đặt PIN 4 số", en: "Set 4-digit PIN", ja: "4桁PINを設定", language: language) }
+            static var setupPin6Title: String { L10n.tr("shared.appLock.setupPin6Title", vi: "Đặt PIN 6 số", en: "Set 6-digit PIN", ja: "6桁PINを設定") }
+            static func setupPin6Title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPin6Title", vi: "Đặt PIN 6 số", en: "Set 6-digit PIN", ja: "6桁PINを設定", language: language) }
+            static var subtitle: String { L10n.tr("shared.appLock.subtitle", vi: "Mở khóa để tiếp tục quản lý tài chính.", en: "Unlock to continue managing your finances.", ja: "ロック解除して家計管理を続けます。") }
+            static func subtitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.subtitle", vi: "Mở khóa để tiếp tục quản lý tài chính.", en: "Unlock to continue managing your finances.", ja: "ロック解除して家計管理を続けます。", language: language) }
+            static var title: String { L10n.tr("shared.appLock.title", vi: "Mistia đã khóa", en: "Mistia is locked", ja: "Mistiaはロックされています") }
+            static func title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.title", vi: "Mistia đã khóa", en: "Mistia is locked", ja: "Mistiaはロックされています", language: language) }
+            static func tryAgainInSeconds(_ value: String) -> String {
+                L10n.format("shared.appLock.tryAgainInSeconds", vi: "Thử lại sau %@ giây", en: "Try again in %@ seconds", ja: "%@秒後に再試行", value)
+            }
+            static func tryAgainInSeconds(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("shared.appLock.tryAgainInSeconds", vi: "Thử lại sau %@ giây", en: "Try again in %@ seconds", ja: "%@秒後に再試行", language: language, value)
+            }
+            static var unlock: String { L10n.tr("shared.appLock.unlock", vi: "Mở khóa", en: "Unlock", ja: "ロック解除") }
+            static func unlock(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.unlock", vi: "Mở khóa", en: "Unlock", ja: "ロック解除", language: language) }
+            static var unlockWithBiometric: String { L10n.tr("shared.appLock.unlockWithBiometric", vi: "Mở khóa bằng sinh trắc học", en: "Unlock with biometrics", ja: "生体認証でロック解除") }
+            static func unlockWithBiometric(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.unlockWithBiometric", vi: "Mở khóa bằng sinh trắc học", en: "Unlock with biometrics", ja: "生体認証でロック解除", language: language) }
+            static var unlockWithFaceID: String { L10n.tr("shared.appLock.unlockWithFaceID", vi: "Mở khóa bằng Face ID", en: "Unlock with Face ID", ja: "Face IDでロック解除") }
+            static func unlockWithFaceID(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.unlockWithFaceID", vi: "Mở khóa bằng Face ID", en: "Unlock with Face ID", ja: "Face IDでロック解除", language: language) }
+            static var unlockWithOpticID: String { L10n.tr("shared.appLock.unlockWithOpticID", vi: "Mở khóa bằng Optic ID", en: "Unlock with Optic ID", ja: "Optic IDでロック解除") }
+            static func unlockWithOpticID(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.unlockWithOpticID", vi: "Mở khóa bằng Optic ID", en: "Unlock with Optic ID", ja: "Optic IDでロック解除", language: language) }
+            static var unlockWithTouchID: String { L10n.tr("shared.appLock.unlockWithTouchID", vi: "Mở khóa bằng Touch ID", en: "Unlock with Touch ID", ja: "Touch IDでロック解除") }
+            static func unlockWithTouchID(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.unlockWithTouchID", vi: "Mở khóa bằng Touch ID", en: "Unlock with Touch ID", ja: "Touch IDでロック解除", language: language) }
+            static var wrongCode: String { L10n.tr("shared.appLock.wrongCode", vi: "Mã chưa đúng.", en: "Incorrect code.", ja: "コードが正しくありません。") }
+            static func wrongCode(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.wrongCode", vi: "Mã chưa đúng.", en: "Incorrect code.", ja: "コードが正しくありません。", language: language) }
         }
 
         nonisolated enum corelogic {

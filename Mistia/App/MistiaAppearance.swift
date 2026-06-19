@@ -18,6 +18,10 @@ enum MistiaAppStorageKey {
     static let pendingSignupEmail = "mistia.auth.pending-signup-email"
     static let authPreservedSignedInUserID = "mistia.auth.preserved-signed-in-user-id"
 
+    static let appLockEnabled = "mistia.appLock.enabled"
+    static let appLockSecretKind = "mistia.appLock.secret-kind"
+    static let appLockBiometricEnabled = "mistia.appLock.biometric.enabled"
+
     static let notificationsEnabled = "mistia.notifications.enabled"
     static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"
     static let notificationsGroupRemindersEnabled = "mistia.notifications.group.reminders.enabled"

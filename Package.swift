@@ -51,6 +51,7 @@ let package = Package(
                 "CoreLogic/BillItemAnalysisModels.swift",
                 "CoreLogic/L10n.generated.swift",
                 "CoreLogic/MistiaAmountCalculatorLogic.swift",
+                "CoreLogic/MistiaAppLockLogic.swift",
                 "CoreLogic/MistiaArchiveRetention.swift",
                 "CoreLogic/MistiaCollectionChangeSignature.swift",
                 "CoreLogic/MistiaUnsavedChangesDismissalLogic.swift",

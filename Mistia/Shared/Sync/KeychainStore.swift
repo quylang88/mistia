@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-enum KeychainStoreError: LocalizedError {
+nonisolated enum KeychainStoreError: LocalizedError {
     case unexpectedData
     case unhandledStatus(OSStatus)
 
@@ -18,11 +18,16 @@ enum KeychainStoreError: LocalizedError {
     }
 }
 
-struct KeychainStore {
+nonisolated struct KeychainStore {
     let service: String
+    let accessible: CFString?
 
-    init(service: String = "vn.com.quyln.mistia.sync") {
+    init(
+        service: String = "vn.com.quyln.mistia.sync",
+        accessible: CFString? = nil
+    ) {
         self.service = service
+        self.accessible = accessible
     }
 
     func data(for account: String) throws -> Data? {
@@ -57,6 +62,9 @@ struct KeychainStore {
         case errSecItemNotFound:
             var addQuery = query
             addQuery[kSecValueData as String] = data
+            if let accessible {
+                addQuery[kSecAttrAccessible as String] = accessible
+            }
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
                 throw KeychainStoreError.unhandledStatus(addStatus)

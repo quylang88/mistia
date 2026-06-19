@@ -54,6 +54,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Mistia dùng camera để chụp ảnh bill gắn vào giao dịch.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Mistia dùng Face ID để mở khóa app khi bạn bật bảo mật sinh trắc học.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Mistia dùng quyền ảnh để bạn chọn bill gắn vào giao dịch.</string>
 	<key>UIApplicationSceneManifest</key>

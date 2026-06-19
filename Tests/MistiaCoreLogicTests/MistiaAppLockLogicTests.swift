@@ -1,0 +1,85 @@
+import XCTest
+@testable import MistiaCoreLogic
+
+final class MistiaAppLockLogicTests: XCTestCase {
+    func testSecretValidationAcceptsOnlyTheConfiguredSecretShape() {
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "1234", kind: .pin4), nil)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "123456", kind: .pin6), nil)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "passcode", kind: .customPassword), nil)
+
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "123", kind: .pin4), .pin4RequiresFourDigits)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "12a4", kind: .pin4), .pin4RequiresFourDigits)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "12345", kind: .pin6), .pin6RequiresSixDigits)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "12345a", kind: .pin6), .pin6RequiresSixDigits)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "abc", kind: .customPassword), .customPasswordTooShort)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "abcde", kind: .customPassword), .customPasswordTooShort)
+    }
+
+    func testBiometricRequiresExistingPIN4Credential() {
+        XCTAssertTrue(
+            MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+                currentKind: nil,
+                hasCredential: false
+            )
+        )
+        XCTAssertTrue(
+            MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+                currentKind: .pin6,
+                hasCredential: true
+            )
+        )
+        XCTAssertFalse(
+            MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+                currentKind: .pin4,
+                hasCredential: true
+            )
+        )
+    }
+
+    func testFailedAttemptsLockManualEntryForThirtySecondsAfterFiveFailures() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var state = MistiaAppLockFailureState(failedAttemptCount: 0, lockedUntil: nil)
+
+        for _ in 0..<4 {
+            state = MistiaAppLockLogic.recordFailedAttempt(from: state, now: now)
+            XCTAssertFalse(MistiaAppLockLogic.isLockedOut(state, now: now))
+        }
+
+        state = MistiaAppLockLogic.recordFailedAttempt(from: state, now: now)
+
+        XCTAssertEqual(state.failedAttemptCount, 5)
+        XCTAssertEqual(state.lockedUntil, now.addingTimeInterval(30))
+        XCTAssertTrue(MistiaAppLockLogic.isLockedOut(state, now: now.addingTimeInterval(29)))
+        XCTAssertFalse(MistiaAppLockLogic.isLockedOut(state, now: now.addingTimeInterval(30)))
+    }
+
+    func testSuccessfulAuthenticationClearsFailedAttemptsAndLockout() {
+        let state = MistiaAppLockFailureState(
+            failedAttemptCount: 5,
+            lockedUntil: Date(timeIntervalSince1970: 1_800_000_030)
+        )
+
+        XCTAssertEqual(MistiaAppLockLogic.recordSuccessfulAuthentication(from: state), .empty)
+    }
+
+    func testCredentialVerificationUsesSaltedDerivedKeysWithoutStoringRawSecret() throws {
+        let first = try MistiaAppLockCredential.make(
+            kind: .pin4,
+            secret: "1234",
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            saltGenerator: { Data(repeating: 0x01, count: 16) }
+        )
+        let second = try MistiaAppLockCredential.make(
+            kind: .pin4,
+            secret: "1234",
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            saltGenerator: { Data(repeating: 0x02, count: 16) }
+        )
+
+        XCTAssertTrue(first.verifies(secret: "1234"))
+        XCTAssertFalse(first.verifies(secret: "0000"))
+        XCTAssertNotEqual(first.saltData, second.saltData)
+        XCTAssertNotEqual(first.derivedKeyData, second.derivedKeyData)
+        XCTAssertNotEqual(first.derivedKeyData, Data("1234".utf8))
+    }
+}
