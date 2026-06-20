@@ -370,26 +370,36 @@ struct MistiaAppLockScreen: View {
     @State private var usesCodeFallback = false
 
     var body: some View {
-        if shouldPresentBiometricGate {
-            MistiaAppLockBiometricGateScreen(
-                biometryKind: appLockController.biometryKind,
-                onRetry: {
-                    await authenticateWithBiometrics()
-                },
-                onUseCode: {
-                    AppLockHaptics.light()
-                    withAnimation(.snappy) {
-                        usesCodeFallback = true
+        ZStack {
+            AppLockSetupBackground()
+
+            Group {
+                if shouldPresentBiometricGate {
+                    MistiaAppLockBiometricGateScreen(
+                        biometryKind: appLockController.biometryKind,
+                        showsBackground: false,
+                        onRetry: {
+                            await authenticateWithBiometrics()
+                        },
+                        onUseCode: {
+                            AppLockHaptics.light()
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                usesCodeFallback = true
+                            }
+                        }
+                    )
+                    .task {
+                        guard !didAttemptBiometric else { return }
+                        didAttemptBiometric = true
+                        await authenticateWithBiometrics()
                     }
+                } else {
+                    codeUnlockScreen
                 }
-            )
-            .task {
-                guard !didAttemptBiometric else { return }
-                didAttemptBiometric = true
-                await authenticateWithBiometrics()
             }
-        } else {
-            codeUnlockScreen
+            .transition(.identity)
         }
     }
 
@@ -402,6 +412,7 @@ struct MistiaAppLockScreen: View {
     private var codeUnlockScreen: some View {
         AppLockGlassScreenFrame(
             title: L10n.shared.appLock.title,
+            showsBackground: false,
             topSpacerExtra: 40,
             bottomSpacerExtra: 24
         ) { _ in
@@ -433,6 +444,7 @@ struct MistiaAppLockScreen: View {
 
 private struct MistiaAppLockBiometricGateScreen: View {
     let biometryKind: MistiaAppLockBiometryKind
+    var showsBackground = true
     let onRetry: () async -> Void
     let onUseCode: () -> Void
 
@@ -441,7 +453,9 @@ private struct MistiaAppLockBiometricGateScreen: View {
             let metrics = AppLockSetupMetrics(containerHeight: proxy.size.height)
 
             ZStack {
-                AppLockSetupBackground()
+                if showsBackground {
+                    AppLockSetupBackground()
+                }
 
                 VStack(spacing: 0) {
                     Spacer(minLength: metrics.topSpacer + 56)
@@ -602,6 +616,7 @@ private struct MistiaAppLockSetupFullScreen: View {
 private struct AppLockGlassScreenFrame<TopAccessory: View, Entry: View, BelowEntry: View, Footer: View>: View {
     let title: String
     let subtitle: String?
+    var showsBackground: Bool
     var topSpacerExtra: CGFloat
     var bottomSpacerExtra: CGFloat
     @ViewBuilder let topAccessory: (AppLockSetupMetrics) -> TopAccessory
@@ -612,6 +627,7 @@ private struct AppLockGlassScreenFrame<TopAccessory: View, Entry: View, BelowEnt
     init(
         title: String,
         subtitle: String? = nil,
+        showsBackground: Bool = true,
         topSpacerExtra: CGFloat = 0,
         bottomSpacerExtra: CGFloat = 0,
         @ViewBuilder topAccessory: @escaping (AppLockSetupMetrics) -> TopAccessory,
@@ -621,6 +637,7 @@ private struct AppLockGlassScreenFrame<TopAccessory: View, Entry: View, BelowEnt
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.showsBackground = showsBackground
         self.topSpacerExtra = topSpacerExtra
         self.bottomSpacerExtra = bottomSpacerExtra
         self.topAccessory = topAccessory
@@ -634,7 +651,9 @@ private struct AppLockGlassScreenFrame<TopAccessory: View, Entry: View, BelowEnt
             let metrics = AppLockSetupMetrics(containerHeight: proxy.size.height)
 
             ZStack {
-                AppLockSetupBackground()
+                if showsBackground {
+                    AppLockSetupBackground()
+                }
 
                 VStack(spacing: 0) {
                     topAccessory(metrics)
@@ -728,6 +747,9 @@ private struct AppLockSetupMetrics {
 private struct AppLockSetupBackground: View {
     var body: some View {
         ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
             LinearGradient(
                 colors: [
                     MistiaAccent.slate.color.opacity(0.28),
