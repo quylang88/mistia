@@ -191,9 +191,7 @@ final class MistiaAppLockController {
         try credentialStore.saveCredential(credential)
         defaults.set(true, forKey: MistiaAppStorageKey.appLockEnabled)
         defaults.set(kind.rawValue, forKey: MistiaAppStorageKey.appLockSecretKind)
-        if kind != .pin4 {
-            defaults.set(false, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
-        } else if defaults.object(forKey: MistiaAppStorageKey.appLockBiometricEnabled) == nil {
+        if defaults.object(forKey: MistiaAppStorageKey.appLockBiometricEnabled) == nil {
             defaults.set(false, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
         }
         failureState = .empty
@@ -227,7 +225,7 @@ final class MistiaAppLockController {
     func authenticateWithBiometrics(reason: String) async -> Bool {
         guard isEnabled,
               isBiometricEnabled,
-              configuredSecretKind == .pin4,
+              configuredSecretKind != nil,
               hasCredential,
               biometricAuthenticator.kind != .none
         else {

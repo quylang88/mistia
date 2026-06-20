@@ -26469,7 +26469,30 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mistia đã khóa"
+            "value" : "Mistia bị khóa"
+          }
+        }
+      }
+    },
+    "shared.appLock.retryBiometric" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "もう一度試す"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thử lại"
           }
         }
       }
@@ -26543,94 +26566,25 @@
         }
       }
     },
-    "shared.appLock.unlockWithBiometric" : {
+    "shared.appLock.useAppCode" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unlock with biometrics"
+            "value" : "App code"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "生体認証でロック解除"
+            "value" : "アプリコード"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mở khóa bằng sinh trắc học"
-          }
-        }
-      }
-    },
-    "shared.appLock.unlockWithFaceID" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unlock with Face ID"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Face IDでロック解除"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mở khóa bằng Face ID"
-          }
-        }
-      }
-    },
-    "shared.appLock.unlockWithOpticID" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unlock with Optic ID"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Optic IDでロック解除"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mở khóa bằng Optic ID"
-          }
-        }
-      }
-    },
-    "shared.appLock.unlockWithTouchID" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unlock with Touch ID"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Touch IDでロック解除"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mở khóa bằng Touch ID"
+            "value" : "Mã khóa"
           }
         }
       }

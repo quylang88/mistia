@@ -67,7 +67,7 @@ struct SecuritySettingsView: View {
                             accent: .purple,
                             isOn: biometricBinding,
                             isDisabled: appLockController.biometryKind == .none,
-                            prefersHighContrastIcon: true
+                            iconVariant: .biometric
                         )
                     }
 
@@ -210,18 +210,11 @@ struct SecuritySettingsView: View {
                     )
                 }
             case .enableBiometric:
-                if kind == .pin4 {
-                    try appLockController.setBiometricsEnabled(true)
-                    statusAlert = SecuritySettingsStatusAlert(
-                        title: biometricEnabledTitle,
-                        message: biometricEnabledMessage
-                    )
-                } else {
-                    statusAlert = SecuritySettingsStatusAlert(
-                        title: L10n.settings.security.status.changedTitle,
-                        message: L10n.settings.security.status.changedMessage
-                    )
-                }
+                try appLockController.setBiometricsEnabled(true)
+                statusAlert = SecuritySettingsStatusAlert(
+                    title: biometricEnabledTitle,
+                    message: biometricEnabledMessage
+                )
             case .changeKind:
                 statusAlert = SecuritySettingsStatusAlert(
                     title: L10n.settings.security.status.changedTitle,
@@ -345,13 +338,13 @@ struct SecuritySettingsView: View {
         accent: MistiaAccent,
         isOn: Binding<Bool>,
         isDisabled: Bool = false,
-        prefersHighContrastIcon: Bool = false
+        iconVariant: SecurityPreferenceIcon.Variant = .standard
     ) -> some View {
         HStack(spacing: 12) {
             SecurityPreferenceIcon(
                 systemImage: systemImage,
                 accent: accent,
-                prefersHighContrastSymbol: prefersHighContrastIcon
+                variant: iconVariant
             )
 
             Text(title)
@@ -372,11 +365,41 @@ struct SecuritySettingsView: View {
 }
 
 struct MistiaAppLockScreen: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(MistiaAppLockController.self) private var appLockController
     @State private var didAttemptBiometric = false
+    @State private var usesCodeFallback = false
 
     var body: some View {
+        if shouldPresentBiometricGate {
+            MistiaAppLockBiometricGateScreen(
+                biometryKind: appLockController.biometryKind,
+                onRetry: {
+                    await authenticateWithBiometrics()
+                },
+                onUseCode: {
+                    AppLockHaptics.light()
+                    withAnimation(.snappy) {
+                        usesCodeFallback = true
+                    }
+                }
+            )
+            .task {
+                guard !didAttemptBiometric else { return }
+                didAttemptBiometric = true
+                await authenticateWithBiometrics()
+            }
+        } else {
+            codeUnlockScreen
+        }
+    }
+
+    private var shouldPresentBiometricGate: Bool {
+        !usesCodeFallback
+            && appLockController.isBiometricEnabled
+            && appLockController.biometryKind != .none
+    }
+
+    private var codeUnlockScreen: some View {
         AppLockGlassScreenFrame(
             title: L10n.shared.appLock.title,
             topSpacerExtra: 40,
@@ -395,55 +418,83 @@ struct MistiaAppLockScreen: View {
                 }
             )
         } belowEntry: {
-            if appLockController.isBiometricEnabled, appLockController.biometryKind != .none {
-                biometricButton
-                    .padding(.top, 20)
-            }
+            EmptyView()
         } footer: { _ in
             EmptyView()
         }
-        .task {
-            guard !didAttemptBiometric else { return }
-            didAttemptBiometric = true
-            await authenticateWithBiometrics()
-        }
     }
 
-    @ViewBuilder
-    private var biometricButton: some View {
-        let button = Button {
-            AppLockHaptics.light()
-            Task { await authenticateWithBiometrics() }
-        } label: {
-            Label(biometricButtonTitle, systemImage: biometricIconName)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(colorScheme == .dark ? .white : .primary)
-        }
-        .tint(colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color)
-
-        if #available(iOS 26.0, *) {
-            button.buttonStyle(.glassProminent)
-        } else {
-            button.buttonStyle(.borderedProminent)
-        }
+    private func authenticateWithBiometrics() async {
+        _ = await appLockController.authenticateWithBiometrics(
+            reason: L10n.shared.appLock.biometricReason
+        )
     }
+}
 
-    private var biometricButtonTitle: String {
-        switch appLockController.biometryKind {
-        case .faceID:
-            L10n.shared.appLock.unlockWithFaceID
-        case .touchID:
-            L10n.shared.appLock.unlockWithTouchID
-        case .opticID:
-            L10n.shared.appLock.unlockWithOpticID
-        case .none:
-            L10n.shared.appLock.unlockWithBiometric
+private struct MistiaAppLockBiometricGateScreen: View {
+    let biometryKind: MistiaAppLockBiometryKind
+    let onRetry: () async -> Void
+    let onUseCode: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            let metrics = AppLockSetupMetrics(containerHeight: proxy.size.height)
+
+            ZStack {
+                AppLockSetupBackground()
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: metrics.topSpacer + 56)
+
+                    VStack(spacing: metrics.contentSpacing + 4) {
+                        Image(systemName: biometricIconName)
+                            .font(.system(size: biometricIconSize(for: metrics), weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(MistiaAccent.tabActive.color)
+                            .frame(
+                                width: biometricIconFrame(for: metrics),
+                                height: biometricIconFrame(for: metrics)
+                            )
+                            .background {
+                                AppLockGlassRoundedBackground(cornerRadius: biometricIconFrame(for: metrics) / 2)
+                            }
+
+                        Text(L10n.shared.appLock.title)
+                            .font(.system(size: 27, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 24)
+                    .frame(maxWidth: 420)
+
+                    Spacer(minLength: metrics.bottomSpacer + 24)
+
+                    VStack(spacing: 12) {
+                        AppLockGlassActionButton(
+                            title: L10n.shared.appLock.retryBiometric,
+                            systemImage: biometricIconName,
+                            isProminent: true
+                        ) {
+                            AppLockHaptics.light()
+                            Task { await onRetry() }
+                        }
+
+                        AppLockGlassActionButton(
+                            title: L10n.shared.appLock.useAppCode,
+                            systemImage: "number.square.fill",
+                            isProminent: false,
+                            action: onUseCode
+                        )
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, metrics.dockBottomPadding + 10)
+                    .frame(maxWidth: 320)
+                }
+            }
         }
     }
 
     private var biometricIconName: String {
-        switch appLockController.biometryKind {
+        switch biometryKind {
         case .faceID:
             "faceid"
         case .touchID:
@@ -455,10 +506,47 @@ struct MistiaAppLockScreen: View {
         }
     }
 
-    private func authenticateWithBiometrics() async {
-        _ = await appLockController.authenticateWithBiometrics(
-            reason: L10n.shared.appLock.biometricReason
-        )
+    private func biometricIconSize(for metrics: AppLockSetupMetrics) -> CGFloat {
+        metrics.isCompactHeight ? 58 : 66
+    }
+
+    private func biometricIconFrame(for metrics: AppLockSetupMetrics) -> CGFloat {
+        metrics.isCompactHeight ? 118 : 132
+    }
+}
+
+private struct AppLockGlassActionButton: View {
+    let title: String
+    let systemImage: String
+    var isProminent = false
+    let action: () -> Void
+
+    var body: some View {
+        let button = Button {
+            action()
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .symbolRenderingMode(.hierarchical)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+        }
+        .buttonBorderShape(.capsule)
+        .tint(isProminent ? MistiaAccent.purple.color : MistiaAccent.slate.color)
+
+        if #available(iOS 26.0, *) {
+            if isProminent {
+                button.buttonStyle(.glassProminent)
+            } else {
+                button.buttonStyle(.glass(.regular.interactive()))
+            }
+        } else {
+            if isProminent {
+                button.buttonStyle(.borderedProminent)
+            } else {
+                button.buttonStyle(.bordered)
+            }
+        }
     }
 }
 
@@ -1363,21 +1451,20 @@ private enum AppLockHaptics {
 }
 
 private struct SecurityPreferenceIcon: View {
+    enum Variant {
+        case standard
+        case biometric
+    }
+
     @Environment(\.colorScheme) private var colorScheme
     let systemImage: String
     let accent: MistiaAccent
-    var prefersHighContrastSymbol = false
+    var variant: Variant = .standard
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .fill(backgroundColor)
-                .overlay {
-                    if prefersHighContrastSymbol && colorScheme == .dark {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .strokeBorder(MistiaAccent.lightPurple.color.opacity(0.42), lineWidth: 1)
-                    }
-                }
 
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .bold))
@@ -1388,15 +1475,15 @@ private struct SecurityPreferenceIcon: View {
     }
 
     private var backgroundColor: Color {
-        if prefersHighContrastSymbol && colorScheme == .dark {
-            return MistiaAccent.lightPurple.color.opacity(0.26)
+        if variant == .biometric && colorScheme == .dark {
+            return MistiaAccent.lightPurple.color.opacity(0.24)
         }
         return accent.color.opacity(0.15)
     }
 
     private var symbolColor: Color {
-        if prefersHighContrastSymbol && colorScheme == .dark {
-            return MistiaAccent.checkmarkPurple.color
+        if variant == .biometric && colorScheme == .dark {
+            return MistiaAccent.tabActive.color
         }
         return accent.color
     }

@@ -21,7 +21,7 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertFalse(controller.isLocked)
     }
 
-    func testConfigureCustomPasswordStoresCredentialAndDisablesBiometricUnlock() throws {
+    func testConfigureCustomPasswordStoresCredentialAndKeepsBiometricUnlockEnabled() throws {
         let defaults = makeDefaults()
         defaults.set(true, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
         let credentialStore = AppLockCredentialStoreSpy()
@@ -35,7 +35,7 @@ final class MistiaAppLockControllerTests: XCTestCase {
 
         XCTAssertTrue(defaults.bool(forKey: MistiaAppStorageKey.appLockEnabled))
         XCTAssertEqual(defaults.string(forKey: MistiaAppStorageKey.appLockSecretKind), "customPassword")
-        XCTAssertFalse(defaults.bool(forKey: MistiaAppStorageKey.appLockBiometricEnabled))
+        XCTAssertTrue(defaults.bool(forKey: MistiaAppStorageKey.appLockBiometricEnabled))
         XCTAssertEqual(credentialStore.savedCredential?.kind, .customPassword)
         XCTAssertFalse(controller.isLocked)
     }
@@ -144,15 +144,15 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertEqual(controller.failureState, .empty)
     }
 
-    func testBiometricSuccessUnlocksOnlyWhenEnabledForPIN4Credential() async throws {
+    func testBiometricSuccessUnlocksWhenEnabledForConfiguredCredential() async throws {
         let defaults = makeDefaults()
         let credential = try MistiaAppLockCredential.make(
-            kind: .pin4,
-            secret: "1234",
+            kind: .customPassword,
+            secret: "Abc1234",
             saltGenerator: { Data(repeating: 0x04, count: 16) }
         )
         defaults.set(true, forKey: MistiaAppStorageKey.appLockEnabled)
-        defaults.set("pin4", forKey: MistiaAppStorageKey.appLockSecretKind)
+        defaults.set("customPassword", forKey: MistiaAppStorageKey.appLockSecretKind)
         defaults.set(true, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
         let biometric = AppLockBiometricAuthenticatorSpy(kind: .faceID, result: true)
         let controller = MistiaAppLockController(
