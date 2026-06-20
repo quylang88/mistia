@@ -101,14 +101,12 @@ struct SecuritySettingsView: View {
                 handleSetupCompletion(setup.completion, kind: kind, secret: secret)
             }
         }
-        .sheet(item: $activeSheet, onDismiss: handleSheetDismiss) { sheet in
+        .fullScreenCover(item: $activeSheet, onDismiss: handleSheetDismiss) { sheet in
             switch sheet {
             case .authenticate(let action):
-                MistiaAppLockAuthenticationSheet(kind: appLockController.configuredSecretKind ?? .pin4) {
+                MistiaAppLockAuthenticationFullScreen(kind: appLockController.configuredSecretKind ?? .pin4) {
                     pendingAuthenticatedAction = action
                 }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
             }
         }
         .alert(item: $statusAlert) { alert in
@@ -725,29 +723,40 @@ private struct AppLockSecretKindIconButton: View {
     }
 }
 
-private struct MistiaAppLockAuthenticationSheet: View {
+private struct MistiaAppLockAuthenticationFullScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(MistiaAppLockController.self) private var appLockController
     let kind: MistiaAppLockSecretKind
     let onAuthenticated: () -> Void
 
     var body: some View {
-        NavigationStack {
-            MistiaAppLockEntryPanel(mode: .authenticate, kind: kind) { secret in
+        AppLockGlassScreenFrame(title: L10n.shared.appLock.enterCurrentCodeTitle) { metrics in
+            HStack {
+                AppLockSetupCloseButton {
+                    dismiss()
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, metrics.closeTopPadding)
+        } entry: { metrics in
+            MistiaAppLockEntryPanel(
+                mode: .authenticate,
+                kind: kind,
+                hidesAuthenticationPrompt: true,
+                usesLockScreenLayout: true,
+                lockScreenKeypadStyle: metrics.keypadStyle
+            ) { secret in
                 guard appLockController.verify(secret: secret) else { return false }
                 onAuthenticated()
                 dismiss()
                 return true
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 24)
-            .navigationTitle(L10n.shared.appLock.enterCurrentCodeTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.common.cancel) { dismiss() }
-                }
-            }
+        } belowEntry: {
+            EmptyView()
+        } footer: { _ in
+            EmptyView()
         }
     }
 }
@@ -758,6 +767,7 @@ private struct MistiaAppLockEntryPanel: View {
     let kind: MistiaAppLockSecretKind
     var hidesInitialSetupPrompt = false
     var hidesUnlockPrompt = false
+    var hidesAuthenticationPrompt = false
     var usesLockScreenLayout = false
     var lockScreenKeypadStyle: MistiaPINKeypadStyle = .lockScreen
     let onSubmit: (String) -> Bool
@@ -909,6 +919,9 @@ private struct MistiaAppLockEntryPanel: View {
 
     private var shouldShowPromptTitle: Bool {
         if mode == .unlock && hidesUnlockPrompt {
+            return false
+        }
+        if mode == .authenticate && hidesAuthenticationPrompt {
             return false
         }
         return !(mode == .setup && hidesInitialSetupPrompt && pendingSecret == nil)

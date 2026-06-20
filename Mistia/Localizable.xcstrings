@@ -25974,19 +25974,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Authenticate first"
+            "value" : "Enter app code"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "先に認証"
+            "value" : "アプリコードを入力"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Xác thực hiện tại"
+            "value" : "Nhập mã khóa"
           }
         }
       }
