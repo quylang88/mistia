@@ -12,6 +12,10 @@ nonisolated enum MistiaAppLockSecretValidationFailure: Equatable, Sendable {
     case pin4RequiresFourDigits
     case pin6RequiresSixDigits
     case customPasswordTooShort
+    case customPasswordMissingLetter
+    case customPasswordMissingDigit
+    case customPasswordMissingUppercase
+    case customPasswordMissingLowercase
 }
 
 nonisolated struct MistiaAppLockFailureState: Equatable, Sendable {
@@ -165,9 +169,7 @@ nonisolated enum MistiaAppLockLogic {
         case .pin6:
             return isNumeric(secret, count: 6) ? nil : .pin6RequiresSixDigits
         case .customPassword:
-            return secret.trimmingCharacters(in: .whitespacesAndNewlines).count >= 6
-                ? nil
-                : .customPasswordTooShort
+            return passwordValidationFailure(for: secret)
         }
     }
 
@@ -216,5 +218,32 @@ nonisolated enum MistiaAppLockLogic {
 
     private static func isNumeric(_ value: String, count: Int) -> Bool {
         value.count == count && value.allSatisfy(\.isNumber)
+    }
+
+    private static func passwordValidationFailure(for secret: String) -> MistiaAppLockSecretValidationFailure? {
+        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 6 else {
+            return .customPasswordTooShort
+        }
+
+        let scalars = trimmed.unicodeScalars
+        let hasLetter = scalars.contains(where: CharacterSet.letters.contains)
+        let hasDigit = scalars.contains(where: CharacterSet.decimalDigits.contains)
+        let hasUppercase = scalars.contains(where: CharacterSet.uppercaseLetters.contains)
+        let hasLowercase = scalars.contains(where: CharacterSet.lowercaseLetters.contains)
+
+        if !hasLetter {
+            return .customPasswordMissingLetter
+        }
+        if !hasDigit {
+            return .customPasswordMissingDigit
+        }
+        if !hasUppercase {
+            return .customPasswordMissingUppercase
+        }
+        if !hasLowercase {
+            return .customPasswordMissingLowercase
+        }
+        return nil
     }
 }

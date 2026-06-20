@@ -21,6 +21,25 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertFalse(controller.isLocked)
     }
 
+    func testConfigureCustomPasswordStoresCredentialAndDisablesBiometricUnlock() throws {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
+        let credentialStore = AppLockCredentialStoreSpy()
+        let controller = MistiaAppLockController(
+            defaults: defaults,
+            credentialStore: credentialStore,
+            biometricAuthenticator: AppLockBiometricAuthenticatorSpy()
+        )
+
+        try controller.configure(kind: .customPassword, secret: "Abc1234")
+
+        XCTAssertTrue(defaults.bool(forKey: MistiaAppStorageKey.appLockEnabled))
+        XCTAssertEqual(defaults.string(forKey: MistiaAppStorageKey.appLockSecretKind), "customPassword")
+        XCTAssertFalse(defaults.bool(forKey: MistiaAppStorageKey.appLockBiometricEnabled))
+        XCTAssertEqual(credentialStore.savedCredential?.kind, .customPassword)
+        XCTAssertFalse(controller.isLocked)
+    }
+
     func testEnabledControllerLocksAndVerifiesStoredPIN() throws {
         let defaults = makeDefaults()
         let credential = try MistiaAppLockCredential.make(

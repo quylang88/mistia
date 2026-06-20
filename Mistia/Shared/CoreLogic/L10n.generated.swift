@@ -105,6 +105,8 @@ nonisolated enum L10n {
         static func archive(language: MistiaAppLanguage) -> String { L10n.tr("common.archive", vi: "Lưu trữ", en: "Archive", ja: "アーカイブ", language: language) }
         static var cancel: String { L10n.tr("common.cancel", vi: "Hủy", en: "Cancel", ja: "キャンセル") }
         static func cancel(language: MistiaAppLanguage) -> String { L10n.tr("common.cancel", vi: "Hủy", en: "Cancel", ja: "キャンセル", language: language) }
+        static var close: String { L10n.tr("common.close", vi: "Đóng", en: "Close", ja: "閉じる") }
+        static func close(language: MistiaAppLanguage) -> String { L10n.tr("common.close", vi: "Đóng", en: "Close", ja: "閉じる", language: language) }
         static var delete: String { L10n.tr("common.delete", vi: "Xóa", en: "Delete", ja: "削除") }
         static func delete(language: MistiaAppLanguage) -> String { L10n.tr("common.delete", vi: "Xóa", en: "Delete", ja: "削除", language: language) }
         static var off: String { L10n.tr("common.off", vi: "Tắt", en: "Off", ja: "オフ") }
@@ -2877,18 +2879,36 @@ nonisolated enum L10n {
             static func enterPin6(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPin6", vi: "Nhập PIN 6 số", en: "Enter 6-digit PIN", ja: "6桁PINを入力", language: language) }
             static var forgotCode: String { L10n.tr("shared.appLock.forgotCode", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？") }
             static func forgotCode(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.forgotCode", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？", language: language) }
-            static var passwordHelper: String { L10n.tr("shared.appLock.passwordHelper", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。") }
-            static func passwordHelper(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordHelper", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。", language: language) }
+            static var optionPassword: String { L10n.tr("shared.appLock.optionPassword", vi: "Mật khẩu", en: "Password", ja: "パスワード") }
+            static func optionPassword(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.optionPassword", vi: "Mật khẩu", en: "Password", ja: "パスワード", language: language) }
+            static var optionPin4: String { L10n.tr("shared.appLock.optionPin4", vi: "PIN 4", en: "PIN 4", ja: "PIN 4") }
+            static func optionPin4(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.optionPin4", vi: "PIN 4", en: "PIN 4", ja: "PIN 4", language: language) }
+            static var optionPin6: String { L10n.tr("shared.appLock.optionPin6", vi: "PIN 6", en: "PIN 6", ja: "PIN 6") }
+            static func optionPin6(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.optionPin6", vi: "PIN 6", en: "PIN 6", ja: "PIN 6", language: language) }
+            static var passwordHelper: String { L10n.tr("shared.appLock.passwordHelper", vi: "Dài hơn 6 ký tự, có chữ hoa, chữ thường và số.", en: "Use more than 6 characters with uppercase, lowercase, and a number.", ja: "6文字より長くし、大文字・小文字・数字を含めてください。") }
+            static func passwordHelper(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordHelper", vi: "Dài hơn 6 ký tự, có chữ hoa, chữ thường và số.", en: "Use more than 6 characters with uppercase, lowercase, and a number.", ja: "6文字より長くし、大文字・小文字・数字を含めてください。", language: language) }
+            static var passwordMissingDigitValidation: String { L10n.tr("shared.appLock.passwordMissingDigitValidation", vi: "Mật khẩu cần có ít nhất 1 số.", en: "Password needs at least one number.", ja: "パスワードには数字を1文字以上含めてください。") }
+            static func passwordMissingDigitValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordMissingDigitValidation", vi: "Mật khẩu cần có ít nhất 1 số.", en: "Password needs at least one number.", ja: "パスワードには数字を1文字以上含めてください。", language: language) }
+            static var passwordMissingLetterValidation: String { L10n.tr("shared.appLock.passwordMissingLetterValidation", vi: "Mật khẩu cần có chữ cái.", en: "Password needs at least one letter.", ja: "パスワードには文字を1文字以上含めてください。") }
+            static func passwordMissingLetterValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordMissingLetterValidation", vi: "Mật khẩu cần có chữ cái.", en: "Password needs at least one letter.", ja: "パスワードには文字を1文字以上含めてください。", language: language) }
+            static var passwordMissingLowercaseValidation: String { L10n.tr("shared.appLock.passwordMissingLowercaseValidation", vi: "Mật khẩu cần có ít nhất 1 chữ viết thường.", en: "Password needs at least one lowercase letter.", ja: "パスワードには小文字を1文字以上含めてください。") }
+            static func passwordMissingLowercaseValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordMissingLowercaseValidation", vi: "Mật khẩu cần có ít nhất 1 chữ viết thường.", en: "Password needs at least one lowercase letter.", ja: "パスワードには小文字を1文字以上含めてください。", language: language) }
+            static var passwordMissingUppercaseValidation: String { L10n.tr("shared.appLock.passwordMissingUppercaseValidation", vi: "Mật khẩu cần có ít nhất 1 chữ viết hoa.", en: "Password needs at least one uppercase letter.", ja: "パスワードには大文字を1文字以上含めてください。") }
+            static func passwordMissingUppercaseValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordMissingUppercaseValidation", vi: "Mật khẩu cần có ít nhất 1 chữ viết hoa.", en: "Password needs at least one uppercase letter.", ja: "パスワードには大文字を1文字以上含めてください。", language: language) }
             static var passwordPlaceholder: String { L10n.tr("shared.appLock.passwordPlaceholder", vi: "Mật khẩu", en: "Password", ja: "パスワード") }
             static func passwordPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordPlaceholder", vi: "Mật khẩu", en: "Password", ja: "パスワード", language: language) }
-            static var passwordValidation: String { L10n.tr("shared.appLock.passwordValidation", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。") }
-            static func passwordValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordValidation", vi: "Mật khẩu cần ít nhất 6 ký tự.", en: "Password must be at least 6 characters.", ja: "パスワードは6文字以上にしてください。", language: language) }
+            static var passwordValidation: String { L10n.tr("shared.appLock.passwordValidation", vi: "Mật khẩu cần dài hơn 6 ký tự.", en: "Password must be longer than 6 characters.", ja: "パスワードは6文字より長くしてください。") }
+            static func passwordValidation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.passwordValidation", vi: "Mật khẩu cần dài hơn 6 ký tự.", en: "Password must be longer than 6 characters.", ja: "パスワードは6文字より長くしてください。", language: language) }
             static var pin4Validation: String { L10n.tr("shared.appLock.pin4Validation", vi: "PIN cần đủ 4 số.", en: "PIN must be exactly 4 digits.", ja: "PINは4桁の数字にしてください。") }
             static func pin4Validation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pin4Validation", vi: "PIN cần đủ 4 số.", en: "PIN must be exactly 4 digits.", ja: "PINは4桁の数字にしてください。", language: language) }
             static var pin6Validation: String { L10n.tr("shared.appLock.pin6Validation", vi: "PIN cần đủ 6 số.", en: "PIN must be exactly 6 digits.", ja: "PINは6桁の数字にしてください。") }
             static func pin6Validation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pin6Validation", vi: "PIN cần đủ 6 số.", en: "PIN must be exactly 6 digits.", ja: "PINは6桁の数字にしてください。", language: language) }
             static var pinHelper: String { L10n.tr("shared.appLock.pinHelper", vi: "Dùng bàn phím số để nhập mã.", en: "Use the number pad to enter your code.", ja: "数字キーパッドでコードを入力します。") }
             static func pinHelper(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pinHelper", vi: "Dùng bàn phím số để nhập mã.", en: "Use the number pad to enter your code.", ja: "数字キーパッドでコードを入力します。", language: language) }
+            static var setupCodeSubtitle: String { L10n.tr("shared.appLock.setupCodeSubtitle", vi: "Chọn PIN hoặc mật khẩu để mở khóa Mistia.", en: "Choose a PIN or password to unlock Mistia.", ja: "Mistiaのロック解除に使うPINまたはパスワードを選択します。") }
+            static func setupCodeSubtitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupCodeSubtitle", vi: "Chọn PIN hoặc mật khẩu để mở khóa Mistia.", en: "Choose a PIN or password to unlock Mistia.", ja: "Mistiaのロック解除に使うPINまたはパスワードを選択します。", language: language) }
+            static var setupCodeTitle: String { L10n.tr("shared.appLock.setupCodeTitle", vi: "Thiết lập mã khóa", en: "Set app code", ja: "アプリコードを設定") }
+            static func setupCodeTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupCodeTitle", vi: "Thiết lập mã khóa", en: "Set app code", ja: "アプリコードを設定", language: language) }
             static var setupPasswordTitle: String { L10n.tr("shared.appLock.setupPasswordTitle", vi: "Đặt mật khẩu app", en: "Set app password", ja: "アプリパスワードを設定") }
             static func setupPasswordTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPasswordTitle", vi: "Đặt mật khẩu app", en: "Set app password", ja: "アプリパスワードを設定", language: language) }
             static var setupPin4Title: String { L10n.tr("shared.appLock.setupPin4Title", vi: "Đặt PIN 4 số", en: "Set 4-digit PIN", ja: "4桁PINを設定") }

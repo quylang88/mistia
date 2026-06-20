@@ -5,14 +5,19 @@ final class MistiaAppLockLogicTests: XCTestCase {
     func testSecretValidationAcceptsOnlyTheConfiguredSecretShape() {
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "1234", kind: .pin4), nil)
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "123456", kind: .pin6), nil)
-        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "passcode", kind: .customPassword), nil)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "Abc1234", kind: .customPassword), nil)
 
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "123", kind: .pin4), .pin4RequiresFourDigits)
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "12a4", kind: .pin4), .pin4RequiresFourDigits)
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "12345", kind: .pin6), .pin6RequiresSixDigits)
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "12345a", kind: .pin6), .pin6RequiresSixDigits)
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "abc", kind: .customPassword), .customPasswordTooShort)
-        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "abcde", kind: .customPassword), .customPasswordTooShort)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "Abc123", kind: .customPassword), .customPasswordTooShort)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "1234567", kind: .customPassword), .customPasswordMissingLetter)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "abcdefg", kind: .customPassword), .customPasswordMissingDigit)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "ABCDEFG1", kind: .customPassword), .customPasswordMissingLowercase)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "abcdefg1", kind: .customPassword), .customPasswordMissingUppercase)
+        XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "Abcdefg", kind: .customPassword), .customPasswordMissingDigit)
     }
 
     func testBiometricRequiresExistingPIN4Credential() {

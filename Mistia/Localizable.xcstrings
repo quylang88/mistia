@@ -806,6 +806,29 @@
         }
       }
     },
+    "common.close" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "閉じる"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đóng"
+          }
+        }
+      }
+    },
     "common.delete" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -26060,25 +26083,186 @@
         }
       }
     },
+    "shared.appLock.optionPassword" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワード"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mật khẩu"
+          }
+        }
+      }
+    },
+    "shared.appLock.optionPin4" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN 4"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN 4"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN 4"
+          }
+        }
+      }
+    },
+    "shared.appLock.optionPin6" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN 6"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN 6"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN 6"
+          }
+        }
+      }
+    },
     "shared.appLock.passwordHelper" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Password must be at least 6 characters."
+            "value" : "Use more than 6 characters with uppercase, lowercase, and a number."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "パスワードは6文字以上にしてください。"
+            "value" : "6文字より長くし、大文字・小文字・数字を含めてください。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mật khẩu cần ít nhất 6 ký tự."
+            "value" : "Dài hơn 6 ký tự, có chữ hoa, chữ thường và số."
+          }
+        }
+      }
+    },
+    "shared.appLock.passwordMissingDigitValidation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password needs at least one number."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワードには数字を1文字以上含めてください。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mật khẩu cần có ít nhất 1 số."
+          }
+        }
+      }
+    },
+    "shared.appLock.passwordMissingLetterValidation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password needs at least one letter."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワードには文字を1文字以上含めてください。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mật khẩu cần có chữ cái."
+          }
+        }
+      }
+    },
+    "shared.appLock.passwordMissingLowercaseValidation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password needs at least one lowercase letter."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワードには小文字を1文字以上含めてください。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mật khẩu cần có ít nhất 1 chữ viết thường."
+          }
+        }
+      }
+    },
+    "shared.appLock.passwordMissingUppercaseValidation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password needs at least one uppercase letter."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワードには大文字を1文字以上含めてください。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mật khẩu cần có ít nhất 1 chữ viết hoa."
           }
         }
       }
@@ -26112,19 +26296,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Password must be at least 6 characters."
+            "value" : "Password must be longer than 6 characters."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "パスワードは6文字以上にしてください。"
+            "value" : "パスワードは6文字より長くしてください。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mật khẩu cần ít nhất 6 ký tự."
+            "value" : "Mật khẩu cần dài hơn 6 ký tự."
           }
         }
       }
@@ -26194,6 +26378,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dùng bàn phím số để nhập mã."
+          }
+        }
+      }
+    },
+    "shared.appLock.setupCodeSubtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a PIN or password to unlock Mistia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistiaのロック解除に使うPINまたはパスワードを選択します。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn PIN hoặc mật khẩu để mở khóa Mistia."
+          }
+        }
+      }
+    },
+    "shared.appLock.setupCodeTitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set app code"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリコードを設定"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thiết lập mã khóa"
           }
         }
       }

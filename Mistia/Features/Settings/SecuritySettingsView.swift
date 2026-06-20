@@ -6,6 +6,7 @@ struct SecuritySettingsView: View {
     @Environment(MistiaAppLockController.self) private var appLockController
 
     @State private var activeSheet: SecuritySettingsSheet?
+    @State private var activeSetup: SecuritySettingsSetup?
     @State private var pendingAuthenticatedAction: SecurityProtectedAction?
     @State private var statusAlert: SecuritySettingsStatusAlert?
 
@@ -95,14 +96,13 @@ struct SecuritySettingsView: View {
                 }
             }
         }
+        .fullScreenCover(item: $activeSetup) { setup in
+            MistiaAppLockSetupFullScreen(initialKind: setup.kind) { kind, secret in
+                handleSetupCompletion(setup.completion, kind: kind, secret: secret)
+            }
+        }
         .sheet(item: $activeSheet, onDismiss: handleSheetDismiss) { sheet in
             switch sheet {
-            case .setup(let kind, let completion):
-                MistiaAppLockSetupSheet(kind: kind) { secret in
-                    handleSetupCompletion(completion, kind: kind, secret: secret)
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
             case .authenticate(let action):
                 MistiaAppLockAuthenticationSheet(kind: appLockController.configuredSecretKind ?? .pin4) {
                     pendingAuthenticatedAction = action
@@ -125,7 +125,7 @@ struct SecuritySettingsView: View {
             get: { appLockController.isEnabled },
             set: { newValue in
                 if newValue {
-                    activeSheet = .setup(.pin4, .enableProtection)
+                    activeSetup = SecuritySettingsSetup(kind: .pin4, completion: .enableProtection)
                 } else {
                     activeSheet = .authenticate(.disableProtection)
                 }
@@ -200,11 +200,18 @@ struct SecuritySettingsView: View {
                     message: L10n.settings.security.status.enabledMessage
                 )
             case .enableBiometric:
-                try appLockController.setBiometricsEnabled(true)
-                statusAlert = SecuritySettingsStatusAlert(
-                    title: L10n.settings.security.status.biometricEnabledTitle,
-                    message: L10n.settings.security.status.biometricEnabledMessage
-                )
+                if kind == .pin4 {
+                    try appLockController.setBiometricsEnabled(true)
+                    statusAlert = SecuritySettingsStatusAlert(
+                        title: L10n.settings.security.status.biometricEnabledTitle,
+                        message: L10n.settings.security.status.biometricEnabledMessage
+                    )
+                } else {
+                    statusAlert = SecuritySettingsStatusAlert(
+                        title: L10n.settings.security.status.changedTitle,
+                        message: L10n.settings.security.status.changedMessage
+                    )
+                }
             case .changeKind:
                 statusAlert = SecuritySettingsStatusAlert(
                     title: L10n.settings.security.status.changedTitle,
@@ -230,7 +237,7 @@ struct SecuritySettingsView: View {
                 )
             case .enableBiometric:
                 if appLockController.requiresPIN4SetupBeforeBiometric {
-                    activeSheet = .setup(.pin4, .enableBiometric)
+                    activeSetup = SecuritySettingsSetup(kind: .pin4, completion: .enableBiometric)
                 } else {
                     try appLockController.setBiometricsEnabled(true)
                     statusAlert = SecuritySettingsStatusAlert(
@@ -245,7 +252,7 @@ struct SecuritySettingsView: View {
                     message: L10n.settings.security.status.biometricDisabledMessage
                 )
             case .changeKind(let kind):
-                activeSheet = .setup(kind, .changeKind)
+                activeSetup = SecuritySettingsSetup(kind: kind, completion: .changeKind)
             }
         } catch {
             statusAlert = SecuritySettingsStatusAlert(
@@ -415,39 +422,98 @@ struct MistiaAppLockScreen: View {
     }
 }
 
-private struct MistiaAppLockSetupSheet: View {
+private struct MistiaAppLockSetupFullScreen: View {
     @Environment(\.dismiss) private var dismiss
-    let kind: MistiaAppLockSecretKind
-    let onComplete: (String) -> Void
+    @State private var selectedKind: MistiaAppLockSecretKind
+    let onComplete: (MistiaAppLockSecretKind, String) -> Void
+
+    init(
+        initialKind: MistiaAppLockSecretKind,
+        onComplete: @escaping (MistiaAppLockSecretKind, String) -> Void
+    ) {
+        _selectedKind = State(initialValue: initialKind)
+        self.onComplete = onComplete
+    }
 
     var body: some View {
-        NavigationStack {
-            MistiaAppLockEntryPanel(mode: .setup, kind: kind) { secret in
-                onComplete(secret)
-                dismiss()
-                return true
-            }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 24)
-            .navigationTitle(setupTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.common.cancel) { dismiss() }
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.common.close)
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+
+                Spacer(minLength: 18)
+
+                VStack(spacing: 22) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 38, weight: .semibold))
+                        .foregroundStyle(MistiaAccent.mint.color)
+
+                    VStack(spacing: 7) {
+                        Text(L10n.shared.appLock.setupCodeTitle)
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.center)
+
+                        Text(L10n.shared.appLock.setupCodeSubtitle)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    AppLockSecretKindSegmentedPicker(selection: $selectedKind)
+
+                    MistiaAppLockEntryPanel(
+                        mode: .setup,
+                        kind: selectedKind,
+                        hidesInitialSetupPrompt: true
+                    ) { secret in
+                        onComplete(selectedKind, secret)
+                        dismiss()
+                        return true
+                    }
+                    .id(selectedKind)
+                }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: 420)
+
+                Spacer(minLength: 28)
             }
         }
     }
+}
 
-    private var setupTitle: String {
-        switch kind {
-        case .pin4:
-            L10n.shared.appLock.setupPin4Title
-        case .pin6:
-            L10n.shared.appLock.setupPin6Title
-        case .customPassword:
-            L10n.shared.appLock.setupPasswordTitle
+private struct AppLockSecretKindSegmentedPicker: View {
+    @Binding var selection: MistiaAppLockSecretKind
+
+    var body: some View {
+        Picker(String(), selection: $selection) {
+            Text(L10n.shared.appLock.optionPin4)
+                .tag(MistiaAppLockSecretKind.pin4)
+            Text(L10n.shared.appLock.optionPin6)
+                .tag(MistiaAppLockSecretKind.pin6)
+            Text(L10n.shared.appLock.optionPassword)
+                .tag(MistiaAppLockSecretKind.customPassword)
         }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 360)
     }
 }
 
@@ -482,6 +548,7 @@ private struct MistiaAppLockEntryPanel: View {
     @Environment(MistiaAppLockController.self) private var appLockController
     let mode: MistiaAppLockEntryMode
     let kind: MistiaAppLockSecretKind
+    var hidesInitialSetupPrompt = false
     let onSubmit: (String) -> Bool
 
     @State private var pinInput = ""
@@ -492,15 +559,20 @@ private struct MistiaAppLockEntryPanel: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            VStack(spacing: 6) {
-                Text(promptTitle)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                if let helperText {
-                    Text(helperText)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+            if shouldShowPromptBlock {
+                VStack(spacing: 6) {
+                    if shouldShowPromptTitle {
+                        Text(promptTitle)
+                            .font(.system(size: 19, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.center)
+                    }
+
+                    if let helperText {
+                        Text(helperText)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
 
@@ -577,14 +649,20 @@ private struct MistiaAppLockEntryPanel: View {
             return L10n.shared.appLock.enterCurrentCodeTitle
         case .setup:
             if pendingSecret == nil {
-                return kind == .customPassword
-                    ? L10n.shared.appLock.createPassword
-                    : pinLength == 4 ? L10n.shared.appLock.createPin4 : L10n.shared.appLock.createPin6
+                return L10n.shared.appLock.setupCodeTitle
             }
             return kind == .customPassword
                 ? L10n.shared.appLock.confirmPassword
                 : L10n.shared.appLock.confirmPin
         }
+    }
+
+    private var shouldShowPromptTitle: Bool {
+        !(mode == .setup && hidesInitialSetupPrompt && pendingSecret == nil)
+    }
+
+    private var shouldShowPromptBlock: Bool {
+        shouldShowPromptTitle || helperText != nil
     }
 
     private var helperText: String? {
@@ -689,6 +767,14 @@ private struct MistiaAppLockEntryPanel: View {
             L10n.shared.appLock.pin6Validation
         case .customPasswordTooShort:
             L10n.shared.appLock.passwordValidation
+        case .customPasswordMissingLetter:
+            L10n.shared.appLock.passwordMissingLetterValidation
+        case .customPasswordMissingDigit:
+            L10n.shared.appLock.passwordMissingDigitValidation
+        case .customPasswordMissingUppercase:
+            L10n.shared.appLock.passwordMissingUppercaseValidation
+        case .customPasswordMissingLowercase:
+            L10n.shared.appLock.passwordMissingLowercaseValidation
         }
     }
 }
@@ -845,14 +931,20 @@ private enum MistiaAppLockEntryMode {
     case setup
 }
 
+private struct SecuritySettingsSetup: Identifiable {
+    let kind: MistiaAppLockSecretKind
+    let completion: SecuritySetupCompletion
+
+    var id: String {
+        "setup-\(kind.rawValue)-\(completion.id)"
+    }
+}
+
 private enum SecuritySettingsSheet: Identifiable {
-    case setup(MistiaAppLockSecretKind, SecuritySetupCompletion)
     case authenticate(SecurityProtectedAction)
 
     var id: String {
         switch self {
-        case .setup(let kind, let completion):
-            "setup-\(kind.rawValue)-\(completion.id)"
         case .authenticate(let action):
             "auth-\(action.id)"
         }
