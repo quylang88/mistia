@@ -2903,8 +2903,6 @@ nonisolated enum L10n {
             static func pin4Validation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pin4Validation", vi: "PIN cần đủ 4 số.", en: "PIN must be exactly 4 digits.", ja: "PINは4桁の数字にしてください。", language: language) }
             static var pin6Validation: String { L10n.tr("shared.appLock.pin6Validation", vi: "PIN cần đủ 6 số.", en: "PIN must be exactly 6 digits.", ja: "PINは6桁の数字にしてください。") }
             static func pin6Validation(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pin6Validation", vi: "PIN cần đủ 6 số.", en: "PIN must be exactly 6 digits.", ja: "PINは6桁の数字にしてください。", language: language) }
-            static var pinHelper: String { L10n.tr("shared.appLock.pinHelper", vi: "Dùng bàn phím số để nhập mã.", en: "Use the number pad to enter your code.", ja: "数字キーパッドでコードを入力します。") }
-            static func pinHelper(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.pinHelper", vi: "Dùng bàn phím số để nhập mã.", en: "Use the number pad to enter your code.", ja: "数字キーパッドでコードを入力します。", language: language) }
             static var setupCodeSubtitle: String { L10n.tr("shared.appLock.setupCodeSubtitle", vi: "Chọn PIN hoặc mật khẩu để mở khóa Mistia.", en: "Choose a PIN or password to unlock Mistia.", ja: "Mistiaのロック解除に使うPINまたはパスワードを選択します。") }
             static func setupCodeSubtitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupCodeSubtitle", vi: "Chọn PIN hoặc mật khẩu để mở khóa Mistia.", en: "Choose a PIN or password to unlock Mistia.", ja: "Mistiaのロック解除に使うPINまたはパスワードを選択します。", language: language) }
             static var setupCodeTitle: String { L10n.tr("shared.appLock.setupCodeTitle", vi: "Thiết lập mã khóa", en: "Set app code", ja: "アプリコードを設定") }

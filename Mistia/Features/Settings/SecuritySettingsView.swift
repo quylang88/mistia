@@ -436,59 +436,100 @@ private struct MistiaAppLockSetupFullScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            AppLockSetupBackground()
+        GeometryReader { proxy in
+            let metrics = AppLockSetupMetrics(containerHeight: proxy.size.height)
 
-            VStack(spacing: 0) {
-                HStack {
-                    AppLockSetupCloseButton {
-                        dismiss()
+            ZStack {
+                AppLockSetupBackground()
+
+                VStack(spacing: 0) {
+                    HStack {
+                        AppLockSetupCloseButton {
+                            dismiss()
+                        }
+
+                        Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, metrics.closeTopPadding)
 
-                    Spacer(minLength: 0)
+                    Spacer(minLength: metrics.topSpacer)
+
+                    VStack(spacing: metrics.contentSpacing) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: metrics.lockIconSize, weight: .semibold))
+                            .foregroundStyle(MistiaAccent.mint.color)
+
+                        VStack(spacing: 7) {
+                            Text(L10n.shared.appLock.setupCodeTitle)
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                                .multilineTextAlignment(.center)
+
+                            Text(L10n.shared.appLock.setupCodeSubtitle)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        MistiaAppLockEntryPanel(
+                            mode: .setup,
+                            kind: selectedKind,
+                            hidesInitialSetupPrompt: true,
+                            usesLockScreenLayout: true,
+                            lockScreenKeypadStyle: metrics.keypadStyle
+                        ) { secret in
+                            onComplete(selectedKind, secret)
+                            dismiss()
+                            return true
+                        }
+                        .id(selectedKind)
+                    }
+                    .padding(.horizontal, 24)
+                    .frame(maxWidth: 420)
+
+                    Spacer(minLength: metrics.bottomSpacer)
+
+                    AppLockSecretKindIconDock(selection: $selectedKind)
+                        .padding(.bottom, metrics.dockBottomPadding)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-
-                Spacer(minLength: 24)
-
-                VStack(spacing: 24) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 36, weight: .semibold))
-                        .foregroundStyle(MistiaAccent.mint.color)
-
-                    VStack(spacing: 7) {
-                        Text(L10n.shared.appLock.setupCodeTitle)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .multilineTextAlignment(.center)
-
-                        Text(L10n.shared.appLock.setupCodeSubtitle)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-
-                    MistiaAppLockEntryPanel(
-                        mode: .setup,
-                        kind: selectedKind,
-                        hidesInitialSetupPrompt: true,
-                        usesLockScreenLayout: true
-                    ) { secret in
-                        onComplete(selectedKind, secret)
-                        dismiss()
-                        return true
-                    }
-                    .id(selectedKind)
-                }
-                .padding(.horizontal, 24)
-                .frame(maxWidth: 420)
-
-                Spacer(minLength: 18)
-
-                AppLockSecretKindIconDock(selection: $selectedKind)
-                    .padding(.bottom, 20)
             }
         }
+    }
+}
+
+private struct AppLockSetupMetrics {
+    let isCompactHeight: Bool
+
+    init(containerHeight: CGFloat) {
+        isCompactHeight = containerHeight < 880
+    }
+
+    var closeTopPadding: CGFloat {
+        isCompactHeight ? 18 : 20
+    }
+
+    var topSpacer: CGFloat {
+        isCompactHeight ? 14 : 24
+    }
+
+    var contentSpacing: CGFloat {
+        isCompactHeight ? 18 : 24
+    }
+
+    var lockIconSize: CGFloat {
+        isCompactHeight ? 32 : 36
+    }
+
+    var bottomSpacer: CGFloat {
+        isCompactHeight ? 12 : 18
+    }
+
+    var dockBottomPadding: CGFloat {
+        isCompactHeight ? 14 : 20
+    }
+
+    var keypadStyle: MistiaPINKeypadStyle {
+        isCompactHeight ? .lockScreenCompact : .lockScreen
     }
 }
 
@@ -662,6 +703,7 @@ private struct MistiaAppLockEntryPanel: View {
     let kind: MistiaAppLockSecretKind
     var hidesInitialSetupPrompt = false
     var usesLockScreenLayout = false
+    var lockScreenKeypadStyle: MistiaPINKeypadStyle = .lockScreen
     let onSubmit: (String) -> Bool
 
     @State private var pinInput = ""
@@ -694,7 +736,7 @@ private struct MistiaAppLockEntryPanel: View {
             } else {
                 pinDots
                 MistiaPINKeypad(
-                    style: usesLockScreenLayout ? .lockScreen : .compact,
+                    style: usesLockScreenLayout ? lockScreenKeypadStyle : .compact,
                     onDigit: appendDigit,
                     onDelete: deleteDigit
                 )
@@ -824,12 +866,7 @@ private struct MistiaAppLockEntryPanel: View {
         case .unlock, .authenticate:
             return nil
         case .setup:
-            if usesLockScreenLayout && kind != .customPassword {
-                return nil
-            }
-            return kind == .customPassword
-                ? L10n.shared.appLock.passwordHelper
-                : L10n.shared.appLock.pinHelper
+            return kind == .customPassword ? L10n.shared.appLock.passwordHelper : nil
         }
     }
 
@@ -968,6 +1005,16 @@ private struct AppLockGlassRoundedBackground: View {
 private enum MistiaPINKeypadStyle {
     case compact
     case lockScreen
+    case lockScreenCompact
+
+    var isLockScreen: Bool {
+        switch self {
+        case .compact:
+            false
+        case .lockScreen, .lockScreenCompact:
+            true
+        }
+    }
 
     var rowSpacing: CGFloat {
         switch self {
@@ -975,6 +1022,8 @@ private enum MistiaPINKeypadStyle {
             12
         case .lockScreen:
             18
+        case .lockScreenCompact:
+            14
         }
     }
 
@@ -984,6 +1033,8 @@ private enum MistiaPINKeypadStyle {
             18
         case .lockScreen:
             22
+        case .lockScreenCompact:
+            18
         }
     }
 
@@ -993,6 +1044,8 @@ private enum MistiaPINKeypadStyle {
             66
         case .lockScreen:
             78
+        case .lockScreenCompact:
+            70
         }
     }
 
@@ -1002,6 +1055,8 @@ private enum MistiaPINKeypadStyle {
             54
         case .lockScreen:
             78
+        case .lockScreenCompact:
+            70
         }
     }
 
@@ -1011,6 +1066,8 @@ private enum MistiaPINKeypadStyle {
             26
         case .lockScreen:
             32
+        case .lockScreenCompact:
+            29
         }
     }
 }
@@ -1029,7 +1086,7 @@ private struct MistiaPINKeypad: View {
 
     var body: some View {
         Group {
-            if style == .lockScreen, #available(iOS 26.0, *) {
+            if style.isLockScreen, #available(iOS 26.0, *) {
                 GlassEffectContainer(spacing: style.columnSpacing) {
                     keypadRows
                 }
@@ -1044,7 +1101,7 @@ private struct MistiaPINKeypad: View {
             ForEach(rows, id: \.self) { row in
                 HStack(spacing: style.columnSpacing) {
                     ForEach(row, id: \.self) { item in
-                        if style == .lockScreen {
+                        if style.isLockScreen {
                             lockScreenKeypadButton(item)
                         } else {
                             compactKeypadButton(item)
@@ -1095,13 +1152,13 @@ private struct MistiaPINKeypad: View {
             Color.clear
                 .frame(width: style.keyWidth, height: style.keyHeight)
         } else if item == "delete" {
-            AppLockGlassKeyButton(action: onDelete) {
+            AppLockGlassKeyButton(keySize: style.keyWidth, action: onDelete) {
                 Image(systemName: "delete.left.fill")
                     .font(.system(size: 25, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
             }
         } else {
-            AppLockGlassKeyButton {
+            AppLockGlassKeyButton(keySize: style.keyWidth) {
                 onDigit(item)
             } label: {
                 Text(verbatim: item)
@@ -1113,6 +1170,7 @@ private struct MistiaPINKeypad: View {
 }
 
 private struct AppLockGlassKeyButton<Label: View>: View {
+    let keySize: CGFloat
     let action: () -> Void
     @ViewBuilder let label: Label
 
@@ -1122,7 +1180,7 @@ private struct AppLockGlassKeyButton<Label: View>: View {
             action()
         } label: {
             label
-                .frame(width: 78, height: 78)
+                .frame(width: keySize, height: keySize)
                 .contentShape(Circle())
         }
         .buttonBorderShape(.circle)

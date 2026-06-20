@@ -26359,29 +26359,6 @@
         }
       }
     },
-    "shared.appLock.pinHelper" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use the number pad to enter your code."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "数字キーパッドでコードを入力します。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dùng bàn phím số để nhập mã."
-          }
-        }
-      }
-    },
     "shared.appLock.setupCodeSubtitle" : {
       "extractionState" : "stale",
       "localizations" : {
