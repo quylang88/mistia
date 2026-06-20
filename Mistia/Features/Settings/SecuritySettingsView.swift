@@ -767,6 +767,7 @@ private struct MistiaAppLockEntryPanel: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String?
+    @State private var countdownNow = Date()
 
     var body: some View {
         VStack(spacing: usesLockScreenLayout ? 24 : 18) {
@@ -808,6 +809,9 @@ private struct MistiaAppLockEntryPanel: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .task(id: appLockController.failureState.lockedUntil) {
+            await updateLockoutCountdown(until: appLockController.failureState.lockedUntil)
+        }
     }
 
     private var passwordFields: some View {
@@ -929,12 +933,20 @@ private struct MistiaAppLockEntryPanel: View {
 
     private var lockedOutText: String? {
         guard let lockedUntil = appLockController.failureState.lockedUntil else { return nil }
-        let seconds = max(1, Int(ceil(lockedUntil.timeIntervalSince(Date()))))
+        let remaining = lockedUntil.timeIntervalSince(countdownNow)
+        guard remaining > 0 else { return nil }
+
+        if remaining >= 60 {
+            let minutes = max(1, Int(ceil(remaining / 60)))
+            return L10n.shared.appLock.tryAgainInMinutes("\(minutes)")
+        }
+
+        let seconds = max(1, Int(ceil(remaining)))
         return L10n.shared.appLock.tryAgainInSeconds("\(seconds)")
     }
 
     private var isManualEntryLockedOut: Bool {
-        MistiaAppLockLogic.isLockedOut(appLockController.failureState)
+        MistiaAppLockLogic.isLockedOut(appLockController.failureState, now: countdownNow)
     }
 
     private func appendDigit(_ digit: String) {
@@ -973,9 +985,7 @@ private struct MistiaAppLockEntryPanel: View {
         case .unlock, .authenticate:
             guard onSubmit(candidate) else {
                 pinInput = ""
-                errorMessage = MistiaAppLockLogic.isLockedOut(appLockController.failureState)
-                    ? lockedOutText
-                    : L10n.shared.appLock.wrongCode
+                errorMessage = isManualEntryLockedOut ? nil : L10n.shared.appLock.wrongCode
                 return
             }
             errorMessage = nil
@@ -997,12 +1007,29 @@ private struct MistiaAppLockEntryPanel: View {
         case .unlock, .authenticate:
             guard onSubmit(password) else {
                 password = ""
-                errorMessage = MistiaAppLockLogic.isLockedOut(appLockController.failureState)
-                    ? lockedOutText
-                    : L10n.shared.appLock.wrongCode
+                errorMessage = isManualEntryLockedOut ? nil : L10n.shared.appLock.wrongCode
                 return
             }
             errorMessage = nil
+        }
+    }
+
+    private func updateLockoutCountdown(until lockedUntil: Date?) async {
+        guard let lockedUntil else {
+            countdownNow = Date()
+            return
+        }
+
+        while !Task.isCancelled {
+            let now = Date()
+            countdownNow = now
+
+            guard now < lockedUntil else {
+                errorMessage = nil
+                return
+            }
+
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 

@@ -26428,6 +26428,29 @@
         }
       }
     },
+    "shared.appLock.tryAgainInMinutes" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again in %@ min"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@分後に再試行"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thử lại sau %@ phút"
+          }
+        }
+      }
+    },
     "shared.appLock.unlock" : {
       "extractionState" : "stale",
       "localizations" : {

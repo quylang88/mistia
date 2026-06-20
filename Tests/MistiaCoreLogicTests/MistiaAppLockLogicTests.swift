@@ -58,6 +58,38 @@ final class MistiaAppLockLogicTests: XCTestCase {
         XCTAssertFalse(MistiaAppLockLogic.isLockedOut(state, now: now.addingTimeInterval(30)))
     }
 
+    func testLockoutEscalatesEveryFiveFailedAttemptsUpToOneHour() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var state = MistiaAppLockFailureState(failedAttemptCount: 0, lockedUntil: nil)
+        let expectedDurations: [TimeInterval] = [
+            30,
+            60,
+            5 * 60,
+            10 * 60,
+            20 * 60,
+            30 * 60,
+            60 * 60,
+            60 * 60
+        ]
+
+        for lockoutIndex in expectedDurations.indices {
+            let attemptStart = now.addingTimeInterval(TimeInterval(lockoutIndex * 10_000))
+            for attemptOffset in 0..<4 {
+                state = MistiaAppLockLogic.recordFailedAttempt(
+                    from: state,
+                    now: attemptStart.addingTimeInterval(TimeInterval(attemptOffset))
+                )
+                XCTAssertNil(state.lockedUntil)
+            }
+
+            let lockoutStart = attemptStart.addingTimeInterval(4)
+            state = MistiaAppLockLogic.recordFailedAttempt(from: state, now: lockoutStart)
+
+            XCTAssertEqual(state.failedAttemptCount, (lockoutIndex + 1) * 5)
+            XCTAssertEqual(state.lockedUntil, lockoutStart.addingTimeInterval(expectedDurations[lockoutIndex]))
+        }
+    }
+
     func testSuccessfulAuthenticationClearsFailedAttemptsAndLockout() {
         let state = MistiaAppLockFailureState(
             failedAttemptCount: 5,

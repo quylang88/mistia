@@ -157,7 +157,15 @@ nonisolated struct MistiaAppLockCredential: Codable, Equatable, Sendable {
 
 nonisolated enum MistiaAppLockLogic {
     static let maxFailedAttempts = 5
-    static let lockoutDuration: TimeInterval = 30
+    static let lockoutDurations: [TimeInterval] = [
+        30,
+        60,
+        5 * 60,
+        10 * 60,
+        20 * 60,
+        30 * 60,
+        60 * 60
+    ]
 
     static func validationFailure(
         for secret: String,
@@ -193,9 +201,8 @@ nonisolated enum MistiaAppLockLogic {
         now: Date = Date()
     ) -> MistiaAppLockFailureState {
         let failedAttemptCount = state.failedAttemptCount + 1
-        let lockedUntil = failedAttemptCount >= maxFailedAttempts
-            ? now.addingTimeInterval(lockoutDuration)
-            : nil
+        let lockedUntil = lockoutDuration(forFailedAttemptCount: failedAttemptCount)
+            .map { now.addingTimeInterval($0) }
         return MistiaAppLockFailureState(
             failedAttemptCount: failedAttemptCount,
             lockedUntil: lockedUntil
@@ -218,6 +225,17 @@ nonisolated enum MistiaAppLockLogic {
 
     private static func isNumeric(_ value: String, count: Int) -> Bool {
         value.count == count && value.allSatisfy(\.isNumber)
+    }
+
+    private static func lockoutDuration(forFailedAttemptCount failedAttemptCount: Int) -> TimeInterval? {
+        guard failedAttemptCount >= maxFailedAttempts,
+              failedAttemptCount.isMultiple(of: maxFailedAttempts)
+        else {
+            return nil
+        }
+
+        let lockoutIndex = failedAttemptCount / maxFailedAttempts - 1
+        return lockoutDurations[min(lockoutIndex, lockoutDurations.count - 1)]
     }
 
     private static func passwordValidationFailure(for secret: String) -> MistiaAppLockSecretValidationFailure? {

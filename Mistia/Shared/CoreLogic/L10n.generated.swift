@@ -2907,6 +2907,12 @@ nonisolated enum L10n {
             static func setupPin6Title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPin6Title", vi: "Đặt PIN 6 số", en: "Set 6-digit PIN", ja: "6桁PINを設定", language: language) }
             static var title: String { L10n.tr("shared.appLock.title", vi: "Mistia đã khóa", en: "Mistia is locked", ja: "Mistiaはロックされています") }
             static func title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.title", vi: "Mistia đã khóa", en: "Mistia is locked", ja: "Mistiaはロックされています", language: language) }
+            static func tryAgainInMinutes(_ value: String) -> String {
+                L10n.format("shared.appLock.tryAgainInMinutes", vi: "Thử lại sau %@ phút", en: "Try again in %@ min", ja: "%@分後に再試行", value)
+            }
+            static func tryAgainInMinutes(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("shared.appLock.tryAgainInMinutes", vi: "Thử lại sau %@ phút", en: "Try again in %@ min", ja: "%@分後に再試行", language: language, value)
+            }
             static func tryAgainInSeconds(_ value: String) -> String {
                 L10n.format("shared.appLock.tryAgainInSeconds", vi: "Thử lại sau %@ giây", en: "Try again in %@ seconds", ja: "%@秒後に再試行", value)
             }
