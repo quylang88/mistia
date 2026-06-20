@@ -134,6 +134,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private var isCurrentShortcutAttentionPulsing = false
   private var currentShortcutDisabledAccessibilityHint: String?
   private var currentSelectedMistiaTab: MistiaTab?
+  private var currentShowsShortcutTab = false
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
   private var shortcutPulseLayer: CAShapeLayer?
 
@@ -158,7 +159,6 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
         }
       }
     }
-    configureTabsIfNeeded()
     configureSystemTabBar()
     configureQuickCreateButtonIfNeeded()
   }
@@ -210,6 +210,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
     currentAppearanceMode = appearanceMode
     currentAppLanguage = appLanguage
+    currentShowsShortcutTab = showsShortcutTab
     currentShortcutPresentation = shortcutPresentation
     isCurrentShortcutSyncing = isShortcutSyncing
     isCurrentShortcutDisabled = isShortcutDisabled
@@ -226,23 +227,30 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       refreshShortcutTabContent()
     }
 
-    if isFirstRender || didChangeAppearance {
-      applyChromeAppearance()
-    }
-
-    updateShortcutTabVisibilityIfNeeded(showsShortcutTab: showsShortcutTab)
+    let didChangeShortcutTabVisibility = updateShortcutTabVisibilityIfNeeded(
+      showsShortcutTab: showsShortcutTab
+    )
     updateShortcutPulseAnimation()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
     updateTabBarVisibility(isHidden: hidesTabBar)
-    if isFirstRender || didChangeSelectedTab || didChangeAppearance {
+    if isFirstRender || didChangeAppearance || didChangeShortcutTabVisibility {
+      applyChromeAppearance()
+    }
+    if isFirstRender || didChangeSelectedTab || didChangeAppearance
+      || didChangeShortcutTabVisibility
+    {
       syncTabSymbols(selectedTab: selectedTab)
     }
     currentSelectedMistiaTab = selectedTab
 
     guard #available(iOS 18.0, *) else { return }
     let identifier = selectedTab.tabIdentifier
-    guard self.selectedTab?.identifier != identifier else { return }
-    self.selectedTab = tab(forIdentifier: identifier)
+    if self.selectedTab?.identifier != identifier {
+      self.selectedTab = tab(forIdentifier: identifier)
+    }
+    if isFirstRender || didChangeShortcutTabVisibility {
+      scheduleTabBarChromeRefresh(selectedTab: selectedTab)
+    }
   }
 
   private func configureTabsIfNeeded() {
@@ -255,7 +263,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
       let rootTabs = MistiaTab.nativeShellTabs.map(makeRootTab(for:))
       cachedRootTabs = Dictionary(uniqueKeysWithValues: zip(MistiaTab.nativeShellTabs, rootTabs))
-      tabs = rootTabs
+      let configuredTabs = currentShowsShortcutTab ? rootTabs + [makePinnedShortcutTab()] : rootTabs
+      setTabs(configuredTabs, animated: false)
       selectedTab = rootTabs.first
       syncTabSymbols(selectedTab: .overview)
     } else {
@@ -878,18 +887,37 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     return searchTab
   }
 
-  private func updateShortcutTabVisibilityIfNeeded(showsShortcutTab: Bool) {
-    guard #available(iOS 18.0, *) else { return }
+  @discardableResult
+  private func updateShortcutTabVisibilityIfNeeded(showsShortcutTab: Bool) -> Bool {
+    guard #available(iOS 18.0, *) else { return false }
 
     if showsShortcutTab {
-      guard shortcutTab == nil else { return }
-      tabs = tabs + [makePinnedShortcutTab()]
+      guard shortcutTab == nil else { return false }
+      setTabs(tabs + [makePinnedShortcutTab()], animated: false)
+      return true
     } else {
-      guard let shortcutTab else { return }
+      guard let shortcutTab else { return false }
       var nextTabs = tabs
       nextTabs.removeAll { $0 === shortcutTab }
-      tabs = nextTabs
+      setTabs(nextTabs, animated: false)
       self.shortcutTab = nil
+      return true
+    }
+  }
+
+  private func scheduleTabBarChromeRefresh(selectedTab: MistiaTab) {
+    view.setNeedsLayout()
+    tabBar.setNeedsLayout()
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.applyChromeAppearance()
+      self.syncTabSymbols(selectedTab: selectedTab)
+      self.view.setNeedsLayout()
+      self.tabBar.setNeedsLayout()
+      self.view.layoutIfNeeded()
+      self.alignQuickCreateButtonToSearchPill()
+      self.notifyQuickCreateFrameChanged()
     }
   }
 

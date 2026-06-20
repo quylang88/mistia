@@ -84,7 +84,6 @@ struct RootTabView: View {
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
-  @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
   @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
   @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue =
     MistiaShortcutKind.backupRestore.rawValue
@@ -113,7 +112,10 @@ struct RootTabView: View {
           selectedTab: $selectedTab,
           appearanceMode: appearanceMode,
           appLanguage: appLanguage,
-          hidesQuickCreate: hideQuickCreate || uiState.isQuickCreateHidden || isQuickCreateMenuVisible,
+          hidesQuickCreate: MistiaRootChromeLogic.hidesQuickCreate(
+            transientHidden: uiState.isQuickCreateHidden,
+            menuVisible: isQuickCreateMenuVisible
+          ),
           hidesTabBar: uiState.isTabBarHidden,
           showsShortcutTab: mistiaShortcutEnabled && !shouldHideShortcutTabInCurrentContext,
           isShortcutSyncing: isSyncingShortcut && !isPinnedShortcutDisabled,
@@ -191,7 +193,7 @@ struct RootTabView: View {
       .task(id: shortcutNormalizationKey) {
         persistShortcutSelectionIfNeeded(shortcutResolution.selection)
       }
-      .onChange(of: hideQuickCreate) { _, newValue in
+      .onChange(of: uiState.isQuickCreateHidden) { _, newValue in
         if newValue {
           dismissQuickCreateMenu()
         }
@@ -402,8 +404,10 @@ struct RootTabView: View {
   }
 
   private func presentQuickCreateMenu() {
-    guard !hideQuickCreate else { return }
-    guard quickCreateButtonFrame.width > 0 else { return }
+    guard MistiaRootChromeLogic.canPresentQuickCreate(
+      transientHidden: uiState.isQuickCreateHidden,
+      buttonFrame: quickCreateButtonFrame
+    ) else { return }
     if familyContextStore.isViewingOtherMemberContext && !hasUsableWalletForQuickCreateSubject {
       guard !isRefreshingQuickCreateAccess else { return }
       isRefreshingQuickCreateAccess = true
@@ -428,8 +432,10 @@ struct RootTabView: View {
   }
 
   private func openQuickCreateMenu() {
-    guard !hideQuickCreate else { return }
-    guard quickCreateButtonFrame.width > 0 else { return }
+    guard MistiaRootChromeLogic.canPresentQuickCreate(
+      transientHidden: uiState.isQuickCreateHidden,
+      buttonFrame: quickCreateButtonFrame
+    ) else { return }
     if familyContextStore.isViewingOtherMemberContext && !hasUsableWalletForQuickCreateSubject {
       quickCreateAccessAlert = RootQuickCreateAccessAlert(
         title: L10n.app.roottab.noWalletUseAccess,

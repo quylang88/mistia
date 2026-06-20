@@ -1,6 +1,26 @@
 import SwiftUI
 import Observation
 
+enum MistiaRootChromeLogic {
+    static func hidesQuickCreate(
+        transientHidden: Bool,
+        menuVisible: Bool
+    ) -> Bool {
+        transientHidden || menuVisible
+    }
+
+    static func canPresentQuickCreate(
+        transientHidden: Bool,
+        buttonFrame: CGRect
+    ) -> Bool {
+        !transientHidden && buttonFrame.width > 0 && buttonFrame.height > 0
+    }
+
+    static func normalizeLegacyPersistentFlags(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: MistiaAppStorageKey.hideQuickCreate)
+    }
+}
+
 enum MistiaManagementNavigationDestination: Equatable {
     case backupRestore
     case archivedItems

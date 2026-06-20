@@ -139,7 +139,6 @@ struct ManagementView: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Environment(MistiaUIState.self) private var uiState
 
-    @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
     @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
     @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
     @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
@@ -169,6 +168,7 @@ struct ManagementView: View {
     @State private var familyOwnerConflictAlert: ManagementFamilyOwnerConflictAlert?
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var renderSnapshotCache: ManagementRenderSnapshotCache?
+    @State private var quickCreateHideRequestID = UUID()
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -516,17 +516,14 @@ struct ManagementView: View {
         } message: { alert in
             Text(alert.message)
         }
-        .onAppear {
-            hideQuickCreate = destination != nil
-        }
         .onChange(of: destination, initial: true) { _, newValue in
-            hideQuickCreate = newValue != nil
+            uiState.requestQuickCreateHidden(newValue != nil, id: quickCreateHideRequestID)
         }
         .onChange(of: uiState.managementNavigationRequest?.id, initial: true) { _, _ in
             handleManagementNavigationRequest()
         }
         .onDisappear {
-            hideQuickCreate = false
+            uiState.requestQuickCreateHidden(false, id: quickCreateHideRequestID)
         }
         .task(id: snapshotKey) {
             refreshRenderSnapshotCache(for: snapshotKey, snapshot: renderSnapshot)

@@ -16,6 +16,7 @@ struct MistiaApp: App {
 
     init() {
         MistiaAppLanguage.bootstrapStoredPreference()
+        MistiaRootChromeLogic.normalizeLegacyPersistentFlags()
         let launchState = MistiaDataStack.sharedLaunchState
         _launchState = State(initialValue: launchState)
         _sessionStore = State(initialValue: SessionStore(
