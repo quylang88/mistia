@@ -816,7 +816,7 @@ private struct MistiaAppLockEntryPanel: View {
         HStack(spacing: usesLockScreenLayout ? 15 : 12) {
             ForEach(0..<pinLength, id: \.self) { index in
                 Circle()
-                    .fill(index < pinInput.count ? MistiaAccent.purple.color : Color.secondary.opacity(0.24))
+                    .fill(index < pinInput.count ? MistiaAccent.tabActive.color : Color.secondary.opacity(0.24))
                     .frame(
                         width: usesLockScreenLayout ? 14 : 13,
                         height: usesLockScreenLayout ? 14 : 13
@@ -1070,6 +1070,17 @@ private enum MistiaPINKeypadStyle {
             29
         }
     }
+
+    var trailingControlRowOffset: CGFloat {
+        switch self {
+        case .compact:
+            0
+        case .lockScreen:
+            13
+        case .lockScreenCompact:
+            12
+        }
+    }
 }
 
 private struct MistiaPINKeypad: View {
@@ -1108,6 +1119,7 @@ private struct MistiaPINKeypad: View {
                         }
                     }
                 }
+                .offset(x: row.first == "" ? style.trailingControlRowOffset : 0)
             }
         }
     }
