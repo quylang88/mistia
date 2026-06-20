@@ -326,66 +326,57 @@ struct SecuritySettingsView: View {
 }
 
 struct MistiaAppLockScreen: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(MistiaAppLockController.self) private var appLockController
     @State private var didAttemptBiometric = false
 
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-
-            VStack(spacing: 22) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(MistiaAccent.mint.color)
-
-                VStack(spacing: 8) {
-                    Text(L10n.shared.appLock.title)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .multilineTextAlignment(.center)
-                    Text(L10n.shared.appLock.subtitle)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+        AppLockGlassScreenFrame(
+            title: L10n.shared.appLock.title,
+            topSpacerExtra: 40,
+            bottomSpacerExtra: 24
+        ) { _ in
+            EmptyView()
+        } entry: { metrics in
+            MistiaAppLockEntryPanel(
+                mode: .unlock,
+                kind: appLockController.configuredSecretKind ?? .pin4,
+                hidesUnlockPrompt: true,
+                usesLockScreenLayout: true,
+                lockScreenKeypadStyle: metrics.keypadStyle,
+                onSubmit: { secret in
+                    appLockController.verify(secret: secret)
                 }
-
-                MistiaAppLockEntryPanel(
-                    mode: .unlock,
-                    kind: appLockController.configuredSecretKind ?? .pin4,
-                    onSubmit: { secret in
-                        appLockController.verify(secret: secret)
-                    }
-                )
-
-                Button {
-                } label: {
-                    Text(L10n.shared.appLock.forgotCode)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                }
-                .disabled(true)
-                .foregroundStyle(.secondary)
-
-                if appLockController.isBiometricEnabled, appLockController.biometryKind != .none {
-                    Button {
-                        Task { await authenticateWithBiometrics() }
-                    } label: {
-                        Label(biometricButtonTitle, systemImage: biometricIconName)
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MistiaAccent.purple.color)
-                }
+            )
+        } belowEntry: {
+            if appLockController.isBiometricEnabled, appLockController.biometryKind != .none {
+                biometricButton
+                    .padding(.top, 20)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 30)
-            .frame(maxWidth: 420)
+        } footer: { _ in
+            EmptyView()
         }
         .task {
             guard !didAttemptBiometric else { return }
             didAttemptBiometric = true
             await authenticateWithBiometrics()
+        }
+    }
+
+    @ViewBuilder
+    private var biometricButton: some View {
+        let button = Button {
+            AppLockHaptics.light()
+            Task { await authenticateWithBiometrics() }
+        } label: {
+            Label(biometricButtonTitle, systemImage: biometricIconName)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+        }
+        .tint(MistiaAccent.purple.color)
+
+        if #available(iOS 26.0, *) {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.borderedProminent)
         }
     }
 
@@ -436,6 +427,72 @@ private struct MistiaAppLockSetupFullScreen: View {
     }
 
     var body: some View {
+        AppLockGlassScreenFrame(
+            title: L10n.shared.appLock.setupCodeTitle,
+            subtitle: L10n.shared.appLock.setupCodeSubtitle
+        ) { metrics in
+            HStack {
+                AppLockSetupCloseButton {
+                    dismiss()
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, metrics.closeTopPadding)
+        } entry: { metrics in
+            MistiaAppLockEntryPanel(
+                mode: .setup,
+                kind: selectedKind,
+                hidesInitialSetupPrompt: true,
+                usesLockScreenLayout: true,
+                lockScreenKeypadStyle: metrics.keypadStyle
+            ) { secret in
+                onComplete(selectedKind, secret)
+                dismiss()
+                return true
+            }
+            .id(selectedKind)
+        } belowEntry: {
+            EmptyView()
+        } footer: { metrics in
+            AppLockSecretKindIconDock(selection: $selectedKind)
+                .padding(.bottom, metrics.dockBottomPadding)
+        }
+    }
+}
+
+private struct AppLockGlassScreenFrame<TopAccessory: View, Entry: View, BelowEntry: View, Footer: View>: View {
+    let title: String
+    let subtitle: String?
+    var topSpacerExtra: CGFloat
+    var bottomSpacerExtra: CGFloat
+    @ViewBuilder let topAccessory: (AppLockSetupMetrics) -> TopAccessory
+    @ViewBuilder let entry: (AppLockSetupMetrics) -> Entry
+    @ViewBuilder let belowEntry: () -> BelowEntry
+    @ViewBuilder let footer: (AppLockSetupMetrics) -> Footer
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        topSpacerExtra: CGFloat = 0,
+        bottomSpacerExtra: CGFloat = 0,
+        @ViewBuilder topAccessory: @escaping (AppLockSetupMetrics) -> TopAccessory,
+        @ViewBuilder entry: @escaping (AppLockSetupMetrics) -> Entry,
+        @ViewBuilder belowEntry: @escaping () -> BelowEntry,
+        @ViewBuilder footer: @escaping (AppLockSetupMetrics) -> Footer
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.topSpacerExtra = topSpacerExtra
+        self.bottomSpacerExtra = bottomSpacerExtra
+        self.topAccessory = topAccessory
+        self.entry = entry
+        self.belowEntry = belowEntry
+        self.footer = footer
+    }
+
+    var body: some View {
         GeometryReader { proxy in
             let metrics = AppLockSetupMetrics(containerHeight: proxy.size.height)
 
@@ -443,55 +500,53 @@ private struct MistiaAppLockSetupFullScreen: View {
                 AppLockSetupBackground()
 
                 VStack(spacing: 0) {
-                    HStack {
-                        AppLockSetupCloseButton {
-                            dismiss()
-                        }
+                    topAccessory(metrics)
 
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, metrics.closeTopPadding)
-
-                    Spacer(minLength: metrics.topSpacer)
+                    Spacer(minLength: metrics.topSpacer + topSpacerExtra)
 
                     VStack(spacing: metrics.contentSpacing) {
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: metrics.lockIconSize, weight: .semibold))
-                            .foregroundStyle(MistiaAccent.mint.color)
+                        AppLockGlassScreenHeader(
+                            title: title,
+                            subtitle: subtitle,
+                            lockIconSize: metrics.lockIconSize
+                        )
 
-                        VStack(spacing: 7) {
-                            Text(L10n.shared.appLock.setupCodeTitle)
-                                .font(.system(size: 26, weight: .bold, design: .rounded))
-                                .multilineTextAlignment(.center)
-
-                            Text(L10n.shared.appLock.setupCodeSubtitle)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-
-                        MistiaAppLockEntryPanel(
-                            mode: .setup,
-                            kind: selectedKind,
-                            hidesInitialSetupPrompt: true,
-                            usesLockScreenLayout: true,
-                            lockScreenKeypadStyle: metrics.keypadStyle
-                        ) { secret in
-                            onComplete(selectedKind, secret)
-                            dismiss()
-                            return true
-                        }
-                        .id(selectedKind)
+                        entry(metrics)
                     }
                     .padding(.horizontal, 24)
                     .frame(maxWidth: 420)
 
-                    Spacer(minLength: metrics.bottomSpacer)
+                    belowEntry()
 
-                    AppLockSecretKindIconDock(selection: $selectedKind)
-                        .padding(.bottom, metrics.dockBottomPadding)
+                    Spacer(minLength: metrics.bottomSpacer + bottomSpacerExtra)
+
+                    footer(metrics)
                 }
+            }
+        }
+    }
+}
+
+private struct AppLockGlassScreenHeader: View {
+    let title: String
+    let subtitle: String?
+    let lockIconSize: CGFloat
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: lockIconSize, weight: .semibold))
+                .foregroundStyle(MistiaAccent.mint.color)
+
+            Text(title)
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
     }
@@ -702,6 +757,7 @@ private struct MistiaAppLockEntryPanel: View {
     let mode: MistiaAppLockEntryMode
     let kind: MistiaAppLockSecretKind
     var hidesInitialSetupPrompt = false
+    var hidesUnlockPrompt = false
     var usesLockScreenLayout = false
     var lockScreenKeypadStyle: MistiaPINKeypadStyle = .lockScreen
     let onSubmit: (String) -> Bool
@@ -834,9 +890,7 @@ private struct MistiaAppLockEntryPanel: View {
     private var promptTitle: String {
         switch mode {
         case .unlock:
-            return kind == .customPassword
-                ? L10n.shared.appLock.enterPassword
-                : pinLength == 4 ? L10n.shared.appLock.enterPin4 : L10n.shared.appLock.enterPin6
+            return L10n.shared.appLock.title
         case .authenticate:
             return L10n.shared.appLock.enterCurrentCodeTitle
         case .setup:
@@ -850,7 +904,10 @@ private struct MistiaAppLockEntryPanel: View {
     }
 
     private var shouldShowPromptTitle: Bool {
-        !(mode == .setup && hidesInitialSetupPrompt && pendingSecret == nil)
+        if mode == .unlock && hidesUnlockPrompt {
+            return false
+        }
+        return !(mode == .setup && hidesInitialSetupPrompt && pendingSecret == nil)
     }
 
     private var shouldShowPromptBlock: Bool {

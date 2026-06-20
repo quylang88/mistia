@@ -2871,14 +2871,6 @@ nonisolated enum L10n {
             static func createPin6(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.createPin6", vi: "Tạo PIN 6 số", en: "Create a 6-digit PIN", ja: "6桁PINを作成", language: language) }
             static var enterCurrentCodeTitle: String { L10n.tr("shared.appLock.enterCurrentCodeTitle", vi: "Xác thực hiện tại", en: "Authenticate first", ja: "先に認証") }
             static func enterCurrentCodeTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterCurrentCodeTitle", vi: "Xác thực hiện tại", en: "Authenticate first", ja: "先に認証", language: language) }
-            static var enterPassword: String { L10n.tr("shared.appLock.enterPassword", vi: "Nhập mật khẩu", en: "Enter password", ja: "パスワードを入力") }
-            static func enterPassword(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPassword", vi: "Nhập mật khẩu", en: "Enter password", ja: "パスワードを入力", language: language) }
-            static var enterPin4: String { L10n.tr("shared.appLock.enterPin4", vi: "Nhập PIN 4 số", en: "Enter 4-digit PIN", ja: "4桁PINを入力") }
-            static func enterPin4(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPin4", vi: "Nhập PIN 4 số", en: "Enter 4-digit PIN", ja: "4桁PINを入力", language: language) }
-            static var enterPin6: String { L10n.tr("shared.appLock.enterPin6", vi: "Nhập PIN 6 số", en: "Enter 6-digit PIN", ja: "6桁PINを入力") }
-            static func enterPin6(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.enterPin6", vi: "Nhập PIN 6 số", en: "Enter 6-digit PIN", ja: "6桁PINを入力", language: language) }
-            static var forgotCode: String { L10n.tr("shared.appLock.forgotCode", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？") }
-            static func forgotCode(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.forgotCode", vi: "Quên mã?", en: "Forgot code?", ja: "コードを忘れましたか？", language: language) }
             static var optionPassword: String { L10n.tr("shared.appLock.optionPassword", vi: "Mật khẩu", en: "Password", ja: "パスワード") }
             static func optionPassword(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.optionPassword", vi: "Mật khẩu", en: "Password", ja: "パスワード", language: language) }
             static var optionPin4: String { L10n.tr("shared.appLock.optionPin4", vi: "PIN 4", en: "PIN 4", ja: "PIN 4") }
@@ -2913,8 +2905,6 @@ nonisolated enum L10n {
             static func setupPin4Title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPin4Title", vi: "Đặt PIN 4 số", en: "Set 4-digit PIN", ja: "4桁PINを設定", language: language) }
             static var setupPin6Title: String { L10n.tr("shared.appLock.setupPin6Title", vi: "Đặt PIN 6 số", en: "Set 6-digit PIN", ja: "6桁PINを設定") }
             static func setupPin6Title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.setupPin6Title", vi: "Đặt PIN 6 số", en: "Set 6-digit PIN", ja: "6桁PINを設定", language: language) }
-            static var subtitle: String { L10n.tr("shared.appLock.subtitle", vi: "Mở khóa để tiếp tục quản lý tài chính.", en: "Unlock to continue managing your finances.", ja: "ロック解除して家計管理を続けます。") }
-            static func subtitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.subtitle", vi: "Mở khóa để tiếp tục quản lý tài chính.", en: "Unlock to continue managing your finances.", ja: "ロック解除して家計管理を続けます。", language: language) }
             static var title: String { L10n.tr("shared.appLock.title", vi: "Mistia đã khóa", en: "Mistia is locked", ja: "Mistiaはロックされています") }
             static func title(language: MistiaAppLanguage) -> String { L10n.tr("shared.appLock.title", vi: "Mistia đã khóa", en: "Mistia is locked", ja: "Mistiaはロックされています", language: language) }
             static func tryAgainInSeconds(_ value: String) -> String {
