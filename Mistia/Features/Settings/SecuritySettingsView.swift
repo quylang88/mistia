@@ -447,8 +447,8 @@ private struct MistiaAppLockSetupFullScreen: View {
 
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
 
                 Spacer(minLength: 24)
 
@@ -517,10 +517,13 @@ private struct AppLockSetupCloseButton: View {
     let action: () -> Void
 
     var body: some View {
-        let button = Button(action: action) {
+        let button = Button {
+            AppLockHaptics.light()
+            action()
+        } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 36, height: 36)
         }
         .buttonBorderShape(.circle)
         .accessibilityLabel(L10n.common.close)
@@ -569,6 +572,8 @@ private struct AppLockSecretKindIconButton: View {
 
     var body: some View {
         let button = Button {
+            guard selection != kind else { return }
+            AppLockHaptics.light()
             withAnimation(.snappy) {
                 selection = kind
             }
@@ -819,6 +824,9 @@ private struct MistiaAppLockEntryPanel: View {
         case .unlock, .authenticate:
             return nil
         case .setup:
+            if usesLockScreenLayout && kind != .customPassword {
+                return nil
+            }
             return kind == .customPassword
                 ? L10n.shared.appLock.passwordHelper
                 : L10n.shared.appLock.pinHelper
@@ -975,7 +983,7 @@ private enum MistiaPINKeypadStyle {
         case .compact:
             18
         case .lockScreen:
-            24
+            22
         }
     }
 
@@ -984,7 +992,7 @@ private enum MistiaPINKeypadStyle {
         case .compact:
             66
         case .lockScreen:
-            82
+            78
         }
     }
 
@@ -993,7 +1001,7 @@ private enum MistiaPINKeypadStyle {
         case .compact:
             54
         case .lockScreen:
-            82
+            78
         }
     }
 
@@ -1002,7 +1010,7 @@ private enum MistiaPINKeypadStyle {
         case .compact:
             26
         case .lockScreen:
-            35
+            32
         }
     }
 }
@@ -1053,7 +1061,10 @@ private struct MistiaPINKeypad: View {
             Color.clear
                 .frame(width: style.keyWidth, height: style.keyHeight)
         } else if item == "delete" {
-            Button(action: onDelete) {
+            Button {
+                AppLockHaptics.light()
+                onDelete()
+            } label: {
                 Image(systemName: "delete.left.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .frame(width: style.keyWidth, height: style.keyHeight)
@@ -1062,6 +1073,7 @@ private struct MistiaPINKeypad: View {
             .foregroundStyle(.secondary)
         } else {
             Button {
+                AppLockHaptics.light()
                 onDigit(item)
             } label: {
                 Text(verbatim: item)
@@ -1105,9 +1117,12 @@ private struct AppLockGlassKeyButton<Label: View>: View {
     @ViewBuilder let label: Label
 
     var body: some View {
-        let button = Button(action: action) {
+        let button = Button {
+            AppLockHaptics.light()
+            action()
+        } label: {
             label
-                .frame(width: 82, height: 82)
+                .frame(width: 78, height: 78)
                 .contentShape(Circle())
         }
         .buttonBorderShape(.circle)
@@ -1120,6 +1135,12 @@ private struct AppLockGlassKeyButton<Label: View>: View {
                 .buttonStyle(.plain)
                 .background(.ultraThinMaterial, in: Circle())
         }
+    }
+}
+
+private enum AppLockHaptics {
+    static func light() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }
 
