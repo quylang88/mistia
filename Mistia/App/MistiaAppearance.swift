@@ -21,6 +21,7 @@ enum MistiaAppStorageKey {
     static let appLockEnabled = "mistia.appLock.enabled"
     static let appLockSecretKind = "mistia.appLock.secret-kind"
     static let appLockBiometricEnabled = "mistia.appLock.biometric.enabled"
+    static let appLockFailureState = "mistia.appLock.failure-state"
 
     static let notificationsEnabled = "mistia.notifications.enabled"
     static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"

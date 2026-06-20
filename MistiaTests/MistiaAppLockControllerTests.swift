@@ -63,6 +63,49 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertEqual(controller.failureState, .empty)
     }
 
+    func testFailedAttemptsAndLockoutPersistAcrossControllerRecreation() throws {
+        let lockoutStart = Date(timeIntervalSince1970: 1_800_000_000)
+        var currentDate = lockoutStart
+        let defaults = makeDefaults()
+        let credential = try MistiaAppLockCredential.make(
+            kind: .pin4,
+            secret: "1234",
+            saltGenerator: { Data(repeating: 0x07, count: 16) }
+        )
+        defaults.set(true, forKey: MistiaAppStorageKey.appLockEnabled)
+        defaults.set("pin4", forKey: MistiaAppStorageKey.appLockSecretKind)
+        let credentialStore = AppLockCredentialStoreSpy(credential: credential)
+        let makeController = {
+            MistiaAppLockController(
+                defaults: defaults,
+                credentialStore: credentialStore,
+                biometricAuthenticator: AppLockBiometricAuthenticatorSpy(),
+                now: { currentDate }
+            )
+        }
+
+        var controller = makeController()
+        for _ in 0..<5 {
+            XCTAssertFalse(controller.verify(secret: "0000"))
+        }
+
+        XCTAssertEqual(controller.failureState.failedAttemptCount, 5)
+        XCTAssertEqual(controller.failureState.lockedUntil, lockoutStart.addingTimeInterval(30))
+
+        currentDate = lockoutStart.addingTimeInterval(10)
+        controller = makeController()
+
+        XCTAssertEqual(controller.failureState.failedAttemptCount, 5)
+        XCTAssertTrue(MistiaAppLockLogic.isLockedOut(controller.failureState, now: currentDate))
+        XCTAssertFalse(controller.verify(secret: "1234"))
+
+        currentDate = lockoutStart.addingTimeInterval(31)
+        controller = makeController()
+
+        XCTAssertTrue(controller.verify(secret: "1234"))
+        XCTAssertEqual(controller.failureState, .empty)
+    }
+
     func testBiometricSuccessUnlocksOnlyWhenEnabledForPIN4Credential() async throws {
         let defaults = makeDefaults()
         let credential = try MistiaAppLockCredential.make(

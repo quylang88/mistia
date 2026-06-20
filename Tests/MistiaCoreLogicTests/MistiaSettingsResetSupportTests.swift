@@ -19,6 +19,7 @@ final class MistiaSettingsResetSupportTests: XCTestCase {
         defaults.set(true, forKey: MistiaSettingsResetSupport.StorageKey.appLockEnabled)
         defaults.set("pin4", forKey: MistiaSettingsResetSupport.StorageKey.appLockSecretKind)
         defaults.set(true, forKey: MistiaSettingsResetSupport.StorageKey.appLockBiometricEnabled)
+        defaults.set(Data([4, 5, 6]), forKey: MistiaSettingsResetSupport.StorageKey.appLockFailureState)
         defaults.set("vi", forKey: MistiaAppLanguage.userDefaultsKey)
         defaults.set("vi", forKey: MistiaAppLanguage.backupUserDefaultsKey)
 
@@ -48,6 +49,7 @@ final class MistiaSettingsResetSupportTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: MistiaSettingsResetSupport.StorageKey.appLockEnabled))
         XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.appLockSecretKind))
         XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.appLockBiometricEnabled))
+        XCTAssertNil(defaults.object(forKey: MistiaSettingsResetSupport.StorageKey.appLockFailureState))
         XCTAssertEqual(defaults.string(forKey: MistiaAppLanguage.userDefaultsKey), "ja")
         XCTAssertEqual(defaults.string(forKey: MistiaAppLanguage.backupUserDefaultsKey), "ja")
 

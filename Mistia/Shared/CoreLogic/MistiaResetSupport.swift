@@ -17,6 +17,7 @@ enum MistiaSettingsResetSupport {
         static let appLockEnabled = "mistia.appLock.enabled"
         static let appLockSecretKind = "mistia.appLock.secret-kind"
         static let appLockBiometricEnabled = "mistia.appLock.biometric.enabled"
+        static let appLockFailureState = "mistia.appLock.failure-state"
         static let notificationsEnabled = "mistia.notifications.enabled"
         static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"
         static let notificationsGroupRemindersEnabled = "mistia.notifications.group.reminders.enabled"
@@ -45,6 +46,7 @@ enum MistiaSettingsResetSupport {
         defaults.set(false, forKey: StorageKey.appLockEnabled)
         defaults.removeObject(forKey: StorageKey.appLockSecretKind)
         defaults.removeObject(forKey: StorageKey.appLockBiometricEnabled)
+        defaults.removeObject(forKey: StorageKey.appLockFailureState)
         defaults.set(false, forKey: StorageKey.mistiaShortcutEnabled)
         defaults.removeObject(forKey: StorageKey.mistiaShortcutKind)
         defaults.removeObject(forKey: StorageKey.mistiaShortcutMemberUserID)

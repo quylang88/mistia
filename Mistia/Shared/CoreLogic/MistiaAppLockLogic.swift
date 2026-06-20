@@ -18,7 +18,7 @@ nonisolated enum MistiaAppLockSecretValidationFailure: Equatable, Sendable {
     case customPasswordMissingLowercase
 }
 
-nonisolated struct MistiaAppLockFailureState: Equatable, Sendable {
+nonisolated struct MistiaAppLockFailureState: Codable, Equatable, Sendable {
     static let empty = MistiaAppLockFailureState(failedAttemptCount: 0, lockedUntil: nil)
 
     let failedAttemptCount: Int

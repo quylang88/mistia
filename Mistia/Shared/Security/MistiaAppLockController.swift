@@ -106,6 +106,8 @@ final class MistiaAppLockController {
     private let credentialStore: any MistiaAppLockCredentialStoring
     private let biometricAuthenticator: any MistiaAppLockBiometricAuthenticating
     private let now: () -> Date
+    private let failureStateEncoder = JSONEncoder()
+    private let failureStateDecoder = JSONDecoder()
 
     private(set) var isLocked = false
     private(set) var failureState = MistiaAppLockFailureState.empty
@@ -165,6 +167,7 @@ final class MistiaAppLockController {
         guard isEnabled else {
             isLocked = false
             failureState = .empty
+            clearPersistedFailureState()
             return
         }
 
@@ -176,6 +179,7 @@ final class MistiaAppLockController {
         }
 
         defaults.set(credential.kind.rawValue, forKey: MistiaAppStorageKey.appLockSecretKind)
+        failureState = loadPersistedFailureState()
         isLocked = true
     }
 
@@ -190,6 +194,7 @@ final class MistiaAppLockController {
             defaults.set(false, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
         }
         failureState = .empty
+        clearPersistedFailureState()
         isLocked = false
     }
 
@@ -208,6 +213,7 @@ final class MistiaAppLockController {
 
         guard credential.verifies(secret: secret) else {
             failureState = MistiaAppLockLogic.recordFailedAttempt(from: failureState, now: now())
+            persistFailureState()
             return false
         }
 
@@ -281,6 +287,7 @@ final class MistiaAppLockController {
 
     func unlock() {
         failureState = MistiaAppLockLogic.recordSuccessfulAuthentication(from: failureState)
+        clearPersistedFailureState()
         isLocked = false
     }
 
@@ -288,5 +295,26 @@ final class MistiaAppLockController {
         defaults.set(false, forKey: MistiaAppStorageKey.appLockEnabled)
         defaults.removeObject(forKey: MistiaAppStorageKey.appLockSecretKind)
         defaults.removeObject(forKey: MistiaAppStorageKey.appLockBiometricEnabled)
+        clearPersistedFailureState()
+    }
+
+    private func loadPersistedFailureState() -> MistiaAppLockFailureState {
+        guard let data = defaults.data(forKey: MistiaAppStorageKey.appLockFailureState),
+              let state = try? failureStateDecoder.decode(MistiaAppLockFailureState.self, from: data)
+        else {
+            clearPersistedFailureState()
+            return .empty
+        }
+
+        return state
+    }
+
+    private func persistFailureState() {
+        guard let data = try? failureStateEncoder.encode(failureState) else { return }
+        defaults.set(data, forKey: MistiaAppStorageKey.appLockFailureState)
+    }
+
+    private func clearPersistedFailureState() {
+        defaults.removeObject(forKey: MistiaAppStorageKey.appLockFailureState)
     }
 }
