@@ -181,11 +181,11 @@ nonisolated enum MistiaAppLockLogic {
         }
     }
 
-    static func requiresPIN4SetupBeforeBiometric(
+    static func requiresCredentialSetupBeforeBiometric(
         currentKind: MistiaAppLockSecretKind?,
         hasCredential: Bool
     ) -> Bool {
-        !(hasCredential && currentKind == .pin4)
+        !(hasCredential && currentKind != nil)
     }
 
     static func isLockedOut(

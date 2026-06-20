@@ -20,22 +20,28 @@ final class MistiaAppLockLogicTests: XCTestCase {
         XCTAssertEqual(MistiaAppLockLogic.validationFailure(for: "Abcdefg", kind: .customPassword), .customPasswordMissingDigit)
     }
 
-    func testBiometricRequiresExistingPIN4Credential() {
+    func testBiometricRequiresExistingCredential() {
         XCTAssertTrue(
-            MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+            MistiaAppLockLogic.requiresCredentialSetupBeforeBiometric(
                 currentKind: nil,
                 hasCredential: false
             )
         )
-        XCTAssertTrue(
-            MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+        XCTAssertFalse(
+            MistiaAppLockLogic.requiresCredentialSetupBeforeBiometric(
                 currentKind: .pin6,
                 hasCredential: true
             )
         )
         XCTAssertFalse(
-            MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+            MistiaAppLockLogic.requiresCredentialSetupBeforeBiometric(
                 currentKind: .pin4,
+                hasCredential: true
+            )
+        )
+        XCTAssertFalse(
+            MistiaAppLockLogic.requiresCredentialSetupBeforeBiometric(
+                currentKind: .customPassword,
                 hasCredential: true
             )
         )

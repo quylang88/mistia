@@ -22,7 +22,6 @@ nonisolated protocol MistiaAppLockBiometricAuthenticating {
 
 nonisolated enum MistiaAppLockControllerError: Error, Equatable {
     case authenticationRequired
-    case pin4RequiredForBiometric
     case missingCredential
 }
 
@@ -156,11 +155,15 @@ final class MistiaAppLockController {
         ((try? credentialStore.loadCredential()) ?? nil) != nil
     }
 
-    var requiresPIN4SetupBeforeBiometric: Bool {
-        MistiaAppLockLogic.requiresPIN4SetupBeforeBiometric(
+    var requiresCodeSetupBeforeBiometric: Bool {
+        MistiaAppLockLogic.requiresCredentialSetupBeforeBiometric(
             currentKind: configuredSecretKind,
             hasCredential: hasCredential
         )
+    }
+
+    func canOfferBiometricEnrollmentAfterSetup(for kind: MistiaAppLockSecretKind) -> Bool {
+        biometricAuthenticator.kind != .none && !isBiometricEnabled
     }
 
     func refreshConfiguration() {
@@ -251,9 +254,6 @@ final class MistiaAppLockController {
         guard let credential = try credentialStore.loadCredential() else {
             clearPreferences()
             throw MistiaAppLockControllerError.missingCredential
-        }
-        guard credential.kind == .pin4 else {
-            throw MistiaAppLockControllerError.pin4RequiredForBiometric
         }
         defaults.set(true, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
         defaults.set(credential.kind.rawValue, forKey: MistiaAppStorageKey.appLockSecretKind)

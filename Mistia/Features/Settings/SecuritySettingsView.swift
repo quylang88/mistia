@@ -9,6 +9,7 @@ struct SecuritySettingsView: View {
     @State private var activeSetup: SecuritySettingsSetup?
     @State private var pendingAuthenticatedAction: SecurityProtectedAction?
     @State private var statusAlert: SecuritySettingsStatusAlert?
+    @State private var biometricEnrollmentPrompt: SecurityBiometricEnrollmentPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
@@ -65,11 +66,10 @@ struct SecuritySettingsView: View {
                             systemImage: biometricIconName,
                             accent: .purple,
                             isOn: biometricBinding,
-                            isDisabled: appLockController.biometryKind == .none
+                            isDisabled: appLockController.biometryKind == .none,
+                            prefersHighContrastIcon: true
                         )
                     }
-
-                    textDetailLayout(biometricDescription)
 
                     securityCard {
                         Button {
@@ -116,6 +116,16 @@ struct SecuritySettingsView: View {
                 dismissButton: .default(Text(L10n.common.ok))
             )
         }
+        .alert(item: $biometricEnrollmentPrompt) { prompt in
+            Alert(
+                title: Text(L10n.settings.security.biometricPrompt.title(biometricDisplayName(for: prompt.kind))),
+                message: Text(L10n.settings.security.biometricPrompt.message(biometricDisplayName(for: prompt.kind))),
+                primaryButton: .default(Text(L10n.settings.security.biometricPrompt.confirm(biometricDisplayName(for: prompt.kind)))) {
+                    enableBiometricFromEnrollmentPrompt(prompt)
+                },
+                secondaryButton: .cancel(Text(L10n.settings.security.biometricPrompt.notNow))
+            )
+        }
     }
 
     private var protectionBinding: Binding<Bool> {
@@ -148,7 +158,11 @@ struct SecuritySettingsView: View {
     }
 
     private var biometricTitle: String {
-        switch appLockController.biometryKind {
+        biometricDisplayName(for: appLockController.biometryKind)
+    }
+
+    private func biometricDisplayName(for kind: MistiaAppLockBiometryKind) -> String {
+        switch kind {
         case .faceID:
             L10n.settings.security.biometric.faceID
         case .touchID:
@@ -173,12 +187,6 @@ struct SecuritySettingsView: View {
         }
     }
 
-    private var biometricDescription: String {
-        appLockController.biometryKind == .none
-            ? L10n.settings.security.biometric.unavailable
-            : L10n.settings.security.biometric.description
-    }
-
     private func handleSecretKindSelection(_ kind: MistiaAppLockSecretKind) {
         guard appLockController.configuredSecretKind != kind else { return }
         activeSheet = .authenticate(.changeKind(kind))
@@ -193,16 +201,20 @@ struct SecuritySettingsView: View {
             try appLockController.configure(kind: kind, secret: secret)
             switch completion {
             case .enableProtection:
-                statusAlert = SecuritySettingsStatusAlert(
-                    title: L10n.settings.security.status.enabledTitle,
-                    message: L10n.settings.security.status.enabledMessage
-                )
+                if appLockController.canOfferBiometricEnrollmentAfterSetup(for: kind) {
+                    biometricEnrollmentPrompt = SecurityBiometricEnrollmentPrompt(kind: appLockController.biometryKind)
+                } else {
+                    statusAlert = SecuritySettingsStatusAlert(
+                        title: L10n.settings.security.status.enabledTitle,
+                        message: L10n.settings.security.status.enabledMessage
+                    )
+                }
             case .enableBiometric:
                 if kind == .pin4 {
                     try appLockController.setBiometricsEnabled(true)
                     statusAlert = SecuritySettingsStatusAlert(
-                        title: L10n.settings.security.status.biometricEnabledTitle,
-                        message: L10n.settings.security.status.biometricEnabledMessage
+                        title: biometricEnabledTitle,
+                        message: biometricEnabledMessage
                     )
                 } else {
                     statusAlert = SecuritySettingsStatusAlert(
@@ -234,24 +246,55 @@ struct SecuritySettingsView: View {
                     message: L10n.settings.security.status.disabledMessage
                 )
             case .enableBiometric:
-                if appLockController.requiresPIN4SetupBeforeBiometric {
+                if appLockController.requiresCodeSetupBeforeBiometric {
                     activeSetup = SecuritySettingsSetup(kind: .pin4, completion: .enableBiometric)
                 } else {
                     try appLockController.setBiometricsEnabled(true)
                     statusAlert = SecuritySettingsStatusAlert(
-                        title: L10n.settings.security.status.biometricEnabledTitle,
-                        message: L10n.settings.security.status.biometricEnabledMessage
+                        title: biometricEnabledTitle,
+                        message: biometricEnabledMessage
                     )
                 }
             case .disableBiometric:
                 try appLockController.setBiometricsEnabled(false)
                 statusAlert = SecuritySettingsStatusAlert(
-                    title: L10n.settings.security.status.biometricDisabledTitle,
-                    message: L10n.settings.security.status.biometricDisabledMessage
+                    title: biometricDisabledTitle,
+                    message: biometricDisabledMessage
                 )
             case .changeKind(let kind):
                 activeSetup = SecuritySettingsSetup(kind: kind, completion: .changeKind)
             }
+        } catch {
+            statusAlert = SecuritySettingsStatusAlert(
+                title: L10n.settings.security.status.errorTitle,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private var biometricEnabledTitle: String {
+        L10n.settings.security.status.biometricEnabledTitle(biometricTitle)
+    }
+
+    private var biometricEnabledMessage: String {
+        L10n.settings.security.status.biometricEnabledMessage(biometricTitle)
+    }
+
+    private var biometricDisabledTitle: String {
+        L10n.settings.security.status.biometricDisabledTitle(biometricTitle)
+    }
+
+    private var biometricDisabledMessage: String {
+        L10n.settings.security.status.biometricDisabledMessage(biometricTitle)
+    }
+
+    private func enableBiometricFromEnrollmentPrompt(_ prompt: SecurityBiometricEnrollmentPrompt) {
+        do {
+            try appLockController.setBiometricsEnabled(true)
+            statusAlert = SecuritySettingsStatusAlert(
+                title: L10n.settings.security.status.biometricEnabledTitle(biometricDisplayName(for: prompt.kind)),
+                message: L10n.settings.security.status.biometricEnabledMessage(biometricDisplayName(for: prompt.kind))
+            )
         } catch {
             statusAlert = SecuritySettingsStatusAlert(
                 title: L10n.settings.security.status.errorTitle,
@@ -301,10 +344,15 @@ struct SecuritySettingsView: View {
         systemImage: String,
         accent: MistiaAccent,
         isOn: Binding<Bool>,
-        isDisabled: Bool = false
+        isDisabled: Bool = false,
+        prefersHighContrastIcon: Bool = false
     ) -> some View {
         HStack(spacing: 12) {
-            SecurityPreferenceIcon(systemImage: systemImage, accent: accent)
+            SecurityPreferenceIcon(
+                systemImage: systemImage,
+                accent: accent,
+                prefersHighContrastSymbol: prefersHighContrastIcon
+            )
 
             Text(title)
                 .font(.system(size: 16.5, weight: .semibold, design: .rounded))
@@ -324,6 +372,7 @@ struct SecuritySettingsView: View {
 }
 
 struct MistiaAppLockScreen: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(MistiaAppLockController.self) private var appLockController
     @State private var didAttemptBiometric = false
 
@@ -368,8 +417,10 @@ struct MistiaAppLockScreen: View {
         } label: {
             Label(biometricButtonTitle, systemImage: biometricIconName)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(colorScheme == .dark ? .white : .primary)
         }
-        .tint(MistiaAccent.purple.color)
+        .tint(colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color)
 
         if #available(iOS 26.0, *) {
             button.buttonStyle(.glassProminent)
@@ -1312,19 +1363,42 @@ private enum AppLockHaptics {
 }
 
 private struct SecurityPreferenceIcon: View {
+    @Environment(\.colorScheme) private var colorScheme
     let systemImage: String
     let accent: MistiaAccent
+    var prefersHighContrastSymbol = false
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(accent.color.opacity(0.15))
+                .fill(backgroundColor)
+                .overlay {
+                    if prefersHighContrastSymbol && colorScheme == .dark {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(MistiaAccent.lightPurple.color.opacity(0.42), lineWidth: 1)
+                    }
+                }
 
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(accent.color)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(symbolColor)
         }
         .frame(width: 32, height: 32)
+    }
+
+    private var backgroundColor: Color {
+        if prefersHighContrastSymbol && colorScheme == .dark {
+            return MistiaAccent.lightPurple.color.opacity(0.26)
+        }
+        return accent.color.opacity(0.15)
+    }
+
+    private var symbolColor: Color {
+        if prefersHighContrastSymbol && colorScheme == .dark {
+            return MistiaAccent.checkmarkPurple.color
+        }
+        return accent.color
     }
 }
 
@@ -1470,4 +1544,9 @@ private struct SecuritySettingsStatusAlert: Identifiable {
     let id = UUID()
     let title: String
     let message: String
+}
+
+private struct SecurityBiometricEnrollmentPrompt: Identifiable {
+    let id = UUID()
+    let kind: MistiaAppLockBiometryKind
 }

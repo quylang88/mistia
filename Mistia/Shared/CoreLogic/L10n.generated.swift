@@ -2674,8 +2674,6 @@ nonisolated enum L10n {
             }
 
             nonisolated enum biometric {
-                static var description: String { L10n.tr("settings.security.biometric.description", vi: "Face ID/Touch ID chỉ bật sau khi đã có PIN 4 số để dự phòng.", en: "Face ID or Touch ID can be enabled only after a 4-digit PIN is set as backup.", ja: "Face IDまたはTouch IDは、バックアップ用の4桁PINを設定した後にのみ有効にできます。") }
-                static func description(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.description", vi: "Face ID/Touch ID chỉ bật sau khi đã có PIN 4 số để dự phòng.", en: "Face ID or Touch ID can be enabled only after a 4-digit PIN is set as backup.", ja: "Face IDまたはTouch IDは、バックアップ用の4桁PINを設定した後にのみ有効にできます。", language: language) }
                 static var faceID: String { L10n.tr("settings.security.biometric.faceID", vi: "Face ID", en: "Face ID", ja: "Face ID") }
                 static func faceID(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.faceID", vi: "Face ID", en: "Face ID", ja: "Face ID", language: language) }
                 static var generic: String { L10n.tr("settings.security.biometric.generic", vi: "Sinh trắc học", en: "Biometric unlock", ja: "生体認証ロック解除") }
@@ -2686,6 +2684,29 @@ nonisolated enum L10n {
                 static func touchID(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.touchID", vi: "Touch ID", en: "Touch ID", ja: "Touch ID", language: language) }
                 static var unavailable: String { L10n.tr("settings.security.biometric.unavailable", vi: "Thiết bị này chưa có Face ID hoặc Touch ID khả dụng.", en: "Face ID or Touch ID is not available on this device.", ja: "このデバイスではFace IDまたはTouch IDを利用できません。") }
                 static func unavailable(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometric.unavailable", vi: "Thiết bị này chưa có Face ID hoặc Touch ID khả dụng.", en: "Face ID or Touch ID is not available on this device.", ja: "このデバイスではFace IDまたはTouch IDを利用できません。", language: language) }
+            }
+
+            nonisolated enum biometricPrompt {
+                static func confirm(_ value: String) -> String {
+                    L10n.format("settings.security.biometricPrompt.confirm", vi: "Dùng %@", en: "Use %@", ja: "%@を使う", value)
+                }
+                static func confirm(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.biometricPrompt.confirm", vi: "Dùng %@", en: "Use %@", ja: "%@を使う", language: language, value)
+                }
+                static func message(_ value: String) -> String {
+                    L10n.format("settings.security.biometricPrompt.message", vi: "Từ lần mở sau, Mistia sẽ xác thực bằng %@. Mã khóa vẫn dùng làm mã dự phòng.", en: "Next time, Mistia will unlock with %@. Your app code stays available as backup.", ja: "次回からMistiaは%@でロック解除します。アプリコードはバックアップとして引き続き使えます。", value)
+                }
+                static func message(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.biometricPrompt.message", vi: "Từ lần mở sau, Mistia sẽ xác thực bằng %@. Mã khóa vẫn dùng làm mã dự phòng.", en: "Next time, Mistia will unlock with %@. Your app code stays available as backup.", ja: "次回からMistiaは%@でロック解除します。アプリコードはバックアップとして引き続き使えます。", language: language, value)
+                }
+                static var notNow: String { L10n.tr("settings.security.biometricPrompt.notNow", vi: "Để sau", en: "Not now", ja: "あとで") }
+                static func notNow(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.biometricPrompt.notNow", vi: "Để sau", en: "Not now", ja: "あとで", language: language) }
+                static func title(_ value: String) -> String {
+                    L10n.format("settings.security.biometricPrompt.title", vi: "Sử dụng %@?", en: "Use %@?", ja: "%@を使いますか？", value)
+                }
+                static func title(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.biometricPrompt.title", vi: "Sử dụng %@?", en: "Use %@?", ja: "%@を使いますか？", language: language, value)
+                }
             }
 
             nonisolated enum forgotCode {
@@ -2722,14 +2743,30 @@ nonisolated enum L10n {
             }
 
             nonisolated enum status {
-                static var biometricDisabledMessage: String { L10n.tr("settings.security.status.biometricDisabledMessage", vi: "Mở khóa sinh trắc học đã tắt. Bạn vẫn có thể dùng mã của app.", en: "Biometric unlock is off. You can still use the app code.", ja: "生体認証ロック解除はオフです。引き続きアプリのコードを使えます。") }
-                static func biometricDisabledMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricDisabledMessage", vi: "Mở khóa sinh trắc học đã tắt. Bạn vẫn có thể dùng mã của app.", en: "Biometric unlock is off. You can still use the app code.", ja: "生体認証ロック解除はオフです。引き続きアプリのコードを使えます。", language: language) }
-                static var biometricDisabledTitle: String { L10n.tr("settings.security.status.biometricDisabledTitle", vi: "Đã tắt sinh trắc học", en: "Biometric unlock off", ja: "生体認証がオフになりました") }
-                static func biometricDisabledTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricDisabledTitle", vi: "Đã tắt sinh trắc học", en: "Biometric unlock off", ja: "生体認証がオフになりました", language: language) }
-                static var biometricEnabledMessage: String { L10n.tr("settings.security.status.biometricEnabledMessage", vi: "Bạn có thể mở khóa Mistia bằng sinh trắc học hoặc mã dự phòng.", en: "You can unlock Mistia with biometrics or your backup code.", ja: "生体認証またはバックアップコードでMistiaをロック解除できます。") }
-                static func biometricEnabledMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricEnabledMessage", vi: "Bạn có thể mở khóa Mistia bằng sinh trắc học hoặc mã dự phòng.", en: "You can unlock Mistia with biometrics or your backup code.", ja: "生体認証またはバックアップコードでMistiaをロック解除できます。", language: language) }
-                static var biometricEnabledTitle: String { L10n.tr("settings.security.status.biometricEnabledTitle", vi: "Đã bật sinh trắc học", en: "Biometric unlock on", ja: "生体認証がオンになりました") }
-                static func biometricEnabledTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.biometricEnabledTitle", vi: "Đã bật sinh trắc học", en: "Biometric unlock on", ja: "生体認証がオンになりました", language: language) }
+                static func biometricDisabledMessage(_ value: String) -> String {
+                    L10n.format("settings.security.status.biometricDisabledMessage", vi: "Mở khóa bằng %@ đã tắt. Bạn vẫn có thể dùng mã của app.", en: "%@ unlock is off. You can still use the app code.", ja: "%@ロック解除はオフです。引き続きアプリのコードを使えます。", value)
+                }
+                static func biometricDisabledMessage(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.status.biometricDisabledMessage", vi: "Mở khóa bằng %@ đã tắt. Bạn vẫn có thể dùng mã của app.", en: "%@ unlock is off. You can still use the app code.", ja: "%@ロック解除はオフです。引き続きアプリのコードを使えます。", language: language, value)
+                }
+                static func biometricDisabledTitle(_ value: String) -> String {
+                    L10n.format("settings.security.status.biometricDisabledTitle", vi: "Đã tắt %@", en: "%@ unlock off", ja: "%@がオフになりました", value)
+                }
+                static func biometricDisabledTitle(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.status.biometricDisabledTitle", vi: "Đã tắt %@", en: "%@ unlock off", ja: "%@がオフになりました", language: language, value)
+                }
+                static func biometricEnabledMessage(_ value: String) -> String {
+                    L10n.format("settings.security.status.biometricEnabledMessage", vi: "Mistia có thể mở khóa bằng %@ hoặc mã dự phòng.", en: "Mistia can unlock with %@ or your backup code.", ja: "%@またはバックアップコードでMistiaをロック解除できます。", value)
+                }
+                static func biometricEnabledMessage(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.status.biometricEnabledMessage", vi: "Mistia có thể mở khóa bằng %@ hoặc mã dự phòng.", en: "Mistia can unlock with %@ or your backup code.", ja: "%@またはバックアップコードでMistiaをロック解除できます。", language: language, value)
+                }
+                static func biometricEnabledTitle(_ value: String) -> String {
+                    L10n.format("settings.security.status.biometricEnabledTitle", vi: "Đã bật %@", en: "%@ unlock on", ja: "%@がオンになりました", value)
+                }
+                static func biometricEnabledTitle(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("settings.security.status.biometricEnabledTitle", vi: "Đã bật %@", en: "%@ unlock on", ja: "%@がオンになりました", language: language, value)
+                }
                 static var changedMessage: String { L10n.tr("settings.security.status.changedMessage", vi: "Mã khóa mới sẽ được dùng từ lần khóa tiếp theo.", en: "The new code will be used from the next lock.", ja: "次回のロックから新しいコードが使われます。") }
                 static func changedMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.security.status.changedMessage", vi: "Mã khóa mới sẽ được dùng từ lần khóa tiếp theo.", en: "The new code will be used from the next lock.", ja: "次回のロックから新しいコードが使われます。", language: language) }
                 static var changedTitle: String { L10n.tr("settings.security.status.changedTitle", vi: "Đã cập nhật mã khóa", en: "Code updated", ja: "コードを更新しました") }

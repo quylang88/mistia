@@ -40,6 +40,44 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertFalse(controller.isLocked)
     }
 
+    func testOffersBiometricEnrollmentAfterAnyCodeSetupOnSupportedDevices() throws {
+        let defaults = makeDefaults()
+        let controller = MistiaAppLockController(
+            defaults: defaults,
+            credentialStore: AppLockCredentialStoreSpy(),
+            biometricAuthenticator: AppLockBiometricAuthenticatorSpy(kind: .faceID)
+        )
+
+        XCTAssertTrue(controller.canOfferBiometricEnrollmentAfterSetup(for: .pin4))
+        XCTAssertTrue(controller.canOfferBiometricEnrollmentAfterSetup(for: .pin6))
+        XCTAssertTrue(controller.canOfferBiometricEnrollmentAfterSetup(for: .customPassword))
+
+        defaults.set(true, forKey: MistiaAppStorageKey.appLockBiometricEnabled)
+        XCTAssertFalse(controller.canOfferBiometricEnrollmentAfterSetup(for: .pin4))
+
+        let unsupportedController = MistiaAppLockController(
+            defaults: makeDefaults(),
+            credentialStore: AppLockCredentialStoreSpy(),
+            biometricAuthenticator: AppLockBiometricAuthenticatorSpy(kind: .none)
+        )
+        XCTAssertFalse(unsupportedController.canOfferBiometricEnrollmentAfterSetup(for: .pin4))
+    }
+
+    func testBiometricCanBeEnabledWithCustomPasswordBackup() throws {
+        let defaults = makeDefaults()
+        let credentialStore = AppLockCredentialStoreSpy()
+        let controller = MistiaAppLockController(
+            defaults: defaults,
+            credentialStore: credentialStore,
+            biometricAuthenticator: AppLockBiometricAuthenticatorSpy(kind: .faceID)
+        )
+
+        try controller.configure(kind: .customPassword, secret: "Abc1234")
+        XCTAssertNoThrow(try controller.setBiometricsEnabled(true))
+        XCTAssertTrue(defaults.bool(forKey: MistiaAppStorageKey.appLockBiometricEnabled))
+        XCTAssertEqual(credentialStore.savedCredential?.kind, .customPassword)
+    }
+
     func testEnabledControllerLocksAndVerifiesStoredPIN() throws {
         let defaults = makeDefaults()
         let credential = try MistiaAppLockCredential.make(

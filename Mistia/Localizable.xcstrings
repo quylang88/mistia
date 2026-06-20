@@ -24588,29 +24588,6 @@
         }
       }
     },
-    "settings.security.biometric.description" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Face ID or Touch ID can be enabled only after a 4-digit PIN is set as backup."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Face IDまたはTouch IDは、バックアップ用の4桁PINを設定した後にのみ有効にできます。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Face ID/Touch ID chỉ bật sau khi đã có PIN 4 số để dự phòng."
-          }
-        }
-      }
-    },
     "settings.security.biometric.faceID" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -24722,6 +24699,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Thiết bị này chưa có Face ID hoặc Touch ID khả dụng."
+          }
+        }
+      }
+    },
+    "settings.security.biometricPrompt.confirm" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@を使う"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dùng %@"
+          }
+        }
+      }
+    },
+    "settings.security.biometricPrompt.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next time, Mistia will unlock with %@. Your app code stays available as backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次回からMistiaは%@でロック解除します。アプリコードはバックアップとして引き続き使えます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Từ lần mở sau, Mistia sẽ xác thực bằng %@. Mã khóa vẫn dùng làm mã dự phòng."
+          }
+        }
+      }
+    },
+    "settings.security.biometricPrompt.notNow" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not now"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "あとで"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Để sau"
+          }
+        }
+      }
+    },
+    "settings.security.biometricPrompt.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use %@?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@を使いますか？"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sử dụng %@?"
           }
         }
       }
@@ -24939,19 +25008,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Biometric unlock is off. You can still use the app code."
+            "value" : "%@ unlock is off. You can still use the app code."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "生体認証ロック解除はオフです。引き続きアプリのコードを使えます。"
+            "value" : "%@ロック解除はオフです。引き続きアプリのコードを使えます。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mở khóa sinh trắc học đã tắt. Bạn vẫn có thể dùng mã của app."
+            "value" : "Mở khóa bằng %@ đã tắt. Bạn vẫn có thể dùng mã của app."
           }
         }
       }
@@ -24962,19 +25031,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Biometric unlock off"
+            "value" : "%@ unlock off"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "生体認証がオフになりました"
+            "value" : "%@がオフになりました"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đã tắt sinh trắc học"
+            "value" : "Đã tắt %@"
           }
         }
       }
@@ -24985,19 +25054,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can unlock Mistia with biometrics or your backup code."
+            "value" : "Mistia can unlock with %@ or your backup code."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "生体認証またはバックアップコードでMistiaをロック解除できます。"
+            "value" : "%@またはバックアップコードでMistiaをロック解除できます。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bạn có thể mở khóa Mistia bằng sinh trắc học hoặc mã dự phòng."
+            "value" : "Mistia có thể mở khóa bằng %@ hoặc mã dự phòng."
           }
         }
       }
@@ -25008,19 +25077,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Biometric unlock on"
+            "value" : "%@ unlock on"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "生体認証がオンになりました"
+            "value" : "%@がオンになりました"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đã bật sinh trắc học"
+            "value" : "Đã bật %@"
           }
         }
       }
