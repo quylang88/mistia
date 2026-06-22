@@ -1985,6 +1985,8 @@ private struct SharedExpenseTransactionSearchSheet: View {
             displayedRecordCount: records.count,
             hasAdjustments: false,
             debtCounterpartyFilterOptions: [],
+            activeWallets: [],
+            activeCategorySections: [],
             preparingSettlementEvents: [],
             allSettlementEvents: [],
             openDebtPositions: [],

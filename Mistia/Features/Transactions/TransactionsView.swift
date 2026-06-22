@@ -135,6 +135,8 @@ struct TransactionsListSnapshot {
     let displayedRecordCount: Int
     let hasAdjustments: Bool
     let debtCounterpartyFilterOptions: [DebtCounterpartyFilterOption]
+    let activeWallets: [LedgerWallet]
+    let activeCategorySections: [TransactionCategoryGroupSection]
     let preparingSettlementEvents: [PreparingSettlementEventSnapshot]
     let allSettlementEvents: [PreparingSettlementEventSnapshot]
     let openDebtPositions: [CounterpartyDebtSnapshot]
@@ -180,10 +182,157 @@ private struct TransactionsListSnapshotCacheKey: Hashable {
     let familyID: UUID?
     let familyAccessSignature: Int
     let transactionSignature: MistiaCollectionChangeSignature
+    let walletSignature: MistiaCollectionChangeSignature
+    let categorySignature: MistiaCollectionChangeSignature
     let settlementGroupSignature: MistiaCollectionChangeSignature?
     let settlementParticipantSignature: MistiaCollectionChangeSignature?
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
+}
+
+struct TransactionsVisibilitySnapshot {
+    let activeTransactions: [LedgerTransaction]
+    let activeWallets: [LedgerWallet]
+    let visibleCategories: [TransactionCategory]
+    let visibleSettlementGroups: [SettlementGroup]
+    let visibleSettlementParticipants: [SettlementParticipant]
+    let archivedSettlementGroupIDs: Set<UUID>
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+
+    static func make(
+        transactions: [LedgerTransaction],
+        wallets: [LedgerWallet],
+        categories: [TransactionCategory],
+        settlementGroups: [SettlementGroup],
+        settlementParticipants: [SettlementParticipant],
+        ownershipScopes: [OwnedRecordScope],
+        transactionAuditRecords: [TransactionAuditRecord],
+        familyContextStore: FamilyContextStore,
+        sessionStore: SessionStore,
+        includesActiveWallets: Bool = true,
+        includesCategories: Bool = true,
+        includesSettlementParticipants: Bool = true
+    ) -> TransactionsVisibilitySnapshot {
+        var entities: Set<MistiaSyncEntity> = [
+            .wallet,
+            .transaction,
+            .settlementGroup
+        ]
+        if includesCategories {
+            entities.insert(.category)
+        }
+        if includesSettlementParticipants {
+            entities.insert(.settlementParticipant)
+        }
+
+        let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore,
+            entities: entities
+        )
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            settlementGroups,
+            entity: .settlementGroup,
+            scopeSnapshot: scopeSnapshot
+        )
+        let archivedSettlementGroupIDs = SettlementLogic.archivedSharedExpenseEventIDs(
+            from: visibleSettlementGroups
+                .filter { $0.deletedAt == nil }
+                .map(\.recordSnapshot)
+        )
+        let activeTransactions = FamilyScopedData.visibleTransactionsForHistory(
+            transactions,
+            audits: transactionAuditRecords,
+            scopeSnapshot: scopeSnapshot,
+            archivedEventIDs: archivedSettlementGroupIDs
+        )
+        .sorted(by: sortTransactionsByRecency)
+        let activeWallets = includesActiveWallets
+            ? FamilyScopedData.visible(
+                wallets,
+                entity: .wallet,
+                scopeSnapshot: scopeSnapshot
+            )
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .sorted(by: sortWalletsForFilter)
+            : []
+        let visibleCategories = includesCategories
+            ? FamilyScopedData.visible(
+                categories,
+                entity: .category,
+                scopeSnapshot: scopeSnapshot
+            )
+            : []
+        let visibleSettlementParticipants = includesSettlementParticipants
+            ? FamilyScopedData.visible(
+                settlementParticipants,
+                entity: .settlementParticipant,
+                scopeSnapshot: scopeSnapshot
+            )
+            : []
+
+        return TransactionsVisibilitySnapshot(
+            activeTransactions: activeTransactions,
+            activeWallets: activeWallets,
+            visibleCategories: visibleCategories,
+            visibleSettlementGroups: visibleSettlementGroups,
+            visibleSettlementParticipants: visibleSettlementParticipants,
+            archivedSettlementGroupIDs: archivedSettlementGroupIDs,
+            transactionAuditMap: TransactionAuditStore.auditMap(from: transactionAuditRecords),
+            walletOwnerMap: scopeSnapshot.ownerMap(for: .wallet),
+            transactionOwnerMap: scopeSnapshot.ownerMap(for: .transaction)
+        )
+    }
+
+    func categorySections(for selectedKind: TransactionPrimaryKind?) -> [TransactionCategoryGroupSection] {
+        switch selectedKind {
+        case .expense:
+            return MistiaCategoryHierarchy.groupedSections(
+                from: visibleCategories,
+                kind: .expense,
+                includeArchived: false,
+                includeEmptyParents: false
+            )
+        case .income:
+            return MistiaCategoryHierarchy.groupedSections(
+                from: visibleCategories,
+                kind: .income,
+                includeArchived: false,
+                includeEmptyParents: false
+            )
+        case .transfer:
+            return []
+        case nil:
+            return MistiaCategoryHierarchy.groupedSections(
+                from: visibleCategories,
+                kind: .expense,
+                includeArchived: false,
+                includeEmptyParents: false
+            ) + MistiaCategoryHierarchy.groupedSections(
+                from: visibleCategories,
+                kind: .income,
+                includeArchived: false,
+                includeEmptyParents: false
+            )
+        }
+    }
+
+    nonisolated private static func sortTransactionsByRecency(_ lhs: LedgerTransaction, _ rhs: LedgerTransaction) -> Bool {
+        if lhs.occurredAt != rhs.occurredAt {
+            return lhs.occurredAt > rhs.occurredAt
+        }
+        return lhs.createdAt > rhs.createdAt
+    }
+
+    nonisolated private static func sortWalletsForFilter(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        return lhs.createdAt < rhs.createdAt
+    }
 }
 
 struct DebtCounterpartyFilterOption: Equatable, Identifiable {
@@ -237,38 +386,6 @@ struct TransactionsView: View {
     @State private var listSnapshotCache: TransactionsListSnapshotCache?
     @State private var searchSnapshotCache: TransactionsListSnapshotCache?
 
-    private var activeTransactions: [LedgerTransaction] {
-        let activeVisibleTransactions = visibleTransactions
-            .filter { $0.deletedAt == nil && !$0.isArchived }
-        let visibleRecordIDs = Set(
-            SettlementLogic.visibleRecordsAfterEventArchiveFiltering(
-                activeVisibleTransactions.map(\.snapshot),
-                archivedEventIDs: archivedSettlementGroupIDs
-            )
-            .map(\.id)
-        )
-
-        return activeVisibleTransactions
-            .filter { visibleRecordIDs.contains($0.id) }
-            .sorted {
-                if $0.occurredAt != $1.occurredAt {
-                    return $0.occurredAt > $1.occurredAt
-                }
-                return $0.createdAt > $1.createdAt
-            }
-    }
-
-    private var activeWallets: [LedgerWallet] {
-        visibleWallets
-            .filter { $0.deletedAt == nil && !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
-    }
-
     private var appExchangeRates: [MistiaExchangeRate] {
         _ = currencyRateMode
         _ = manualJPYToVNDRate
@@ -289,107 +406,33 @@ struct TransactionsView: View {
         return nil
     }
 
-    private var activeCategorySections: [TransactionCategoryGroupSection] {
-        switch selectedSegment?.kind {
-        case .expense:
-            return MistiaCategoryHierarchy.groupedSections(
-                from: visibleCategories,
-                kind: .expense,
-                includeArchived: false,
-                includeEmptyParents: false
-            )
-        case .income:
-            return MistiaCategoryHierarchy.groupedSections(
-                from: visibleCategories,
-                kind: .income,
-                includeArchived: false,
-                includeEmptyParents: false
-            )
-        case .transfer:
-            return []
-        case nil:
-            return MistiaCategoryHierarchy.groupedSections(
-                from: visibleCategories,
-                kind: .expense,
-                includeArchived: false,
-                includeEmptyParents: false
-            ) + MistiaCategoryHierarchy.groupedSections(
-                from: visibleCategories,
-                kind: .income,
-                includeArchived: false,
-                includeEmptyParents: false
-            )
-        }
-    }
-
-    private var visibleTransactions: [LedgerTransaction] {
-        FamilyScopedData.visibleTransactionsForHistory(
-            storedTransactions,
-            audits: transactionAuditRecords,
-            scopes: ownershipScopes,
+    private func makeVisibilitySnapshot(
+        includesActiveWallets: Bool = true,
+        includesCategories: Bool = true,
+        includesSettlementParticipants: Bool = true
+    ) -> TransactionsVisibilitySnapshot {
+        TransactionsVisibilitySnapshot.make(
+            transactions: storedTransactions,
+            wallets: storedWallets,
+            categories: storedCategories,
+            settlementGroups: storedSettlementGroups,
+            settlementParticipants: storedSettlementParticipants,
+            ownershipScopes: ownershipScopes,
+            transactionAuditRecords: transactionAuditRecords,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore,
-            archivedEventIDs: archivedSettlementGroupIDs
+            includesActiveWallets: includesActiveWallets,
+            includesCategories: includesCategories,
+            includesSettlementParticipants: includesSettlementParticipants
         )
-    }
-
-    private var visibleWallets: [LedgerWallet] {
-        FamilyScopedData.visible(
-            storedWallets,
-            entity: .wallet,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleCategories: [TransactionCategory] {
-        FamilyScopedData.visible(
-            storedCategories,
-            entity: .category,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleSettlementGroups: [SettlementGroup] {
-        FamilyScopedData.visible(
-            storedSettlementGroups,
-            entity: .settlementGroup,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleSettlementParticipants: [SettlementParticipant] {
-        FamilyScopedData.visible(
-            storedSettlementParticipants,
-            entity: .settlementParticipant,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var archivedSettlementGroupIDs: Set<UUID> {
-        SettlementLogic.archivedSharedExpenseEventIDs(
-            from: visibleSettlementGroups
-                .filter { $0.deletedAt == nil }
-                .map(\.recordSnapshot)
-        )
-    }
-
-    private var transactionAuditMap: [UUID: TransactionAuditRecord] {
-        TransactionAuditStore.auditMap(from: transactionAuditRecords)
     }
 
     private var transactionListSnapshot: TransactionsListSnapshot {
-        let activeTransactions = self.activeTransactions
+        let visibilitySnapshot = makeVisibilitySnapshot()
+        let activeTransactions = visibilitySnapshot.activeTransactions
         let records = activeTransactions.map(\.snapshot)
-        let settlementGroupSnapshots = visibleSettlementGroups.map(\.recordSnapshot)
-        let settlementParticipantSnapshots = visibleSettlementParticipants.map(\.recordSnapshot)
+        let settlementGroupSnapshots = visibilitySnapshot.visibleSettlementGroups.map(\.recordSnapshot)
+        let settlementParticipantSnapshots = visibilitySnapshot.visibleSettlementParticipants.map(\.recordSnapshot)
         let page = TransactionLogic.visibleRecordsPage(
             from: records,
             selectedKind: selectedSegment?.kind,
@@ -410,6 +453,8 @@ struct TransactionsView: View {
             displayedRecordCount: displayedRecords.count,
             hasAdjustments: records.contains { TransactionLogic.isAdjustment($0) },
             debtCounterpartyFilterOptions: debtCounterpartyFilterOptions(from: records),
+            activeWallets: visibilitySnapshot.activeWallets,
+            activeCategorySections: visibilitySnapshot.categorySections(for: selectedSegment?.kind),
             preparingSettlementEvents: SettlementLogic.preparingEventSnapshots(
                 groups: settlementGroupSnapshots,
                 participants: settlementParticipantSnapshots,
@@ -436,10 +481,10 @@ struct TransactionsView: View {
                     .map { ($0.id, $0) },
                 uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
             ),
-            transactionAuditMap: transactionAuditMap,
-            walletOwnerMap: walletOwnerMap,
-            transactionOwnerMap: transactionOwnerMap,
-            archivedSettlementGroupIDs: archivedSettlementGroupIDs
+            transactionAuditMap: visibilitySnapshot.transactionAuditMap,
+            walletOwnerMap: visibilitySnapshot.walletOwnerMap,
+            transactionOwnerMap: visibilitySnapshot.transactionOwnerMap,
+            archivedSettlementGroupIDs: visibilitySnapshot.archivedSettlementGroupIDs
         )
     }
 
@@ -448,7 +493,12 @@ struct TransactionsView: View {
             return nil
         }
 
-        let activeTransactions = self.activeTransactions
+        let visibilitySnapshot = makeVisibilitySnapshot(
+            includesActiveWallets: false,
+            includesCategories: false,
+            includesSettlementParticipants: false
+        )
+        let activeTransactions = visibilitySnapshot.activeTransactions
         let records = activeTransactions.map(\.snapshot)
         let page = TransactionLogic.visibleRecordsPage(
             from: records,
@@ -467,6 +517,8 @@ struct TransactionsView: View {
             displayedRecordCount: displayedRecords.count,
             hasAdjustments: false,
             debtCounterpartyFilterOptions: [],
+            activeWallets: [],
+            activeCategorySections: [],
             preparingSettlementEvents: [],
             allSettlementEvents: [],
             openDebtPositions: [],
@@ -482,10 +534,10 @@ struct TransactionsView: View {
                     .map { ($0.id, $0) },
                 uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
             ),
-            transactionAuditMap: transactionAuditMap,
-            walletOwnerMap: walletOwnerMap,
-            transactionOwnerMap: transactionOwnerMap,
-            archivedSettlementGroupIDs: archivedSettlementGroupIDs
+            transactionAuditMap: visibilitySnapshot.transactionAuditMap,
+            walletOwnerMap: visibilitySnapshot.walletOwnerMap,
+            transactionOwnerMap: visibilitySnapshot.transactionOwnerMap,
+            archivedSettlementGroupIDs: visibilitySnapshot.archivedSettlementGroupIDs
         )
     }
 
@@ -562,6 +614,20 @@ struct TransactionsView: View {
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
             ),
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
             settlementGroupSignature: MistiaCollectionChangeSignature.make(
                 storedSettlementGroups,
                 updatedAt: \.updatedAt,
@@ -623,6 +689,20 @@ struct TransactionsView: View {
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
             ),
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
             settlementGroupSignature: nil,
             settlementParticipantSignature: nil,
             ownershipSignature: MistiaCollectionChangeSignature.make(
@@ -663,35 +743,18 @@ struct TransactionsView: View {
         return hasher.finalize()
     }
 
-    private var walletOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-    }
-
-    private var transactionOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-    }
-
-    private var transactionRecords: [TransactionRecordSnapshot] {
-        activeTransactions.map(\.planningRecordSnapshot)
-    }
-
-    private var overviewTransactions: [OverviewTransactionSnapshot] {
-        activeTransactions.map(\.overviewSnapshot)
-    }
-
-    private var walletSnapshots: [OverviewWalletSnapshot] {
-        activeWallets.compactMap(\.overviewWalletSnapshot)
-    }
-
-    private var statementCreditCardAccounts: [OverviewCreditCardStatementAccountSnapshot] {
+    private func statementCreditCardAccounts(
+        from visibilitySnapshot: TransactionsVisibilitySnapshot,
+        transactionRecords: [TransactionRecordSnapshot]
+    ) -> [OverviewCreditCardStatementAccountSnapshot] {
         let filteredWallets: [LedgerWallet]
         if let walletID = filterState.walletID {
-            filteredWallets = activeWallets.filter { $0.id == walletID }
+            filteredWallets = visibilitySnapshot.activeWallets.filter { $0.id == walletID }
         } else {
-            filteredWallets = activeWallets
+            filteredWallets = visibilitySnapshot.activeWallets
         }
         let balanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: activeWallets.map {
+            wallets: visibilitySnapshot.activeWallets.map {
                 TransactionWalletSnapshot(
                     id: $0.id,
                     kind: $0.kind,
@@ -726,8 +789,10 @@ struct TransactionsView: View {
         }
     }
 
-    private var statementFilteredTransactions: [OverviewTransactionSnapshot] {
-        overviewTransactions.filter { transaction in
+    private func statementFilteredTransactions(
+        from transactions: [OverviewTransactionSnapshot]
+    ) -> [OverviewTransactionSnapshot] {
+        transactions.filter { transaction in
             if let walletID = filterState.walletID {
                 guard transaction.sourceWalletID == walletID || transaction.destinationWalletID == walletID else {
                     return false
@@ -750,11 +815,18 @@ struct TransactionsView: View {
         }
     }
 
-    private var monthlyStatement: TransactionSummaryStatementSnapshot {
-        TransactionLogic.monthlyStatement(
+    private func monthlyStatement(
+        from visibilitySnapshot: TransactionsVisibilitySnapshot
+    ) -> TransactionSummaryStatementSnapshot {
+        let transactionRecords = visibilitySnapshot.activeTransactions.map(\.planningRecordSnapshot)
+        let walletSnapshots = visibilitySnapshot.activeWallets.compactMap(\.overviewWalletSnapshot)
+        let filteredTransactions = statementFilteredTransactions(
+            from: visibilitySnapshot.activeTransactions.map(\.overviewSnapshot)
+        )
+        return TransactionLogic.monthlyStatement(
             wallets: walletSnapshots,
             transactionRecords: transactionRecords,
-            transactions: statementFilteredTransactions,
+            transactions: filteredTransactions,
             statementPeriod: statementPeriod,
             currencyCode: currencyCode,
             referenceDate: .now,
@@ -762,10 +834,19 @@ struct TransactionsView: View {
         )
     }
 
-    private var creditCardStatement: TransactionCreditCardStatementSnapshot {
-        TransactionLogic.creditCardStatement(
-            accounts: statementCreditCardAccounts,
-            transactions: statementFilteredTransactions,
+    private func creditCardStatement(
+        from visibilitySnapshot: TransactionsVisibilitySnapshot
+    ) -> TransactionCreditCardStatementSnapshot {
+        let transactionRecords = visibilitySnapshot.activeTransactions.map(\.planningRecordSnapshot)
+        let filteredTransactions = statementFilteredTransactions(
+            from: visibilitySnapshot.activeTransactions.map(\.overviewSnapshot)
+        )
+        return TransactionLogic.creditCardStatement(
+            accounts: statementCreditCardAccounts(
+                from: visibilitySnapshot,
+                transactionRecords: transactionRecords
+            ),
+            transactions: filteredTransactions,
             referenceDate: .now,
             calendar: calendar
         )
@@ -958,7 +1039,17 @@ struct TransactionsView: View {
                         transactionOwnerMap: searchSnapshot?.transactionOwnerMap ?? [:],
                         primaryCurrencyCode: primaryCurrencyCode,
                         exchangeRateIndex: exchangeRateIndex,
-                        onSelect: openTransactionEditorIfAllowed,
+                        onSelect: { transaction in
+                            if let searchSnapshot {
+                                openTransactionEditorIfAllowed(
+                                    transaction,
+                                    transactionOwnerMap: searchSnapshot.transactionOwnerMap,
+                                    walletOwnerMap: searchSnapshot.walletOwnerMap
+                                )
+                            } else {
+                                openTransactionEditorIfAllowed(transaction)
+                            }
+                        },
                         onLoadMore: loadMoreSearchResultsIfNeeded
                     )
                     .transition(.opacity)
@@ -1146,13 +1237,21 @@ struct TransactionsView: View {
 
     private func exportStatement(_ kind: TransactionStatementKind) {
         do {
+            let visibilitySnapshot = makeVisibilitySnapshot(
+                includesCategories: false,
+                includesSettlementParticipants: false
+            )
             let document: TransactionStatementDocument
 
             switch kind {
             case .monthlySummary:
-                document = TransactionLogic.renderMonthlyStatement(monthlyStatement)
+                document = TransactionLogic.renderMonthlyStatement(
+                    monthlyStatement(from: visibilitySnapshot)
+                )
             case .creditCard:
-                document = TransactionLogic.renderCreditCardStatement(creditCardStatement)
+                document = TransactionLogic.renderCreditCardStatement(
+                    creditCardStatement(from: visibilitySnapshot)
+                )
             }
 
             let url = try TransactionStatementExportSupport.write(document: document)
@@ -1206,8 +1305,8 @@ struct TransactionsView: View {
 
     private func filterChipsHStack(_ snapshot: TransactionsListSnapshot) -> some View {
         let debtCounterpartyFilterOptions = snapshot.debtCounterpartyFilterOptions
-        let activeWallets = self.activeWallets
-        let activeCategorySections = self.activeCategorySections
+        let activeWallets = snapshot.activeWallets
+        let activeCategorySections = snapshot.activeCategorySections
         let activeCategories = activeCategorySections.map(\.parent) + activeCategorySections.flatMap(\.children)
 
         return HStack(spacing: 8) {
@@ -1523,7 +1622,11 @@ struct TransactionsView: View {
                     primaryCurrencyCode: primaryCurrencyCode,
                     exchangeRateIndex: exchangeRateIndex
                 ) { transaction in
-                    openTransactionEditorIfAllowed(transaction)
+                    openTransactionEditorIfAllowed(
+                        transaction,
+                        transactionOwnerMap: snapshot.transactionOwnerMap,
+                        walletOwnerMap: snapshot.walletOwnerMap
+                    )
                 }
             }
 
@@ -1588,6 +1691,19 @@ struct TransactionsView: View {
     }
 
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
+        let visibilitySnapshot = makeVisibilitySnapshot()
+        openTransactionEditorIfAllowed(
+            transaction,
+            transactionOwnerMap: visibilitySnapshot.transactionOwnerMap,
+            walletOwnerMap: visibilitySnapshot.walletOwnerMap
+        )
+    }
+
+    private func openTransactionEditorIfAllowed(
+        _ transaction: LedgerTransaction,
+        transactionOwnerMap: [UUID: UUID],
+        walletOwnerMap: [UUID: UUID]
+    ) {
         guard !sessionStore.hasFamilyOwnerPushConflict(entity: .transaction, recordID: transaction.id) else {
             familyOwnerConflictAlert = TransactionsFamilyOwnerConflictAlert(
                 entity: .transaction,
@@ -1602,7 +1718,11 @@ struct TransactionsView: View {
             return
         }
 
-        guard let ownerUserID = transactionOwnerUserID(for: transaction) else {
+        guard let ownerUserID = transactionOwnerUserID(
+            for: transaction,
+            transactionOwnerMap: transactionOwnerMap,
+            walletOwnerMap: walletOwnerMap
+        ) else {
             editorTarget = TransactionEditorTarget(transaction: transaction)
             return
         }
@@ -1617,15 +1737,22 @@ struct TransactionsView: View {
         editorTarget = TransactionEditorTarget(transaction: transaction)
     }
 
-    private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
+    private func transactionOwnerUserID(
+        for transaction: LedgerTransaction,
+        transactionOwnerMap: [UUID: UUID],
+        walletOwnerMap: [UUID: UUID]
+    ) -> UUID? {
         transactionOwnerMap[transaction.id]
-            ?? ownerUserID(forWalletID: transaction.sourceWallet?.id)
-            ?? ownerUserID(forWalletID: transaction.destinationWallet?.id)
+            ?? ownerUserID(forWalletID: transaction.sourceWallet?.id, walletOwnerMap: walletOwnerMap)
+            ?? ownerUserID(forWalletID: transaction.destinationWallet?.id, walletOwnerMap: walletOwnerMap)
             ?? familyContextStore.selectedSubjectUserID
             ?? sessionStore.activeLocalProfileUserID
     }
 
-    private func ownerUserID(forWalletID walletID: UUID?) -> UUID? {
+    private func ownerUserID(
+        forWalletID walletID: UUID?,
+        walletOwnerMap: [UUID: UUID]
+    ) -> UUID? {
         guard let walletID else { return nil }
         return walletOwnerMap[walletID]
     }
