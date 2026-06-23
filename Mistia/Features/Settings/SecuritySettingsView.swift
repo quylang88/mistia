@@ -461,17 +461,13 @@ private struct MistiaAppLockBiometricGateScreen: View {
                     Spacer(minLength: metrics.topSpacer + 56)
 
                     VStack(spacing: metrics.contentSpacing + 4) {
-                        Image(systemName: biometricIconName)
-                            .font(.system(size: biometricIconSize(for: metrics), weight: .semibold))
-                            .symbolRenderingMode(.hierarchical)
+                        Image(systemName: lockStatusIconName)
+                            .font(.system(size: lockStatusIconSize(for: metrics), weight: .regular))
+                            .symbolRenderingMode(.monochrome)
                             .foregroundStyle(MistiaAccent.tabActive.color)
                             .frame(
-                                width: biometricIconFrame(for: metrics),
-                                height: biometricIconFrame(for: metrics)
+                                height: lockStatusIconFrame(for: metrics)
                             )
-                            .background {
-                                AppLockGlassRoundedBackground(cornerRadius: biometricIconFrame(for: metrics) / 2)
-                            }
 
                         Text(L10n.shared.appLock.title)
                             .font(.system(size: 27, weight: .bold, design: .rounded))
@@ -520,12 +516,16 @@ private struct MistiaAppLockBiometricGateScreen: View {
         }
     }
 
-    private func biometricIconSize(for metrics: AppLockSetupMetrics) -> CGFloat {
-        metrics.isCompactHeight ? 58 : 66
+    private var lockStatusIconName: String {
+        "lock.shield"
     }
 
-    private func biometricIconFrame(for metrics: AppLockSetupMetrics) -> CGFloat {
-        metrics.isCompactHeight ? 118 : 132
+    private func lockStatusIconSize(for metrics: AppLockSetupMetrics) -> CGFloat {
+        metrics.isCompactHeight ? 76 : 88
+    }
+
+    private func lockStatusIconFrame(for metrics: AppLockSetupMetrics) -> CGFloat {
+        metrics.isCompactHeight ? 96 : 112
     }
 }
 

@@ -102,8 +102,7 @@ struct RootTabView: View {
   @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
   @State private var showsReceiptSourceDialog = false
 
-  private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
-  private let quickCreateMenuDuration = 0.28
+  private let quickCreateMenuAnimation = Animation.spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.08)
 
   var body: some View {
     GeometryReader { proxy in
@@ -114,7 +113,7 @@ struct RootTabView: View {
           appLanguage: appLanguage,
           hidesQuickCreate: MistiaRootChromeLogic.hidesQuickCreate(
             transientHidden: uiState.isQuickCreateHidden,
-            menuVisible: isQuickCreateMenuVisible
+            menuVisible: isQuickCreateMenuExpanded
           ),
           hidesTabBar: uiState.isTabBarHidden,
           showsShortcutTab: mistiaShortcutEnabled && !shouldHideShortcutTabInCurrentContext,
@@ -143,52 +142,10 @@ struct RootTabView: View {
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
         }
 
-        if isQuickCreateMenuVisible, quickCreateAnchorFrame.width > 0 {
-          Color.black
-            .opacity(isQuickCreateMenuExpanded ? (colorScheme == .dark ? 0.18 : 0.08) : 0)
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture(perform: dismissQuickCreateMenu)
-            .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
-
-          MistiaQuickCreateMenu(
-            isExpanded: isQuickCreateMenuExpanded,
-            width: proxy.size.width - 40, // Match tab bar margins (20pt each side)
-            expandedHeight: quickCreateExpandedHeight,
-            destinations: quickCreateDestinations,
-            dragOffset: $quickCreateDragOffset,
-            isDragging: $isDraggingQuickCreate,
-            onDismiss: dismissQuickCreateMenu
-          ) { destination in
-            presentQuickCreateSheet(for: destination)
-          }
-          .position(quickCreateMenuPosition(in: proxy))
-          .offset(y: quickCreateDragOffset)
-          .scaleEffect(isQuickCreateMenuExpanded ? 1 : 0.9, anchor: .bottomTrailing)
-          .opacity(isQuickCreateMenuExpanded ? 1 : 0)
-          .offset(y: isQuickCreateMenuExpanded ? 0 : 10)
-          .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
-        }
+        quickCreateOverlay(in: proxy)
       }
       .sheet(item: $activeSheet) { sheet in
-        switch sheet {
-        case .quickCreate(let destination, let receiptInitialSource):
-          TransactionEditorSheet(target: quickCreateTarget(for: destination, receiptInitialSource: receiptInitialSource)) { completion in
-            if completion == .savedDraft {
-              self.selectedTab = .transactions
-            }
-          }
-            .presentationDetents(destination == .note ? [.medium, .large] : [.large])
-            .presentationDragIndicator(.hidden)
-        case .settlement(let target):
-          SettlementEditorSheet(target: target)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
-        case .managementShortcut(let destination):
-          RootManagementShortcutModal(destination: destination)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
-        }
+        activeSheetView(for: sheet)
       }
       .task(id: shortcutNormalizationKey) {
         persistShortcutSelectionIfNeeded(shortcutResolution.selection)
@@ -348,6 +305,63 @@ struct RootTabView: View {
     MistiaQuickCreateMenu.expandedHeight(for: quickCreateDestinations)
   }
 
+  @ViewBuilder
+  private func quickCreateOverlay(in proxy: GeometryProxy) -> some View {
+    if isQuickCreateMenuVisible, quickCreateAnchorFrame.width > 0 {
+      Color.black
+        .opacity(isQuickCreateMenuExpanded ? (colorScheme == .dark ? 0.18 : 0.08) : 0)
+        .ignoresSafeArea()
+        .contentShape(Rectangle())
+        .onTapGesture {
+          dismissQuickCreateMenu()
+        }
+        .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
+
+      MistiaQuickCreateMenu(
+        isExpanded: isQuickCreateMenuExpanded,
+        width: proxy.size.width - 40, // Match tab bar margins (20pt each side)
+        expandedHeight: quickCreateExpandedHeight,
+        destinations: quickCreateDestinations,
+        dragOffset: $quickCreateDragOffset,
+        isDragging: $isDraggingQuickCreate,
+        onDismiss: {
+          dismissQuickCreateMenu()
+        }
+      ) { destination in
+        presentQuickCreateSheet(for: destination)
+      }
+      .position(quickCreateMenuPosition(in: proxy))
+      .offset(y: quickCreateDragOffset)
+      .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
+    }
+  }
+
+  @ViewBuilder
+  private func activeSheetView(for sheet: RootSheet) -> some View {
+    switch sheet {
+    case .quickCreate(let destination, let receiptInitialSource):
+      TransactionEditorSheet(target: quickCreateTarget(for: destination, receiptInitialSource: receiptInitialSource)) { completion in
+        handleQuickCreateCompletion(completion)
+      }
+      .presentationDetents(destination == .note ? [.medium, .large] : [.large])
+      .presentationDragIndicator(.hidden)
+    case .settlement(let target):
+      SettlementEditorSheet(target: target)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+    case .managementShortcut(let destination):
+      RootManagementShortcutModal(destination: destination)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+    }
+  }
+
+  private func handleQuickCreateCompletion(_ completion: TransactionEditorCompletion) {
+    if completion == .savedDraft {
+      selectedTab = .transactions
+    }
+  }
+
   private var shortcutNormalizationKey: String {
     let memberFingerprint = familyContextStore.members
       .map { member in
@@ -377,22 +391,25 @@ struct RootTabView: View {
     }
   }
 
-  private func dismissQuickCreateMenu() {
-    guard isQuickCreateMenuVisible else { return }
-
-    withAnimation(quickCreateMenuAnimation) {
-      isQuickCreateMenuExpanded = false
+  private func dismissQuickCreateMenu(completion: (() -> Void)? = nil) {
+    guard isQuickCreateMenuVisible else {
+      completion?()
+      return
     }
 
-    DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
+    withAnimation(quickCreateMenuAnimation, completionCriteria: .removed) {
+      isQuickCreateMenuExpanded = false
+      quickCreateDragOffset = 0
+      isDraggingQuickCreate = false
+    } completion: {
       guard !isQuickCreateMenuExpanded else { return }
       isQuickCreateMenuVisible = false
+      completion?()
     }
   }
 
   private func presentQuickCreateSheet(for destination: MistiaQuickCreateDestination) {
-    dismissQuickCreateMenu()
-    DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
+    dismissQuickCreateMenu {
       if destination == .receipt {
         showsReceiptSourceDialog = true
       } else if let settlementTarget = destination.settlementTarget {
@@ -750,7 +767,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   }
 
   var accent: Color {
-    Color(red: 0.43, green: 0.23, blue: 0.76)
+    MistiaAccent.tabActive.color
   }
 
   var settlementTarget: SettlementEditorTarget? {
@@ -781,10 +798,6 @@ private struct MistiaQuickCreateMenu: View {
     max(262, defaultExpandedHeight - CGFloat(4 - destinations.count) * 54)
   }
 
-  private var collapsedTint: Color {
-    Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.18 : 0.12)
-  }
-
   private var cornerRadius: CGFloat {
     isExpanded ? 30 : 22
   }
@@ -798,59 +811,101 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var lightPurpleAccent: Color {
-    Color(red: 0.88, green: 0.78, blue: 1.0) // Matched to "sao kê" button foreground
+    Color(red: 0.88, green: 0.78, blue: 1.0)
   }
 
   var body: some View {
-    ZStack(alignment: .bottomTrailing) {
-      if isExpanded {
-        VStack(spacing: 0) {
-          VStack(spacing: 0) {
-            ForEach(Array(destinations.enumerated()), id: \.element.id) { index, destination in
-              Button {
-                onSelect(destination)
-              } label: {
-                MistiaQuickCreateMenuRow(destination: destination)
-                  .frame(maxWidth: .infinity, alignment: .leading)
-              }
-              .buttonStyle(PlainButtonStyle())
-              
-              if index < destinations.count - 1 {
-                Divider()
-                  .background(Color.white.opacity(0.06))
-                  .padding(.leading, 68)
-                  .padding(.trailing, 20)
-              }
+    menuBody
+      .frame(
+        width: isExpanded ? width : Self.collapsedSize,
+        height: menuHeight,
+        alignment: .bottomTrailing
+      )
+      .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+      .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: isDragging ? 30 : 22, y: isDragging ? 20 : 12)
+      .scaleEffect(isDragging ? 1.02 : 1.0)
+      .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+      .allowsHitTesting(isExpanded)
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { value in
+            if !isDragging && value.translation.height != 0 {
+              UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+              isDragging = true
             }
+            dragOffset = value.translation.height
           }
-          .padding(.top, 8) 
-          
-          Spacer(minLength: 2) // Even smaller gap
+          .onEnded { value in
+            let velocity = value.predictedEndLocation.y - value.location.y
+            if value.translation.height > 100 || velocity > 500 {
+              onDismiss()
+            }
 
-          // Bottom prominent button: Quick Note (Ghi nhanh)
-          Button {
-            onSelect(.note)
-          } label: {
-            HStack(spacing: 8) {
-              Image(systemName: MistiaQuickCreateDestination.note.systemImage)
-                .font(.system(size: 14, weight: .bold))
-              
-              Text(MistiaQuickCreateDestination.note.title.uppercased())
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .kerning(0.8)
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+              dragOffset = 0
+              isDragging = false
             }
-            .foregroundStyle(lightPurpleAccent)
-            .frame(maxWidth: .infinity) // Make it full-width
-            .padding(.vertical, 6)
           }
-          .buttonStyle(.glassProminent)
-          .buttonBorderShape(.capsule)
-          .tint(appPurple)
-          .padding(.horizontal, 20)
-          .padding(.bottom, 16)
+      )
+      .accessibilityElement(children: .contain)
+  }
+
+  @ViewBuilder
+  private var menuBody: some View {
+    ZStack(alignment: .bottomTrailing) {
+      MistiaQuickCreateMenuBackground(
+        cornerRadius: cornerRadius,
+        isExpanded: isExpanded
+      )
+
+      VStack(spacing: 0) {
+        VStack(spacing: 0) {
+          ForEach(Array(destinations.enumerated()), id: \.element.id) { index, destination in
+            Button {
+              onSelect(destination)
+            } label: {
+              MistiaQuickCreateMenuRow(destination: destination)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            if index < destinations.count - 1 {
+              Divider()
+                .background(Color(uiColor: .separator).opacity(colorScheme == .dark ? 0.32 : 0.46))
+                .padding(.leading, 68)
+                .padding(.trailing, 20)
+            }
+          }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 8)
+
+        Spacer(minLength: 2)
+
+        Button {
+          onSelect(.note)
+        } label: {
+          HStack(spacing: 8) {
+            Image(systemName: MistiaQuickCreateDestination.note.systemImage)
+              .font(.system(size: 14, weight: .bold))
+
+            Text(MistiaQuickCreateDestination.note.title.uppercased())
+              .font(.system(size: 14, weight: .bold, design: .rounded))
+              .kerning(0.8)
+          }
+          .foregroundStyle(colorScheme == .dark ? lightPurpleAccent : .white)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 6)
+        }
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .tint(appPurple)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .opacity(isExpanded ? 1 : 0)
+      .scaleEffect(isExpanded ? 1 : 0.94, anchor: .bottomTrailing)
+      .allowsHitTesting(isExpanded)
 
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
@@ -858,100 +913,90 @@ private struct MistiaQuickCreateMenu: View {
         .opacity(isExpanded ? 0 : 1)
         .scaleEffect(isExpanded ? 0.72 : 1)
         .frame(width: Self.collapsedSize, height: Self.collapsedSize)
-        .background {
-          Circle()
-            .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
-            .opacity(isExpanded ? 0 : 1)
-            .scaleEffect(isExpanded ? 0.72 : 1)
+    }
+  }
+}
+
+private struct MistiaQuickCreateMenuBackground: View {
+  @Environment(\.colorScheme) private var colorScheme
+  let cornerRadius: CGFloat
+  let isExpanded: Bool
+
+  var body: some View {
+    if isExpanded {
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(expandedSurfaceColor)
+        .overlay {
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.14 : 0.52), lineWidth: 0.8)
+        }
+        .overlay(alignment: .topLeading) {
+          LinearGradient(
+            colors: [
+              Color.white.opacity(colorScheme == .dark ? 0.08 : 0.36),
+              Color.clear
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+          .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
+    } else {
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(.ultraThinMaterial)
+        .overlay {
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.48), lineWidth: 0.8)
         }
     }
-    .frame(
-      width: isExpanded ? width : Self.collapsedSize,
-      height: menuHeight,
-      alignment: .bottomTrailing
-    )
-    .background {
-      if isExpanded {
-        ZStack {
-          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color(white: 0.12)) // Dark background like the image
-          
-          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(.white.opacity(0.08), lineWidth: 1)
-        }
-      } else {
-        MistiaRoundedGlassBackground(
-          cornerRadius: cornerRadius,
-          tint: collapsedTint,
-          interactive: true
-        )
-      }
-    }
-    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: isDragging ? 30 : 22, y: isDragging ? 20 : 12)
-    .scaleEffect(isDragging ? 1.02 : 1.0)
-    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
-    .allowsHitTesting(isExpanded)
-    .gesture(
-      DragGesture(minimumDistance: 0)
-        .onChanged { value in
-          if !isDragging && value.translation.height != 0 {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            isDragging = true
-          }
-          dragOffset = value.translation.height
-        }
-        .onEnded { value in
-          let velocity = value.predictedEndLocation.y - value.location.y
-          if value.translation.height > 100 || velocity > 500 {
-            onDismiss()
-          }
-          
-          withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-            dragOffset = 0
-            isDragging = false
-          }
-        }
-    )
-    .accessibilityElement(children: .contain)
+  }
+
+  private var expandedSurfaceColor: Color {
+    colorScheme == .dark
+      ? Color(uiColor: .secondarySystemGroupedBackground)
+      : Color(uiColor: .systemBackground)
   }
 }
 
 private struct MistiaQuickCreateMenuRow: View {
-  @Environment(\.colorScheme) private var colorScheme
   let destination: MistiaQuickCreateDestination
-
-  private var iconBackgroundColor: Color {
-    destination.accent.opacity(colorScheme == .dark ? 0.18 : 0.12)
-  }
 
   var body: some View {
     HStack(alignment: .center, spacing: 14) {
       ZStack {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .fill(Color(red: 0.43, green: 0.23, blue: 0.76).opacity(0.24)) // Brightened background
-        
+        MistiaQuickCreateIconBackground(tint: destination.accent)
+
         Image(systemName: destination.systemImage)
           .font(.system(size: 17, weight: .bold, design: .rounded))
-          .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0)) // Matched to light purple accent
+          .foregroundStyle(destination.accent)
       }
       .frame(width: 42, height: 42)
 
       VStack(alignment: .leading, spacing: 1) {
         Text(destination.title)
           .font(.system(size: 17, weight: .bold, design: .rounded))
-          .foregroundStyle(.white)
+          .foregroundStyle(.primary)
 
         Text(destination.subtitle)
           .font(.system(size: 12, weight: .medium, design: .rounded))
-          .foregroundStyle(.white.opacity(0.6))
+          .foregroundStyle(.secondary)
           .lineLimit(1)
       }
 
       Spacer()
     }
     .padding(.horizontal, 20)
-    .frame(height: 60) // Reduced height for rows
+    .frame(height: 60)
     .contentShape(Rectangle())
+  }
+}
+
+private struct MistiaQuickCreateIconBackground: View {
+  @Environment(\.colorScheme) private var colorScheme
+  let tint: Color
+
+  var body: some View {
+    RoundedRectangle(cornerRadius: 12, style: .continuous)
+      .fill(tint.opacity(colorScheme == .dark ? 0.20 : 0.12))
   }
 }

@@ -759,9 +759,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       quickCreateController.view.isHidden = false
     }
 
-    UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseInOut]) {
+    UIView.animate(withDuration: 0.18, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
       self.quickCreateController.view.alpha = targetAlpha
     } completion: { _ in
+      guard abs(self.quickCreateController.view.alpha - targetAlpha) < 0.01 else { return }
       self.quickCreateController.view.isHidden = isHidden
       self.notifyQuickCreateFrameChanged()
     }
