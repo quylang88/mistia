@@ -13,6 +13,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var isShortcutAttentionPulsing: Bool
   var shortcutDisabledAccessibilityHint: String?
   var shortcutPresentation: MistiaShortcutPresentation
+  var isMenuVisible: Bool
   var onShortcutTap: () -> Void
   var onQuickCreateTap: () -> Void
   var onQuickCreateFrameChange: (CGRect) -> Void
@@ -35,7 +36,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
-      showsShortcutTab: showsShortcutTab
+      showsShortcutTab: showsShortcutTab,
+      isMenuVisible: isMenuVisible
     )
     return controller
   }
@@ -54,7 +56,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
-      showsShortcutTab: showsShortcutTab
+      showsShortcutTab: showsShortcutTab,
+      isMenuVisible: isMenuVisible
     )
   }
 
@@ -137,6 +140,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private var currentShowsShortcutTab = false
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
   private var shortcutPulseLayer: CAShapeLayer?
+  private var wasMenuVisible = false
 
   private lazy var quickCreateController = UIHostingController(
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
@@ -194,7 +198,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutDisabledAccessibilityHint: String?,
     hidesQuickCreate: Bool,
     hidesTabBar: Bool,
-    showsShortcutTab: Bool
+    showsShortcutTab: Bool,
+    isMenuVisible: Bool
   )
   {
     let isFirstRender = currentSelectedMistiaTab == nil
@@ -231,7 +236,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       showsShortcutTab: showsShortcutTab
     )
     updateShortcutPulseAnimation()
-    updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
+    updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar, isMenuVisible: isMenuVisible)
     updateTabBarVisibility(isHidden: hidesTabBar)
     if isFirstRender || didChangeAppearance || didChangeShortcutTabVisibility {
       applyChromeAppearance()
@@ -744,13 +749,14 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     ]
   }
 
-  private func updateQuickCreateVisibility(isHidden: Bool) {
+  private func updateQuickCreateVisibility(isHidden: Bool, isMenuVisible: Bool) {
     guard didConfigureQuickCreateButton else { return }
     let targetAlpha: CGFloat = isHidden ? 0 : 1
     guard
       quickCreateController.view.alpha != targetAlpha
         || quickCreateController.view.isHidden != isHidden
     else {
+      wasMenuVisible = isMenuVisible
       notifyQuickCreateFrameChanged()
       return
     }
@@ -759,13 +765,21 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       quickCreateController.view.isHidden = false
     }
 
-    UIView.animate(withDuration: 0.18, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+    if isMenuVisible || wasMenuVisible {
+      // Swap instantly when transitioning with the menu to avoid double-imaging/gaps
       self.quickCreateController.view.alpha = targetAlpha
-    } completion: { _ in
-      guard abs(self.quickCreateController.view.alpha - targetAlpha) < 0.01 else { return }
       self.quickCreateController.view.isHidden = isHidden
       self.notifyQuickCreateFrameChanged()
+    } else {
+      UIView.animate(withDuration: 0.18, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+        self.quickCreateController.view.alpha = targetAlpha
+      } completion: { _ in
+        guard abs(self.quickCreateController.view.alpha - targetAlpha) < 0.01 else { return }
+        self.quickCreateController.view.isHidden = isHidden
+        self.notifyQuickCreateFrameChanged()
+      }
     }
+    wasMenuVisible = isMenuVisible
   }
 
   private func updateTabBarVisibility(isHidden: Bool) {

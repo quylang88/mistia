@@ -113,7 +113,7 @@ struct RootTabView: View {
           appLanguage: appLanguage,
           hidesQuickCreate: MistiaRootChromeLogic.hidesQuickCreate(
             transientHidden: uiState.isQuickCreateHidden,
-            menuVisible: isQuickCreateMenuExpanded
+            menuVisible: isQuickCreateMenuVisible
           ),
           hidesTabBar: uiState.isTabBarHidden,
           showsShortcutTab: mistiaShortcutEnabled && !shouldHideShortcutTabInCurrentContext,
@@ -122,6 +122,7 @@ struct RootTabView: View {
           isShortcutAttentionPulsing: isShortcutMemberAttentionPulsing,
           shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
           shortcutPresentation: shortcutResolution.presentation,
+          isMenuVisible: isQuickCreateMenuVisible,
           onShortcutTap: handlePinnedShortcutTap,
           onQuickCreateTap: toggleQuickCreateMenu,
           onQuickCreateFrameChange: { frame in
@@ -397,7 +398,7 @@ struct RootTabView: View {
       return
     }
 
-    withAnimation(quickCreateMenuAnimation, completionCriteria: .removed) {
+    withAnimation(quickCreateMenuAnimation, completionCriteria: .logicallyComplete) {
       isQuickCreateMenuExpanded = false
       quickCreateDragOffset = 0
       isDraggingQuickCreate = false
@@ -617,11 +618,10 @@ struct RootTabView: View {
       ? quickCreateExpandedHeight
       : MistiaQuickCreateMenu.collapsedSize
 
-    // Anchored to the center but width matches tab bar area
-    let x = isQuickCreateMenuExpanded ? proxy.size.width / 2 : (quickCreateAnchorFrame.maxX - (width / 2))
-    
-    let safeAreaOffset = proxy.safeAreaInsets.top
-    let y = quickCreateAnchorFrame.maxY - (height / 2) - safeAreaOffset - 2 // Moved closer to tab bar
+    let anchorTrailing = quickCreateAnchorFrame.maxX
+    let anchorBottom = quickCreateAnchorFrame.maxY - proxy.safeAreaInsets.top
+    let x = anchorTrailing - (width / 2)
+    let y = anchorBottom - (height / 2) - 2
 
     return CGPoint(x: x, y: y)
   }
@@ -814,6 +814,16 @@ private struct MistiaQuickCreateMenu: View {
     Color(red: 0.88, green: 0.78, blue: 1.0)
   }
 
+  private var surfaceShadowRadius: CGFloat {
+    if isDragging { return 30 }
+    return isExpanded ? 22 : 16
+  }
+
+  private var surfaceShadowY: CGFloat {
+    if isDragging { return 20 }
+    return isExpanded ? 12 : 8
+  }
+
   var body: some View {
     menuBody
       .frame(
@@ -822,7 +832,11 @@ private struct MistiaQuickCreateMenu: View {
         alignment: .bottomTrailing
       )
       .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-      .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: isDragging ? 30 : 22, y: isDragging ? 20 : 12)
+      .shadow(
+        color: .black.opacity(colorScheme == .dark ? 0.22 : 0.18),
+        radius: surfaceShadowRadius,
+        y: surfaceShadowY
+      )
       .scaleEffect(isDragging ? 1.02 : 1.0)
       .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
       .allowsHitTesting(isExpanded)
@@ -907,12 +921,22 @@ private struct MistiaQuickCreateMenu: View {
       .scaleEffect(isExpanded ? 1 : 0.94, anchor: .bottomTrailing)
       .allowsHitTesting(isExpanded)
 
-      Image(systemName: "plus")
-        .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
-        .opacity(isExpanded ? 0 : 1)
-        .scaleEffect(isExpanded ? 0.72 : 1)
-        .frame(width: Self.collapsedSize, height: Self.collapsedSize)
+      // Visual-only replica of the UIKit tab bar button.
+      // Using a plain ZStack (no glass ButtonStyle) to avoid material rendering
+      // artifacts during the collapse animation clip.
+      ZStack {
+        Circle()
+          .fill(.thinMaterial)
+        Circle()
+          .fill(appPurple.opacity(0.18))
+        Image(systemName: "plus")
+          .font(.system(size: 20, weight: .semibold, design: .rounded))
+          .foregroundStyle(appPurple)
+      }
+      .frame(width: Self.collapsedSize, height: Self.collapsedSize)
+      .opacity(isExpanded ? 0 : 1)
+      .scaleEffect(isExpanded ? 0.72 : 1)
+      .allowsHitTesting(false)
     }
   }
 }
@@ -923,31 +947,27 @@ private struct MistiaQuickCreateMenuBackground: View {
   let isExpanded: Bool
 
   var body: some View {
-    if isExpanded {
-      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+    ZStack {
+      shape
         .fill(expandedSurfaceColor)
-        .overlay {
-          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.14 : 0.52), lineWidth: 0.8)
-        }
-        .overlay(alignment: .topLeading) {
-          LinearGradient(
-            colors: [
-              Color.white.opacity(colorScheme == .dark ? 0.08 : 0.36),
-              Color.clear
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-          .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        }
-    } else {
-      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        .fill(.ultraThinMaterial)
-        .overlay {
-          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.48), lineWidth: 0.8)
-        }
+        .opacity(isExpanded ? 1 : 0)
+
+      LinearGradient(
+        colors: [
+          Color.white.opacity(colorScheme == .dark ? 0.08 : 0.36),
+          Color.clear
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      .opacity(isExpanded ? 1 : 0)
+      .clipShape(shape)
+
+      shape
+        .strokeBorder(expandedBorderColor, lineWidth: 0.8)
+        .opacity(isExpanded ? 1 : 0)
     }
   }
 
@@ -955,6 +975,10 @@ private struct MistiaQuickCreateMenuBackground: View {
     colorScheme == .dark
       ? Color(uiColor: .secondarySystemGroupedBackground)
       : Color(uiColor: .systemBackground)
+  }
+
+  private var expandedBorderColor: Color {
+    Color.white.opacity(colorScheme == .dark ? 0.14 : 0.52)
   }
 }
 
