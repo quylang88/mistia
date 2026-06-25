@@ -8,6 +8,78 @@ enum MistiaCreditCardStatementMaintenance {
         let lastAutoPaymentAttemptAt: Date?
     }
 
+    private struct ExistingAutoPaymentKey: Hashable {
+        let sourceWalletID: UUID
+        let destinationWalletID: UUID
+        let amountMinor: Int64
+        let paymentDay: Date
+
+        init(
+            sourceWalletID: UUID,
+            destinationWalletID: UUID,
+            amountMinor: Int64,
+            paymentDay: Date
+        ) {
+            self.sourceWalletID = sourceWalletID
+            self.destinationWalletID = destinationWalletID
+            self.amountMinor = amountMinor
+            self.paymentDay = paymentDay
+        }
+
+        init?(transaction: LedgerTransaction, calendar: Calendar) {
+            guard transaction.primaryKind == .transfer,
+                  transaction.transferSubtype == .internalTransfer,
+                  transaction.entryStatus == .posted,
+                  !transaction.isArchived,
+                  transaction.deletedAt == nil,
+                  let sourceWalletID = transaction.sourceWallet?.id,
+                  let destinationWalletID = transaction.destinationWallet?.id else {
+                return nil
+            }
+
+            self.init(
+                sourceWalletID: sourceWalletID,
+                destinationWalletID: destinationWalletID,
+                amountMinor: transaction.amountMinor,
+                paymentDay: calendar.startOfDay(for: transaction.occurredAt)
+            )
+        }
+    }
+
+    private struct ExistingAutoPaymentIndex {
+        private var transactionsByKey: [ExistingAutoPaymentKey: LedgerTransaction] = [:]
+
+        init(transactions: [LedgerTransaction], calendar: Calendar) {
+            transactionsByKey.reserveCapacity(transactions.count)
+
+            for transaction in transactions {
+                guard let key = ExistingAutoPaymentKey(transaction: transaction, calendar: calendar) else {
+                    continue
+                }
+                if let existing = transactionsByKey[key], existing.updatedAt >= transaction.updatedAt {
+                    continue
+                }
+                transactionsByKey[key] = transaction
+            }
+        }
+
+        func transaction(
+            for statement: PlanningCreditCardStatementSnapshot,
+            calendar: Calendar
+        ) -> LedgerTransaction? {
+            guard let sourceWalletID = statement.paymentSourceWalletID else { return nil }
+
+            return transactionsByKey[
+                ExistingAutoPaymentKey(
+                    sourceWalletID: sourceWalletID,
+                    destinationWalletID: statement.walletID,
+                    amountMinor: statement.amountMinor,
+                    paymentDay: calendar.startOfDay(for: statement.dueDate)
+                )
+            ]
+        }
+    }
+
     static func run(
         modelContext: ModelContext,
         sessionStore: SessionStore,
@@ -51,16 +123,25 @@ enum MistiaCreditCardStatementMaintenance {
             calendar.date(byAdding: .month, value: -offset, to: currentMonth)
         }
         var occurrences = snapshot.activeOccurrences
-
-        for account in accounts {
-            let statements = PlanningLogic.creditCardStatementItems(
-                accounts: [account],
+        let occurrenceSnapshots = occurrences.map(\.planningSnapshot)
+        let statementsByWalletID = Dictionary(
+            grouping: PlanningLogic.creditCardStatementItems(
+                accounts: accounts,
                 records: snapshot.activeTransactionRecords,
-                occurrences: occurrences.map(\.planningSnapshot),
+                occurrences: occurrenceSnapshots,
                 statementMonths: statementMonths,
                 referenceDate: referenceDate,
                 calendar: calendar
-            )
+            ),
+            by: \.walletID
+        )
+        let existingAutoPayments = ExistingAutoPaymentIndex(
+            transactions: snapshot.activeTransactions,
+            calendar: calendar
+        )
+
+        for account in accounts {
+            let statements = statementsByWalletID[account.walletID] ?? []
 
             for statement in statements where statement.amountMinor > 0 {
                 guard statement.state != .unclosed else { continue }
@@ -84,8 +165,7 @@ enum MistiaCreditCardStatementMaintenance {
 
                 if let existingPayment = existingAutoPaymentTransaction(
                     for: statement,
-                    walletByID: snapshot.walletByID,
-                    modelContext: modelContext,
+                    in: existingAutoPayments,
                     calendar: calendar
                 ) {
                     markOccurrencePaid(
@@ -163,10 +243,6 @@ enum MistiaCreditCardStatementMaintenance {
                 }
             }
         }
-    }
-
-    private static func latestWallet(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> LedgerWallet {
-        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
     @discardableResult
@@ -294,25 +370,10 @@ enum MistiaCreditCardStatementMaintenance {
 
     private static func existingAutoPaymentTransaction(
         for statement: PlanningCreditCardStatementSnapshot,
-        walletByID: [UUID: LedgerWallet],
-        modelContext: ModelContext,
+        in index: ExistingAutoPaymentIndex,
         calendar: Calendar
     ) -> LedgerTransaction? {
-        guard let sourceWalletID = statement.paymentSourceWalletID else { return nil }
-        let transactions = (try? modelContext.fetch(FetchDescriptor<LedgerTransaction>())) ?? []
-        return transactions
-            .filter {
-                $0.primaryKind == .transfer
-                    && $0.transferSubtype == .internalTransfer
-                    && $0.entryStatus == .posted
-                    && !$0.isArchived
-                    && $0.deletedAt == nil
-                    && $0.sourceWallet?.id == sourceWalletID
-                    && $0.destinationWallet?.id == statement.walletID
-                    && $0.amountMinor == statement.amountMinor
-                    && calendar.isDate($0.occurredAt, inSameDayAs: statement.dueDate)
-            }
-            .max(by: { $0.updatedAt < $1.updatedAt })
+        index.transaction(for: statement, calendar: calendar)
     }
 
     private static func markOccurrencePaid(
