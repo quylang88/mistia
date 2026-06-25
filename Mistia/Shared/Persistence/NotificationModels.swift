@@ -655,6 +655,15 @@ enum MistiaNotificationStore {
         rows.filter { isVisible($0, to: userID, referenceDate: referenceDate) && !$0.isRead }.count
     }
 
+    static func unreadCount(
+        in context: ModelContext,
+        userID: UUID?,
+        referenceDate: Date = .now
+    ) -> Int {
+        let rows = (try? unreadRowsVisibleTo(userID, in: context)) ?? []
+        return rows.filter { isVisible($0, to: userID, referenceDate: referenceDate) }.count
+    }
+
     static func visibleRows(
         _ rows: [AppNotificationRecord],
         userID: UUID?,
@@ -756,8 +765,7 @@ enum MistiaNotificationStore {
         in context: ModelContext,
         userID: UUID?
     ) {
-        let rows = (try? context.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
-        let count = unreadCount(rows: rows, userID: userID)
+        let count = unreadCount(in: context, userID: userID)
         #if !SWIFT_PACKAGE
         MistiaNotificationBadgeManager.setBadgeCount(count)
         #endif

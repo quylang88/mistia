@@ -93,6 +93,9 @@ enum MistiaLocalNotificationScheduler {
         guard !cashWallets.isEmpty else { return }
 
         let nextMorning = nextLocalMorning(after: referenceDate, hour: 9, minute: 0)
+        let notificationCenter = UNUserNotificationCenter.current()
+        var inboxPayloads: [LocalReminderInboxPayload] = []
+        inboxPayloads.reserveCapacity(cashWallets.count)
 
         for wallet in cashWallets {
             let balance = balanceIndex.balance(
@@ -121,10 +124,9 @@ enum MistiaLocalNotificationScheduler {
                 content: content,
                 trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
             )
-            try? await UNUserNotificationCenter.current().add(request)
+            try? await notificationCenter.add(request)
 
-            upsertInboxRecord(
-                modelContext: modelContext,
+            inboxPayloads.append(LocalReminderInboxPayload(
                 key: identifier,
                 createdAt: nextMorning,
                 title: content.title,
@@ -134,8 +136,98 @@ enum MistiaLocalNotificationScheduler {
                 recipientUserID: recipientUserID,
                 resourceType: .wallet,
                 resourceID: wallet.id
-            )
+            ))
         }
+
+        upsertInboxRecords(
+            modelContext: modelContext,
+            payloads: inboxPayloads,
+            recipientUserID: recipientUserID
+        )
+    }
+
+    private static func upsertInboxRecords(
+        modelContext: ModelContext,
+        payloads: [LocalReminderInboxPayload],
+        recipientUserID: UUID
+    ) {
+        guard !payloads.isEmpty else { return }
+
+        var existingRecordsByKey = existingLowWalletInboxRecordsByKey(modelContext: modelContext)
+        var didMutate = false
+        for payload in payloads {
+            didMutate = upsertInboxRecord(
+                modelContext: modelContext,
+                payload: payload,
+                existingRecordsByKey: &existingRecordsByKey
+            ) || didMutate
+        }
+
+        if didMutate {
+            try? modelContext.save()
+            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
+        }
+    }
+
+    private static func existingLowWalletInboxRecordsByKey(
+        modelContext: ModelContext
+    ) -> [String: AppNotificationRecord] {
+        let lowWalletKindRawValue = MistiaAppNotificationKind.lowWallet.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.kindRawValue == lowWalletKindRawValue
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
+
+        return Dictionary(rows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
+    }
+
+    @discardableResult
+    private static func upsertInboxRecord(
+        modelContext: ModelContext,
+        payload: LocalReminderInboxPayload,
+        existingRecordsByKey: inout [String: AppNotificationRecord]
+    ) -> Bool {
+        if let existing = existingRecordsByKey[payload.key] {
+            existing.updatedAt = .now
+            existing.createdAt = payload.createdAt
+            existing.title = payload.title
+            existing.body = payload.body
+            existing.kind = payload.kind
+            existing.source = payload.source
+            existing.recipientUserID = payload.recipientUserID
+            existing.resourceType = payload.resourceType
+            existing.resourceID = payload.resourceID
+            existing.metadataJSON = payload.metadataJSON
+            return true
+        }
+
+        let row = AppNotificationRecord(
+            key: payload.key,
+            createdAt: payload.createdAt,
+            updatedAt: .now,
+            title: payload.title,
+            body: payload.body,
+            kind: payload.kind,
+            source: payload.source,
+            isRead: false,
+            actionRoute: nil,
+            recipientUserID: payload.recipientUserID,
+            resourceType: payload.resourceType,
+            resourceID: payload.resourceID,
+            metadataJSON: payload.metadataJSON
+        )
+        modelContext.insert(row)
+        existingRecordsByKey[payload.key] = row
+        return true
     }
 
     private static func removeStaleWalletReminderInboxRecords(
@@ -198,55 +290,23 @@ enum MistiaLocalNotificationScheduler {
         return calendar.date(byAdding: .day, value: 1, to: todayMorning) ?? todayMorning
     }
 
-    private static func upsertInboxRecord(
-        modelContext: ModelContext,
-        key: String,
-        createdAt: Date,
-        title: String,
-        body: String,
-        kind: MistiaAppNotificationKind,
-        source: MistiaAppNotificationSource,
-        recipientUserID: UUID,
-        resourceType: MistiaFamilyNotificationResourceType? = nil,
-        resourceID: UUID? = nil,
-        metadataJSON: String? = nil
-    ) {
-        let existing = (try? modelContext.fetch(
-            FetchDescriptor<AppNotificationRecord>(
-                predicate: #Predicate { $0.key == key }
-            )
-        ))?.first
-
-        if let existing {
-            existing.updatedAt = .now
-            existing.createdAt = createdAt
-            existing.title = title
-            existing.body = body
-            existing.kind = kind
-            existing.source = source
-            existing.recipientUserID = recipientUserID
-            existing.resourceType = resourceType
-            existing.resourceID = resourceID
-            existing.metadataJSON = metadataJSON
-        } else {
-            modelContext.insert(AppNotificationRecord(
-                key: key,
-                createdAt: createdAt,
-                updatedAt: .now,
-                title: title,
-                body: body,
-                kind: kind,
-                source: source,
-                isRead: false,
-                actionRoute: nil,
-                recipientUserID: recipientUserID,
-                resourceType: resourceType,
-                resourceID: resourceID,
-                metadataJSON: metadataJSON
-            ))
-        }
-
-        try? modelContext.save()
-        MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
+    private static func latestNotification(
+        _ lhs: AppNotificationRecord,
+        _ rhs: AppNotificationRecord
+    ) -> AppNotificationRecord {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
+}
+
+private struct LocalReminderInboxPayload {
+    let key: String
+    let createdAt: Date
+    let title: String
+    let body: String
+    let kind: MistiaAppNotificationKind
+    let source: MistiaAppNotificationSource
+    let recipientUserID: UUID
+    let resourceType: MistiaFamilyNotificationResourceType?
+    let resourceID: UUID?
+    var metadataJSON: String? = nil
 }
