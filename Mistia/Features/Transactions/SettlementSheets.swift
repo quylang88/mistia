@@ -1302,6 +1302,38 @@ struct SettlementEditorSheet: View {
         return existing + createdTransactions.filter { !existingIDs.contains($0.id) }
     }
 
+    private func guardSharedExpenseEventPermission(
+        ownerUserID: UUID?,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        guard let ownerUserID,
+              ownerUserID != sessionStore.activeLocalProfileUserID else {
+            return true
+        }
+
+        let isAllowed = switch scope {
+        case .create:
+            familyContextStore.canCreateEvent(for: ownerUserID)
+        case .edit:
+            familyContextStore.canEditEvent(for: ownerUserID)
+        case .use, .view:
+            familyContextStore.hasPermission(
+                ownerUserID: ownerUserID,
+                resourceType: .event,
+                resourceID: nil,
+                scope: scope
+            )
+        }
+
+        guard isAllowed else {
+            alertMessage = scope == .create
+                ? L10n.planning.planning.youDoNotHavePermissionToCreate(L10n.shared.persistence.notification.event)
+                : L10n.planning.planning.youDoNotHavePermissionToEdit(L10n.shared.persistence.notification.event)
+            return false
+        }
+        return true
+    }
+
     private func save() {
         switch target {
         case .newSharedExpense, .editSharedExpense:
@@ -1323,9 +1355,14 @@ struct SettlementEditorSheet: View {
         let ownerUserID = resolvedSharedExpenseOwnerUserID()
         let group: SettlementGroup
         let shouldDismissAfterSave: Bool
+        let requiredPermissionScope: MistiaFamilyPermissionScope
 
         switch target {
         case .newSharedExpense:
+            requiredPermissionScope = .create
+            guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: requiredPermissionScope) else {
+                return
+            }
             group = SettlementGroup(
                 kind: .sharedExpense,
                 status: .preparing,
@@ -1343,6 +1380,10 @@ struct SettlementEditorSheet: View {
             modelContext.insert(group)
             shouldDismissAfterSave = true
         case .editSharedExpense:
+            requiredPermissionScope = .edit
+            guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: requiredPermissionScope) else {
+                return
+            }
             guard let existingGroup = editingSharedExpenseGroup else {
                 alertMessage = L10n.transactions.settlement.settlementNotFound
                 return
@@ -1515,6 +1556,9 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = bill.sourceWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? activeOwnerUserID
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+            return
+        }
         bill.settlementGroupID = nil
         bill.settlementObligationID = nil
         bill.settlementRoleRawValue = nil
@@ -1580,6 +1624,9 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = bill.sourceWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? activeOwnerUserID
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+            return
+        }
         bill.settlementGroupID = group.id
         bill.settlementObligationID = nil
         bill.settlementRole = .sharedExpensePaid
@@ -1634,6 +1681,9 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = eventOwnerUserID(for: group)
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+            return
+        }
         group.isArchived = true
         group.archivedAt = now
         group.updatedAt = now
@@ -1666,6 +1716,9 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = eventOwnerUserID(for: group)
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+            return
+        }
         let groupTransactions = transactions.filter { $0.settlementGroupID == group.id && $0.deletedAt == nil }
         var updatedBills: [LedgerTransaction] = []
         var deletedGeneratedTransactions: [LedgerTransaction] = []
