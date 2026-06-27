@@ -295,15 +295,21 @@ private enum MistiaBudgetReminderMaintenance {
             includesStable: true,
             maximumCount: nil
         )
+        guard !alerts.isEmpty else { return }
 
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+        var existingBudgetWarningsByKey = existingBudgetWarningsByKey(
+            modelContext: modelContext,
+            monthKey: monthKey
+        )
         var didMutateNotifications = false
         for alert in alerts {
             didMutateNotifications = upsertBudgetWarning(
                 alert,
                 monthKey: monthKey,
                 recipientUserID: snapshot.activeUserID,
-                modelContext: modelContext
+                modelContext: modelContext,
+                existingBudgetWarningsByKey: &existingBudgetWarningsByKey
             ) || didMutateNotifications
         }
 
@@ -318,18 +324,13 @@ private enum MistiaBudgetReminderMaintenance {
         _ alert: OverviewBudgetAlertSnapshot,
         monthKey: String,
         recipientUserID: UUID,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        existingBudgetWarningsByKey: inout [String: AppNotificationRecord]
     ) -> Bool {
         let key = "mistia.budget.warning.\(alert.id.uuidString.lowercased()).\(monthKey)"
         let metadataJSON = budgetWarningMetadataJSON(health: alert.health)
 
-        let existing = (try? modelContext.fetch(
-            FetchDescriptor<AppNotificationRecord>(
-                predicate: #Predicate { $0.key == key }
-            )
-        ))?.first
-
-        if let existing {
+        if let existing = existingBudgetWarningsByKey[key] {
             let previousHealth = budgetWarningHealth(from: existing.metadataJSON)
             switch PlanningLogic.budgetNotificationTransition(
                 hasExistingNotification: true,
@@ -373,7 +374,7 @@ private enum MistiaBudgetReminderMaintenance {
             currentHealth: alert.health
         ) == .create else { return false }
         let presentation = budgetWarningPresentation(for: alert)
-        modelContext.insert(AppNotificationRecord(
+        let record = AppNotificationRecord(
             key: key,
             createdAt: .now,
             updatedAt: .now,
@@ -386,8 +387,32 @@ private enum MistiaBudgetReminderMaintenance {
             resourceType: .category,
             resourceID: alert.id,
             metadataJSON: metadataJSON
-        ))
+        )
+        modelContext.insert(record)
+        existingBudgetWarningsByKey[key] = record
         return true
+    }
+
+    private static func existingBudgetWarningsByKey(
+        modelContext: ModelContext,
+        monthKey: String
+    ) -> [String: AppNotificationRecord] {
+        let budgetWarningKindRawValue = MistiaAppNotificationKind.budgetWarning.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.kindRawValue == budgetWarningKindRawValue
+                }
+            )
+        )) ?? []
+        let keyPrefix = "mistia.budget.warning."
+        let keySuffix = ".\(monthKey)"
+        return Dictionary(
+            rows.lazy
+                .filter { $0.key.hasPrefix(keyPrefix) && $0.key.hasSuffix(keySuffix) }
+                .map { ($0.key, $0) },
+            uniquingKeysWith: latestNotification
+        )
     }
 
     private static func budgetWarningPresentation(
@@ -435,5 +460,12 @@ private enum MistiaBudgetReminderMaintenance {
             return nil
         }
         return PlanningBudgetHealth(rawValue: rawValue)
+    }
+
+    private static func latestNotification(
+        _ lhs: AppNotificationRecord,
+        _ rhs: AppNotificationRecord
+    ) -> AppNotificationRecord {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 }

@@ -19,19 +19,31 @@ enum MistiaLocalNotificationScheduler {
         guard let recipientUserID else { return }
 
         await requestAuthorizationIfNeeded()
-        removeStaleWalletReminderInboxRecords(
+        let existingLowWalletRows = existingLowWalletInboxRecords(modelContext: modelContext)
+        var existingLowWalletRecordsByKey = Dictionary(
+            existingLowWalletRows.map { ($0.key, $0) },
+            uniquingKeysWith: latestNotification
+        )
+        let didRemoveStaleRows = removeStaleWalletReminderInboxRecords(
             activeWalletIDs: Set(snapshot.activeWallets.map(\.id)),
             walletOwnerMap: snapshot.walletOwnerMap,
             recipientUserID: recipientUserID,
-            modelContext: modelContext
+            modelContext: modelContext,
+            existingRows: existingLowWalletRows,
+            existingRecordsByKey: &existingLowWalletRecordsByKey
         )
-        await scheduleLowWalletAlerts(
+        let didUpsertInboxRows = await scheduleLowWalletAlerts(
             wallets: snapshot.activeWallets,
             balanceIndex: snapshot.balanceIndex,
             referenceDate: referenceDate,
             recipientUserID: recipientUserID,
-            modelContext: modelContext
+            modelContext: modelContext,
+            existingRecordsByKey: &existingLowWalletRecordsByKey
         )
+        if didRemoveStaleRows || didUpsertInboxRows {
+            try? modelContext.save()
+            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
+        }
     }
 
     static func clearAllScheduledReminders() async {
@@ -86,11 +98,12 @@ enum MistiaLocalNotificationScheduler {
         balanceIndex: TransactionWalletBalanceIndex,
         referenceDate: Date,
         recipientUserID: UUID,
-        modelContext: ModelContext
-    ) async {
+        modelContext: ModelContext,
+        existingRecordsByKey: inout [String: AppNotificationRecord]
+    ) async -> Bool {
         // Phase 1 heuristic: only notify when a cash wallet balance is <= 0.
         let cashWallets = wallets.filter { $0.kind == .cash }
-        guard !cashWallets.isEmpty else { return }
+        guard !cashWallets.isEmpty else { return false }
 
         let nextMorning = nextLocalMorning(after: referenceDate, hour: 9, minute: 0)
         let notificationCenter = UNUserNotificationCenter.current()
@@ -139,21 +152,21 @@ enum MistiaLocalNotificationScheduler {
             ))
         }
 
-        upsertInboxRecords(
+        return upsertInboxRecords(
             modelContext: modelContext,
             payloads: inboxPayloads,
-            recipientUserID: recipientUserID
+            existingRecordsByKey: &existingRecordsByKey
         )
     }
 
+    @discardableResult
     private static func upsertInboxRecords(
         modelContext: ModelContext,
         payloads: [LocalReminderInboxPayload],
-        recipientUserID: UUID
-    ) {
-        guard !payloads.isEmpty else { return }
+        existingRecordsByKey: inout [String: AppNotificationRecord]
+    ) -> Bool {
+        guard !payloads.isEmpty else { return false }
 
-        var existingRecordsByKey = existingLowWalletInboxRecordsByKey(modelContext: modelContext)
         var didMutate = false
         for payload in payloads {
             didMutate = upsertInboxRecord(
@@ -163,19 +176,16 @@ enum MistiaLocalNotificationScheduler {
             ) || didMutate
         }
 
-        if didMutate {
-            try? modelContext.save()
-            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
-        }
+        return didMutate
     }
 
-    private static func existingLowWalletInboxRecordsByKey(
+    private static func existingLowWalletInboxRecords(
         modelContext: ModelContext
-    ) -> [String: AppNotificationRecord] {
+    ) -> [AppNotificationRecord] {
         let lowWalletKindRawValue = MistiaAppNotificationKind.lowWallet.rawValue
         let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
         let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
-        let rows = (try? modelContext.fetch(
+        return (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
                 predicate: #Predicate<AppNotificationRecord> { row in
                     row.kindRawValue == lowWalletKindRawValue
@@ -186,8 +196,6 @@ enum MistiaLocalNotificationScheduler {
                 }
             )
         )) ?? []
-
-        return Dictionary(rows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
     }
 
     @discardableResult
@@ -234,38 +242,26 @@ enum MistiaLocalNotificationScheduler {
         activeWalletIDs: Set<UUID>,
         walletOwnerMap: [UUID: UUID],
         recipientUserID: UUID,
-        modelContext: ModelContext
-    ) {
-        let lowWalletKindRawValue = MistiaAppNotificationKind.lowWallet.rawValue
-        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
-        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
-        let rows = (try? modelContext.fetch(
-            FetchDescriptor<AppNotificationRecord>(
-                predicate: #Predicate<AppNotificationRecord> { row in
-                    row.kindRawValue == lowWalletKindRawValue
-                        && (
-                            row.sourceRawValue == localReminderSourceRawValue
-                                || row.sourceRawValue == systemSourceRawValue
-                        )
-                }
-            )
-        )) ?? []
+        modelContext: ModelContext,
+        existingRows: [AppNotificationRecord],
+        existingRecordsByKey: inout [String: AppNotificationRecord]
+    ) -> Bool {
         var didDelete = false
 
-        for row in rows {
+        for row in existingRows {
             let walletID = row.resourceID ?? walletIDFromReminderKey(row.key)
             guard let walletID else { continue }
             let belongsToOtherUser = walletOwnerMap[walletID].map { $0 != recipientUserID } ?? false
             if belongsToOtherUser || !activeWalletIDs.contains(walletID) {
                 modelContext.delete(row)
+                if existingRecordsByKey[row.key]?.id == row.id {
+                    existingRecordsByKey.removeValue(forKey: row.key)
+                }
                 didDelete = true
             }
         }
 
-        if didDelete {
-            try? modelContext.save()
-            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
-        }
+        return didDelete
     }
 
     private static func walletIDFromReminderKey(_ key: String) -> UUID? {
