@@ -1,5 +1,11 @@
 import Foundation
 
+struct MistiaWalletPickerPreparedWallets {
+    fileprivate let snapshots: [MistiaWalletPickerWalletSnapshot]
+    fileprivate let walletByID: [UUID: LedgerWallet]
+    fileprivate let usableWalletIDs: Set<UUID>
+}
+
 struct MistiaWalletPickerAccess {
     let sessionStore: SessionStore
     let familyContextStore: FamilyContextStore
@@ -40,29 +46,50 @@ struct MistiaWalletPickerAccess {
         excludesCreditCards: Bool = false,
         excludedWalletID: UUID? = nil
     ) -> [LedgerWallet] {
-        let snapshots = walletSnapshots(from: wallets)
-        let walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
-        let usableWalletIDs = Set(
-            snapshots
-                .filter { snapshot in
-                    snapshot.ownerUserID == currentSelfUserID
-                        || familyContextStore.canUseWallet(walletID: snapshot.id, ownerUserID: snapshot.ownerUserID)
-                }
-                .map(\.id)
+        availableWallets(
+            from: preparedWallets(from: wallets),
+            preferredWalletIDs: preferredWalletIDs,
+            targetOwnerUserID: targetOwnerUserID,
+            excludesCreditCards: excludesCreditCards,
+            excludedWalletID: excludedWalletID
         )
+    }
 
+    func preparedWallets(from wallets: [LedgerWallet]) -> MistiaWalletPickerPreparedWallets {
+        let snapshots = walletSnapshots(from: wallets)
+        return MistiaWalletPickerPreparedWallets(
+            snapshots: snapshots,
+            walletByID: Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) }),
+            usableWalletIDs: Set(
+                snapshots
+                    .filter { snapshot in
+                        snapshot.ownerUserID == currentSelfUserID
+                            || familyContextStore.canUseWallet(walletID: snapshot.id, ownerUserID: snapshot.ownerUserID)
+                    }
+                    .map(\.id)
+            )
+        )
+    }
+
+    func availableWallets(
+        from preparedWallets: MistiaWalletPickerPreparedWallets,
+        preferredWalletIDs: Set<UUID> = [],
+        targetOwnerUserID: UUID?,
+        excludesCreditCards: Bool = false,
+        excludedWalletID: UUID? = nil
+    ) -> [LedgerWallet] {
         return MistiaWalletPickerAccessLogic.availableWallets(
-            from: snapshots,
+            from: preparedWallets.snapshots,
             context: MistiaWalletPickerAccessContext(
                 currentSelfUserID: currentSelfUserID,
                 targetOwnerUserID: targetOwnerUserID,
-                usableWalletIDs: usableWalletIDs,
+                usableWalletIDs: preparedWallets.usableWalletIDs,
                 preferredWalletIDs: preferredWalletIDs,
                 excludesCreditCards: excludesCreditCards,
                 excludedWalletID: excludedWalletID
             )
         )
-        .compactMap { walletByID[$0.id] }
+        .compactMap { preparedWallets.walletByID[$0.id] }
     }
 
     func title(

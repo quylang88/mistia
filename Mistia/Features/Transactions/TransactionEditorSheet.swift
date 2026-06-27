@@ -223,6 +223,35 @@ private struct TransactionEditorRenderContext {
     let ownerWalletLabelsByID: [UUID: String]
 }
 
+private struct TransactionEditorRenderContextCache {
+    let key: TransactionEditorRenderContextCacheKey
+    let context: TransactionEditorRenderContext
+}
+
+private struct TransactionEditorRenderContextCacheKey: Hashable {
+    let targetID: UUID
+    let primaryKindRawValue: String
+    let transferSubtypeRawValue: String?
+    let debtIntentRawValue: String?
+    let borrowDebtEntryModeRawValue: String
+    let sourceWalletID: UUID?
+    let destinationWalletID: UUID?
+    let familyRecipientUserID: UUID?
+    let categoryID: UUID?
+    let conversionModeRawValue: String
+    let primaryCurrencyCode: String
+    let activeScope: FamilyContext.Scope
+    let selectedSubjectUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let familyID: UUID?
+    let familyAccessSignature: Int
+    let walletSignature: MistiaCollectionChangeSignature
+    let categorySignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+}
+
 private struct TransactionEditorContextRowData: Identifiable {
     let id: String
     let title: String
@@ -280,6 +309,7 @@ struct TransactionEditorSheet: View {
     @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
     @State private var cachedCounterpartySuggestions: [TransactionTitleSuggestion] = []
     @State private var cachedSuggestionRecordSnapshots: [TransactionRecordSnapshot] = []
+    @State private var renderContextCache: TransactionEditorRenderContextCache?
     @State private var titleSuggestionRefreshTask: Task<Void, Never>?
     @State private var counterpartySuggestionRefreshTask: Task<Void, Never>?
     @State private var suppressTitleSuggestions = false
@@ -496,10 +526,11 @@ struct TransactionEditorSheet: View {
     }
 
     var body: some View {
+        let renderContextKey = renderContextCacheKey
         let isLockedByStatement = self.isLockedByStatement
         let isReadOnlyDetail = isLockedByStatement || isFamilyTransferDetail || isEventGeneratedSharedExpenseDebtDetail
         let areEditorControlsDisabled = isReadOnlyDetail || isSaving || isProcessingReceiptImage
-        let renderContext = makeRenderContext()
+        let renderContext = cachedRenderContext(for: renderContextKey)
         let showsSaveButton = shouldShowSaveButton
         let isSaveDisabled = isSaveButtonDisabled
 
@@ -736,6 +767,9 @@ struct TransactionEditorSheet: View {
                 scheduleCounterpartySuggestionsRefresh()
                 presentInitialReceiptScannerIfNeeded()
             }
+        }
+        .task(id: renderContextKey) {
+            refreshRenderContextCache(for: renderContextKey, context: renderContext)
         }
         .onDisappear {
             titleSuggestionRefreshTask?.cancel()
@@ -1421,6 +1455,98 @@ struct TransactionEditorSheet: View {
         Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
+    private func cachedRenderContext(
+        for key: TransactionEditorRenderContextCacheKey
+    ) -> TransactionEditorRenderContext {
+        if let renderContextCache, renderContextCache.key == key {
+            return renderContextCache.context
+        }
+
+        return makeRenderContext()
+    }
+
+    private func refreshRenderContextCache(
+        for key: TransactionEditorRenderContextCacheKey,
+        context: TransactionEditorRenderContext
+    ) {
+        renderContextCache = TransactionEditorRenderContextCache(
+            key: key,
+            context: context
+        )
+    }
+
+    private var renderContextCacheKey: TransactionEditorRenderContextCacheKey {
+        TransactionEditorRenderContextCacheKey(
+            targetID: target.id,
+            primaryKindRawValue: draft.primaryKind.rawValue,
+            transferSubtypeRawValue: draft.transferSubtype?.rawValue,
+            debtIntentRawValue: draft.debtIntent?.rawValue,
+            borrowDebtEntryModeRawValue: draft.borrowDebtEntryMode.rawValue,
+            sourceWalletID: draft.sourceWalletID,
+            destinationWalletID: draft.destinationWalletID,
+            familyRecipientUserID: draft.familyRecipientUserID,
+            categoryID: draft.categoryID,
+            conversionModeRawValue: draft.conversionModeRawValue,
+            primaryCurrencyCode: primaryCurrencyCode,
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            familyAccessSignature: familyAccessSignature,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.currentMembership?.role.rawValue)
+        hasher.combine(familyContextStore.currentMembership?.policy)
+        hasher.combine(sessionStore.summary?.displayName)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.displayName)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.policy)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
+    }
+
     private func makeRenderContext() -> TransactionEditorRenderContext {
         let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
             from: ownershipScopes,
@@ -1434,6 +1560,7 @@ struct TransactionEditorSheet: View {
         let currentSelfUserID = access.currentSelfUserID
         let categoryOwnerMap = ownerMaps[.category]
         let transactionOwnerMap = ownerMaps[.transaction]
+        let preparedWallets = access.preparedWallets(from: storedWallets)
         let selectedSourceWallet = storedWallets.first(where: { $0.id == draft.sourceWalletID })
         let selectedDestinationWallet = storedWallets.first(where: { $0.id == draft.destinationWalletID })
 
@@ -1463,7 +1590,7 @@ struct TransactionEditorSheet: View {
             target.transaction?.destinationWallet?.id
         ].compactMap { $0 })
         let availableWallets = access.availableWallets(
-            from: storedWallets,
+            from: preparedWallets,
             preferredWalletIDs: preferredWalletIDs,
             targetOwnerUserID: activeWalletOwnerUserID,
             excludesCreditCards: draft.primaryKind == .income
@@ -1485,14 +1612,14 @@ struct TransactionEditorSheet: View {
         }
         let availableSourceWalletsForFamilyTransfer = currentSelfUserID.map { userID in
             access.availableWallets(
-                from: storedWallets,
+                from: preparedWallets,
                 targetOwnerUserID: userID,
                 excludesCreditCards: true
             )
         } ?? []
         let availableDestinationWalletsForFamilyTransfer = draft.familyRecipientUserID.map { recipientUserID in
             access.availableWallets(
-                from: storedWallets,
+                from: preparedWallets,
                 targetOwnerUserID: recipientUserID
             )
         } ?? []
