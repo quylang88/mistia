@@ -49,19 +49,16 @@ enum MistiaRecurringBillMaintenance {
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let previousMonth = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
         let startOfToday = calendar.startOfDay(for: referenceDate)
+        let pendingDueItemsByBillID = pendingRecurringDueItemsByBillID(
+            bills: activeBills.map(\.planningSnapshot),
+            occurrences: snapshot.activeOccurrenceSnapshots,
+            selectedMonths: [previousMonth, selectedMonth],
+            calendar: calendar
+        )
 
         for bill in activeBills {
             let snap = bill.planningSnapshot
-            let dueItems = [previousMonth, selectedMonth]
-                .flatMap { month in
-                    PlanningLogic.recurringBillDueItems(
-                        bills: [snap],
-                        occurrences: snapshot.activeOccurrenceSnapshots,
-                        selectedMonth: month,
-                        calendar: calendar
-                    )
-                }
-                .filter { $0.status == .pending }
+            let dueItems = pendingDueItemsByBillID[bill.id] ?? []
 
             for dueItem in dueItems {
                 let cycleMonthKey = PlanningLogic.monthKey(for: dueItem.paymentStartDate, calendar: calendar)
@@ -180,6 +177,32 @@ enum MistiaRecurringBillMaintenance {
                 }
             }
         }
+    }
+
+    private static func pendingRecurringDueItemsByBillID(
+        bills: [PlanningBillSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        selectedMonths: [Date],
+        calendar: Calendar
+    ) -> [UUID: [PlanningRecurringDueSnapshot]] {
+        guard !bills.isEmpty, !selectedMonths.isEmpty else { return [:] }
+
+        var dueItemsByBillID: [UUID: [PlanningRecurringDueSnapshot]] = [:]
+        dueItemsByBillID.reserveCapacity(bills.count)
+
+        for selectedMonth in selectedMonths {
+            let dueItems = PlanningLogic.recurringBillDueItems(
+                bills: bills,
+                occurrences: occurrences,
+                selectedMonth: selectedMonth,
+                calendar: calendar
+            )
+            for dueItem in dueItems where dueItem.status == .pending && dueItem.sourceKind == .recurringBill {
+                dueItemsByBillID[dueItem.sourceID, default: []].append(dueItem)
+            }
+        }
+
+        return dueItemsByBillID
     }
 
     // MARK: - Auto-pay
