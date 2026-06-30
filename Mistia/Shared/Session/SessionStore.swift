@@ -1358,11 +1358,36 @@ final class SessionStore {
 
         syncCoordinator.removeQueuedMutation(entity: entity, recordID: recordID)
         clearFamilyOwnerPushConflict(entity: entity, recordID: recordID)
+        lastErrorMessage = nil
         pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
 
         await familyContextStore.refreshAccessibleFinance(
             sessionStore: self,
             userIDs: [conflict.ownerUserID],
+            preserveLocalNewerRows: false
+        )
+    }
+
+    func discardAllFamilyOwnerPushConflictsAndRefresh(
+        familyContextStore: FamilyContextStore
+    ) async {
+        let conflicts = familyOwnerPushConflicts
+        guard !conflicts.isEmpty else { return }
+
+        for conflict in conflicts {
+            syncCoordinator.removeQueuedMutation(
+                entity: conflict.entity,
+                recordID: conflict.recordID
+            )
+        }
+        familyOwnerPushConflicts.removeAll()
+        persistFamilyOwnerPushConflicts()
+        lastErrorMessage = nil
+        pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
+
+        await familyContextStore.refreshAccessibleFinance(
+            sessionStore: self,
+            userIDs: Set(conflicts.map(\.ownerUserID)),
             preserveLocalNewerRows: false
         )
     }
@@ -2863,12 +2888,15 @@ final class SessionStore {
         pendingFamilyOwnerPush = false
         queuedFamilyOwnerPushTask = nil
         do {
-            _ = try await syncCoordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
+            let summary = try await syncCoordinator.pushQueuedFamilyOwnerMutationsCloudFirstCollectingConflicts(
                 mutations,
                 session: session
             )
+            for conflict in summary.conflicts {
+                recordFamilyOwnerPushConflict(for: conflict)
+            }
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
-            return true
+            return summary.pushedMutations
         } catch {
             recordFamilyOwnerPushConflictIfNeeded(from: error)
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)

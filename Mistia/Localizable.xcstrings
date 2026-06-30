@@ -10673,6 +10673,94 @@
         }
       }
     },
+    "management.managementauth.cloudChangedRefreshAction" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh now"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今すぐ更新"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Làm mới ngay"
+          }
+        }
+      }
+    },
+    "management.managementauth.cloudChangedRefreshMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some items already have a newer cloud version, so only those pending edits need a refresh before you try again. Other changes continue to upload normally."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の項目はクラウド側に新しい版があるため、その未送信の編集だけ更新してから再試行する必要があります。他の変更は通常どおりアップロードされます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Một số mục đã có bản mới hơn trên cloud, nên chỉ các chỉnh sửa đang chờ của những mục đó cần làm mới trước khi thử lại. Các thay đổi khác vẫn tiếp tục được đẩy bình thường."
+          }
+        }
+      }
+    },
+    "management.managementauth.cloudChangedRefreshTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh changed cloud data"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クラウドで変わったデータを更新"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Làm mới dữ liệu đã đổi trên cloud"
+          }
+        }
+      }
+    },
+    "management.managementauth.cloudChangedRefreshing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refreshing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新中"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đang làm mới"
+          }
+        }
+      }
+    },
     "management.managementauth.confirmPassword" : {
       "extractionState" : "stale",
       "localizations" : {

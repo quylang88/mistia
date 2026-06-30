@@ -160,6 +160,93 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         }
     }
 
+    func testFamilyCloudFirstPushContinuesAfterRemoteChangedConflict() async throws {
+        let viewerUserID = UUID()
+        let memberUserID = UUID()
+        let conflictedCategoryID = UUID()
+        let freshCategoryID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+        try insertCustomCategory(
+            id: conflictedCategoryID,
+            name: "Local member category",
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt,
+            remoteVersion: 1,
+            in: container
+        )
+        try insertCustomCategory(
+            id: freshCategoryID,
+            name: "Fresh member category",
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt.addingTimeInterval(60),
+            remoteVersion: 0,
+            in: container
+        )
+
+        let remoteRow = RemoteTransactionCategory(
+            userID: memberUserID,
+            id: conflictedCategoryID,
+            name: "Cloud member category",
+            kindRawValue: TransactionCategoryKind.expense.rawValue,
+            iconSymbolName: "fork.knife",
+            iconColorHex: "#FF8A00",
+            isFavorite: false,
+            parentCategoryID: nil,
+            hierarchyRoleRawValue: TransactionCategoryHierarchyRole.child.rawValue,
+            systemKey: nil,
+            isSystem: false,
+            sortOrder: 20,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: updatedAt,
+            updatedAt: updatedAt.addingTimeInterval(600),
+            deletedAt: nil,
+            syncVersion: 2,
+            lastModifiedByDeviceID: UUID()
+        )
+        let remoteStore = FamilyConflictRemoteStore(remoteRecord: .category(remoteRow))
+        let outbox = MistiaSyncOutbox(
+            defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+            key: "family-conflict-continues"
+        )
+        let coordinator = SyncCoordinator(
+            modelContainer: container,
+            remoteStore: remoteStore,
+            outbox: outbox,
+            deviceID: UUID()
+        )
+        let conflictMutation = MistiaSyncMutation(
+            entity: .category,
+            recordID: conflictedCategoryID,
+            subjectUserID: memberUserID,
+            kind: .upsert,
+            modifiedAt: updatedAt.addingTimeInterval(900),
+            baseVersion: 1
+        )
+        let freshMutation = MistiaSyncMutation(
+            entity: .category,
+            recordID: freshCategoryID,
+            subjectUserID: memberUserID,
+            kind: .upsert,
+            modifiedAt: updatedAt.addingTimeInterval(960),
+            baseVersion: 0
+        )
+        coordinator.queue([conflictMutation, freshMutation])
+
+        let summary = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirstCollectingConflicts(
+            [conflictMutation, freshMutation],
+            session: makeSession(userID: viewerUserID)
+        )
+
+        XCTAssertTrue(summary.pushedMutations)
+        XCTAssertEqual(summary.conflicts, [conflictMutation])
+        XCTAssertEqual(remoteStore.createdRecords.count, 1)
+        XCTAssertEqual(remoteStore.createSubjectUserIDs, [memberUserID])
+        XCTAssertTrue(outbox.contains(entity: .category, recordID: conflictedCategoryID))
+        XCTAssertFalse(outbox.contains(entity: .category, recordID: freshCategoryID))
+    }
+
     func testFamilyCloudFirstTransactionCreateDoesNotBootstrapCategoryCatalog() async throws {
         let viewerUserID = UUID()
         let memberUserID = UUID()

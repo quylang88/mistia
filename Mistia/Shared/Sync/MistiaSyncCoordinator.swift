@@ -200,6 +200,15 @@ enum MistiaFamilyCloudFirstPushError: LocalizedError {
     }
 }
 
+struct MistiaFamilyCloudFirstPushSummary: Equatable {
+    let pushedMutations: Bool
+    let conflicts: [MistiaSyncMutation]
+
+    var hasConflicts: Bool {
+        !conflicts.isEmpty
+    }
+}
+
 private nonisolated struct SyncRemoteSystemCategoryKey: Hashable {
     let userID: UUID
     let systemKey: String
@@ -519,30 +528,54 @@ final class SyncCoordinator {
         _ mutations: [MistiaSyncMutation],
         session: SupabaseAuthSession
     ) async throws -> Bool {
+        let summary = try await pushQueuedFamilyOwnerMutationsCloudFirstCollectingConflicts(
+            mutations,
+            session: session
+        )
+        if let conflict = summary.conflicts.first {
+            throw MistiaFamilyCloudFirstPushError.remoteChanged(conflict)
+        }
+        return summary.pushedMutations
+    }
+
+    func pushQueuedFamilyOwnerMutationsCloudFirstCollectingConflicts(
+        _ mutations: [MistiaSyncMutation],
+        session: SupabaseAuthSession
+    ) async throws -> MistiaFamilyCloudFirstPushSummary {
         let familyMutations = mutations.filter { $0.subjectUserID != session.user.id }
-        guard !familyMutations.isEmpty else { return false }
+        guard !familyMutations.isEmpty else {
+            return MistiaFamilyCloudFirstPushSummary(pushedMutations: false, conflicts: [])
+        }
 
         var pushedMutations = false
+        var conflicts: [MistiaSyncMutation] = []
         let groupedByOwner = Dictionary(grouping: familyMutations, by: \.subjectUserID)
         let ownerIDs = groupedByOwner.keys.sorted { $0.uuidString < $1.uuidString }
 
         for ownerID in ownerIDs {
             let ownerMutations = groupedByOwner[ownerID] ?? []
             for mutation in await sortedMutationsForPush(ownerMutations) {
-                switch mutation.kind {
-                case .upsert:
-                    if try await processFamilyOwnerUpsertMutation(mutation, session: session) {
-                        pushedMutations = true
+                do {
+                    switch mutation.kind {
+                    case .upsert:
+                        if try await processFamilyOwnerUpsertMutation(mutation, session: session) {
+                            pushedMutations = true
+                        }
+                    case .delete:
+                        if try await processFamilyOwnerDeleteMutation(mutation, session: session) {
+                            pushedMutations = true
+                        }
                     }
-                case .delete:
-                    if try await processFamilyOwnerDeleteMutation(mutation, session: session) {
-                        pushedMutations = true
-                    }
+                } catch MistiaFamilyCloudFirstPushError.remoteChanged(let conflictMutation) {
+                    conflicts.append(conflictMutation)
                 }
             }
         }
 
-        return pushedMutations
+        return MistiaFamilyCloudFirstPushSummary(
+            pushedMutations: pushedMutations,
+            conflicts: conflicts
+        )
     }
 
     func resolveConflict(

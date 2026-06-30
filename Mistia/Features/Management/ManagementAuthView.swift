@@ -151,6 +151,7 @@ struct ManagementAccountView: View {
     @State private var isConfirmPasswordVisible = false
     @State private var isEmailAuthExpanded = false
     @State private var destination: ManagementProfileDestination?
+    @State private var isRefreshingCloudChangedItems = false
     @FocusState private var focusedField: ManagementAuthInput?
     
     @Environment(\.colorScheme) private var colorScheme
@@ -388,7 +389,21 @@ struct ManagementAccountView: View {
                 }
             }
 
-            if let lastErrorMessage = sessionStore.lastErrorMessage {
+            if !sessionStore.familyOwnerPushConflicts.isEmpty {
+                ManagementInlineMessageCard(
+                    title: L10n.management.managementauth.cloudChangedRefreshTitle,
+                    message: L10n.management.managementauth.cloudChangedRefreshMessage,
+                    accent: .orange,
+                    actionTitle: isRefreshingCloudChangedItems
+                        ? L10n.management.managementauth.cloudChangedRefreshing
+                        : L10n.management.managementauth.cloudChangedRefreshAction,
+                    actionSystemImage: "arrow.triangle.2.circlepath.icloud",
+                    isActionDisabled: !sessionStore.canPerformRemoteActions,
+                    showsActionProgress: isRefreshingCloudChangedItems
+                ) {
+                    refreshCloudChangedItems()
+                }
+            } else if let lastErrorMessage = sessionStore.lastErrorMessage {
                 ManagementInlineMessageCard(
                     title: L10n.management.managementauth.latestIssue,
                     message: lastErrorMessage,
@@ -439,6 +454,18 @@ struct ManagementAccountView: View {
                     await sessionStore.deleteAccountKeepingLocalData()
                 }
             }
+        }
+    }
+
+    private func refreshCloudChangedItems() {
+        guard !isRefreshingCloudChangedItems else { return }
+        isRefreshingCloudChangedItems = true
+
+        Task { @MainActor in
+            await sessionStore.discardAllFamilyOwnerPushConflictsAndRefresh(
+                familyContextStore: familyContextStore
+            )
+            isRefreshingCloudChangedItems = false
         }
     }
 
@@ -3964,11 +3991,36 @@ private struct ManagementInlineMessageCard: View {
     let title: String
     let message: String
     let accent: Color
+    let actionTitle: String?
+    let actionSystemImage: String?
+    let isActionDisabled: Bool
+    let showsActionProgress: Bool
+    let action: (() -> Void)?
     @Environment(\.colorScheme) private var colorScheme
+
+    init(
+        title: String,
+        message: String,
+        accent: Color,
+        actionTitle: String? = nil,
+        actionSystemImage: String? = nil,
+        isActionDisabled: Bool = false,
+        showsActionProgress: Bool = false,
+        action: (() -> Void)? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.accent = accent
+        self.actionTitle = actionTitle
+        self.actionSystemImage = actionSystemImage
+        self.isActionDisabled = isActionDisabled
+        self.showsActionProgress = showsActionProgress
+        self.action = action
+    }
 
     var body: some View {
         MistiaGlassCard(cornerRadius: 20, tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.14)) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(title)
                     .font(.system(size: 14.5, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
@@ -3977,9 +4029,47 @@ private struct ManagementInlineMessageCard: View {
                     .font(.system(size: 13.5, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let actionTitle, let action {
+                    Button(action: action) {
+                        HStack(spacing: 8) {
+                            if showsActionProgress {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(accent)
+                            } else if let actionSystemImage {
+                                Image(systemName: actionSystemImage)
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+
+                            Text(actionTitle)
+                                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(actionForegroundColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(actionBackgroundColor, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isActionDisabled || showsActionProgress)
+                    .opacity(isActionDisabled ? 0.55 : 1)
+                    .padding(.top, 2)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var actionForegroundColor: Color {
+        isActionDisabled ? .secondary : accent
+    }
+
+    private var actionBackgroundColor: Color {
+        if isActionDisabled {
+            return Color.secondary.opacity(colorScheme == .dark ? 0.12 : 0.08)
+        }
+
+        return accent.opacity(colorScheme == .dark ? 0.18 : 0.12)
     }
 }
 
