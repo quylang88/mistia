@@ -2128,15 +2128,7 @@ private struct ManagementSyncConflictCard: View {
     }
 
     private var visibleDifferences: [MistiaSyncConflictDifference] {
-        let userFacingDifferences = friendlyDifferences.filter { !isInternalConflictField($0.id) }
-        let semanticDifferences = userFacingDifferences.filter { !isMetadataConflictField($0.id) }
-        if !semanticDifferences.isEmpty {
-            return Array(semanticDifferences.prefix(3))
-        }
-        if !userFacingDifferences.isEmpty {
-            return Array(userFacingDifferences.prefix(2))
-        }
-        return []
+        MistiaSyncConflictPresentation.visibleDifferences(from: friendlyDifferences)
     }
 
     private var recordTitle: String {
@@ -2172,18 +2164,22 @@ private struct ManagementSyncConflictCard: View {
     }
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 22, tint: cardTint) {
+        MistiaGlassCard(cornerRadius: 20, tint: cardTint) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 12) {
                     ZStack {
-                        Circle()
-                            .fill(accent.opacity(colorScheme == .dark ? 0.20 : 0.13))
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(iconTileFill)
 
                         Image(systemName: conflict.entity.managementConflictSystemImageName)
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(accent)
                     }
-                    .frame(width: 36, height: 36)
+                    .frame(width: 38, height: 38)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(iconTileBorder, lineWidth: 0.75)
+                    }
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(recordTitle)
@@ -2211,18 +2207,23 @@ private struct ManagementSyncConflictCard: View {
                         .padding(.vertical, 10)
                     } else {
                         ForEach(Array(visibleDifferences.enumerated()), id: \.element.id) { index, difference in
-                            ManagementConflictCompactDifferenceRow(difference: difference)
+                            ManagementConflictComparisonRow(
+                                difference: difference,
+                                accent: accent
+                            )
 
                             if index < visibleDifferences.count - 1 {
                                 Divider()
-                                    .padding(.leading, 92)
                             }
                         }
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.vertical, 6)
+                .background(
+                    Color(UIColor.tertiarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
@@ -2244,9 +2245,12 @@ private struct ManagementSyncConflictCard: View {
             onResolve(.useLocal)
         } label: {
             Label(
-                L10n.management.managementauth.useLocal,
-                systemImage: "icloud.and.arrow.up.fill"
+                L10n.management.managementauth.syncConflictKeepThisDevice,
+                systemImage: "iphone"
             )
+            .font(.system(size: 13.5, weight: .bold, design: .rounded))
+            .lineLimit(2)
+            .minimumScaleFactor(0.88)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
@@ -2257,9 +2261,12 @@ private struct ManagementSyncConflictCard: View {
             onResolve(.useRemote)
         } label: {
             Label(
-                L10n.management.managementauth.useCloud,
-                systemImage: "icloud.and.arrow.down.fill"
+                L10n.management.managementauth.syncConflictKeepCloud,
+                systemImage: "icloud"
             )
+            .font(.system(size: 13.5, weight: .bold, design: .rounded))
+            .lineLimit(2)
+            .minimumScaleFactor(0.88)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glass)
@@ -2273,33 +2280,14 @@ private struct ManagementSyncConflictCard: View {
             : accent.opacity(0.10)
     }
 
-    private func isInternalConflictField(_ id: String) -> Bool {
-        let normalized = id
-            .replacingOccurrences(of: "_", with: "")
-            .replacingOccurrences(of: "-", with: "")
-            .lowercased()
-        return normalized == "id"
-            || normalized == "uid"
-            || normalized == "recordid"
-            || normalized.hasSuffix("userid")
-            || normalized.hasSuffix("deviceid")
-            || normalized == "device"
-            || normalized.contains("device")
-            || normalized == "systemkey"
-            || normalized == "synckey"
-            || normalized == "syncversion"
-            || normalized == "version"
+    private var iconTileFill: Color {
+        colorScheme == .dark
+            ? Color(UIColor.tertiarySystemFill)
+            : accent.opacity(0.13)
     }
 
-    private func isMetadataConflictField(_ id: String) -> Bool {
-        let normalized = id
-            .replacingOccurrences(of: "_", with: "")
-            .replacingOccurrences(of: "-", with: "")
-            .lowercased()
-        return normalized == "updatedat"
-            || normalized == "deletedat"
-            || normalized == "createdat"
-            || normalized == "archivedat"
+    private var iconTileBorder: Color {
+        colorScheme == .dark ? Color.white.opacity(0.08) : Color.clear
     }
 }
 
@@ -2475,56 +2463,66 @@ private struct ManagementConflictReferenceResolver {
     }
 }
 
-private struct ManagementConflictCompactDifferenceRow: View {
+private struct ManagementConflictComparisonRow: View {
     let difference: MistiaSyncConflictDifference
+    let accent: Color
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
             Text(difference.fieldTitle)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
-                .frame(width: 78, alignment: .leading)
                 .lineLimit(2)
 
-            VStack(alignment: .leading, spacing: 3) {
-                ManagementConflictCompactValueLine(
-                    title: L10n.management.managementauth.local,
-                    value: difference.localValue
+            HStack(alignment: .top, spacing: 10) {
+                ManagementConflictComparisonValueColumn(
+                    title: L10n.management.managementauth.syncConflictThisDevice,
+                    systemImage: "iphone",
+                    value: difference.localValue,
+                    tint: accent
                 )
 
-                ManagementConflictCompactValueLine(
-                    title: L10n.management.managementauth.cloud,
-                    value: difference.remoteValue
+                Divider()
+
+                ManagementConflictComparisonValueColumn(
+                    title: L10n.management.managementauth.syncConflictCloud,
+                    systemImage: "icloud",
+                    value: difference.remoteValue,
+                    tint: MistiaAccent.sky.color
                 )
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
     }
 }
 
-private struct ManagementConflictCompactValueLine: View {
+private struct ManagementConflictComparisonValueColumn: View {
     let title: String
+    let systemImage: String
     let value: String
+    let tint: Color
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title)
+        VStack(alignment: .leading, spacing: 5) {
+            Label(title, systemImage: systemImage)
                 .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .frame(width: 34, alignment: .leading)
+                .foregroundStyle(tint)
+                .lineLimit(1)
 
             Text(value)
                 .font(.system(size: 12.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 private struct ManagementConflictSectionHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let section: ManagementSyncConflictSection
     let accent: Color
 
@@ -2534,7 +2532,7 @@ private struct ManagementConflictSectionHeader: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(accent)
                 .frame(width: 28, height: 28)
-                .background(accent.opacity(0.12), in: Circle())
+                .background(sectionIconFill, in: Circle())
 
             Text(section.title)
                 .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -2549,6 +2547,12 @@ private struct ManagementConflictSectionHeader: View {
                 .padding(.vertical, 4)
                 .background(MistiaAccent.purple.color, in: Capsule())
         }
+    }
+
+    private var sectionIconFill: Color {
+        colorScheme == .dark
+            ? Color(UIColor.tertiarySystemFill)
+            : accent.opacity(0.12)
     }
 }
 
@@ -2574,7 +2578,7 @@ private struct ManagementDataConflictsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: L10n.management.managementauth.dataManagement,
+            title: L10n.management.managementauth.manageSyncedData,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -2600,6 +2604,11 @@ private struct ManagementDataConflictsView: View {
                 )
             } else {
                 VStack(spacing: 20) {
+                    ManagementConflictReviewSummaryCard(
+                        count: activeConflicts.count,
+                        accent: accent
+                    )
+
                     ForEach(conflictSections) { section in
                         VStack(alignment: .leading, spacing: 12) {
                             ManagementConflictSectionHeader(section: section, accent: accent)
@@ -2625,6 +2634,63 @@ private struct ManagementDataConflictsView: View {
                 }
             }
         }
+    }
+}
+
+private struct ManagementConflictReviewSummaryCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let count: Int
+    let accent: Color
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 20, tint: cardTint) {
+            HStack(alignment: .center, spacing: 13) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(iconFill)
+
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(accent)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.management.managementauth.syncConflictReviewTitle)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(L10n.management.managementauth.syncConflictReviewSubtitle)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(verbatim: "\(count)")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(accent, in: Capsule())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark
+            ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
+            : accent.opacity(0.10)
+    }
+
+    private var iconFill: Color {
+        colorScheme == .dark
+            ? Color(UIColor.tertiarySystemFill)
+            : accent.opacity(0.13)
     }
 }
 
@@ -3788,7 +3854,8 @@ struct ManagementSyncSettingsView: View {
                         badge: {
                             storedConflicts.isEmpty ? nil : "\(storedConflicts.count)"
                         }(),
-                        badgeAccent: .purple
+                        badgeAccent: .purple,
+                        usesDarkReadableIconStyle: true
                     ) {
                         if !storedConflicts.isEmpty {
                             destination = .dataManagement

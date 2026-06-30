@@ -60,6 +60,7 @@ let package = Package(
                 "CoreLogic/MistiaCalendarSelectionLogic.swift",
                 "CoreLogic/MistiaResetSupport.swift",
                 "CoreLogic/MistiaShortcutLogic.swift",
+                "CoreLogic/MistiaSyncConflictPresentation.swift",
                 "CoreLogic/MistiaSystemCategoryIdentity.swift",
                 "CoreLogic/MistiaSystemCategoryRegistry.swift",
                 "CoreLogic/MistiaWalletPickerAccessLogic.swift",
