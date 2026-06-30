@@ -74,6 +74,7 @@ private enum TransactionsAlertPresentation: Identifiable {
     case info(TransactionsInfoAlert)
     case permission(TransactionsPermissionPrompt)
     case familyOwnerConflict(TransactionsFamilyOwnerConflictAlert)
+    case exportError(String)
 
     var id: String {
         switch self {
@@ -83,6 +84,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             return prompt.id.uuidString
         case .familyOwnerConflict(let alert):
             return alert.id
+        case .exportError(let message):
+            return "exportError-\(message.hashValue)"
         }
     }
 
@@ -94,6 +97,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             prompt.title
         case .familyOwnerConflict:
             L10n.shared.sync.familyOwnerPushConflict.alertTitle
+        case .exportError:
+            L10n.transactions.transactions.couldnTExportStatement
         }
     }
 
@@ -105,6 +110,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             prompt.message
         case .familyOwnerConflict:
             L10n.shared.sync.familyOwnerPushConflict.alertMessage
+        case .exportError(let message):
+            message
         }
     }
 }
@@ -402,6 +409,9 @@ struct TransactionsView: View {
         }
         if let infoAlert {
             return .info(infoAlert)
+        }
+        if let exportErrorMessage {
+            return .exportError(exportErrorMessage)
         }
         return nil
     }
@@ -1115,6 +1125,7 @@ struct TransactionsView: View {
                         familyOwnerConflictAlert = nil
                         permissionPrompt = nil
                         infoAlert = nil
+                        exportErrorMessage = nil
                     }
                 }
             ),
@@ -1141,26 +1152,13 @@ struct TransactionsView: View {
                     prompt.action()
                 }
                 Button(L10n.common.cancel, role: .cancel) {}
+            case .exportError:
+                Button(L10n.transactions.transactions.close, role: .cancel) {
+                    exportErrorMessage = nil
+                }
             }
         } message: { alert in
             Text(alert.message)
-        }
-        .alert(
-            L10n.transactions.transactions.couldnTExportStatement,
-            isPresented: Binding(
-                get: { exportErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        exportErrorMessage = nil
-                    }
-                }
-            )
-        ) {
-            Button(L10n.transactions.transactions.close, role: .cancel) {
-                exportErrorMessage = nil
-            }
-        } message: {
-            Text((exportErrorMessage ?? ""))
         }
         .onChange(of: selectedSegment) { _, _ in
             resetTransactionPage()
