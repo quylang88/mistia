@@ -135,6 +135,7 @@ enum PlanningPersistenceError: LocalizedError {
     case missingWallet
     case missingDestinationWallet
     case missingCategory
+    case insufficientWalletBalance
 
     var errorDescription: String? {
         switch self {
@@ -144,6 +145,8 @@ enum PlanningPersistenceError: LocalizedError {
             L10n.planning.planning.theDestinationCreditCardCouldNotBe
         case .missingCategory:
             L10n.planning.planning.theSystemCategoryForThisPaymentCould
+        case .insufficientWalletBalance:
+            L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
         }
     }
 }
@@ -188,6 +191,17 @@ enum PlanningPersistenceSupport {
         calendar: Calendar = MistiaCalendar.current
     ) throws -> PlanningSavedDuePayment {
         let now = Date()
+
+        guard let sourceWallet = wallets.first(where: { $0.id == draft.sourceWalletID }) else {
+            throw PlanningPersistenceError.missingWallet
+        }
+        try validateSourceWalletCanCoverPayment(
+            sourceWallet: sourceWallet,
+            amountMinor: draft.amountMinor,
+            wallets: wallets,
+            modelContext: modelContext
+        )
+
         let transaction = LedgerTransaction(
             primaryKind: draft.primaryKind,
             transferSubtype: draft.transferSubtype,
@@ -200,10 +214,6 @@ enum PlanningPersistenceSupport {
         transaction.amountMinor = draft.amountMinor
         transaction.occurredAt = now
         transaction.updatedAt = now
-
-        guard let sourceWallet = wallets.first(where: { $0.id == draft.sourceWalletID }) else {
-            throw PlanningPersistenceError.missingWallet
-        }
         transaction.sourceWallet = sourceWallet
 
         if let destinationWalletID = draft.destinationWalletID {
@@ -262,6 +272,49 @@ enum PlanningPersistenceSupport {
             occurrenceID: occurrence.id,
             subjectUserID: subjectUserID
         )
+    }
+
+    private static func validateSourceWalletCanCoverPayment(
+        sourceWallet: LedgerWallet,
+        amountMinor: Int64,
+        wallets: [LedgerWallet],
+        modelContext: ModelContext
+    ) throws {
+        guard amountMinor > 0 else { return }
+
+        let activeTransactions = try modelContext.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { $0.deletedAt == nil }
+            )
+        )
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: wallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: activeTransactions.lazy.map(\.planningRecordSnapshot)
+        )
+        let sourceSnapshot = TransactionWalletSnapshot(
+            id: sourceWallet.id,
+            kind: sourceWallet.kind,
+            openingBalanceMinor: sourceWallet.openingBalanceMinor
+        )
+        let currentBalance = balanceIndex.balance(for: sourceSnapshot)
+
+        if sourceWallet.kind == .creditCard {
+            let currentDebt = max(currentBalance, 0)
+            let availableCredit = max((sourceWallet.creditCardProfile?.creditLimitMinor ?? 0) - currentDebt, 0)
+            guard availableCredit >= amountMinor else {
+                throw PlanningPersistenceError.insufficientWalletBalance
+            }
+        } else {
+            guard currentBalance >= amountMinor else {
+                throw PlanningPersistenceError.insufficientWalletBalance
+            }
+        }
     }
 
     @discardableResult
