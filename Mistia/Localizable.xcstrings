@@ -35825,25 +35825,25 @@
         }
       }
     },
-    "shared.sync.mistiasynccoordinator.thisDataChangedInTheCloudRefresh" : {
+    "shared.sync.mistiasynccoordinator.cloudChangedRefreshRequired" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This data changed in the cloud. Refresh and try again."
+            "value" : "Some items have a newer cloud version. Refresh the changed data and try again; other changes continue to upload."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "このデータはクラウドで変更されました。更新してからもう一度お試しください。"
+            "value" : "一部の項目はクラウド側に新しい版があります。変更されたデータを更新してから再試行してください。他の変更は引き続きアップロードされます。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dữ liệu hiện tại đã thay đổi trên cloud. Vui lòng làm mới rồi thử lại."
+            "value" : "Một số mục đã có bản mới hơn trên cloud. Làm mới dữ liệu đã đổi rồi thử lại; các thay đổi khác vẫn tiếp tục được đẩy."
           }
         }
       }

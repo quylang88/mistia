@@ -196,7 +196,7 @@ enum MistiaFamilyCloudFirstPushError: LocalizedError {
     }
 
     var errorDescription: String? {
-        L10n.shared.sync.mistiasynccoordinator.thisDataChangedInTheCloudRefresh
+        L10n.shared.sync.mistiasynccoordinator.cloudChangedRefreshRequired
     }
 }
 
