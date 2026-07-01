@@ -1612,6 +1612,52 @@ nonisolated enum PlanningLogic {
         .sorted(by: dueSort)
     }
 
+    static func calculateCreditCardDebtAndAvailable(
+        account: PlanningCreditCardAccountSnapshot,
+        creditLimitMinor: Int64,
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> (debt: Int64, available: Int64) {
+        let walletOpenMonth = startOfMonth(for: account.openedAt, calendar: calendar)
+        let currentMonth = startOfMonth(for: referenceDate, calendar: calendar)
+        
+        var statementMonths: [Date] = []
+        var monthIter = walletOpenMonth
+        while monthIter <= currentMonth {
+            statementMonths.append(monthIter)
+            if let next = calendar.date(byAdding: .month, value: 1, to: monthIter) {
+                monthIter = next
+            } else {
+                break
+            }
+        }
+        
+        if let nextMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) {
+            statementMonths.append(nextMonth)
+        }
+        
+        let statements = creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: occurrences,
+            statementMonths: statementMonths,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        
+        var unpaidDebt: Int64 = 0
+        for statement in statements {
+            if statement.state == .unclosed || statement.state == .payable || statement.state == .overdue {
+                unpaidDebt += statement.amountMinor
+            }
+        }
+        
+        let available = max(creditLimitMinor - unpaidDebt, 0)
+        return (debt: unpaidDebt, available: available)
+    }
+
     static func creditCardStatementClosingDate(
         statementMonth: Date,
         statementClosingDay: Int,

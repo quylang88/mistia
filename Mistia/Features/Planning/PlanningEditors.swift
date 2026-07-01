@@ -1976,6 +1976,8 @@ struct PlanningCreditCardEditorSheet: View {
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
+    @Query
+    private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningCreditCardEditorTarget
@@ -2143,13 +2145,56 @@ struct PlanningCreditCardEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .onChange(of: draft.creditLimitText) { _, _ in
-            if target.wallet != nil {
-                let openingDebt = target.wallet?.openingBalanceMinor ?? 0
+            if let wallet = target.wallet {
                 let limit = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-                let newAvailable = max(limit - openingDebt, 0)
-                draft.availableCreditText = "\(newAvailable)"
+                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
+                draft.availableCreditText = "\(result.available)"
             }
         }
+        .task(id: target.wallet?.id) {
+            if let wallet = target.wallet {
+                let limit = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
+                draft.availableCreditText = "\(result.available)"
+            }
+        }
+    }
+
+    private func calculateDebtAndAvailable(for wallet: LedgerWallet, creditLimitMinor: Int64) -> (debt: Int64, available: Int64) {
+        let profile = wallet.creditCardProfile ?? CreditCardProfile()
+        let account = PlanningCreditCardAccountSnapshot(
+            id: wallet.id,
+            walletID: wallet.id,
+            walletName: wallet.name,
+            issuerName: profile.issuerName,
+            network: profile.network,
+            last4: profile.last4,
+            dueDay: profile.paymentDueDay,
+            statementClosingDay: profile.statementClosingDay,
+            paymentSourceWalletID: profile.paymentSourceWallet?.id,
+            paymentSourceWalletName: profile.paymentSourceWallet?.name,
+            currencyCode: wallet.currencyCode,
+            currentDebtMinor: 0,
+            availableCreditMinor: 0,
+            openedAt: wallet.createdAt,
+            autoPayEnabled: profile.autoPayEnabled
+        )
+        
+        let snapshots = storedTransactions
+            .lazy
+            .filter { $0.deletedAt == nil }
+            .map(\.snapshot)
+        let occurrenceSnapshots = storedOccurrences
+            .lazy
+            .filter { $0.deletedAt == nil }
+            .map(\.planningSnapshot)
+            
+        return PlanningLogic.calculateCreditCardDebtAndAvailable(
+            account: account,
+            creditLimitMinor: creditLimitMinor,
+            records: Array(snapshots),
+            occurrences: Array(occurrenceSnapshots)
+        )
     }
 
     private var currentDueSnapshot: PlanningCreditCardDueSnapshot? {
@@ -2192,7 +2237,17 @@ struct PlanningCreditCardEditorSheet: View {
 
         let availableCreditMinor = draft.availableCreditText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let creditLimitMinor = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-        let currentDebtMinor = max(creditLimitMinor - availableCreditMinor, 0)
+        
+        let currentDebtMinor: Int64
+        let targetDebt = max(creditLimitMinor - availableCreditMinor, 0)
+        if let wallet = target.wallet {
+            let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: wallet.creditCardProfile?.creditLimitMinor ?? 0)
+            let unpaidTransactions = result.debt - wallet.openingBalanceMinor
+            currentDebtMinor = max(targetDebt - unpaidTransactions, 0)
+        } else {
+            currentDebtMinor = targetDebt
+        }
+        
         let now = Date()
         let walletForSync: LedgerWallet
 

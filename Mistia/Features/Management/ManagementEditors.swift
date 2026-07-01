@@ -41,6 +41,8 @@ struct ManagementWalletEditorSheet: View {
     private var storedWallets: [LedgerWallet]
     @Query
     private var storedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
+    private var storedOccurrences: [DueOccurrenceRecord]
     @Query
     private var ownershipScopes: [OwnedRecordScope]
 
@@ -276,11 +278,11 @@ struct ManagementWalletEditorSheet: View {
         }
         .onChange(of: draft.creditLimitText) { _, _ in
             // When editing an existing credit card, keep available credit in sync with limit change.
-            // availableCredit = creditLimit - openingDebt
-            if target.wallet != nil, draft.kind == .creditCard {
-                let openingDebt = draft.openingBalanceMinor
-                let newAvailable = max(draft.creditLimitMinor - openingDebt, 0)
-                draft.availableCreditText = "\(newAvailable)"
+            // availableCredit = creditLimit - unpaidDebt
+            if let wallet = target.wallet, draft.kind == .creditCard {
+                let limit = draft.creditLimitMinor
+                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
+                draft.availableCreditText = "\(result.available)"
             }
         }
         .sheet(isPresented: $showsBalanceAdjustment) {
@@ -299,6 +301,12 @@ struct ManagementWalletEditorSheet: View {
                 return
             }
             refreshWalletBalanceSnapshotCache(for: balanceSnapshotKey, snapshot: balanceSnapshot)
+            
+            if let wallet = target.wallet, draft.kind == .creditCard {
+                let limit = draft.creditLimitMinor
+                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
+                draft.availableCreditText = "\(result.available)"
+            }
         }
     }
 
@@ -418,7 +426,8 @@ struct ManagementWalletEditorSheet: View {
 
         // Validate: credit limit must be >= current debt (available credit cannot go negative)
         if draft.kind == .creditCard, let existingWallet = target.wallet {
-            let currentDebt = currentDebtBalanceSnapshot(for: existingWallet)
+            let result = calculateDebtAndAvailable(for: existingWallet, creditLimitMinor: draft.creditLimitMinor)
+            let currentDebt = result.debt
             if draft.creditLimitMinor < currentDebt {
                 let debtFormatted = currentDebt.formattedCurrency(code: draft.currencyCode)
                 alertMessage = L10n.management.management.creditLimitCannotBeLessThanCurrentDebt(debtFormatted)
@@ -465,10 +474,17 @@ struct ManagementWalletEditorSheet: View {
         let existingProfileID = target.wallet?.creditCardProfile?.id
         let walletForSync: LedgerWallet
 
-        // For credit cards, calculate debt from available credit
+        // For credit cards, calculate opening debt from available credit and transactions
         let currentDebtMinor: Int64
         if draft.kind == .creditCard {
-            currentDebtMinor = max(draft.creditLimitMinor - draft.availableCreditMinor, 0)
+            let targetDebt = max(draft.creditLimitMinor - draft.availableCreditMinor, 0)
+            if let existingWallet = target.wallet {
+                let result = calculateDebtAndAvailable(for: existingWallet, creditLimitMinor: existingWallet.creditCardProfile?.creditLimitMinor ?? 0)
+                let unpaidTransactions = result.debt - existingWallet.openingBalanceMinor
+                currentDebtMinor = max(targetDebt - unpaidTransactions, 0)
+            } else {
+                currentDebtMinor = targetDebt
+            }
         } else {
             currentDebtMinor = draft.openingBalanceMinor
         }
@@ -584,6 +600,43 @@ struct ManagementWalletEditorSheet: View {
     private func currentDebtBalanceSnapshot(for wallet: LedgerWallet) -> Int64 {
         cachedWalletBalanceSnapshot(for: walletBalanceSnapshotCacheKey)?.debtBalanceMinor
             ?? currentDebtBalance(for: wallet)
+    }
+
+    private func calculateDebtAndAvailable(for wallet: LedgerWallet, creditLimitMinor: Int64) -> (debt: Int64, available: Int64) {
+        let profile = wallet.creditCardProfile ?? CreditCardProfile()
+        let account = PlanningCreditCardAccountSnapshot(
+            id: wallet.id,
+            walletID: wallet.id,
+            walletName: wallet.name,
+            issuerName: profile.issuerName,
+            network: profile.network,
+            last4: profile.last4,
+            dueDay: profile.paymentDueDay,
+            statementClosingDay: profile.statementClosingDay,
+            paymentSourceWalletID: profile.paymentSourceWallet?.id,
+            paymentSourceWalletName: profile.paymentSourceWallet?.name,
+            currencyCode: wallet.currencyCode,
+            currentDebtMinor: 0,
+            availableCreditMinor: 0,
+            openedAt: wallet.createdAt,
+            autoPayEnabled: profile.autoPayEnabled
+        )
+        
+        let snapshots = storedTransactions
+            .lazy
+            .filter { $0.deletedAt == nil }
+            .map(\.snapshot)
+        let occurrenceSnapshots = storedOccurrences
+            .lazy
+            .filter { $0.deletedAt == nil }
+            .map(\.planningSnapshot)
+            
+        return PlanningLogic.calculateCreditCardDebtAndAvailable(
+            account: account,
+            creditLimitMinor: creditLimitMinor,
+            records: Array(snapshots),
+            occurrences: Array(occurrenceSnapshots)
+        )
     }
 
     private func makeWalletBalanceSnapshot(for wallet: LedgerWallet) -> ManagementWalletBalanceSnapshot {
