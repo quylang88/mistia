@@ -2076,7 +2076,9 @@ struct PlanningCreditCardEditorSheet: View {
                         .onChange(of: draft.last4) { _, newValue in
                             draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                         }
-                    MistiaCurrencyInputField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText)
+                    MistiaCurrencyInputField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText, showsCalculatorButton: target.wallet == nil)
+                        .disabled(target.wallet != nil)
+                        .opacity(target.wallet != nil ? 0.5 : 1)
                     MistiaCurrencyInputField(L10n.planning.planning.creditLimit, text: $draft.creditLimitText)
                     Picker(L10n.planning.planning.dueDay, selection: $draft.paymentDueDay) {
                         ForEach(paymentDueDayOptions, id: \.self) { day in
@@ -2140,6 +2142,14 @@ struct PlanningCreditCardEditorSheet: View {
             }
         }
         .planningAlert(message: $alertMessage)
+        .onChange(of: draft.creditLimitText) { _, _ in
+            if target.wallet != nil {
+                let openingDebt = target.wallet?.openingBalanceMinor ?? 0
+                let limit = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+                let newAvailable = max(limit - openingDebt, 0)
+                draft.availableCreditText = "\(newAvailable)"
+            }
+        }
     }
 
     private var currentDueSnapshot: PlanningCreditCardDueSnapshot? {

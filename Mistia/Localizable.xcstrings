@@ -7706,6 +7706,29 @@
         }
       }
     },
+    "management.management.creditLimitCannotBeLessThanCurrentDebt" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit limit cannot be less than current debt (%@)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "利用限度額は現在の負債（%@）より小さくできません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hạn mức không được nhỏ hơn dư nợ hiện tại (%@)."
+          }
+        }
+      }
+    },
     "management.management.currency" : {
       "extractionState" : "stale",
       "localizations" : {

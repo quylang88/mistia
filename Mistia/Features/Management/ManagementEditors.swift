@@ -276,12 +276,10 @@ struct ManagementWalletEditorSheet: View {
         }
         .onChange(of: draft.creditLimitText) { _, _ in
             // When editing an existing credit card, keep available credit in sync with limit change.
-            // availableCredit = creditLimit - existingDebt
+            // availableCredit = creditLimit - openingDebt
             if target.wallet != nil, draft.kind == .creditCard {
-                let existingDebt = walletBalanceSnapshotCache?.snapshot.debtBalanceMinor
-                    ?? target.wallet.map { currentDebtBalance(for: $0) }
-                    ?? 0
-                let newAvailable = max(draft.creditLimitMinor - existingDebt, 0)
+                let openingDebt = draft.openingBalanceMinor
+                let newAvailable = max(draft.creditLimitMinor - openingDebt, 0)
                 draft.availableCreditText = "\(newAvailable)"
             }
         }
@@ -1701,7 +1699,8 @@ struct ManagementBalanceAdjustmentSheet: View {
                         wallet.kind == .creditCard
                             ? L10n.management.balanceEditor.availableCreditPlaceholder
                             : L10n.management.balanceEditor.currentBalancePlaceholder,
-                        text: $newBalanceText
+                        text: $newBalanceText,
+                        showsCalculatorButton: wallet.kind != .creditCard
                     )
                     .disabled(wallet.kind == .creditCard)
                     .opacity(wallet.kind == .creditCard ? 0.5 : 1)
