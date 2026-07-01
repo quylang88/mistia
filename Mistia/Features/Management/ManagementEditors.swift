@@ -640,11 +640,14 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private func makeWalletBalanceSnapshot(for wallet: LedgerWallet) -> ManagementWalletBalanceSnapshot {
-        let debt = currentDebtBalance(for: wallet)
+        let debt: Int64
         let displayBalance: Int64
-        if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
-            displayBalance = max(profile.creditLimitMinor - debt, 0)
+        if wallet.kind == .creditCard {
+            let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: draft.creditLimitMinor)
+            debt = result.debt
+            displayBalance = result.available
         } else {
+            debt = currentDebtBalance(for: wallet)
             displayBalance = debt
         }
         return ManagementWalletBalanceSnapshot(
