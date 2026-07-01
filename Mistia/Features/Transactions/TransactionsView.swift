@@ -1215,20 +1215,6 @@ struct TransactionsView: View {
                     systemImage: "creditcard.and.123"
                 )
             }
-
-            Button(action: {
-                let ownerUserID = familyContextStore.viewedMember?.userID ?? sessionStore.activeLocalProfileUserID
-                if familyContextStore.canCreateEvent(for: ownerUserID) {
-                    settlementEditorTarget = .newSharedExpense
-                } else if let ownerUserID {
-                    presentEventPermissionPrompt(ownerUserID: ownerUserID, scope: .create)
-                }
-            }) {
-                Label(
-                    L10n.transactions.settlement.addSharedExpense,
-                    systemImage: "person.3.sequence"
-                )
-            }
         }
         .accessibilityLabel(L10n.transactions.transactions.statement)
     }
