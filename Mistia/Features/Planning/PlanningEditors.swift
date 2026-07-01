@@ -1983,6 +1983,7 @@ struct PlanningCreditCardEditorSheet: View {
     let target: PlanningCreditCardEditorTarget
 
     @State private var draft: PlanningCreditCardDraft
+    @State private var dismissBaselineDraft: PlanningCreditCardDraft
     private let initialDraft: PlanningCreditCardDraft
     @State private var paymentAmountText: String
     private let initialPaymentAmountText: String
@@ -1996,6 +1997,7 @@ struct PlanningCreditCardEditorSheet: View {
         let initialPaymentAmountText = target.dueItem.map { String($0.amountMinor) } ?? initialDraft.availableCreditText
         self.initialPaymentAmountText = initialPaymentAmountText
         _draft = State(initialValue: initialDraft)
+        _dismissBaselineDraft = State(initialValue: initialDraft)
         _paymentAmountText = State(initialValue: initialPaymentAmountText)
     }
 
@@ -2047,7 +2049,7 @@ struct PlanningCreditCardEditorSheet: View {
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
         MistiaDismissGuardConfiguration(
             mode: target.wallet == nil ? .creating : .editing,
-            hasUnsavedChanges: draft != initialDraft || paymentAmountText != initialPaymentAmountText
+            hasUnsavedChanges: draft != dismissBaselineDraft || paymentAmountText != initialPaymentAmountText
         )
     }
 
@@ -2155,7 +2157,11 @@ struct PlanningCreditCardEditorSheet: View {
             if let wallet = target.wallet {
                 let limit = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
                 let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
-                draft.availableCreditText = "\(result.available)"
+                let availableStr = "\(result.available)"
+                draft.availableCreditText = availableStr
+                if dismissBaselineDraft.availableCreditText != availableStr {
+                    dismissBaselineDraft.availableCreditText = availableStr
+                }
             }
         }
     }

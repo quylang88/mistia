@@ -49,6 +49,7 @@ struct ManagementWalletEditorSheet: View {
     let target: ManagementWalletEditorTarget
 
     @State private var draft: WalletDraft
+    @State private var dismissBaselineDraft: WalletDraft
     private let initialDraft: WalletDraft
     @State private var showsIconPicker = false
     @State private var showsBalanceAdjustment = false
@@ -64,12 +65,13 @@ struct ManagementWalletEditorSheet: View {
         let initialDraft = WalletDraft(wallet: target.wallet, defaultKind: target.defaultKind)
         self.initialDraft = initialDraft
         _draft = State(initialValue: initialDraft)
+        _dismissBaselineDraft = State(initialValue: initialDraft)
     }
 
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
         MistiaDismissGuardConfiguration(
             mode: target.wallet == nil ? .creating : .editing,
-            hasUnsavedChanges: draft != initialDraft
+            hasUnsavedChanges: draft != dismissBaselineDraft
         )
     }
 
@@ -305,7 +307,11 @@ struct ManagementWalletEditorSheet: View {
             if let wallet = target.wallet, draft.kind == .creditCard {
                 let limit = draft.creditLimitMinor
                 let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
-                draft.availableCreditText = "\(result.available)"
+                let availableStr = "\(result.available)"
+                draft.availableCreditText = availableStr
+                if dismissBaselineDraft.availableCreditText != availableStr {
+                    dismissBaselineDraft.availableCreditText = availableStr
+                }
             }
         }
     }
