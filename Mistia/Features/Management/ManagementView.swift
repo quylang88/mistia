@@ -829,13 +829,25 @@ struct ManagementView: View {
 
     private func presentWalletPermissionPrompt(_ wallet: LedgerWallet) {
         guard let ownerUserID = walletOwnerUserID(for: wallet) else { return }
-        walletPermissionPrompt = ManagementWalletPermissionPrompt(
+        let prompt = ManagementWalletPermissionPrompt(
             walletID: wallet.id,
             walletName: wallet.name,
             ownerUserID: ownerUserID,
             title: L10n.management.management.noWalletAccess,
             message: L10n.management.management.youDoNotHaveEnoughAccessFor(String(describing: wallet.name))
         )
+        guard hasPendingWalletPermission(prompt, scope: .use)
+            || hasPendingWalletPermission(prompt, scope: .edit) else {
+            walletPermissionPrompt = prompt
+            return
+        }
+
+        Task { @MainActor in
+            if await resolvePendingWalletPermissionBeforePrompt(prompt) {
+                return
+            }
+            walletPermissionPrompt = prompt
+        }
     }
 
     private func walletPermissionActionTitle(
@@ -895,6 +907,43 @@ struct ManagementView: View {
             resourceID: prompt.walletID,
             scope: scope
         )
+    }
+
+    private func hasPendingWalletPermission(
+        _ prompt: ManagementWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        )
+    }
+
+    private func resolvePendingWalletPermissionBeforePrompt(
+        _ prompt: ManagementWalletPermissionPrompt
+    ) async -> Bool {
+        for scope in [MistiaFamilyPermissionScope.use, .edit] {
+            guard !isWalletPermissionGranted(for: prompt, scope: scope),
+                  hasPendingWalletPermission(prompt, scope: scope) else {
+                continue
+            }
+            _ = await familyContextStore.resolvePendingPermissionBeforePrompt(
+                ownerUserID: prompt.ownerUserID,
+                resourceType: .wallet,
+                resourceID: prompt.walletID,
+                scope: scope,
+                sessionStore: sessionStore
+            )
+        }
+
+        guard let wallet = storedWallets.first(where: { $0.id == prompt.walletID }),
+              canOpenWalletEditor(wallet) else {
+            return false
+        }
+        performApprovedWalletPermissionAction(prompt, scope: .edit)
+        return true
     }
 
     private func shouldShowWalletPermissionAction(
@@ -1019,6 +1068,49 @@ struct ManagementView: View {
             resourceID: nil,
             scope: .create
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: nil,
+                    scope: .create,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
+                showCreatePermissionPrompt(
+                    resourceType: resourceType,
+                    resourceName: resourceName,
+                    actionTitle: actionTitle,
+                    ownerUserID: ownerUserID,
+                    isPending: true,
+                    onGranted: onGranted
+                )
+            }
+            return
+        }
+
+        showCreatePermissionPrompt(
+            resourceType: resourceType,
+            resourceName: resourceName,
+            actionTitle: actionTitle,
+            ownerUserID: ownerUserID,
+            isPending: false,
+            onGranted: onGranted
+        )
+    }
+
+    private func showCreatePermissionPrompt(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceName: String,
+        actionTitle: String,
+        ownerUserID: UUID,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
         permissionPrompt = ManagementPermissionPrompt(
             title: L10n.management.management.noCreateAccess,
             message: L10n.management.management.youDoNotHavePermissionToCreate2(String(describing: resourceName)),
@@ -1288,6 +1380,32 @@ struct ManagementView: View {
             resourceID: nil,
             scope: .edit
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: .category,
+                    resourceID: nil,
+                    scope: .edit,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
+                showCategoryEditPermissionPrompt(ownerUserID: ownerUserID, isPending: true, onGranted: onGranted)
+            }
+            return
+        }
+
+        showCategoryEditPermissionPrompt(ownerUserID: ownerUserID, isPending: false, onGranted: onGranted)
+    }
+
+    private func showCategoryEditPermissionPrompt(
+        ownerUserID: UUID,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
         permissionPrompt = ManagementPermissionPrompt(
             title: L10n.management.management.noCategoryEditAccess,
             message: L10n.management.management.youDoNotHavePermissionToEdit,
@@ -1319,6 +1437,32 @@ struct ManagementView: View {
             resourceID: nil,
             scope: .create
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: .category,
+                    resourceID: nil,
+                    scope: .create,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
+                showCategoryCreatePermissionPrompt(ownerUserID: ownerUserID, isPending: true, onGranted: onGranted)
+            }
+            return
+        }
+
+        showCategoryCreatePermissionPrompt(ownerUserID: ownerUserID, isPending: false, onGranted: onGranted)
+    }
+
+    private func showCategoryCreatePermissionPrompt(
+        ownerUserID: UUID,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
         permissionPrompt = ManagementPermissionPrompt(
             title: L10n.management.management.noCategoryCreateAccess,
             message: L10n.management.management.youDoNotHavePermissionToCreate,

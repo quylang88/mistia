@@ -1304,7 +1304,8 @@ struct SettlementEditorSheet: View {
 
     private func guardSharedExpenseEventPermission(
         ownerUserID: UUID?,
-        scope: MistiaFamilyPermissionScope
+        scope: MistiaFamilyPermissionScope,
+        retryAction: (() -> Void)? = nil
     ) -> Bool {
         guard let ownerUserID,
               ownerUserID != sessionStore.activeLocalProfileUserID else {
@@ -1326,6 +1327,31 @@ struct SettlementEditorSheet: View {
         }
 
         guard isAllowed else {
+            if familyContextStore.hasPendingPermissionRequest(
+                ownerUserID: ownerUserID,
+                resourceType: .event,
+                resourceID: nil,
+                scope: scope
+            ) {
+                Task { @MainActor in
+                    let isApproved = await familyContextStore.resolvePendingPermissionBeforePrompt(
+                        ownerUserID: ownerUserID,
+                        resourceType: .event,
+                        resourceID: nil,
+                        scope: scope,
+                        sessionStore: sessionStore
+                    )
+                    if isApproved {
+                        retryAction?()
+                    } else {
+                        alertMessage = scope == .create
+                            ? L10n.planning.planning.youDoNotHavePermissionToCreate(L10n.shared.persistence.notification.event)
+                            : L10n.planning.planning.youDoNotHavePermissionToEdit(L10n.shared.persistence.notification.event)
+                    }
+                }
+                return false
+            }
+
             alertMessage = scope == .create
                 ? L10n.planning.planning.youDoNotHavePermissionToCreate(L10n.shared.persistence.notification.event)
                 : L10n.planning.planning.youDoNotHavePermissionToEdit(L10n.shared.persistence.notification.event)
@@ -1360,7 +1386,11 @@ struct SettlementEditorSheet: View {
         switch target {
         case .newSharedExpense:
             requiredPermissionScope = .create
-            guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: requiredPermissionScope) else {
+            guard guardSharedExpenseEventPermission(
+                ownerUserID: ownerUserID,
+                scope: requiredPermissionScope,
+                retryAction: saveSharedExpense
+            ) else {
                 return
             }
             group = SettlementGroup(
@@ -1381,7 +1411,11 @@ struct SettlementEditorSheet: View {
             shouldDismissAfterSave = true
         case .editSharedExpense:
             requiredPermissionScope = .edit
-            guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: requiredPermissionScope) else {
+            guard guardSharedExpenseEventPermission(
+                ownerUserID: ownerUserID,
+                scope: requiredPermissionScope,
+                retryAction: saveSharedExpense
+            ) else {
                 return
             }
             guard let existingGroup = editingSharedExpenseGroup else {
@@ -1556,7 +1590,7 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = bill.sourceWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? activeOwnerUserID
-        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit, retryAction: { detachBill(bill) }) else {
             return
         }
         bill.settlementGroupID = nil
@@ -1624,7 +1658,7 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = bill.sourceWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? activeOwnerUserID
-        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit, retryAction: { persistLinkedBillUpdate(bill) }) else {
             return
         }
         bill.settlementGroupID = group.id
@@ -1681,7 +1715,7 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = eventOwnerUserID(for: group)
-        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit, retryAction: archiveSharedExpenseEvent) else {
             return
         }
         group.isArchived = true
@@ -1716,7 +1750,11 @@ struct SettlementEditorSheet: View {
 
         let now = Date()
         let ownerUserID = eventOwnerUserID(for: group)
-        guard guardSharedExpenseEventPermission(ownerUserID: ownerUserID, scope: .edit) else {
+        guard guardSharedExpenseEventPermission(
+            ownerUserID: ownerUserID,
+            scope: .edit,
+            retryAction: resetCompletedSharedExpenseToPreparing
+        ) else {
             return
         }
         let groupTransactions = transactions.filter { $0.settlementGroupID == group.id && $0.deletedAt == nil }

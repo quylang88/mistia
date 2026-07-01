@@ -1110,7 +1110,9 @@ struct TransactionsView: View {
                 if familyContextStore.canEditEvent(for: ownerUserID) {
                     settlementEditorTarget = .editSharedExpense(groupID)
                 } else if let ownerUserID {
-                    presentEventPermissionPrompt(ownerUserID: ownerUserID, scope: .edit)
+                    presentEventPermissionPrompt(ownerUserID: ownerUserID, scope: .edit) {
+                        settlementEditorTarget = .editSharedExpense(groupID)
+                    }
                 }
             }
             .presentationDetents([.large])
@@ -1741,13 +1743,54 @@ struct TransactionsView: View {
         return walletOwnerMap[walletID]
     }
 
-    private func presentEventPermissionPrompt(ownerUserID: UUID, scope: MistiaFamilyPermissionScope) {
+    private func presentEventPermissionPrompt(
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        onGranted: @escaping () -> Void = {}
+    ) {
         let isPending = familyContextStore.hasPendingPermissionRequest(
             ownerUserID: ownerUserID,
             resourceType: .event,
             resourceID: nil,
             scope: scope
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: .event,
+                    resourceID: nil,
+                    scope: scope,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
+                showEventPermissionPrompt(
+                    ownerUserID: ownerUserID,
+                    scope: scope,
+                    isPending: true,
+                    onGranted: onGranted
+                )
+            }
+            return
+        }
+
+        showEventPermissionPrompt(
+            ownerUserID: ownerUserID,
+            scope: scope,
+            isPending: false,
+            onGranted: onGranted
+        )
+    }
+
+    private func showEventPermissionPrompt(
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
         permissionPrompt = TransactionsPermissionPrompt(
             title: scope == .create
                 ? L10n.planning.planning.noCreateAccess
@@ -1770,6 +1813,7 @@ struct TransactionsView: View {
                     )
                     if isApproved {
                         permissionPrompt = nil
+                        onGranted()
                     }
                     return
                 }
@@ -1805,6 +1849,43 @@ struct TransactionsView: View {
             resourceID: nil,
             scope: .edit
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: .transaction,
+                    resourceID: nil,
+                    scope: .edit,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    editorTarget = TransactionEditorTarget(transaction: transaction)
+                    return
+                }
+                showTransactionEditPermissionPrompt(
+                    transaction,
+                    ownerUserID: ownerUserID,
+                    resourceName: resourceName,
+                    isPending: true
+                )
+            }
+            return
+        }
+
+        showTransactionEditPermissionPrompt(
+            transaction,
+            ownerUserID: ownerUserID,
+            resourceName: resourceName,
+            isPending: false
+        )
+    }
+
+    private func showTransactionEditPermissionPrompt(
+        _ transaction: LedgerTransaction,
+        ownerUserID: UUID,
+        resourceName: String,
+        isPending: Bool
+    ) {
         permissionPrompt = TransactionsPermissionPrompt(
             title: L10n.transactions.transactions.noTransactionEditAccess,
             message: L10n.transactions.transactions.youDoNotHavePermissionToEdit,

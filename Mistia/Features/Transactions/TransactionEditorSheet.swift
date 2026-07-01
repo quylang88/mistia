@@ -859,12 +859,7 @@ struct TransactionEditorSheet: View {
                         selection: Binding(
                             get: { bindableDraft.transferSubtype ?? .internalTransfer },
                             set: { subtype in
-                                guard isTransferSubtypeEnabled(subtype) else { return }
-                                if let prompt = transferPermissionPrompt(for: subtype) {
-                                    transferPermissionPrompt = prompt
-                                    return
-                                }
-                                bindableDraft.transferSubtype = subtype
+                                selectTransferSubtypeIfAllowed(subtype)
                             }
                         ),
                         options: transferSubtypeOptions,
@@ -1843,12 +1838,55 @@ struct TransactionEditorSheet: View {
         }
     }
 
+    private func selectTransferSubtypeIfAllowed(_ subtype: TransactionTransferSubtype) {
+        guard isTransferSubtypeEnabled(subtype) else { return }
+        if let prompt = transferPermissionPrompt(for: subtype) {
+            presentTransferPermissionPrompt(prompt) {
+                draft.transferSubtype = subtype
+            }
+            return
+        }
+        draft.transferSubtype = subtype
+    }
+
+    private func presentTransferPermissionPrompt(
+        _ prompt: TransferCreatePermissionPrompt,
+        onGranted: @escaping () -> Void
+    ) {
+        guard prompt.isPending else {
+            transferPermissionPrompt = prompt
+            return
+        }
+
+        Task { @MainActor in
+            let isApproved = await familyContextStore.resolvePendingPermissionBeforePrompt(
+                ownerUserID: prompt.ownerUserID,
+                resourceType: prompt.resourceType,
+                resourceID: nil,
+                scope: .create,
+                sessionStore: sessionStore
+            )
+            guard isApproved, transferPermissionPrompt(for: prompt.subtype) == nil else {
+                transferPermissionPrompt = prompt
+                return
+            }
+            transferPermissionPrompt = nil
+            onGranted()
+        }
+    }
+
     private func refreshTransferPermissionPrompt() {
         guard let prompt = transferPermissionPrompt else { return }
         transferPermissionPrompt = nil
         Task { @MainActor in
-            await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
-            if transferPermissionPrompt(for: prompt.subtype) == nil {
+            let isApproved = await familyContextStore.resolvePendingPermissionBeforePrompt(
+                ownerUserID: prompt.ownerUserID,
+                resourceType: prompt.resourceType,
+                resourceID: nil,
+                scope: .create,
+                sessionStore: sessionStore
+            )
+            if isApproved, transferPermissionPrompt(for: prompt.subtype) == nil {
                 draft.transferSubtype = prompt.subtype
             }
         }
@@ -2421,7 +2459,9 @@ struct TransactionEditorSheet: View {
         if draft.primaryKind == .transfer {
             let subtype = draft.transferSubtype ?? .internalTransfer
             if let prompt = transferPermissionPrompt(for: subtype) {
-                transferPermissionPrompt = prompt
+                presentTransferPermissionPrompt(prompt) {
+                    save()
+                }
                 return
             }
         }

@@ -1194,6 +1194,40 @@ final class FamilyContextStore {
         )
     }
 
+    @discardableResult
+    func resolvePendingPermissionBeforePrompt(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let ownerUserID else { return false }
+        if hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope
+        ) {
+            return true
+        }
+        guard hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope
+        ) else {
+            return false
+        }
+        return await refreshPermissionGrant(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope,
+            sessionStore: sessionStore
+        )
+    }
+
     func hasPendingPermissionRequest(
         ownerUserID: UUID?,
         resourceType: MistiaFamilyNotificationResourceType,

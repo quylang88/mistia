@@ -1387,13 +1387,25 @@ struct PlanningView: View {
         ownerUserID: UUID
     ) {
         guard ownerUserID != sessionStore.activeLocalProfileUserID else { return }
-        walletPermissionPrompt = PlanningWalletPermissionPrompt(
+        let prompt = PlanningWalletPermissionPrompt(
             walletID: walletID,
             walletName: walletName,
             ownerUserID: ownerUserID,
             title: L10n.planning.planning.noWalletAccess,
             message: L10n.planning.planning.youDoNotHaveEnoughAccessFor(String(describing: walletName))
         )
+        guard hasPendingWalletPermission(prompt, scope: .use)
+            || hasPendingWalletPermission(prompt, scope: .edit) else {
+            walletPermissionPrompt = prompt
+            return
+        }
+
+        Task { @MainActor in
+            if await resolvePendingCreditCardWalletPermissionBeforePrompt(prompt) {
+                return
+            }
+            walletPermissionPrompt = prompt
+        }
     }
 
     private func walletPermissionActionTitle(
@@ -1453,6 +1465,42 @@ struct PlanningView: View {
             resourceID: prompt.walletID,
             scope: scope
         )
+    }
+
+    private func hasPendingWalletPermission(
+        _ prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        )
+    }
+
+    private func resolvePendingCreditCardWalletPermissionBeforePrompt(
+        _ prompt: PlanningWalletPermissionPrompt
+    ) async -> Bool {
+        for scope in [MistiaFamilyPermissionScope.use, .edit] {
+            guard !isWalletPermissionGranted(for: prompt, scope: scope),
+                  hasPendingWalletPermission(prompt, scope: scope) else {
+                continue
+            }
+            _ = await familyContextStore.resolvePendingPermissionBeforePrompt(
+                ownerUserID: prompt.ownerUserID,
+                resourceType: .wallet,
+                resourceID: prompt.walletID,
+                scope: scope,
+                sessionStore: sessionStore
+            )
+        }
+
+        guard canOpenCreditCardEditor(walletID: prompt.walletID, ownerUserID: prompt.ownerUserID) else {
+            return false
+        }
+        performApprovedWalletPermissionAction(prompt, scope: .edit)
+        return true
     }
 
     private func shouldShowWalletPermissionAction(
@@ -1551,6 +1599,49 @@ struct PlanningView: View {
             resourceID: resourceID,
             scope: .edit
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: resourceID,
+                    scope: .edit,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
+                showEditPermissionPrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: resourceID,
+                    resourceName: resourceName,
+                    isPending: true,
+                    onGranted: onGranted
+                )
+            }
+            return
+        }
+
+        showEditPermissionPrompt(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            resourceName: resourceName,
+            isPending: false,
+            onGranted: onGranted
+        )
+    }
+
+    private func showEditPermissionPrompt(
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        resourceName: String,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
         permissionPrompt = PlanningPermissionPrompt(
             title: L10n.planning.planning.noEditAccess,
             message: L10n.planning.planning.youDoNotHavePermissionToEdit(String(describing: resourceName)),
@@ -1584,6 +1675,46 @@ struct PlanningView: View {
             resourceID: nil,
             scope: .create
         )
+        if isPending {
+            Task { @MainActor in
+                if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: nil,
+                    scope: .create,
+                    sessionStore: sessionStore
+                ) {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
+                showCreatePermissionPrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceName: resourceName,
+                    isPending: true,
+                    onGranted: onGranted
+                )
+            }
+            return
+        }
+
+        showCreatePermissionPrompt(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceName: resourceName,
+            isPending: false,
+            onGranted: onGranted
+        )
+    }
+
+    private func showCreatePermissionPrompt(
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceName: String,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
         permissionPrompt = PlanningPermissionPrompt(
             title: L10n.planning.planning.noCreateAccess,
             message: L10n.planning.planning.youDoNotHavePermissionToCreate(String(describing: resourceName)),
