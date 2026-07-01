@@ -859,6 +859,7 @@ final class FamilyContextStore {
                     scope: scope
                 )
             )
+            persistCachedState(currentSnapshot)
             lastErrorMessage = nil
             return true
         } catch {
