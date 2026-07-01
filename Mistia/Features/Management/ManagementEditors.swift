@@ -128,11 +128,13 @@ struct ManagementWalletEditorSheet: View {
                                 Text(effectiveBalance.formattedCurrency(code: draft.currencyCode))
                                     .foregroundStyle(.secondary)
 
-                                MistiaSmallIconButton(
-                                    systemImage: "pencil",
-                                    accessibilityLabel: L10n.management.management.editBalance
-                                ) {
-                                    showsBalanceAdjustment = true
+                                if draft.kind != .creditCard {
+                                    MistiaSmallIconButton(
+                                        systemImage: "pencil",
+                                        accessibilityLabel: L10n.management.management.editBalance
+                                    ) {
+                                        showsBalanceAdjustment = true
+                                    }
                                 }
                             }
                         }
@@ -272,6 +274,17 @@ struct ManagementWalletEditorSheet: View {
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
         }
+        .onChange(of: draft.creditLimitText) { _, _ in
+            // When editing an existing credit card, keep available credit in sync with limit change.
+            // availableCredit = creditLimit - existingDebt
+            if target.wallet != nil, draft.kind == .creditCard {
+                let existingDebt = walletBalanceSnapshotCache?.snapshot.debtBalanceMinor
+                    ?? target.wallet.map { currentDebtBalance(for: $0) }
+                    ?? 0
+                let newAvailable = max(draft.creditLimitMinor - existingDebt, 0)
+                draft.availableCreditText = "\(newAvailable)"
+            }
+        }
         .sheet(isPresented: $showsBalanceAdjustment) {
             if let wallet = target.wallet {
                 let creditLimit = wallet.kind == .creditCard ? wallet.creditCardProfile?.creditLimitMinor : nil
@@ -403,6 +416,16 @@ struct ManagementWalletEditorSheet: View {
         if draft.kind == .creditCard, draft.statementClosingDay >= draft.paymentDueDay {
             alertMessage = L10n.management.management.statementClosingDayMustBeEarlierThan
             return
+        }
+
+        // Validate: credit limit must be >= current debt (available credit cannot go negative)
+        if draft.kind == .creditCard, let existingWallet = target.wallet {
+            let currentDebt = currentDebtBalanceSnapshot(for: existingWallet)
+            if draft.creditLimitMinor < currentDebt {
+                let debtFormatted = currentDebt.formattedCurrency(code: draft.currencyCode)
+                alertMessage = L10n.management.management.creditLimitCannotBeLessThanCurrentDebt(debtFormatted)
+                return
+            }
         }
 
         // Edge Case 6: Check for payment source wallet change with outstanding debt
@@ -1680,11 +1703,15 @@ struct ManagementBalanceAdjustmentSheet: View {
                             : L10n.management.balanceEditor.currentBalancePlaceholder,
                         text: $newBalanceText
                     )
+                    .disabled(wallet.kind == .creditCard)
+                    .opacity(wallet.kind == .creditCard ? 0.5 : 1)
                 }
 
                 Section(L10n.management.management.adjustmentReason) {
                     TextField(L10n.management.management.eGAuditError, text: $reason, axis: .vertical)
                         .lineLimit(3...5)
+                        .disabled(wallet.kind == .creditCard)
+                        .opacity(wallet.kind == .creditCard ? 0.5 : 1)
                 }
             }
             .dismissKeyboardOnTap()

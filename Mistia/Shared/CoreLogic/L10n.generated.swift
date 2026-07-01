@@ -850,6 +850,12 @@ nonisolated enum L10n {
             static func creditCard2(language: MistiaAppLanguage) -> String { L10n.tr("management.management.creditCard2", vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード", language: language) }
             static var creditLimit: String { L10n.tr("management.management.creditLimit", vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額") }
             static func creditLimit(language: MistiaAppLanguage) -> String { L10n.tr("management.management.creditLimit", vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額", language: language) }
+            static func creditLimitCannotBeLessThanCurrentDebt(_ value: String) -> String {
+                L10n.format("management.management.creditLimitCannotBeLessThanCurrentDebt", vi: "Hạn mức không được nhỏ hơn dư nợ hiện tại (%@).", en: "Credit limit cannot be less than current debt (%@).", ja: "利用限度額は現在の負債（%@）より小さくできません。", value)
+            }
+            static func creditLimitCannotBeLessThanCurrentDebt(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("management.management.creditLimitCannotBeLessThanCurrentDebt", vi: "Hạn mức không được nhỏ hơn dư nợ hiện tại (%@).", en: "Credit limit cannot be less than current debt (%@).", ja: "利用限度額は現在の負債（%@）より小さくできません。", language: language, value)
+            }
             static var currency: String { L10n.tr("management.management.currency", vi: "Tiền tệ", en: "Currency", ja: "通貨") }
             static func currency(language: MistiaAppLanguage) -> String { L10n.tr("management.management.currency", vi: "Tiền tệ", en: "Currency", ja: "通貨", language: language) }
             static var currentBalance: String { L10n.tr("management.management.currentBalance", vi: "Số dư hiện tại", en: "Current balance", ja: "現在の残高") }
