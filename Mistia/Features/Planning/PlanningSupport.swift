@@ -676,17 +676,56 @@ extension LedgerWallet {
     func planningCreditCardSnapshot<Records: Sequence>(
         records: Records
     ) -> PlanningCreditCardAccountSnapshot? where Records.Element == TransactionRecordSnapshot {
-        let balanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: [
-                TransactionWalletSnapshot(
-                    id: id,
-                    kind: kind,
-                    openingBalanceMinor: openingBalanceMinor
-                )
-            ],
-            records: records
+        return planningCreditCardSnapshot(records: Array(records), occurrences: [])
+    }
+
+    func planningCreditCardSnapshot(
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot]
+    ) -> PlanningCreditCardAccountSnapshot? {
+        guard kind == .creditCard, !isArchived, let profile = creditCardProfile else {
+            return nil
+        }
+        let account = PlanningCreditCardAccountSnapshot(
+            id: id,
+            walletID: id,
+            walletName: name,
+            issuerName: profile.issuerName,
+            network: profile.network,
+            last4: profile.last4,
+            dueDay: profile.paymentDueDay,
+            statementClosingDay: profile.statementClosingDay,
+            paymentSourceWalletID: profile.paymentSourceWallet?.id,
+            paymentSourceWalletName: profile.paymentSourceWallet?.name,
+            currencyCode: currencyCode,
+            currentDebtMinor: 0,
+            availableCreditMinor: 0,
+            openedAt: createdAt,
+            autoPayEnabled: profile.autoPayEnabled
         )
-        return planningCreditCardSnapshot(balanceIndex: balanceIndex)
+        let result = PlanningLogic.calculateCreditCardDebtAndAvailable(
+            account: account,
+            creditLimitMinor: profile.creditLimitMinor,
+            records: records,
+            occurrences: occurrences
+        )
+        return PlanningCreditCardAccountSnapshot(
+            id: id,
+            walletID: id,
+            walletName: name,
+            issuerName: profile.issuerName,
+            network: profile.network,
+            last4: profile.last4,
+            dueDay: profile.paymentDueDay,
+            statementClosingDay: profile.statementClosingDay,
+            paymentSourceWalletID: profile.paymentSourceWallet?.id,
+            paymentSourceWalletName: profile.paymentSourceWallet?.name,
+            currencyCode: currencyCode,
+            currentDebtMinor: result.debt,
+            availableCreditMinor: result.available,
+            openedAt: createdAt,
+            autoPayEnabled: profile.autoPayEnabled
+        )
     }
 
     func planningCreditCardSnapshot(

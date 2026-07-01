@@ -287,7 +287,7 @@ struct OverviewView: View {
             records: transactionRecords
         )
         let creditCardAccounts = visibleWallets.compactMap {
-            $0.planningCreditCardSnapshot(balanceIndex: balanceIndex)
+            $0.planningCreditCardSnapshot(records: transactionRecords, occurrences: occurrenceSnapshots)
         }
         let month = currentMonth
         let activeBudgets = PlanningLogic.resolvingFamilySpendingCategoryScopes(

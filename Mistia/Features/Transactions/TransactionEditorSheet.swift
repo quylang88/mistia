@@ -3604,7 +3604,7 @@ struct TransactionEditorSheet: View {
             records: records
         )
 
-        guard let account = wallet.planningCreditCardSnapshot(balanceIndex: resolvedBalanceIndex) else {
+        guard let account = wallet.planningCreditCardSnapshot(records: Array(records), occurrences: Array(occurrenceSnapshots)) else {
             return nil
         }
 
