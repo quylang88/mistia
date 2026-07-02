@@ -724,6 +724,79 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(position?.preferredWalletID, nil)
     }
 
+    func testOverCollectingReceivableDebtClosesPositionWithoutCreatingPayableDebt() {
+        let walletID = UUID()
+        let now = Date(timeIntervalSince1970: 1_774_051_200)
+        let records = [
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .lend,
+                amountMinor: 5_000,
+                occurredAt: now,
+                sourceWalletID: walletID,
+                sourceWalletKind: .cash,
+                sourceCurrencyCode: "JPY",
+                counterpartyName: "Lan"
+            ),
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .collect,
+                amountMinor: 7_000,
+                occurredAt: now.addingTimeInterval(60),
+                sourceWalletID: walletID,
+                sourceWalletKind: .cash,
+                sourceCurrencyCode: "JPY",
+                counterpartyName: "Lan"
+            )
+        ]
+
+        XCTAssertTrue(TransactionLogic.openDebtPositions(from: records).isEmpty)
+    }
+
+    func testDebtCollectionAndBorrowingDoNotCountAsIncomeEvenForLegacyIncomeRows() {
+        let now = Date(timeIntervalSince1970: 1_774_051_200)
+        let records = [
+            makeRecord(
+                primaryKind: .income,
+                transferSubtype: .debt,
+                debtIntent: .collect,
+                amountMinor: 7_000,
+                occurredAt: now,
+                sourceWalletID: UUID(),
+                sourceWalletKind: .cash,
+                sourceCurrencyCode: "JPY",
+                counterpartyName: "Lan"
+            ),
+            makeRecord(
+                primaryKind: .income,
+                transferSubtype: .debt,
+                debtIntent: .borrow,
+                amountMinor: 4_000,
+                occurredAt: now.addingTimeInterval(60),
+                sourceWalletID: UUID(),
+                sourceWalletKind: .cash,
+                sourceCurrencyCode: "JPY",
+                counterpartyName: "Minh"
+            ),
+            makeRecord(
+                primaryKind: .income,
+                amountMinor: 9_000,
+                occurredAt: now.addingTimeInterval(120),
+                sourceWalletID: UUID(),
+                sourceWalletKind: .cash,
+                sourceCurrencyCode: "JPY",
+                categoryID: UUID()
+            )
+        ]
+
+        let summary = TransactionLogic.summary(for: records)
+
+        XCTAssertEqual(records.map { TransactionLogic.reportedIncomeAmount(for: $0) }, [0, 0, 9_000])
+        XCTAssertEqual(summary.incomeMinor, 9_000)
+    }
+
     func testDraftDoesNotAffectSummaryBalanceAndDraftSectionComesFirst() {
         let wallet = TransactionWalletSnapshot(
             id: UUID(),

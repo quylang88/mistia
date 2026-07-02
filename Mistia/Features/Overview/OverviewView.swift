@@ -291,12 +291,13 @@ struct OverviewView: View {
         }
         let month = currentMonth
         let activeBudgets = PlanningLogic.resolvingFamilySpendingCategoryScopes(
-            plans: visibleBudgets
-                .filter {
-                    !$0.isArchived
-                        && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == month
-                }
-                .map { $0.planningSnapshot(calendar: calendar) },
+            plans: PlanningLogic.activeBudgetPlans(
+                plans: visibleBudgets
+                    .filter { !$0.isArchived }
+                    .map { $0.planningSnapshot(calendar: calendar) },
+                selectedMonth: month,
+                calendar: calendar
+            ),
             categoryScopes: familyBudgetSpendingCategoryScopes
         )
         let billSnapshots = visibleBills

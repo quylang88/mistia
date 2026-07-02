@@ -321,6 +321,9 @@ enum FamilyScopedData {
         if TransactionLogic.isPaidForExpenseDebt(record) {
             return .expense
         }
+        if record.transferSubtype == .debt {
+            return .transfer
+        }
 
         switch record.primaryKind {
         case .expense:

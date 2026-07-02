@@ -233,6 +233,14 @@ nonisolated enum PlanningBudgetBranchMode: Equatable {
     case childOnly
 }
 
+nonisolated private struct PlanningBudgetContinuityKey: Hashable {
+    let categoryID: UUID?
+    let categoryKey: String
+    let parentKey: String
+    let isParent: Bool
+    let currencyCode: String
+}
+
 nonisolated struct PlanningBudgetSpendingIndex {
     private let personalRecordsByCategory: [UUID: [TransactionRecordSnapshot]]
     private let personalRecordsByBranch: [UUID: [TransactionRecordSnapshot]]
@@ -246,24 +254,35 @@ nonisolated struct PlanningBudgetSpendingIndex {
         selectedMonth: Date,
         calendar: Calendar = MistiaCalendar.current
     ) {
-        let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
-        let expenseRecordsInMonth = records.filter { record in
+        self.init(
+            records: records,
+            familyTransactions: familyTransactions,
+            dateInterval: calendar.dateInterval(of: .month, for: selectedMonth)
+        )
+    }
+
+    init(
+        records: [TransactionRecordSnapshot],
+        familyTransactions: [FamilyAggregateTransactionSnapshot],
+        dateInterval: DateInterval?
+    ) {
+        let expenseRecordsInRange = records.filter { record in
             guard record.entryStatus == .posted,
                   TransactionLogic.reportedExpenseAmount(for: record) != 0,
-                  let monthInterval
+                  let dateInterval
             else {
                 return false
             }
 
-            return record.occurredAt >= monthInterval.start
-                && record.occurredAt < monthInterval.end
+            return record.occurredAt >= dateInterval.start
+                && record.occurredAt < dateInterval.end
         }
 
         var recordsByCategory: [UUID: [TransactionRecordSnapshot]] = [:]
         var recordsByBranch: [UUID: [TransactionRecordSnapshot]] = [:]
         var recordsByCategoryKey: [String: [TransactionRecordSnapshot]] = [:]
         var recordsByBranchKey: [String: [TransactionRecordSnapshot]] = [:]
-        for record in expenseRecordsInMonth {
+        for record in expenseRecordsInRange {
             if let categoryID = record.categoryID {
                 recordsByCategory[categoryID, default: []].append(record)
             }
@@ -290,7 +309,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
         self.personalRecordsByBranchKey = recordsByBranchKey
 
         var familyIndex: [String: [FamilyAggregateTransactionSnapshot]] = [:]
-        guard let monthInterval else {
+        guard let dateInterval else {
             self.familyTransactionsByCategoryKey = familyIndex
             return
         }
@@ -300,8 +319,8 @@ nonisolated struct PlanningBudgetSpendingIndex {
                 (transaction.kind == .expense && !transaction.isAdjustment && !transaction.isCreditCardPayment && !transaction.isInstallmentPayment) ? transaction.amountMinor : 0
             )
             guard expenseMinor != 0,
-                  transaction.occurredAt >= monthInterval.start,
-                  transaction.occurredAt < monthInterval.end
+                  transaction.occurredAt >= dateInterval.start,
+                  transaction.occurredAt < dateInterval.end
             else {
                 continue
             }
@@ -1009,6 +1028,76 @@ nonisolated enum PlanningLogic {
         )
     }
 
+    static func activeBudgetPlans(
+        plans: [BudgetPlanSnapshot],
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [BudgetPlanSnapshot] {
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+        let eligiblePlans = plans.filter { plan in
+            !plan.categoryName.isEmpty
+                && startOfMonth(for: plan.monthAnchor, calendar: calendar) <= selectedMonthStart
+        }
+
+        return Dictionary(grouping: eligiblePlans) { plan in
+            budgetContinuityKey(for: plan)
+        }
+            .compactMap { _, groupedPlans in
+                groupedPlans.max { lhs, rhs in
+                    let lhsMonth = startOfMonth(for: lhs.monthAnchor, calendar: calendar)
+                    let rhsMonth = startOfMonth(for: rhs.monthAnchor, calendar: calendar)
+                    if lhsMonth != rhsMonth {
+                        return lhsMonth < rhsMonth
+                    }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+            }
+            .sorted { lhs, rhs in
+                let nameComparison = lhs.branchCategoryName.localizedCaseInsensitiveCompare(rhs.branchCategoryName)
+                if nameComparison != .orderedSame {
+                    return nameComparison == .orderedAscending
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+    }
+
+    private static func budgetContinuityKey(
+        for plan: BudgetPlanSnapshot
+    ) -> PlanningBudgetContinuityKey {
+        if let categoryID = plan.categoryID {
+            return PlanningBudgetContinuityKey(
+                categoryID: categoryID,
+                categoryKey: "",
+                parentKey: "",
+                isParent: false,
+                currencyCode: MistiaCurrencyLogic.normalizedCode(plan.currencyCode)
+            )
+        }
+
+        return PlanningBudgetContinuityKey(
+            categoryID: nil,
+            categoryKey: FamilyLogic.normalizedFamilyGroupingName(plan.categoryName),
+            parentKey: FamilyLogic.normalizedFamilyGroupingName(plan.categoryParentName ?? ""),
+            isParent: plan.categoryIsParent,
+            currencyCode: MistiaCurrencyLogic.normalizedCode(plan.currencyCode)
+        )
+    }
+
+    private static func budgetSpendingInterval(
+        for plan: BudgetPlanSnapshot,
+        selectedMonth: Date,
+        selectedMonthInterval: DateInterval?,
+        calendar: Calendar
+    ) -> DateInterval? {
+        guard let selectedMonthInterval else { return nil }
+        guard plan.rolloverEnabled else { return selectedMonthInterval }
+
+        let planMonthStart = startOfMonth(for: plan.monthAnchor, calendar: calendar)
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+        let start = min(planMonthStart, selectedMonthStart)
+        return DateInterval(start: start, end: selectedMonthInterval.end)
+    }
+
     static func budgetRows(
         plans: [BudgetPlanSnapshot],
         records: [TransactionRecordSnapshot],
@@ -1019,23 +1108,47 @@ nonisolated enum PlanningLogic {
         familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
         familySpendingAvailable: Bool = false
     ) -> [PlanningBudgetRowSnapshot] {
-        let spendingIndex = PlanningBudgetSpendingIndex(
+        let selectedMonthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
+        let monthlySpendingIndex = PlanningBudgetSpendingIndex(
             records: records,
             familyTransactions: familyTransactions,
-            selectedMonth: selectedMonth,
-            calendar: calendar
+            dateInterval: selectedMonthInterval
         )
         let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+        var rolloverSpendingIndexesByStart: [Date: PlanningBudgetSpendingIndex] = [:]
 
         return plans
             .map { plan in
+                let planSpendingIndex: PlanningBudgetSpendingIndex
+                if plan.rolloverEnabled,
+                   let interval = budgetSpendingInterval(
+                    for: plan,
+                    selectedMonth: selectedMonth,
+                    selectedMonthInterval: selectedMonthInterval,
+                    calendar: calendar
+                   ) {
+                    if let cachedIndex = rolloverSpendingIndexesByStart[interval.start] {
+                        planSpendingIndex = cachedIndex
+                    } else {
+                        let index = PlanningBudgetSpendingIndex(
+                            records: records,
+                            familyTransactions: familyTransactions,
+                            dateInterval: interval
+                        )
+                        rolloverSpendingIndexesByStart[interval.start] = index
+                        planSpendingIndex = index
+                    }
+                } else {
+                    planSpendingIndex = monthlySpendingIndex
+                }
+
                 let spent = plan.includesFamilySpending && familySpendingAvailable
-                    ? spendingIndex.familySpentForCategoryName(
+                    ? planSpendingIndex.familySpentForCategoryName(
                         plan.categoryName,
                         currencyCode: plan.currencyCode,
                         rateIndex: rateIndex
                     )
-                    : spendingIndex.personalSpentForCategory(
+                    : planSpendingIndex.personalSpentForCategory(
                         plan.categoryID,
                         categoryName: plan.categoryName,
                         currencyCode: plan.currencyCode,
@@ -1170,13 +1283,39 @@ nonisolated enum PlanningLogic {
         familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
         familySpendingAvailable: Bool = false
     ) -> [PlanningBudgetBranchRowSnapshot] {
-        let spendingIndex = PlanningBudgetSpendingIndex(
+        let selectedMonthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
+        let monthlySpendingIndex = PlanningBudgetSpendingIndex(
             records: records,
             familyTransactions: familyTransactions,
-            selectedMonth: selectedMonth,
-            calendar: calendar
+            dateInterval: selectedMonthInterval
         )
         let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+        var rolloverSpendingIndexesByStart: [Date: PlanningBudgetSpendingIndex] = [:]
+
+        func spendingIndex(for plan: BudgetPlanSnapshot) -> PlanningBudgetSpendingIndex {
+            guard plan.rolloverEnabled,
+                  let interval = budgetSpendingInterval(
+                    for: plan,
+                    selectedMonth: selectedMonth,
+                    selectedMonthInterval: selectedMonthInterval,
+                    calendar: calendar
+                  )
+            else {
+                return monthlySpendingIndex
+            }
+
+            if let cachedIndex = rolloverSpendingIndexesByStart[interval.start] {
+                return cachedIndex
+            }
+
+            let index = PlanningBudgetSpendingIndex(
+                records: records,
+                familyTransactions: familyTransactions,
+                dateInterval: interval
+            )
+            rolloverSpendingIndexesByStart[interval.start] = index
+            return index
+        }
 
         return Dictionary(grouping: plans) { $0.branchCategoryID }
             .compactMap { branchID, branchPlans in
@@ -1188,15 +1327,16 @@ nonisolated enum PlanningLogic {
                 guard let branchTemplate else { return nil }
                 let childRows = childPlans
                     .map { plan in
+                        let planSpendingIndex = spendingIndex(for: plan)
                         let planIncludesFamilySpending = familySpendingAvailable
                             && plan.includesFamilySpending
                         let spent = planIncludesFamilySpending
-                            ? spendingIndex.familySpentForCategoryName(
+                            ? planSpendingIndex.familySpentForCategoryName(
                                 plan.categoryName,
                                 currencyCode: plan.currencyCode,
                                 rateIndex: rateIndex
                             )
-                            : spendingIndex.personalSpentForCategory(
+                            : planSpendingIndex.personalSpentForCategory(
                                 plan.categoryID,
                                 categoryName: plan.categoryName,
                                 currencyCode: plan.currencyCode,
@@ -1230,15 +1370,16 @@ nonisolated enum PlanningLogic {
                     }
 
                 if let parentPlan {
+                    let parentSpendingIndex = spendingIndex(for: parentPlan)
                     let parentIncludesFamilySpending = familySpendingAvailable
                         && parentPlan.includesFamilySpending
                     let spent = parentIncludesFamilySpending
-                        ? spendingIndex.familySpentForCategoryName(
+                        ? parentSpendingIndex.familySpentForCategoryName(
                             parentPlan.branchCategoryName,
                             currencyCode: parentPlan.currencyCode,
                             rateIndex: rateIndex
                         )
-                        : spendingIndex.personalSpentForBranch(
+                        : parentSpendingIndex.personalSpentForBranch(
                             branchID,
                             branchName: parentPlan.branchCategoryName,
                             currencyCode: parentPlan.currencyCode,

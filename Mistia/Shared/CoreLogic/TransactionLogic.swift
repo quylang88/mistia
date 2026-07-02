@@ -1284,6 +1284,9 @@ nonisolated enum TransactionLogic {
         if let reportingIncomeMinor = record.reportingIncomeMinor {
             return reportingIncomeMinor
         }
+        if record.transferSubtype == .debt {
+            return 0
+        }
         return record.primaryKind == .income ? record.amountMinor : 0
     }
 
@@ -1514,21 +1517,27 @@ nonisolated enum TransactionLogic {
                 return nil
             }
 
-            let total = groupedRecords
-                .reduce(into: Int64.zero) { partialResult, record in
-                    switch record.debtIntent {
-                    case .lend:
-                        partialResult += record.amountMinor
-                    case .collect:
-                        partialResult -= record.amountMinor
-                    case .borrow:
-                        partialResult -= record.amountMinor
-                    case .repay:
-                        partialResult += record.amountMinor
-                    case nil:
-                        break
-                    }
+            var lentMinor = Int64.zero
+            var collectedMinor = Int64.zero
+            var borrowedMinor = Int64.zero
+            var repaidMinor = Int64.zero
+            for record in groupedRecords {
+                switch record.debtIntent {
+                case .lend:
+                    lentMinor += record.amountMinor
+                case .collect:
+                    collectedMinor += record.amountMinor
+                case .borrow:
+                    borrowedMinor += record.amountMinor
+                case .repay:
+                    repaidMinor += record.amountMinor
+                case nil:
+                    break
                 }
+            }
+            let receivableMinor = max(lentMinor - collectedMinor, 0)
+            let payableMinor = max(borrowedMinor - repaidMinor, 0)
+            let total = receivableMinor - payableMinor
 
             guard total != 0 else { return nil }
             let preferredIntent: TransactionDebtIntent = total > 0 ? .lend : .borrow

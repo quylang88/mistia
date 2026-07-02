@@ -109,6 +109,11 @@ struct PlanningBudgetEditorSheet: View {
         target.budget != nil && targetMonthAnchor == currentMonthAnchor
     }
 
+    private var isEditingCarriedForwardBudgetRecord: Bool {
+        guard let budget = target.budget else { return false }
+        return PlanningLogic.startOfMonth(for: budget.monthAnchor) < targetMonthAnchor
+    }
+
     private var shouldShowFamilySpendingToggle: Bool {
         familyContextStore.family != nil && familyContextStore.members.count >= 2
     }
@@ -229,7 +234,7 @@ struct PlanningBudgetEditorSheet: View {
                     }
                 }
 
-                if target.budget != nil {
+                if target.budget != nil && !isEditingCarriedForwardBudgetRecord {
                     if isPastBudgetRecord {
                         MistiaDestructiveActionSection(
                             buttonTitle: L10n.planning.planning.archiveBudget,
@@ -354,7 +359,7 @@ struct PlanningBudgetEditorSheet: View {
 
         let now = Date()
         let budgetForSync: BudgetPlan
-        if let budget = target.budget {
+        if let budget = target.budget, !isEditingCarriedForwardBudgetRecord {
             budget.category = category
             budget.limitMinor = limitMinor
             budget.rolloverEnabled = draft.rolloverEnabled

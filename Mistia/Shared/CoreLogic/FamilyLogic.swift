@@ -255,6 +255,29 @@ nonisolated struct FamilyBudgetPlanSnapshot: Equatable, Identifiable {
     let limitMinor: Int64
     let currencyCode: String
     let monthAnchor: Date
+    let rolloverEnabled: Bool
+
+    init(
+        id: UUID,
+        ownerUserID: UUID,
+        categoryName: String,
+        iconSymbolName: String,
+        colorHex: String,
+        limitMinor: Int64,
+        currencyCode: String,
+        monthAnchor: Date,
+        rolloverEnabled: Bool = false
+    ) {
+        self.id = id
+        self.ownerUserID = ownerUserID
+        self.categoryName = categoryName
+        self.iconSymbolName = iconSymbolName
+        self.colorHex = colorHex
+        self.limitMinor = limitMinor
+        self.currencyCode = currencyCode
+        self.monthAnchor = monthAnchor
+        self.rolloverEnabled = rolloverEnabled
+    }
 }
 
 nonisolated struct FamilyBudgetAggregateSnapshot: Equatable, Identifiable {
@@ -584,9 +607,13 @@ nonisolated enum FamilyLogic {
     ) -> [FamilyBudgetAggregateSnapshot] {
         let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
         let monthInterval = calendar.dateInterval(of: .month, for: monthStart)
-        let groupedPlans = Dictionary(grouping: plans.filter { plan in
+        let activePlans = activeFamilyBudgetPlans(
+            plans: plans,
+            selectedMonth: monthStart,
+            calendar: calendar
+        )
+        let groupedPlans = Dictionary(grouping: activePlans.filter { plan in
             !normalizedFamilyGroupingName(plan.categoryName).isEmpty
-                && PlanningLogic.startOfMonth(for: plan.monthAnchor, calendar: calendar) == monthStart
         }) { plan in
             normalizedFamilyGroupingName(plan.categoryName)
         }
@@ -596,11 +623,36 @@ nonisolated enum FamilyLogic {
             referenceDate: referenceDate,
             calendar: calendar
         )
-        let spendingTransactionsByCategoryKey = budgetSpendingTransactionsByCategoryKey(
+        let monthlySpendingTransactionsByCategoryKey = budgetSpendingTransactionsByCategoryKey(
             transactions: transactions,
             monthInterval: monthInterval
         )
         let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+        var rolloverSpendingTransactionsByStart: [Date: [String: [FamilyAggregateTransactionSnapshot]]] = [:]
+
+        func spendingTransactionsByCategoryKey(
+            for plan: FamilyBudgetPlanSnapshot
+        ) -> [String: [FamilyAggregateTransactionSnapshot]] {
+            guard plan.rolloverEnabled,
+                  let monthInterval
+            else {
+                return monthlySpendingTransactionsByCategoryKey
+            }
+
+            let planMonthStart = PlanningLogic.startOfMonth(for: plan.monthAnchor, calendar: calendar)
+            let start = min(planMonthStart, monthStart)
+            if let cached = rolloverSpendingTransactionsByStart[start] {
+                return cached
+            }
+
+            let interval = DateInterval(start: start, end: monthInterval.end)
+            let indexed = budgetSpendingTransactionsByCategoryKey(
+                transactions: transactions,
+                monthInterval: interval
+            )
+            rolloverSpendingTransactionsByStart[start] = indexed
+            return indexed
+        }
 
         let rows = groupedPlans.compactMap { key, groupedPlans -> FamilyBudgetAggregateSnapshot? in
             guard let selectedPlan = prioritizedPlan(
@@ -612,7 +664,7 @@ nonisolated enum FamilyLogic {
                 return nil
             }
 
-            let spent = spendingTransactionsByCategoryKey[key]?.reduce(into: Int64.zero) { partial, transaction in
+            let spent = spendingTransactionsByCategoryKey(for: selectedPlan)[key]?.reduce(into: Int64.zero) { partial, transaction in
                 partial += reportingAmount(
                     amountMinor: reportedExpenseAmount(for: transaction),
                     sourceCurrencyCode: transaction.currencyCode,
@@ -652,6 +704,36 @@ nonisolated enum FamilyLogic {
             }
 
         return maximumCount.map { Array(sortedRows.prefix($0)) } ?? sortedRows
+    }
+
+    private static func activeFamilyBudgetPlans(
+        plans: [FamilyBudgetPlanSnapshot],
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> [FamilyBudgetPlanSnapshot] {
+        let selectedMonthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
+        let eligiblePlans = plans.filter { plan in
+            !normalizedFamilyGroupingName(plan.categoryName).isEmpty
+                && PlanningLogic.startOfMonth(for: plan.monthAnchor, calendar: calendar) <= selectedMonthStart
+        }
+
+        return Dictionary(grouping: eligiblePlans) { plan in
+            [
+                plan.ownerUserID.uuidString,
+                normalizedFamilyGroupingName(plan.categoryName),
+                MistiaCurrencyLogic.normalizedCode(plan.currencyCode)
+            ].joined(separator: "|")
+        }
+        .compactMap { _, groupedPlans in
+            groupedPlans.max { lhs, rhs in
+                let lhsMonth = PlanningLogic.startOfMonth(for: lhs.monthAnchor, calendar: calendar)
+                let rhsMonth = PlanningLogic.startOfMonth(for: rhs.monthAnchor, calendar: calendar)
+                if lhsMonth != rhsMonth {
+                    return lhsMonth < rhsMonth
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+        }
     }
 
     nonisolated static func familyGoalRows(

@@ -196,6 +196,120 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(rows.first?.spentMinor, 4_000)
     }
 
+    func testActiveBudgetPlansCarryForwardLatestMonthlyBudgetWithoutBackfillingEarlierMonths() {
+        let june = makeDate(year: 2026, month: 6, day: 1)
+        let july = makeDate(year: 2026, month: 7, day: 1)
+        let august = makeDate(year: 2026, month: 8, day: 1)
+        let foodCategory = UUID()
+        let juneBudgetID = UUID()
+        let julyBudgetID = UUID()
+
+        let juneBudget = BudgetPlanSnapshot(
+            id: juneBudgetID,
+            categoryID: foodCategory,
+            categoryName: "Ăn uống",
+            categoryIconSymbolName: "fork.knife",
+            categoryColorHex: "#FF9F1C",
+            limitMinor: 10_000,
+            rolloverEnabled: false,
+            currencyCode: "JPY",
+            monthAnchor: june
+        )
+        let julyBudget = BudgetPlanSnapshot(
+            id: julyBudgetID,
+            categoryID: foodCategory,
+            categoryName: "Ăn uống",
+            categoryIconSymbolName: "fork.knife",
+            categoryColorHex: "#FF9F1C",
+            limitMinor: 12_000,
+            rolloverEnabled: false,
+            currencyCode: "JPY",
+            monthAnchor: july
+        )
+
+        let mayPlans = PlanningLogic.activeBudgetPlans(
+            plans: [juneBudget, julyBudget],
+            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+            calendar: calendar
+        )
+        let augustPlans = PlanningLogic.activeBudgetPlans(
+            plans: [juneBudget, julyBudget],
+            selectedMonth: august,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(mayPlans.isEmpty)
+        XCTAssertEqual(augustPlans.map(\.id), [julyBudgetID])
+        XCTAssertEqual(augustPlans.first?.limitMinor, 12_000)
+        XCTAssertEqual(augustPlans.first?.monthAnchor, july)
+    }
+
+    func testBudgetRowsResetNonRolloverSpendingAndCarryRolloverSpendingAcrossMonths() {
+        let june = makeDate(year: 2026, month: 6, day: 1)
+        let july = makeDate(year: 2026, month: 7, day: 1)
+        let groceriesCategory = UUID()
+        let travelCategory = UUID()
+
+        let rows = PlanningLogic.budgetRows(
+            plans: [
+                BudgetPlanSnapshot(
+                    id: UUID(),
+                    categoryID: groceriesCategory,
+                    categoryName: "Đi chợ",
+                    categoryIconSymbolName: "cart.fill",
+                    categoryColorHex: "#2DAA9E",
+                    limitMinor: 10_000,
+                    rolloverEnabled: false,
+                    currencyCode: "JPY",
+                    monthAnchor: june
+                ),
+                BudgetPlanSnapshot(
+                    id: UUID(),
+                    categoryID: travelCategory,
+                    categoryName: "Du lịch",
+                    categoryIconSymbolName: "airplane",
+                    categoryColorHex: "#5B7BFF",
+                    limitMinor: 20_000,
+                    rolloverEnabled: true,
+                    currencyCode: "JPY",
+                    monthAnchor: june
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 6, day: 20),
+                    categoryID: groceriesCategory
+                ),
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 7, day: 4),
+                    categoryID: groceriesCategory
+                ),
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 6, day: 21),
+                    categoryID: travelCategory
+                ),
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 1_500,
+                    occurredAt: makeDate(year: 2026, month: 7, day: 5),
+                    categoryID: travelCategory
+                )
+            ],
+            selectedMonth: july,
+            referenceDate: makeDate(year: 2026, month: 7, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.first { $0.name == "Đi chợ" }?.spentMinor, 2_000)
+        XCTAssertEqual(rows.first { $0.name == "Du lịch" }?.spentMinor, 5_500)
+    }
+
     func testBudgetPaceWarnsWhenEarlyMonthSpendingIsMoreThanFifteenPercentAhead() {
         let assessment = PlanningLogic.budgetPaceAssessment(
             spentMinor: 25_000,

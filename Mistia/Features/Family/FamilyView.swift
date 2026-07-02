@@ -2184,9 +2184,6 @@ private struct FamilyOverviewDataHost: View {
             )
         }
         let activeBudgetPlans = visibleBudgets
-            .filter {
-                PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth
-            }
             .map { budget in
                 let plan = budget.planningSnapshot(calendar: calendar)
                 return FamilyBudgetPlanSnapshot(
@@ -2197,7 +2194,8 @@ private struct FamilyOverviewDataHost: View {
                     colorHex: plan.categoryColorHex,
                     limitMinor: plan.limitMinor,
                     currencyCode: plan.currencyCode,
-                    monthAnchor: plan.monthAnchor
+                    monthAnchor: plan.monthAnchor,
+                    rolloverEnabled: plan.rolloverEnabled
                 )
             }
         let goalSnapshots = visibleGoals.map { goal in
@@ -4400,6 +4398,9 @@ private extension TransactionRecordSnapshot {
     var familyAggregateKind: FamilyAggregateTransactionSnapshot.Kind {
         if TransactionLogic.isPaidForExpenseDebt(self) {
             return .expense
+        }
+        if transferSubtype == .debt {
+            return .transfer
         }
 
         switch primaryKind {

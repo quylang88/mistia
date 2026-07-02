@@ -1086,8 +1086,13 @@ nonisolated enum OverviewLogic {
         maximumCount: Int? = 3
     ) -> [OverviewBudgetAlertSnapshot] {
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        let activeBudgets = PlanningLogic.activeBudgetPlans(
+            plans: budgets,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
         let rows = PlanningLogic.budgetBranchRows(
-            plans: budgets.filter { !$0.categoryName.isEmpty && $0.monthAnchor == selectedMonth },
+            plans: activeBudgets.filter { !$0.categoryName.isEmpty },
             records: transactionRecords,
             selectedMonth: selectedMonth,
             referenceDate: referenceDate,

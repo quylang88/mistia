@@ -357,9 +357,13 @@ struct PlanningView: View {
         )
         let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
         let activeBudgetPlans = PlanningLogic.resolvingFamilySpendingCategoryScopes(
-            plans: visibleBudgets
-                .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
-                .map { $0.planningSnapshot(calendar: calendar) },
+            plans: PlanningLogic.activeBudgetPlans(
+                plans: visibleBudgets
+                    .filter { !$0.isArchived }
+                    .map { $0.planningSnapshot(calendar: calendar) },
+                selectedMonth: selectedMonth,
+                calendar: calendar
+            ),
             categoryScopes: familyBudgetSpendingCategoryScopes
         )
         let rows = PlanningLogic.budgetBranchRows(
@@ -826,6 +830,7 @@ struct PlanningView: View {
                     BudgetTabContent(
                         summary: tabSnapshot.summary,
                         currencyCode: currencyCode,
+                        selectedMonth: selectedMonth,
                         rows: tabSnapshot.rows,
                         referenceDate: .now,
                         onAdd: {
@@ -1822,6 +1827,7 @@ struct PlanningView: View {
 private struct BudgetTabContent: View {
     let summary: PlanningBudgetSummarySnapshot
     let currencyCode: String
+    let selectedMonth: Date
     let rows: [PlanningBudgetBranchRowSnapshot]
     let referenceDate: Date
     let onAdd: () -> Void
@@ -1830,7 +1836,11 @@ private struct BudgetTabContent: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            PlanningBudgetSummaryCard(summary: summary, currencyCode: currencyCode)
+            PlanningBudgetSummaryCard(
+                summary: summary,
+                currencyCode: currencyCode,
+                selectedMonth: selectedMonth
+            )
 
             if rows.isEmpty {
                 PlanningEmptyStateCard(
@@ -2286,8 +2296,10 @@ private struct PlanningDueModePicker: View {
 
 private struct PlanningBudgetSummaryCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.calendar) private var calendar
     let summary: PlanningBudgetSummarySnapshot
     let currencyCode: String
+    let selectedMonth: Date
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -2298,7 +2310,11 @@ private struct PlanningBudgetSummaryCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 18) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(L10n.planning.planning.monthlyBudgetTotal)
+                        Text(
+                            L10n.planning.planning.monthlyBudgetTotalForMonth(
+                                selectedMonth.monthDisplayText(calendar: calendar)
+                            )
+                        )
                             .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
 
@@ -2340,17 +2356,19 @@ private struct PlanningBudgetSummaryCard: View {
                         tint: Color(hex: "#2DAA9E")
                     )
 
-                    PlanningMetricColumn(
-                        title: L10n.planning.planning.projectedEndOfMonth,
-                        value: summary.projectedSpentMinor.formattedCurrency(code: currencyCode),
-                        tint: summaryColor
-                    )
+                    if !summary.paceAssessment.isPastMonth {
+                        PlanningMetricColumn(
+                            title: L10n.planning.planning.projectedEndOfMonth,
+                            value: summary.projectedSpentMinor.formattedCurrency(code: currencyCode),
+                            tint: summaryColor
+                        )
 
-                    PlanningMetricColumn(
-                        title: L10n.planning.planning.availablePerDay,
-                        value: summary.remainingDailyAllowanceMinor.formattedCurrency(code: currencyCode),
-                        tint: Color(hex: "#2DAA9E")
-                    )
+                        PlanningMetricColumn(
+                            title: L10n.planning.planning.availablePerDay,
+                            value: summary.remainingDailyAllowanceMinor.formattedCurrency(code: currencyCode),
+                            tint: Color(hex: "#2DAA9E")
+                        )
+                    }
                 }
             }
         }

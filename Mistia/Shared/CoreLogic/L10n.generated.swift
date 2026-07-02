@@ -2232,8 +2232,12 @@ nonisolated enum L10n {
             }
             static var monthly: String { L10n.tr("planning.planning.monthly", vi: "Theo tháng", en: "Monthly", ja: "毎月") }
             static func monthly(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.monthly", vi: "Theo tháng", en: "Monthly", ja: "毎月", language: language) }
-            static var monthlyBudgetTotal: String { L10n.tr("planning.planning.monthlyBudgetTotal", vi: "Tổng ngân sách tháng", en: "Monthly budget total", ja: "月間予算合計") }
-            static func monthlyBudgetTotal(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.monthlyBudgetTotal", vi: "Tổng ngân sách tháng", en: "Monthly budget total", ja: "月間予算合計", language: language) }
+            static func monthlyBudgetTotalForMonth(_ value: String) -> String {
+                L10n.format("planning.planning.monthlyBudgetTotalForMonth", vi: "Tổng ngân sách %@", en: "Total budget for %@", ja: "%@ の予算合計", value)
+            }
+            static func monthlyBudgetTotalForMonth(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("planning.planning.monthlyBudgetTotalForMonth", vi: "Tổng ngân sách %@", en: "Total budget for %@", ja: "%@ の予算合計", language: language, value)
+            }
             static var name: String { L10n.tr("planning.planning.name", vi: "Tên khoản", en: "Name", ja: "名称") }
             static func name(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.name", vi: "Tên khoản", en: "Name", ja: "名称", language: language) }
             static func needValueMonth(_ value: String) -> String {

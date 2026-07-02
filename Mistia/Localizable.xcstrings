@@ -20806,25 +20806,25 @@
         }
       }
     },
-    "planning.planning.monthlyBudgetTotal" : {
-      "extractionState" : "stale",
+    "planning.planning.monthlyBudgetTotalForMonth" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monthly budget total"
+            "value" : "Total budget for %@"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "月間予算合計"
+            "value" : "%@ の予算合計"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tổng ngân sách tháng"
+            "value" : "Tổng ngân sách %@"
           }
         }
       }
