@@ -2883,7 +2883,11 @@ struct DebtSettlementSheet: View {
             return
         }
 
-        guard parsedAmountMinor <= target.amountMinor else {
+        guard TransactionLogic.isDebtSettlementAmountAllowed(
+            amountMinor: parsedAmountMinor,
+            outstandingMinor: target.amountMinor,
+            intent: target.intent
+        ) else {
             alertMessage = L10n.transactions.debtsettlement.amountExceedsOutstanding
             return
         }

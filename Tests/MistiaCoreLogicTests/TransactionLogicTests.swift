@@ -755,6 +755,30 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertTrue(TransactionLogic.openDebtPositions(from: records).isEmpty)
     }
 
+    func testDebtSettlementAmountAllowsOverCollectionButNotOverRepayment() {
+        XCTAssertTrue(
+            TransactionLogic.isDebtSettlementAmountAllowed(
+                amountMinor: 7_000,
+                outstandingMinor: 5_000,
+                intent: .collect
+            )
+        )
+        XCTAssertFalse(
+            TransactionLogic.isDebtSettlementAmountAllowed(
+                amountMinor: 7_000,
+                outstandingMinor: 5_000,
+                intent: .repay
+            )
+        )
+        XCTAssertFalse(
+            TransactionLogic.isDebtSettlementAmountAllowed(
+                amountMinor: 0,
+                outstandingMinor: 5_000,
+                intent: .collect
+            )
+        )
+    }
+
     func testDebtCollectionAndBorrowingDoNotCountAsIncomeEvenForLegacyIncomeRows() {
         let now = Date(timeIntervalSince1970: 1_774_051_200)
         let records = [
@@ -783,6 +807,16 @@ final class TransactionLogicTests: XCTestCase {
             ),
             makeRecord(
                 primaryKind: .income,
+                title: TransactionGeneratedTitle.debt(.collect, language: .vietnamese),
+                amountMinor: 780,
+                occurredAt: now.addingTimeInterval(90),
+                sourceWalletID: UUID(),
+                sourceWalletKind: .cash,
+                sourceCurrencyCode: "JPY",
+                categoryID: MistiaSystemCategoryIdentity.canonicalID(for: .peopleRepayment)
+            ),
+            makeRecord(
+                primaryKind: .income,
                 amountMinor: 9_000,
                 occurredAt: now.addingTimeInterval(120),
                 sourceWalletID: UUID(),
@@ -794,7 +828,7 @@ final class TransactionLogicTests: XCTestCase {
 
         let summary = TransactionLogic.summary(for: records)
 
-        XCTAssertEqual(records.map { TransactionLogic.reportedIncomeAmount(for: $0) }, [0, 0, 9_000])
+        XCTAssertEqual(records.map { TransactionLogic.reportedIncomeAmount(for: $0) }, [0, 0, 0, 9_000])
         XCTAssertEqual(summary.incomeMinor, 9_000)
     }
 

@@ -516,6 +516,27 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(monthly.map(\.expenseMinor), [0])
     }
 
+    func testMonthlyCashflowDoesNotCountLegacyPeopleRepaymentIncomeAsIncome() {
+        let monthly = OverviewLogic.monthlyCashflowPages(
+            from: [
+                makeTransactionRecord(
+                    primaryKind: .income,
+                    title: TransactionGeneratedTitle.debt(.collect, language: .vietnamese),
+                    amountMinor: 780,
+                    occurredAt: makeDate(year: 2026, month: 7, day: 1),
+                    categoryID: MistiaSystemCategoryIdentity.canonicalID(for: .peopleRepayment),
+                    categoryName: "Thu nợ"
+                )
+            ],
+            currencyCode: "JPY",
+            referenceDate: makeDate(year: 2026, month: 7, day: 2),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(monthly.map(\.incomeMinor), [0])
+        XCTAssertEqual(monthly.map(\.expenseMinor), [0])
+    }
+
     func testCategorySpendingDrilldownIncludesChildAndDirectParentTransactions() {
         let foodParent = UUID()
         let grocery = UUID()
@@ -1305,6 +1326,7 @@ final class OverviewLogicTests: XCTestCase {
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype? = nil,
         debtIntent: TransactionDebtIntent? = nil,
+        title: String = "Test",
         amountMinor: Int64,
         reportingExpenseMinor: Int64? = nil,
         reportingIncomeMinor: Int64? = nil,
@@ -1313,6 +1335,7 @@ final class OverviewLogicTests: XCTestCase {
         sourceWalletID: UUID? = UUID(),
         sourceWalletKind: LedgerWalletKind? = .cash,
         categoryID: UUID? = nil,
+        categoryName: String? = nil,
         categoryParentID: UUID? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
@@ -1321,7 +1344,7 @@ final class OverviewLogicTests: XCTestCase {
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,
             entryStatus: .posted,
-            title: "Test",
+            title: title,
             note: nil,
             amountMinor: amountMinor,
             reportingExpenseMinor: reportingExpenseMinor,
@@ -1334,6 +1357,7 @@ final class OverviewLogicTests: XCTestCase {
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: categoryID,
+            categoryName: categoryName,
             categoryParentID: categoryParentID,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil

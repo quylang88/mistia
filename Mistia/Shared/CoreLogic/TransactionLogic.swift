@@ -1238,6 +1238,15 @@ nonisolated enum TransactionLogic {
         intent == .lend
     }
 
+    static func isDebtSettlementAmountAllowed(
+        amountMinor: Int64,
+        outstandingMinor: Int64,
+        intent: TransactionDebtIntent
+    ) -> Bool {
+        guard amountMinor > 0 else { return false }
+        return intent == .collect || amountMinor <= max(outstandingMinor, 0)
+    }
+
     static func isCreditCardDebtLending(_ record: TransactionRecordSnapshot) -> Bool {
         record.primaryKind == .transfer
             && record.transferSubtype == .debt
@@ -1293,7 +1302,34 @@ nonisolated enum TransactionLogic {
     }
 
     private static func isDebtReportingRecord(_ record: TransactionRecordSnapshot) -> Bool {
-        record.transferSubtype == .debt || record.debtIntent != nil
+        record.transferSubtype == .debt
+            || record.debtIntent != nil
+            || isLegacyDebtIncomeRecord(record)
+    }
+
+    private static func isLegacyDebtIncomeRecord(_ record: TransactionRecordSnapshot) -> Bool {
+        guard record.primaryKind == .income else {
+            return false
+        }
+
+        if record.categoryID == MistiaSystemCategoryIdentity.canonicalID(for: .peopleRepayment) {
+            return true
+        }
+
+        return isKnownGeneratedDebtIncomeTitle(record.title)
+    }
+
+    private static func isKnownGeneratedDebtIncomeTitle(_ title: String) -> Bool {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedTitle.isEmpty else { return false }
+
+        return [TransactionDebtIntent.collect, .borrow].contains { intent in
+            MistiaAppLanguage.allCases.contains { language in
+                TransactionGeneratedTitle.debt(intent, language: language)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased() == normalizedTitle
+            }
+        }
     }
 
     static func isPaidForDebt(_ record: TransactionRecordSnapshot) -> Bool {
