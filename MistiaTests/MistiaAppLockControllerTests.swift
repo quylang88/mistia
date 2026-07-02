@@ -270,6 +270,19 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertEqual(controller.lockCycle, launchCycle + 2)
     }
 
+    func testAutomaticBiometricAttemptWaitsForActiveSceneAndRunsOnlyOnce() {
+        var attempt = MistiaAppLockAutomaticBiometricAttemptState()
+
+        XCTAssertFalse(attempt.claim(isSceneActive: false))
+        XCTAssertFalse(attempt.hasAttempted)
+
+        XCTAssertTrue(attempt.claim(isSceneActive: true))
+        XCTAssertTrue(attempt.hasAttempted)
+
+        XCTAssertFalse(attempt.claim(isSceneActive: false))
+        XCTAssertFalse(attempt.claim(isSceneActive: true))
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "MistiaAppLockControllerTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

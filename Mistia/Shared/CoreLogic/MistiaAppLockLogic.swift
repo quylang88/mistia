@@ -25,6 +25,16 @@ nonisolated struct MistiaAppLockFailureState: Codable, Equatable, Sendable {
     let lockedUntil: Date?
 }
 
+nonisolated struct MistiaAppLockAutomaticBiometricAttemptState: Equatable, Sendable {
+    private(set) var hasAttempted = false
+
+    mutating func claim(isSceneActive: Bool) -> Bool {
+        guard isSceneActive, !hasAttempted else { return false }
+        hasAttempted = true
+        return true
+    }
+}
+
 nonisolated enum MistiaAppLockCredentialError: Error, Equatable {
     case invalidSecret(MistiaAppLockSecretValidationFailure)
     case randomGenerationFailed(OSStatus)

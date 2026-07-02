@@ -365,8 +365,9 @@ struct SecuritySettingsView: View {
 }
 
 struct MistiaAppLockScreen: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(MistiaAppLockController.self) private var appLockController
-    @State private var didAttemptBiometric = false
+    @State private var automaticBiometricAttempt = MistiaAppLockAutomaticBiometricAttemptState()
     @State private var usesCodeFallback = false
 
     var body: some View {
@@ -390,10 +391,8 @@ struct MistiaAppLockScreen: View {
                             }
                         }
                     )
-                    .task {
-                        guard !didAttemptBiometric else { return }
-                        didAttemptBiometric = true
-                        await authenticateWithBiometrics()
+                    .onChange(of: scenePhase, initial: true) { _, newPhase in
+                        startAutomaticBiometricAuthenticationIfNeeded(for: newPhase)
                     }
                 } else {
                     codeUnlockScreen
@@ -439,6 +438,13 @@ struct MistiaAppLockScreen: View {
         _ = await appLockController.authenticateWithBiometrics(
             reason: L10n.shared.appLock.biometricReason
         )
+    }
+
+    private func startAutomaticBiometricAuthenticationIfNeeded(for scenePhase: ScenePhase) {
+        guard automaticBiometricAttempt.claim(isSceneActive: scenePhase == .active) else { return }
+        Task {
+            await authenticateWithBiometrics()
+        }
     }
 }
 
