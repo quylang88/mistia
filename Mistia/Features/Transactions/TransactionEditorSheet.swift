@@ -605,6 +605,7 @@ struct TransactionEditorSheet: View {
                         .disabled(true)
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
