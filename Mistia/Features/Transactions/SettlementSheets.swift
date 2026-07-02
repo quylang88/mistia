@@ -570,6 +570,7 @@ struct SettlementEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -2676,6 +2677,7 @@ struct SettlementSplitCalculatorSheet: View {
                     splitSuggestionSection
                 }
             }
+            .scrollIndicators(.hidden)
             .navigationTitle(group?.title ?? L10n.transactions.settlement.sharedExpenseTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -255,6 +255,7 @@ struct PlanningBudgetEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.budget == nil ? L10n.planning.planning.ngNSChMI : L10n.planning.planning.sANgNSCh)
             .navigationBarTitleDisplayMode(.inline)
@@ -872,6 +873,7 @@ struct PlanningGoalEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.goal == nil ? L10n.planning.planning.mCTiUMI : L10n.planning.planning.sAMCTiU)
             .navigationBarTitleDisplayMode(.inline)
@@ -1254,6 +1256,7 @@ struct PlanningBillEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.plan == nil ? L10n.planning.planning.hANMI : L10n.planning.planning.sAHAN)
             .navigationBarTitleDisplayMode(.inline)
@@ -1794,6 +1797,7 @@ struct PlanningInstallmentEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.plan == nil ? L10n.planning.planning.khoNMI : L10n.planning.planning.sAKhoN)
             .navigationBarTitleDisplayMode(.inline)
@@ -2127,6 +2131,7 @@ struct PlanningCreditCardEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.wallet == nil ? L10n.planning.planning.thMI : L10n.planning.planning.sATh)
             .navigationBarTitleDisplayMode(.inline)

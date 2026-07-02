@@ -205,6 +205,7 @@ struct ManagementWalletEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.wallet == nil ? L10n.management.walletEditor.newTitle : L10n.management.walletEditor.editTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -977,6 +978,7 @@ struct ManagementCategoryEditorSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(target.category == nil ? L10n.management.categoryEditor.newTitle : L10n.management.categoryEditor.editTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -1444,6 +1446,7 @@ private struct ManagementBankPickerSheet: View {
                     .disabled(manualName.nilIfBlank == nil)
                 }
             }
+            .scrollIndicators(.hidden)
             .searchable(text: $searchText, prompt: L10n.management.management.searchBanks)
             .navigationTitle(L10n.management.management.chooseBank)
             .navigationBarTitleDisplayMode(.inline)
@@ -1504,6 +1507,7 @@ private struct ManagementParentCategoryPickerSheet: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .navigationTitle(L10n.management.management.parentCategory)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1775,6 +1779,7 @@ struct ManagementBalanceAdjustmentSheet: View {
                         .opacity(wallet.kind == .creditCard ? 0.5 : 1)
                 }
             }
+            .scrollIndicators(.hidden)
             .dismissKeyboardOnTap()
             .navigationTitle(L10n.management.management.balanceAdjustment2)
             .navigationBarTitleDisplayMode(.inline)
