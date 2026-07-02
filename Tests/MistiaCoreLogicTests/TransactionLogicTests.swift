@@ -767,6 +767,7 @@ final class TransactionLogicTests: XCTestCase {
                 sourceWalletID: UUID(),
                 sourceWalletKind: .cash,
                 sourceCurrencyCode: "JPY",
+                reportingIncomeMinor: 780,
                 counterpartyName: "Lan"
             ),
             makeRecord(

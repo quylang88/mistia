@@ -1281,13 +1281,19 @@ nonisolated enum TransactionLogic {
     }
 
     static func reportedIncomeAmount(for record: TransactionRecordSnapshot) -> Int64 {
+        if isDebtReportingRecord(record) {
+            return record.settlementRole == .resaleReceipt
+                ? (record.reportingIncomeMinor ?? 0)
+                : 0
+        }
         if let reportingIncomeMinor = record.reportingIncomeMinor {
             return reportingIncomeMinor
         }
-        if record.transferSubtype == .debt {
-            return 0
-        }
         return record.primaryKind == .income ? record.amountMinor : 0
+    }
+
+    private static func isDebtReportingRecord(_ record: TransactionRecordSnapshot) -> Bool {
+        record.transferSubtype == .debt || record.debtIntent != nil
     }
 
     static func isPaidForDebt(_ record: TransactionRecordSnapshot) -> Bool {

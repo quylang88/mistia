@@ -494,6 +494,28 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(week.last?.points.map(\.valueMinor), [0, 0, 0, 0, 5_000, 0, 0])
     }
 
+    func testMonthlyCashflowDoesNotCountDebtCollectionOverrideAsIncome() {
+        let monthly = OverviewLogic.monthlyCashflowPages(
+            from: [
+                makeTransactionRecord(
+                    primaryKind: .transfer,
+                    transferSubtype: .debt,
+                    debtIntent: .collect,
+                    amountMinor: 2_632,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 780,
+                    occurredAt: makeDate(year: 2026, month: 7, day: 1)
+                )
+            ],
+            currencyCode: "JPY",
+            referenceDate: makeDate(year: 2026, month: 7, day: 2),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(monthly.map(\.incomeMinor), [0])
+        XCTAssertEqual(monthly.map(\.expenseMinor), [0])
+    }
+
     func testCategorySpendingDrilldownIncludesChildAndDirectParentTransactions() {
         let foodParent = UUID()
         let grocery = UUID()

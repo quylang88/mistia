@@ -330,6 +330,70 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeByMember.map(\.amountMinor), [50_000])
     }
 
+    func testAggregateSummaryDoesNotCountDebtCollectionOverrideAsIncome() {
+        let member = UUID()
+        let interval = DateInterval(
+            start: makeDate(year: 2026, month: 7, day: 1),
+            end: makeDate(year: 2026, month: 8, day: 1)
+        )
+
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: [],
+            transactions: [
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: member,
+                    categoryName: "Vay & cho vay",
+                    occurredAt: makeDate(year: 2026, month: 7, day: 1),
+                    kind: .transfer,
+                    amountMinor: 2_632,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 780
+                )
+            ],
+            selectedInterval: interval,
+            visibleMemberIDs: [member],
+            memberNames: [member: "Tâm"],
+            referenceDate: makeDate(year: 2026, month: 7, day: 2),
+            calendar: calendar
+        )
+
+        XCTAssertTrue(summary.incomeByMember.isEmpty)
+    }
+
+    func testAggregateSummaryCountsResaleReceiptProfitAsIncome() {
+        let member = UUID()
+        let interval = DateInterval(
+            start: makeDate(year: 2026, month: 7, day: 1),
+            end: makeDate(year: 2026, month: 8, day: 1)
+        )
+
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: [],
+            transactions: [
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: member,
+                    categoryName: "Bán lại",
+                    occurredAt: makeDate(year: 2026, month: 7, day: 1),
+                    kind: .transfer,
+                    transferSubtype: .debt,
+                    debtIntent: .collect,
+                    settlementRole: .resaleReceipt,
+                    amountMinor: 1_500,
+                    reportingExpenseMinor: -1_000,
+                    reportingIncomeMinor: 500
+                )
+            ],
+            selectedInterval: interval,
+            visibleMemberIDs: [member],
+            memberNames: [member: "Tâm"],
+            referenceDate: makeDate(year: 2026, month: 7, day: 2),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(summary.incomeByMember.map(\.name), ["Tâm"])
+        XCTAssertEqual(summary.incomeByMember.map(\.amountMinor), [500])
+    }
+
     func testAggregateSummarySumsSameNamedCategorySpendingAcrossMembers() {
         let memberA = UUID()
         let memberB = UUID()

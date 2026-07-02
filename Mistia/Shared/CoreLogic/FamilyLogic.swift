@@ -348,6 +348,9 @@ nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
     let categoryParentName: String?
     let occurredAt: Date
     let kind: Kind
+    let transferSubtype: TransactionTransferSubtype?
+    let debtIntent: TransactionDebtIntent?
+    let settlementRole: SettlementTransactionRole?
     let amountMinor: Int64
     let reportingExpenseMinor: Int64?
     let reportingIncomeMinor: Int64?
@@ -363,6 +366,9 @@ nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
         categoryParentName: String? = nil,
         occurredAt: Date,
         kind: Kind,
+        transferSubtype: TransactionTransferSubtype? = nil,
+        debtIntent: TransactionDebtIntent? = nil,
+        settlementRole: SettlementTransactionRole? = nil,
         amountMinor: Int64,
         reportingExpenseMinor: Int64? = nil,
         reportingIncomeMinor: Int64? = nil,
@@ -377,6 +383,9 @@ nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
         self.categoryParentName = categoryParentName
         self.occurredAt = occurredAt
         self.kind = kind
+        self.transferSubtype = transferSubtype
+        self.debtIntent = debtIntent
+        self.settlementRole = settlementRole
         self.amountMinor = amountMinor
         self.reportingExpenseMinor = reportingExpenseMinor
         self.reportingIncomeMinor = reportingIncomeMinor
@@ -1024,10 +1033,24 @@ nonisolated enum FamilyLogic {
     nonisolated private static func reportedIncomeAmount(
         for transaction: FamilyAggregateTransactionSnapshot
     ) -> Int64 {
+        if isDebtReportingTransfer(transaction) {
+            return transaction.settlementRole == .resaleReceipt
+                ? (transaction.reportingIncomeMinor ?? 0)
+                : 0
+        }
         if let reportingIncomeMinor = transaction.reportingIncomeMinor {
             return reportingIncomeMinor
         }
         return transaction.kind == .income ? transaction.amountMinor : 0
+    }
+
+    nonisolated private static func isDebtReportingTransfer(
+        _ transaction: FamilyAggregateTransactionSnapshot
+    ) -> Bool {
+        transaction.kind == .transfer
+            || transaction.transferSubtype == .debt
+            || transaction.debtIntent != nil
+            || transaction.settlementRole != nil
     }
 
     nonisolated private static func budgetSpendingTransactionsByCategoryKey(
