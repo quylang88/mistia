@@ -109,6 +109,7 @@ final class MistiaAppLockController {
     private let failureStateDecoder = JSONDecoder()
 
     private(set) var isLocked = false
+    private(set) var lockCycle = 0
     private(set) var failureState = MistiaAppLockFailureState.empty
 
     init(
@@ -280,7 +281,9 @@ final class MistiaAppLockController {
             return
         }
 
+        guard !isLocked else { return }
         isLocked = true
+        lockCycle += 1
     }
 
     func unlock() {

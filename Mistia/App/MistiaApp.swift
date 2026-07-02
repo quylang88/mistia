@@ -50,6 +50,7 @@ struct MistiaApp: App {
                        appLockController.shouldPresentLock {
                         MistiaAppLockScreen()
                             .environment(appLockController)
+                            .id(appLockController.lockCycle)
                     }
                 }
                 .id(appRootIdentity)

@@ -239,6 +239,37 @@ final class MistiaAppLockControllerTests: XCTestCase {
         XCTAssertFalse(controller.isLocked)
     }
 
+    func testLockCycleAdvancesOnlyForEachUnlockedToLockedTransition() throws {
+        let defaults = makeDefaults()
+        let credential = try MistiaAppLockCredential.make(
+            kind: .pin4,
+            secret: "1234",
+            saltGenerator: { Data(repeating: 0x08, count: 16) }
+        )
+        defaults.set(true, forKey: MistiaAppStorageKey.appLockEnabled)
+        defaults.set("pin4", forKey: MistiaAppStorageKey.appLockSecretKind)
+        let controller = MistiaAppLockController(
+            defaults: defaults,
+            credentialStore: AppLockCredentialStoreSpy(credential: credential),
+            biometricAuthenticator: AppLockBiometricAuthenticatorSpy(kind: .faceID)
+        )
+
+        let launchCycle = controller.lockCycle
+        controller.lockIfNeeded()
+        XCTAssertEqual(controller.lockCycle, launchCycle)
+
+        XCTAssertTrue(controller.verify(secret: "1234"))
+        controller.lockIfNeeded()
+        XCTAssertEqual(controller.lockCycle, launchCycle + 1)
+
+        controller.lockIfNeeded()
+        XCTAssertEqual(controller.lockCycle, launchCycle + 1)
+
+        XCTAssertTrue(controller.verify(secret: "1234"))
+        controller.lockIfNeeded()
+        XCTAssertEqual(controller.lockCycle, launchCycle + 2)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "MistiaAppLockControllerTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
