@@ -65,3 +65,4 @@ playground.xcworkspace
 # AI
 .agent/
 .superpowers/
+.worktrees/
