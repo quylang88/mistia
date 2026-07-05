@@ -689,7 +689,7 @@ struct NotificationCenterView: View {
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var duePaymentOriginRow: AppNotificationRecord?
     @State private var transferTarget: TransactionEditorTarget?
-    @State private var responseErrorAlert: NotificationResponseErrorAlert?
+    @State private var responseAlert: NotificationPermissionResponseAlert?
     @State private var selectedGroupRoute: NotificationCenterGroupRoute?
     @State private var pendingGroupDetailSnapshotRefresh = false
     @State private var renderSnapshotCache: NotificationCenterRenderSnapshot?
@@ -754,7 +754,7 @@ struct NotificationCenterView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
-        .alert(item: $responseErrorAlert) { alert in
+        .alert(item: $responseAlert) { alert in
             Alert(
                 title: Text(alert.title),
                 message: Text(alert.message),
@@ -783,7 +783,7 @@ struct NotificationCenterView: View {
                     handleRowTap(rowID: rowID, resourceIndex: resourceIndex)
                 },
                 onRespond: { rowID, approve in
-                    respond(to: rowID, approve: approve)
+                    await respond(to: rowID, approve: approve)
                 },
                 onDismiss: {
                     handleGroupDetailDisappear()
@@ -992,7 +992,9 @@ struct NotificationCenterView: View {
                 if row.isRespondableFamilyRequest {
                     HStack(spacing: 10) {
                         Button {
-                            respond(to: row, approve: true)
+                            Task { @MainActor in
+                                responseAlert = await respond(to: row, approve: true)
+                            }
                         } label: {
                             Label(
                                 L10n.notifications.notificationcenter.approve,
@@ -1004,7 +1006,9 @@ struct NotificationCenterView: View {
                         .tint(notificationPurpleAccent)
 
                         Button(role: .destructive) {
-                            respond(to: row, approve: false)
+                            Task { @MainActor in
+                                responseAlert = await respond(to: row, approve: false)
+                            }
                         } label: {
                             Label(
                                 L10n.notifications.notificationcenter.reject,
@@ -1449,34 +1453,39 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func respond(to rowID: UUID, approve: Bool) {
+    @MainActor
+    private func respond(to rowID: UUID, approve: Bool) async -> NotificationPermissionResponseAlert {
         guard let row = rowRecord(for: rowID) else {
-            return
+            return .failure(
+                message: L10n.notifications.notificationcenter.mistiaCouldnTSendThisResponseYet
+            )
         }
-        respond(to: row, approve: approve)
+        return await respond(to: row, approve: approve)
     }
 
-    private func respond(to row: AppNotificationRecord, approve: Bool) {
+    @MainActor
+    private func respond(to row: AppNotificationRecord, approve: Bool) async -> NotificationPermissionResponseAlert {
         let snapshot = NotificationResponseSnapshot(row: row)
         applyImmediatePermissionResponse(to: row, approve: approve)
 
-        Task {
-            let didRespond = await familyContextStore.respondToPermissionNotification(
-                row,
-                approve: approve,
-                sessionStore: sessionStore
+        let didRespond = await familyContextStore.respondToPermissionNotification(
+            row,
+            approve: approve,
+            sessionStore: sessionStore
+        )
+        guard didRespond else {
+            snapshot.restore(row)
+            try? modelContext.save()
+            refreshRenderSnapshotCache()
+            return .failure(
+                message: familyContextStore.lastErrorMessage
+                    ?? L10n.notifications.notificationcenter.mistiaCouldnTSendThisResponseYet
             )
-            guard !didRespond else { return }
-
-            await MainActor.run {
-                snapshot.restore(row)
-                try? modelContext.save()
-                responseErrorAlert = NotificationResponseErrorAlert(
-                    title: L10n.notifications.notificationcenter.couldnTRespond,
-                    message: familyContextStore.lastErrorMessage ?? L10n.notifications.notificationcenter.mistiaCouldnTSendThisResponseYet
-                )
-            }
         }
+
+        refreshRenderSnapshotCache()
+        pendingGroupDetailSnapshotRefresh = true
+        return .success(approve: approve)
     }
 
     private func applyImmediatePermissionResponse(to row: AppNotificationRecord, approve: Bool) {
@@ -2024,7 +2033,7 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
     let uiState: MistiaUIState
     let onMarkGroupAsRead: ([UUID]) async -> Void
     let onRowTap: (UUID, NotificationCenterResourceIndex) -> Void
-    let onRespond: (UUID, Bool) -> Void
+    let onRespond: (UUID, Bool) async -> NotificationPermissionResponseAlert
     let onDismiss: () -> Void
 
     func makeUIViewController(context: Context) -> PresenterViewController {
@@ -2055,7 +2064,7 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
             uiState: MistiaUIState,
             onMarkGroupAsRead: @escaping ([UUID]) async -> Void,
             onRowTap: @escaping (UUID, NotificationCenterResourceIndex) -> Void,
-            onRespond: @escaping (UUID, Bool) -> Void,
+            onRespond: @escaping (UUID, Bool) async -> NotificationPermissionResponseAlert,
             onDismiss: @escaping () -> Void
         ) {
             guard let route else {
@@ -2075,7 +2084,10 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
                     uiState: uiState,
                     onMarkGroupAsRead: onMarkGroupAsRead,
                     onRowTap: onRowTap,
-                    onRespond: onRespond
+                    onRespond: onRespond,
+                    onFinishResponse: { [weak navigationController] in
+                        navigationController?.popViewController(animated: true)
+                    }
                 )
                 let host = HostingController(rootView: detail, routeID: route.id) { [weak self] in
                     self?.presentedRouteID = nil
@@ -2115,10 +2127,29 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
     }
 }
 
-private struct NotificationResponseErrorAlert: Identifiable {
+struct NotificationPermissionResponseAlert: Identifiable {
     let id = UUID()
     let title: String
     let message: String
+    let dismissesDetail: Bool
+
+    static func success(approve: Bool) -> NotificationPermissionResponseAlert {
+        NotificationPermissionResponseAlert(
+            title: approve
+                ? L10n.notifications.notificationcenter.approved
+                : L10n.notifications.notificationcenter.rejected,
+            message: NotificationCenterDisplayText.permissionResponseBody(approve: approve),
+            dismissesDetail: true
+        )
+    }
+
+    static func failure(message: String) -> NotificationPermissionResponseAlert {
+        NotificationPermissionResponseAlert(
+            title: L10n.notifications.notificationcenter.couldnTRespond,
+            message: message,
+            dismissesDetail: false
+        )
+    }
 }
 
 private struct NotificationResponseSnapshot {

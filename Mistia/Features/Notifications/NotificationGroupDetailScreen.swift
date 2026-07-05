@@ -9,16 +9,15 @@ struct NotificationGroupDetailScreen: View {
     let uiState: MistiaUIState
     let onMarkGroupAsRead: ([UUID]) async -> Void
     let onRowTap: (UUID, NotificationCenterResourceIndex) -> Void
-    let onRespond: (UUID, Bool) -> Void
+    let onRespond: (UUID, Bool) async -> NotificationPermissionResponseAlert
+    let onFinishResponse: () -> Void
 
     @State private var viewID = UUID()
+    @State private var responseAlert: NotificationPermissionResponseAlert?
+    @State private var respondingSubmission: PermissionResponseSubmission?
 
     private var notificationPurpleAccent: Color {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
-    }
-
-    private var actionFill: Color {
-        colorScheme == .dark ? .white.opacity(0.11) : .black.opacity(0.07)
     }
 
     private var rowTitleColor: Color {
@@ -29,13 +28,23 @@ struct NotificationGroupDetailScreen: View {
         colorScheme == .dark ? .primary.opacity(0.76) : .secondary
     }
 
+    private var permissionButtonBorder: Color {
+        colorScheme == .dark ? .white.opacity(0.18) : .black.opacity(0.10)
+    }
+
+    private struct PermissionResponseSubmission: Equatable {
+        let rowID: UUID
+        let approve: Bool
+    }
+
     init(
         _ route: NotificationCenterGroupRoute,
         calendar: Calendar,
         uiState: MistiaUIState,
         onMarkGroupAsRead: @escaping ([UUID]) async -> Void,
         onRowTap: @escaping (UUID, NotificationCenterResourceIndex) -> Void,
-        onRespond: @escaping (UUID, Bool) -> Void
+        onRespond: @escaping (UUID, Bool) async -> NotificationPermissionResponseAlert,
+        onFinishResponse: @escaping () -> Void
     ) {
         self.route = route
         self.calendar = calendar
@@ -43,6 +52,7 @@ struct NotificationGroupDetailScreen: View {
         self.onMarkGroupAsRead = onMarkGroupAsRead
         self.onRowTap = onRowTap
         self.onRespond = onRespond
+        self.onFinishResponse = onFinishResponse
     }
 
     var body: some View {
@@ -62,6 +72,17 @@ struct NotificationGroupDetailScreen: View {
         }
         .onDisappear {
             uiState.requestQuickCreateHidden(false, id: viewID)
+        }
+        .alert(item: $responseAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text(L10n.common.ok)) {
+                    if alert.dismissesDetail {
+                        onFinishResponse()
+                    }
+                }
+            )
         }
     }
 
@@ -146,24 +167,8 @@ struct NotificationGroupDetailScreen: View {
     private func actions(for row: NotificationCenterDetailRowSnapshot) -> some View {
         switch row.action {
         case .permissionResponse:
-            HStack(spacing: 8) {
-                actionButton(
-                    title: L10n.notifications.notificationcenter.approve,
-                    systemImage: "checkmark.circle.fill",
-                    foreground: notificationPurpleAccent
-                ) {
-                    onRespond(row.id, true)
-                }
-
-                actionButton(
-                    title: L10n.notifications.notificationcenter.reject,
-                    systemImage: "xmark.circle.fill",
-                    foreground: .red
-                ) {
-                    onRespond(row.id, false)
-                }
-            }
-            .padding(.top, 2)
+            permissionResponseButtons(for: row)
+                .padding(.top, 4)
         case .primary(let title, let systemImage):
             actionButton(
                 title: title,
@@ -175,6 +180,84 @@ struct NotificationGroupDetailScreen: View {
             .padding(.top, 2)
         case nil:
             EmptyView()
+        }
+    }
+
+    private func permissionResponseButtons(for row: NotificationCenterDetailRowSnapshot) -> some View {
+        let isProcessing = respondingSubmission != nil
+
+        return HStack(spacing: 10) {
+            permissionResponseButton(
+                title: L10n.notifications.notificationcenter.approve,
+                systemImage: "checkmark",
+                approve: true,
+                isProcessing: respondingSubmission == PermissionResponseSubmission(rowID: row.id, approve: true)
+            ) {
+                submitPermissionResponse(rowID: row.id, approve: true)
+            }
+
+            permissionResponseButton(
+                title: L10n.notifications.notificationcenter.reject,
+                systemImage: "xmark",
+                approve: false,
+                isProcessing: respondingSubmission == PermissionResponseSubmission(rowID: row.id, approve: false)
+            ) {
+                submitPermissionResponse(rowID: row.id, approve: false)
+            }
+        }
+        .disabled(isProcessing)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func permissionResponseButton(
+        title: String,
+        systemImage: String,
+        approve: Bool,
+        isProcessing: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        let foreground: Color = approve ? .white : .red
+        let fill: Color = approve ? notificationPurpleAccent : .clear
+
+        return Button(action: action) {
+            HStack(spacing: 7) {
+                if isProcessing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(foreground)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 12, weight: .bold))
+                }
+
+                Text(title)
+                    .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .foregroundStyle(foreground)
+            .background(fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(approve ? Color.clear : permissionButtonBorder, lineWidth: 0.8)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .opacity(isProcessing ? 0.72 : 1)
+    }
+
+    private func submitPermissionResponse(rowID: UUID, approve: Bool) {
+        guard respondingSubmission == nil else { return }
+        respondingSubmission = PermissionResponseSubmission(rowID: rowID, approve: approve)
+
+        Task {
+            let alert = await onRespond(rowID, approve)
+            await MainActor.run {
+                respondingSubmission = nil
+                responseAlert = alert
+            }
         }
     }
 
@@ -191,7 +274,10 @@ struct NotificationGroupDetailScreen: View {
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(actionFill, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(permissionButtonBorder, lineWidth: 0.8)
+            }
             .contentShape(Capsule())
             .onTapGesture(perform: action)
             .accessibilityElement(children: .combine)
