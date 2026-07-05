@@ -335,21 +335,24 @@ enum PlanningPersistenceSupport {
             ? PlanningLogic.monthKey(for: scheduledDate, calendar: calendar)
             : monthKey
         let now = Date()
-        if let existing = occurrences.first(where: {
+        let matchingOccurrences = occurrences.filter {
             $0.sourceKind == sourceKind
                 && $0.sourceID == sourceID
                 && (
                     $0.selectedMonthKey == monthKey
-                    || (sourceKind == .creditCard && $0.selectedMonthKey == legacyCreditCardDueMonthKey)
+                        || (sourceKind == .creditCard && $0.selectedMonthKey == legacyCreditCardDueMonthKey)
                 )
-        }) {
-            existing.selectedMonthKey = monthKey
-            existing.scheduledDate = scheduledDate
-            existing.amountMinorSnapshot = amountMinor
-            existing.status = paidAt == nil ? .pending : .paid
-            existing.paidAt = paidAt
-            existing.linkedTransactionID = linkedTransactionID
-            existing.updatedAt = now
+        }
+        if let existing = matchingOccurrences.first {
+            for occurrence in matchingOccurrences {
+                occurrence.selectedMonthKey = monthKey
+                occurrence.scheduledDate = scheduledDate
+                occurrence.amountMinorSnapshot = amountMinor
+                occurrence.status = paidAt == nil ? .pending : .paid
+                occurrence.paidAt = paidAt
+                occurrence.linkedTransactionID = linkedTransactionID
+                occurrence.updatedAt = now
+            }
             return existing
         } else {
             let record = DueOccurrenceRecord(

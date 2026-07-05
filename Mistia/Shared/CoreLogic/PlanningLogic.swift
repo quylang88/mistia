@@ -2839,8 +2839,12 @@ nonisolated enum PlanningLogic {
 
         for occurrence in occurrences where occurrence.sourceKind == sourceKind
             && occurrence.selectedMonthKey == selectedMonthKey
-            && result[occurrence.sourceID] == nil {
-            result[occurrence.sourceID] = occurrence
+        {
+            if let existing = result[occurrence.sourceID] {
+                result[occurrence.sourceID] = preferredOccurrence(existing, occurrence)
+            } else {
+                result[occurrence.sourceID] = occurrence
+            }
         }
 
         return result
@@ -2852,13 +2856,27 @@ nonisolated enum PlanningLogic {
         selectedMonthKey: String,
         occurrences: Occurrences
     ) -> PlanningDueOccurrenceSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        var fallback: PlanningDueOccurrenceSnapshot?
         for occurrence in occurrences where occurrence.sourceKind == sourceKind
             && occurrence.sourceID == sourceID
             && occurrence.selectedMonthKey == selectedMonthKey {
-            return occurrence
+            if occurrence.status == .paid {
+                return occurrence
+            }
+            fallback = fallback ?? occurrence
         }
 
-        return nil
+        return fallback
+    }
+
+    private static func preferredOccurrence(
+        _ existing: PlanningDueOccurrenceSnapshot,
+        _ candidate: PlanningDueOccurrenceSnapshot
+    ) -> PlanningDueOccurrenceSnapshot {
+        if existing.status != .paid, candidate.status == .paid {
+            return candidate
+        }
+        return existing
     }
 
     private static func makeRecurringBillDueItem(

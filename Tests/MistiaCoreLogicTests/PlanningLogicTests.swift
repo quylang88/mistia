@@ -1232,6 +1232,61 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertTrue(items.first?.hasExplicitDueDate == true)
     }
 
+    func testRecurringBillDueItemsPreferPaidDuplicateOccurrenceForSameCycle() {
+        let billID = UUID()
+        let paymentWalletID = UUID()
+        let selectedMonth = makeDate(year: 2026, month: 7, day: 1)
+        let paidTransactionID = UUID()
+        let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+        let bill = PlanningBillSnapshot(
+            id: billID,
+            name: "Internet",
+            iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+            categorySystemKey: .internet,
+            amountMinor: 5_000,
+            dueDay: 5,
+            frequencyMonths: 1,
+            paymentWalletID: paymentWalletID,
+            currencyCode: "JPY",
+            createdAt: makeDate(year: 2026, month: 1, day: 1),
+            scheduleKind: .recurring,
+            paymentStartDay: 5,
+            firstScheduledMonth: selectedMonth,
+            hasExplicitDueDate: false,
+            autoPayEnabled: true
+        )
+        let stalePending = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: monthKey,
+            scheduledDate: makeDate(year: 2026, month: 7, day: 5),
+            amountMinorSnapshot: 5_000,
+            status: .pending,
+            linkedTransactionID: nil
+        )
+        let paidDuplicate = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: monthKey,
+            scheduledDate: makeDate(year: 2026, month: 7, day: 5),
+            amountMinorSnapshot: 5_000,
+            status: .paid,
+            linkedTransactionID: paidTransactionID
+        )
+
+        let item = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [stalePending, paidDuplicate],
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        ).first
+
+        XCTAssertEqual(item?.status, .paid)
+        XCTAssertEqual(item?.linkedTransactionID, paidTransactionID)
+    }
+
     func testRecurringBillWindowKeepsDeadlineInSameMonthWhenDueDayIsAfterPaymentStart() {
         let items = PlanningLogic.recurringBillDueItems(
             bills: [

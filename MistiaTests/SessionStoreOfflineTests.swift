@@ -1594,6 +1594,101 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertFalse(rows.contains { $0.body.localizedCaseInsensitiveContains("Member electricity") })
     }
 
+    func testRecurringBillAutoPayMarksDuplicateCycleOccurrencesPaid() async throws {
+        let session = makeSession()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .disconnected
+        )
+        await store.bootstrapIfNeeded()
+
+        let calendar = Calendar(identifier: .gregorian)
+        let selectedMonth = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 7, day: 1)))
+        let autoPayDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 7, day: 5, hour: 12)))
+        let seedDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+        let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+
+        let paymentWallet = LedgerWallet(
+            name: "Main",
+            kind: .bank,
+            iconSymbolName: LedgerWalletKind.bank.defaultIconSymbolName,
+            iconColorHex: LedgerWalletKind.bank.defaultColorHex,
+            openingBalanceMinor: 100_000,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let bill = RecurringBillPlan(
+            name: "Internet",
+            iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+            amountMinor: 5_000,
+            dueDay: 5,
+            scheduleKind: .recurring,
+            paymentStartDay: 5,
+            firstScheduledMonth: selectedMonth,
+            hasExplicitDueDate: false,
+            autoPayEnabled: true,
+            autoPayDay: nil,
+            frequencyMonths: 1,
+            paymentWallet: paymentWallet,
+            currencyCode: "JPY",
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let firstOccurrence = DueOccurrenceRecord(
+            sourceKind: .recurringBill,
+            sourceID: bill.id,
+            selectedMonthKey: monthKey,
+            scheduledDate: autoPayDate,
+            amountMinorSnapshot: 5_000,
+            status: .pending,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let duplicateOccurrence = DueOccurrenceRecord(
+            sourceKind: .recurringBill,
+            sourceID: bill.id,
+            selectedMonthKey: monthKey,
+            scheduledDate: autoPayDate,
+            amountMinorSnapshot: 5_000,
+            status: .pending,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+
+        let context = store.currentModelContainer.mainContext
+        context.insert(paymentWallet)
+        context.insert(bill)
+        context.insert(firstOccurrence)
+        context.insert(duplicateOccurrence)
+        try context.save()
+
+        await MistiaRecurringBillMaintenance.run(
+            modelContext: context,
+            sessionStore: store,
+            referenceDate: autoPayDate,
+            calendar: calendar
+        )
+
+        let matchingOccurrences = try context.fetch(FetchDescriptor<DueOccurrenceRecord>())
+            .filter {
+                $0.sourceKind == .recurringBill
+                    && $0.sourceID == bill.id
+                    && $0.selectedMonthKey == monthKey
+            }
+        let autoPayments = try context.fetch(FetchDescriptor<LedgerTransaction>())
+            .filter {
+                $0.primaryKind == .expense
+                    && $0.sourceWallet?.id == paymentWallet.id
+                    && $0.amountMinor == 5_000
+            }
+
+        XCTAssertEqual(autoPayments.count, 1)
+        XCTAssertEqual(matchingOccurrences.count, 2)
+        XCTAssertTrue(matchingOccurrences.allSatisfy { $0.status == .paid })
+        XCTAssertTrue(matchingOccurrences.allSatisfy { $0.linkedTransactionID == autoPayments.first?.id })
+    }
+
     func testSignOutKeepsPreviousAccountAsEditableLocalProfile() async throws {
         let session = makeSession()
         let authService = SessionAuthServiceSpy(persistedSession: session)
