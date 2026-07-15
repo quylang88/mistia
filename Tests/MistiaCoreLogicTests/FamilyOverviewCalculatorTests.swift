@@ -179,6 +179,130 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         XCTAssertEqual(result.monthlySpendable.displayMinor, 88_000)
     }
 
+    func testComputeIgnoresCreditCardOpeningDebtForFamilyMemberView() {
+        let familyOwnerID = UUID()
+        let memberID = UUID()
+        let walletID = UUID()
+        let categoryID = UUID()
+        let month = makeDate(year: 2026, month: 7, day: 1)
+        let transactionDate = makeDate(year: 2026, month: 7, day: 12)
+        let wallet = FamilyOverviewWalletInputSnapshot(
+            id: walletID,
+            ownerUserID: memberID,
+            name: "Member Card",
+            kind: .creditCard,
+            openingBalanceMinor: 46_058,
+            creditCardProfile: FamilyOverviewCreditCardProfileSnapshot(
+                issuerName: "Test Issuer",
+                network: .visa,
+                last4: "1234",
+                creditLimitMinor: 350_000,
+                statementClosingDay: 10,
+                paymentDueDay: 26,
+                paymentSourceWalletID: nil,
+                paymentSourceWalletName: nil,
+                autoPayEnabled: false
+            ),
+            currencyCode: "JPY",
+            sortOrder: 0,
+            createdAt: makeDate(year: 2026, month: 1, day: 1)
+        )
+        let record = TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .expense,
+            transferSubtype: nil,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: "Member purchase",
+            note: nil,
+            amountMinor: 25_916,
+            sourceCurrencyCode: "JPY",
+            isArchived: false,
+            occurredAt: transactionDate,
+            createdAt: transactionDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .creditCard,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: categoryID,
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+        let transaction = FamilyOverviewTransactionInputSnapshot(
+            record: record,
+            overview: OverviewTransactionSnapshot(
+                id: record.id,
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Member purchase",
+                note: nil,
+                amountMinor: 25_916,
+                sourceCurrencyCode: "JPY",
+                occurredAt: transactionDate,
+                createdAt: transactionDate,
+                sourceWalletID: walletID,
+                sourceWalletName: "Member Card",
+                sourceWalletKind: .creditCard,
+                destinationWalletID: nil,
+                destinationWalletName: nil,
+                destinationWalletKind: nil,
+                categoryID: categoryID,
+                categoryName: "Shopping",
+                categoryIconSymbolName: "cart",
+                categoryColorHex: "#7C3AED",
+                categoryParentID: nil,
+                categoryParentName: nil,
+                categoryParentIconSymbolName: nil,
+                categoryParentColorHex: nil,
+                counterpartyName: nil,
+                isArchived: false
+            ),
+            aggregate: FamilyAggregateTransactionSnapshot(
+                ownerUserID: memberID,
+                createdByUserID: memberID,
+                categoryName: "Shopping",
+                occurredAt: transactionDate,
+                kind: .expense,
+                amountMinor: 25_916,
+                currencyCode: "JPY"
+            )
+        )
+
+        let result = FamilyOverviewCalculator.compute(
+            input: FamilyOverviewCalculationInput(
+                now: makeDate(year: 2026, month: 7, day: 16),
+                selectedMonth: month,
+                selectedInterval: DateInterval(
+                    start: month,
+                    end: makeDate(year: 2026, month: 8, day: 1)
+                ),
+                timeframeTitle: "July 2026",
+                familyMemberUserIDs: [familyOwnerID, memberID],
+                memberNames: [familyOwnerID: "Owner", memberID: "Member"],
+                memberOrder: [familyOwnerID, memberID],
+                familyOwnerUserID: familyOwnerID,
+                budgetManagerUserID: familyOwnerID,
+                goalManagerUserID: familyOwnerID,
+                reportingCurrencyCode: "JPY",
+                exchangeRates: [],
+                calendar: calendar,
+                wallets: [wallet],
+                transactions: [transaction],
+                budgets: [],
+                goals: [],
+                bills: [],
+                installments: [],
+                occurrences: []
+            )
+        )
+
+        let cardRow = result.walletRows.first { $0.name == "Member Card" }
+        XCTAssertEqual(cardRow?.debtMinor, 25_916)
+        XCTAssertEqual(cardRow?.currentBalanceMinor, 324_084)
+    }
+
     func testComputeGroupsMonthlyBillsByCategoryWithinCurrencyAndOmitsUnknownAmounts() {
         let ownerID = UUID()
         let month = makeDate(year: 2026, month: 5, day: 1)

@@ -1985,17 +1985,12 @@ struct PlanningCreditCardEditorSheet: View {
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
-    @Query
-    private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningCreditCardEditorTarget
 
     @State private var draft: PlanningCreditCardDraft
-    @State private var dismissBaselineDraft: PlanningCreditCardDraft
     private let initialDraft: PlanningCreditCardDraft
-    @State private var paymentAmountText: String
-    private let initialPaymentAmountText: String
     @State private var alertMessage: String?
     @State private var showsIconPicker = false
 
@@ -2003,11 +1998,7 @@ struct PlanningCreditCardEditorSheet: View {
         self.target = target
         let initialDraft = PlanningCreditCardDraft(wallet: target.wallet)
         self.initialDraft = initialDraft
-        let initialPaymentAmountText = target.dueItem.map { String($0.amountMinor) } ?? initialDraft.availableCreditText
-        self.initialPaymentAmountText = initialPaymentAmountText
         _draft = State(initialValue: initialDraft)
-        _dismissBaselineDraft = State(initialValue: initialDraft)
-        _paymentAmountText = State(initialValue: initialPaymentAmountText)
     }
 
     private var availablePaymentWallets: [LedgerWallet] {
@@ -2058,7 +2049,7 @@ struct PlanningCreditCardEditorSheet: View {
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
         MistiaDismissGuardConfiguration(
             mode: target.wallet == nil ? .creating : .editing,
-            hasUnsavedChanges: draft != dismissBaselineDraft || paymentAmountText != initialPaymentAmountText
+            hasUnsavedChanges: draft != initialDraft
         )
     }
 
@@ -2089,9 +2080,6 @@ struct PlanningCreditCardEditorSheet: View {
                         .onChange(of: draft.last4) { _, newValue in
                             draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                         }
-                    MistiaCurrencyInputField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText, showsCalculatorButton: target.wallet == nil)
-                        .disabled(target.wallet != nil)
-                        .opacity(target.wallet != nil ? 0.5 : 1)
                     MistiaCurrencyInputField(L10n.planning.planning.creditLimit, text: $draft.creditLimitText)
                     Picker(L10n.planning.planning.dueDay, selection: $draft.paymentDueDay) {
                         ForEach(paymentDueDayOptions, id: \.self) { day in
@@ -2156,78 +2144,6 @@ struct PlanningCreditCardEditorSheet: View {
             }
         }
         .planningAlert(message: $alertMessage)
-        .onChange(of: draft.creditLimitText) { _, _ in
-            if let wallet = target.wallet {
-                let limit = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
-                draft.availableCreditText = "\(result.available)"
-            }
-        }
-        .task(id: target.wallet?.id) {
-            if let wallet = target.wallet {
-                let limit = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
-                let availableStr = "\(result.available)"
-                draft.availableCreditText = availableStr
-                if dismissBaselineDraft.availableCreditText != availableStr {
-                    dismissBaselineDraft.availableCreditText = availableStr
-                }
-            }
-        }
-    }
-
-    private func calculateDebtAndAvailable(for wallet: LedgerWallet, creditLimitMinor: Int64) -> (debt: Int64, available: Int64) {
-        let walletSnapshot = transactionWalletSnapshot(for: wallet)
-        let balance = TransactionLogic.creditCardBalance(
-            creditLimitMinor: creditLimitMinor,
-            wallet: walletSnapshot,
-            balanceIndex: balanceIndex(for: walletSnapshot)
-        )
-        return (balance.currentDebtMinor, balance.availableCreditMinor)
-    }
-
-    private func transactionWalletSnapshot(for wallet: LedgerWallet) -> TransactionWalletSnapshot {
-        TransactionWalletSnapshot(
-            id: wallet.id,
-            kind: wallet.kind,
-            openingBalanceMinor: wallet.openingBalanceMinor
-        )
-    }
-
-    private func balanceIndex(for walletSnapshot: TransactionWalletSnapshot) -> TransactionWalletBalanceIndex {
-        TransactionLogic.walletBalanceIndex(
-            wallets: [walletSnapshot],
-            records: storedTransactions.lazy
-                .filter { $0.deletedAt == nil }
-                .map(\.snapshot)
-        )
-    }
-
-    private var currentDueSnapshot: PlanningCreditCardDueSnapshot? {
-        guard let wallet = target.wallet else { return nil }
-
-        let availableCreditMinor = draft.availableCreditText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-        let creditLimitMinor = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-        let currentDebtMinor = max(creditLimitMinor - availableCreditMinor, 0)
-
-        return PlanningCreditCardDueSnapshot(
-            id: wallet.id,
-            walletID: wallet.id,
-            walletName: draft.name.nilIfBlank ?? wallet.name,
-            network: draft.network,
-            last4: draft.last4,
-            amountMinor: max(
-                paymentAmountText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode),
-                currentDebtMinor
-            ),
-            availableCreditMinor: availableCreditMinor,
-            statementMonth: target.dueItem?.statementMonth ?? target.selectedMonth,
-            dueDate: target.dueItem?.dueDate ?? PlanningLogic.scheduledDate(dueDay: draft.paymentDueDay, selectedMonth: target.selectedMonth),
-            paymentSourceWalletID: draft.paymentSourceWalletID,
-            currencyCode: wallet.currencyCode,
-            status: target.dueItem?.status ?? .pending,
-            linkedTransactionID: target.dueItem?.linkedTransactionID
-        )
     }
 
     private func save() {
@@ -2241,22 +2157,8 @@ struct PlanningCreditCardEditorSheet: View {
             return
         }
 
-        let availableCreditMinor = draft.availableCreditText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let creditLimitMinor = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-        
-        let currentDebtMinor: Int64
-        let targetDebt = max(creditLimitMinor - availableCreditMinor, 0)
-        if let wallet = target.wallet {
-            let walletSnapshot = transactionWalletSnapshot(for: wallet)
-            currentDebtMinor = TransactionLogic.creditCardOpeningDebtMinor(
-                targetCurrentDebtMinor: targetDebt,
-                wallet: walletSnapshot,
-                balanceIndex: balanceIndex(for: walletSnapshot)
-            )
-        } else {
-            currentDebtMinor = targetDebt
-        }
-        
+
         let now = Date()
         let walletForSync: LedgerWallet
 
@@ -2264,7 +2166,6 @@ struct PlanningCreditCardEditorSheet: View {
             wallet.name = trimmedName
             wallet.iconSymbolName = draft.iconSymbolName
             wallet.iconColorHex = draft.iconColorHex
-            wallet.openingBalanceMinor = currentDebtMinor
             wallet.updatedAt = now
             updateProfile(for: wallet, creditLimitMinor: creditLimitMinor, now: now)
             walletForSync = wallet
@@ -2275,7 +2176,6 @@ struct PlanningCreditCardEditorSheet: View {
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
                 currencyCode: activeCurrencyCode,
-                openingBalanceMinor: currentDebtMinor,
                 sortOrder: nextSortOrder(),
                 createdAt: now,
                 updatedAt: now
@@ -2646,7 +2546,6 @@ private struct PlanningCreditCardDraft: Equatable {
     var issuerName: String
     var network: CreditCardNetwork
     var last4: String
-    var availableCreditText: String
     var creditLimitText: String
     var paymentDueDay: Int
     var statementClosingDay: Int
@@ -2673,14 +2572,6 @@ private struct PlanningCreditCardDraft: Equatable {
         issuerName = profile?.issuerName ?? ""
         network = profile?.network ?? .visa
         last4 = profile?.last4 ?? ""
-        if let wallet {
-            let currentDebtMinor = wallet.openingBalanceMinor
-            let creditLimitMinor = profile?.creditLimitMinor ?? 0
-            let availableCreditMinor = max(creditLimitMinor - currentDebtMinor, 0)
-            availableCreditText = String(availableCreditMinor)
-        } else {
-            availableCreditText = ""
-        }
         creditLimitText = profile.map { String($0.creditLimitMinor) } ?? ""
         paymentDueDay = normalizedBillingDays.paymentDueDay
         statementClosingDay = normalizedBillingDays.statementClosingDay

@@ -712,9 +712,14 @@ struct ManagementView: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
+                            let fallbackBalance = TransactionWalletSnapshot(
+                                id: wallet.id,
+                                kind: wallet.kind,
+                                openingBalanceMinor: wallet.openingBalanceMinor
+                            ).balanceSeedMinor
                             ManagementWalletRow(
                                 wallet: wallet,
-                                currentBalanceMinor: walletBalancesByID[wallet.id] ?? wallet.openingBalanceMinor,
+                                currentBalanceMinor: walletBalancesByID[wallet.id] ?? fallbackBalance,
                                 primaryCurrencyCode: primaryCurrencyCode,
                                 exchangeRateIndex: exchangeRateIndex
                             ) {

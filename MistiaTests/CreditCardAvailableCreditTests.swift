@@ -9,10 +9,10 @@ final class CreditCardAvailableCreditTests: XCTestCase {
             kind: .creditCard,
             iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
             iconColorHex: LedgerWalletKind.creditCard.defaultColorHex,
-            openingBalanceMinor: 20_000
+            openingBalanceMinor: 46_058
         )
         let profile = CreditCardProfile(
-            creditLimitMinor: 150_000,
+            creditLimitMinor: 350_000,
             wallet: wallet
         )
         wallet.creditCardProfile = profile
@@ -25,7 +25,7 @@ final class CreditCardAvailableCreditTests: XCTestCase {
             entryStatus: .posted,
             title: "Purchase",
             note: nil,
-            amountMinor: 30_000,
+            amountMinor: 25_916,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: wallet.id,
@@ -42,7 +42,7 @@ final class CreditCardAvailableCreditTests: XCTestCase {
             occurrences: []
         )
 
-        XCTAssertEqual(snapshot?.currentDebtMinor, 50_000)
-        XCTAssertEqual(snapshot?.availableCreditMinor, 100_000)
+        XCTAssertEqual(snapshot?.currentDebtMinor, 25_916)
+        XCTAssertEqual(snapshot?.availableCreditMinor, 324_084)
     }
 }

@@ -11,16 +11,23 @@ final class PlanningDuePaymentPersistenceTests: XCTestCase {
             name: "Credit card",
             kind: .creditCard,
             iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
-            iconColorHex: LedgerWalletKind.creditCard.defaultColorHex,
-            openingBalanceMinor: 20_000
+            iconColorHex: LedgerWalletKind.creditCard.defaultColorHex
         )
         let profile = CreditCardProfile(
             creditLimitMinor: 100_000,
             wallet: card
         )
         card.creditCardProfile = profile
+        let purchase = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Existing card purchase",
+            amountMinor: 20_000,
+            occurredAt: makeDate(year: 2026, month: 7, day: 1),
+            sourceWallet: card
+        )
         context.insert(card)
         context.insert(profile)
+        context.insert(purchase)
         try context.save()
 
         profile.creditLimitMinor = 120_000
@@ -51,7 +58,7 @@ final class PlanningDuePaymentPersistenceTests: XCTestCase {
 
         let transactions = try context.fetch(FetchDescriptor<LedgerTransaction>())
         let occurrences = try context.fetch(FetchDescriptor<DueOccurrenceRecord>())
-        XCTAssertEqual(transactions.count, 1)
+        XCTAssertEqual(transactions.count, 2)
         XCTAssertEqual(occurrences.count, 1)
     }
 
