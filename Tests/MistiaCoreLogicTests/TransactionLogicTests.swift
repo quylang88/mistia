@@ -284,6 +284,96 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(index.balance(for: destination), 2_650_000)
     }
 
+    func testCreditCardBalanceIncludesOpeningDebtPurchasesAndPayments() {
+        let card = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .creditCard,
+            openingBalanceMinor: 20_000
+        )
+        let occurredAt = Date(timeIntervalSince1970: 1_783_728_000)
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 30_000,
+                occurredAt: occurredAt,
+                sourceWalletID: card.id,
+                sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 10_000,
+                occurredAt: occurredAt.addingTimeInterval(60),
+                destinationWalletID: card.id,
+                destinationWalletKind: .creditCard
+            )
+        ]
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [card],
+            records: records
+        )
+
+        let balance = TransactionLogic.creditCardBalance(
+            creditLimitMinor: 100_000,
+            wallet: card,
+            balanceIndex: balanceIndex
+        )
+
+        XCTAssertEqual(balance.currentDebtMinor, 40_000)
+        XCTAssertEqual(balance.availableCreditMinor, 60_000)
+    }
+
+    func testCreditCardBalanceUsesLatestLimitAndAllowsExactAvailableAmount() {
+        let card = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .creditCard,
+            openingBalanceMinor: 50_000
+        )
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [card],
+            records: [TransactionRecordSnapshot]()
+        )
+
+        let balance = TransactionLogic.creditCardBalance(
+            creditLimitMinor: 150_000,
+            wallet: card,
+            balanceIndex: balanceIndex
+        )
+
+        XCTAssertEqual(balance.currentDebtMinor, 50_000)
+        XCTAssertEqual(balance.availableCreditMinor, 100_000)
+        XCTAssertTrue(balance.canCover(amountMinor: 100_000))
+        XCTAssertFalse(balance.canCover(amountMinor: 100_001))
+    }
+
+    func testCreditCardOpeningDebtPreservesCurrentDebtAfterLimitOnlyEdit() {
+        let card = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .creditCard,
+            openingBalanceMinor: 20_000
+        )
+        let purchase = makeRecord(
+            primaryKind: .expense,
+            amountMinor: 30_000,
+            occurredAt: Date(timeIntervalSince1970: 1_783_728_000),
+            sourceWalletID: card.id,
+            sourceWalletKind: .creditCard
+        )
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [card],
+            records: [purchase]
+        )
+
+        XCTAssertEqual(
+            TransactionLogic.creditCardOpeningDebtMinor(
+                targetCurrentDebtMinor: 50_000,
+                wallet: card,
+                balanceIndex: balanceIndex
+            ),
+            20_000
+        )
+    }
+
     func testCrossCurrencyTransferManualDisplayUsesDestinationSnapshot() {
         let record = makeRecord(
             primaryKind: .transfer,
