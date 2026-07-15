@@ -179,10 +179,11 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         XCTAssertEqual(result.monthlySpendable.displayMinor, 88_000)
     }
 
-    func testComputeIgnoresCreditCardOpeningDebtForFamilyMemberView() {
+    func testComputeIgnoresCardOpeningDebtAndIncludesPaymentCreatedByDifferentFamilyMember() {
         let familyOwnerID = UUID()
         let memberID = UUID()
         let walletID = UUID()
+        let paymentWalletID = UUID()
         let categoryID = UUID()
         let month = makeDate(year: 2026, month: 7, day: 1)
         let transactionDate = makeDate(year: 2026, month: 7, day: 12)
@@ -207,7 +208,7 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
             sortOrder: 0,
             createdAt: makeDate(year: 2026, month: 1, day: 1)
         )
-        let record = TransactionRecordSnapshot(
+        let purchaseRecord = TransactionRecordSnapshot(
             id: UUID(),
             primaryKind: .expense,
             transferSubtype: nil,
@@ -215,7 +216,7 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
             entryStatus: .posted,
             title: "Member purchase",
             note: nil,
-            amountMinor: 25_916,
+            amountMinor: 70_214,
             sourceCurrencyCode: "JPY",
             isArchived: false,
             occurredAt: transactionDate,
@@ -228,17 +229,17 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
         )
-        let transaction = FamilyOverviewTransactionInputSnapshot(
-            record: record,
+        let purchase = FamilyOverviewTransactionInputSnapshot(
+            record: purchaseRecord,
             overview: OverviewTransactionSnapshot(
-                id: record.id,
+                id: purchaseRecord.id,
                 primaryKind: .expense,
                 transferSubtype: nil,
                 debtIntent: nil,
                 entryStatus: .posted,
                 title: "Member purchase",
                 note: nil,
-                amountMinor: 25_916,
+                amountMinor: 70_214,
                 sourceCurrencyCode: "JPY",
                 occurredAt: transactionDate,
                 createdAt: transactionDate,
@@ -265,7 +266,70 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
                 categoryName: "Shopping",
                 occurredAt: transactionDate,
                 kind: .expense,
-                amountMinor: 25_916,
+                amountMinor: 70_214,
+                currencyCode: "JPY"
+            )
+        )
+        let paymentDate = transactionDate.addingTimeInterval(60)
+        let paymentRecord = TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: "Statement payment",
+            note: nil,
+            amountMinor: 44_298,
+            sourceCurrencyCode: "JPY",
+            isArchived: false,
+            occurredAt: paymentDate,
+            createdAt: paymentDate,
+            sourceWalletID: paymentWalletID,
+            sourceWalletKind: .bank,
+            destinationWalletID: walletID,
+            destinationWalletKind: .creditCard,
+            categoryID: nil,
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+        let memberCreatedPayment = FamilyOverviewTransactionInputSnapshot(
+            record: paymentRecord,
+            overview: OverviewTransactionSnapshot(
+                id: paymentRecord.id,
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Statement payment",
+                note: nil,
+                amountMinor: 44_298,
+                sourceCurrencyCode: "JPY",
+                occurredAt: paymentDate,
+                createdAt: paymentDate,
+                sourceWalletID: paymentWalletID,
+                sourceWalletName: "Payment bank",
+                sourceWalletKind: .bank,
+                destinationWalletID: walletID,
+                destinationWalletName: "Member Card",
+                destinationWalletKind: .creditCard,
+                categoryID: nil,
+                categoryName: nil,
+                categoryIconSymbolName: nil,
+                categoryColorHex: nil,
+                categoryParentID: nil,
+                categoryParentName: nil,
+                categoryParentIconSymbolName: nil,
+                categoryParentColorHex: nil,
+                counterpartyName: nil,
+                isArchived: false
+            ),
+            aggregate: FamilyAggregateTransactionSnapshot(
+                ownerUserID: memberID,
+                createdByUserID: familyOwnerID,
+                categoryName: nil,
+                occurredAt: paymentDate,
+                kind: .transfer,
+                amountMinor: 44_298,
                 currencyCode: "JPY"
             )
         )
@@ -289,7 +353,7 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
                 exchangeRates: [],
                 calendar: calendar,
                 wallets: [wallet],
-                transactions: [transaction],
+                transactions: [purchase, memberCreatedPayment],
                 budgets: [],
                 goals: [],
                 bills: [],
