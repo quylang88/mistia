@@ -1,9 +1,13 @@
 import Foundation
 
-struct TransactionWalletSnapshot: Equatable, Identifiable {
+nonisolated struct TransactionWalletSnapshot: Equatable, Identifiable {
     let id: UUID
     let kind: LedgerWalletKind
     let openingBalanceMinor: Int64
+
+    var balanceSeedMinor: Int64 {
+        kind.usesOpeningBalance ? openingBalanceMinor : 0
+    }
 }
 
 nonisolated struct TransactionWalletBalanceIndex: Equatable {
@@ -14,7 +18,7 @@ nonisolated struct TransactionWalletBalanceIndex: Equatable {
     }
 
     func balance(for wallet: TransactionWalletSnapshot) -> Int64 {
-        balancesByWalletID[wallet.id] ?? wallet.openingBalanceMinor
+        balancesByWalletID[wallet.id] ?? wallet.balanceSeedMinor
     }
 
     func balance(for walletID: UUID, default defaultBalance: Int64 = 0) -> Int64 {
@@ -1818,7 +1822,7 @@ nonisolated enum TransactionLogic {
         for wallet: TransactionWalletSnapshot,
         records: Records
     ) -> Int64 where Records.Element == TransactionRecordSnapshot {
-        var balance = wallet.openingBalanceMinor
+        var balance = wallet.balanceSeedMinor
         for record in records where record.entryStatus == .posted && !record.isArchived {
             balance += balanceDelta(for: wallet, record: record)
         }
@@ -1837,15 +1841,6 @@ nonisolated enum TransactionLogic {
         )
     }
 
-    static func creditCardOpeningDebtMinor(
-        targetCurrentDebtMinor: Int64,
-        wallet: TransactionWalletSnapshot,
-        balanceIndex: TransactionWalletBalanceIndex
-    ) -> Int64 {
-        let postedDelta = balanceIndex.balance(for: wallet) - wallet.openingBalanceMinor
-        return max(targetCurrentDebtMinor - postedDelta, 0)
-    }
-
     static func walletBalanceIndex<Records: Sequence>(
         wallets: [TransactionWalletSnapshot],
         records: Records
@@ -1854,7 +1849,7 @@ nonisolated enum TransactionLogic {
         var kindByWalletID: [UUID: LedgerWalletKind] = [:]
 
         for wallet in wallets {
-            balancesByWalletID[wallet.id] = wallet.openingBalanceMinor
+            balancesByWalletID[wallet.id] = wallet.balanceSeedMinor
             kindByWalletID[wallet.id] = wallet.kind
         }
 

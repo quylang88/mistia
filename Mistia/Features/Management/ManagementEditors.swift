@@ -119,9 +119,7 @@ struct ManagementWalletEditorSheet: View {
                     .pickerStyle(.menu)
 
                     if target.wallet == nil {
-                        if draft.kind == .creditCard {
-                            MistiaCurrencyInputField(L10n.management.management.availableCredit, text: $draft.availableCreditText)
-                        } else {
+                        if draft.kind.usesOpeningBalance {
                             MistiaCurrencyInputField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
                         }
                     } else {
@@ -277,22 +275,11 @@ struct ManagementWalletEditorSheet: View {
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
         }
-        .onChange(of: draft.creditLimitText) { _, _ in
-            // When editing an existing credit card, keep available credit in sync with limit change.
-            // availableCredit = creditLimit - unpaidDebt
-            if let wallet = target.wallet, draft.kind == .creditCard {
-                let limit = draft.creditLimitMinor
-                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
-                draft.availableCreditText = "\(result.available)"
-            }
-        }
         .sheet(isPresented: $showsBalanceAdjustment) {
             if let wallet = target.wallet {
-                let creditLimit = wallet.kind == .creditCard ? wallet.creditCardProfile?.creditLimitMinor : nil
                 ManagementBalanceAdjustmentSheet(
                     wallet: wallet,
-                    currentBalance: effectiveBalance,
-                    creditLimit: creditLimit
+                    currentBalance: effectiveBalance
                 )
             }
         }
@@ -302,16 +289,6 @@ struct ManagementWalletEditorSheet: View {
                 return
             }
             refreshWalletBalanceSnapshotCache(for: balanceSnapshotKey, snapshot: balanceSnapshot)
-            
-            if let wallet = target.wallet, draft.kind == .creditCard {
-                let limit = draft.creditLimitMinor
-                let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: limit)
-                let availableStr = "\(result.available)"
-                draft.availableCreditText = availableStr
-                if dismissBaselineDraft.availableCreditText != availableStr {
-                    dismissBaselineDraft.availableCreditText = availableStr
-                }
-            }
         }
     }
 
@@ -479,31 +456,15 @@ struct ManagementWalletEditorSheet: View {
         let existingProfileID = target.wallet?.creditCardProfile?.id
         let walletForSync: LedgerWallet
 
-        // For credit cards, calculate opening debt from available credit and transactions
-        let currentDebtMinor: Int64
-        if draft.kind == .creditCard {
-            let targetDebt = max(draft.creditLimitMinor - draft.availableCreditMinor, 0)
-            if let existingWallet = target.wallet {
-                let walletSnapshot = transactionWalletSnapshot(for: existingWallet)
-                currentDebtMinor = TransactionLogic.creditCardOpeningDebtMinor(
-                    targetCurrentDebtMinor: targetDebt,
-                    wallet: walletSnapshot,
-                    balanceIndex: balanceIndex(for: walletSnapshot)
-                )
-            } else {
-                currentDebtMinor = targetDebt
-            }
-        } else {
-            currentDebtMinor = draft.openingBalanceMinor
-        }
-
         if let existingWallet = target.wallet {
             existingWallet.name = trimmedName
             existingWallet.kind = draft.kind
             existingWallet.iconSymbolName = draft.iconSymbolName
             existingWallet.iconColorHex = draft.iconColorHex
             existingWallet.currencyCode = draft.currencyCode
-            existingWallet.openingBalanceMinor = currentDebtMinor
+            if draft.kind.usesOpeningBalance {
+                existingWallet.openingBalanceMinor = draft.openingBalanceMinor
+            }
             existingWallet.institutionDisplayName = draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil
             existingWallet.institutionPresetKey = draft.kind == .bank ? draft.institutionPresetKey : nil
             existingWallet.updatedAt = now
@@ -523,11 +484,14 @@ struct ManagementWalletEditorSheet: View {
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
                 currencyCode: draft.currencyCode,
-                openingBalanceMinor: currentDebtMinor,
                 institutionDisplayName: draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil,
                 institutionPresetKey: draft.kind == .bank ? draft.institutionPresetKey : nil,
                 sortOrder: nextSortOrder()
             )
+
+            if draft.kind.usesOpeningBalance {
+                newWallet.openingBalanceMinor = draft.openingBalanceMinor
+            }
 
             modelContext.insert(newWallet)
             updateCreditCardProfile(for: newWallet, now: now)
@@ -1532,7 +1496,6 @@ private struct WalletDraft: Equatable {
     var iconColorHex: String
     var currencyCode: String
     var openingBalanceText: String
-    var availableCreditText: String
     var institutionDisplayName: String
     var institutionPresetKey: String?
     var issuerName: String
@@ -1557,10 +1520,6 @@ private struct WalletDraft: Equatable {
                 colorHex: wallet.iconColorHex
             )
             
-            let currentDebtMinor = wallet.openingBalanceMinor
-            let creditLimitMinor = profile?.creditLimitMinor ?? 0
-            let availableCreditMinor = max(creditLimitMinor - currentDebtMinor, 0)
-
             self.name = wallet.name
             self.kind = wallet.kind
             self.iconSymbolName = wallet.iconSymbolName
@@ -1570,7 +1529,6 @@ private struct WalletDraft: Equatable {
             ) ?? MistiaIconColorPalette.normalizedHex(wallet.iconColorHex)
             self.currencyCode = wallet.currencyCode
             self.openingBalanceText = "\(wallet.openingBalanceMinor)"
-            self.availableCreditText = "\(availableCreditMinor)"
             self.institutionDisplayName = wallet.institutionDisplayName ?? ""
             self.institutionPresetKey = wallet.institutionPresetKey
             self.issuerName = profile?.issuerName ?? ""
@@ -1589,7 +1547,6 @@ private struct WalletDraft: Equatable {
             self.iconColorHex = defaultKind.defaultColorHex
             self.currencyCode = "JPY"
             self.openingBalanceText = ""
-            self.availableCreditText = ""
             self.institutionDisplayName = ""
             self.institutionPresetKey = nil
             self.issuerName = ""
@@ -1608,10 +1565,6 @@ private struct WalletDraft: Equatable {
         openingBalanceText.currencyInputToMinorUnits(currencyCode: currencyCode)
     }
     
-    var availableCreditMinor: Int64 {
-        availableCreditText.currencyInputToMinorUnits(currencyCode: currencyCode)
-    }
-
     var creditLimitMinor: Int64 {
         creditLimitText.currencyInputToMinorUnits(currencyCode: currencyCode)
     }
@@ -1727,16 +1680,14 @@ struct ManagementBalanceAdjustmentSheet: View {
 
     let wallet: LedgerWallet
     let currentBalance: Int64
-    let creditLimit: Int64?
 
     @State private var newBalanceText: String = ""
     @State private var reason: String = ""
     @State private var showsConfirmation = false
 
-    init(wallet: LedgerWallet, currentBalance: Int64, creditLimit: Int64? = nil) {
+    init(wallet: LedgerWallet, currentBalance: Int64) {
         self.wallet = wallet
         self.currentBalance = currentBalance
-        self.creditLimit = creditLimit
         _newBalanceText = State(initialValue: "\(currentBalance)")
     }
 
@@ -1751,23 +1702,17 @@ struct ManagementBalanceAdjustmentSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(wallet.kind == .creditCard ? L10n.management.balanceEditor.availableCreditTitle : L10n.management.balanceEditor.actualBalanceTitle) {
+                Section(L10n.management.balanceEditor.actualBalanceTitle) {
                     MistiaCurrencyInputField(
-                        wallet.kind == .creditCard
-                            ? L10n.management.balanceEditor.availableCreditPlaceholder
-                            : L10n.management.balanceEditor.currentBalancePlaceholder,
+                        L10n.management.balanceEditor.currentBalancePlaceholder,
                         text: $newBalanceText,
-                        showsCalculatorButton: wallet.kind != .creditCard
+                        showsCalculatorButton: true
                     )
-                    .disabled(wallet.kind == .creditCard)
-                    .opacity(wallet.kind == .creditCard ? 0.5 : 1)
                 }
 
                 Section(L10n.management.management.adjustmentReason) {
                     TextField(L10n.management.management.eGAuditError, text: $reason, axis: .vertical)
                         .lineLimit(3...5)
-                        .disabled(wallet.kind == .creditCard)
-                        .opacity(wallet.kind == .creditCard ? 0.5 : 1)
                 }
             }
             .scrollIndicators(.hidden)
@@ -1803,21 +1748,13 @@ struct ManagementBalanceAdjustmentSheet: View {
     private func save() {
         let newBalance = newBalanceText.currencyInputToMinorUnits(currencyCode: wallet.currencyCode)
         
-        // For credit cards, convert available credit to debt
-        let targetBalance: Int64
-        if wallet.kind == .creditCard, let limit = creditLimit {
-            targetBalance = max(limit - newBalance, 0)
-        } else {
-            targetBalance = newBalance
-        }
-        
-        let diff = targetBalance - currentBalance
+        let diff = newBalance - currentBalance
         guard diff != 0 else {
             dismiss()
             return
         }
 
-        let isIncome = wallet.kind == .creditCard ? diff < 0 : diff > 0
+        let isIncome = diff > 0
         let absDiff = abs(diff)
 
         let categoryID = isIncome ? MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID : MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID

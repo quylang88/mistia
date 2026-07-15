@@ -62,6 +62,10 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    var usesOpeningBalance: Bool {
+        self != .creditCard
+    }
+
     var title: String {
         switch self {
         case .cash:
