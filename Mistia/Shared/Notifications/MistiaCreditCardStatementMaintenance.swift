@@ -139,6 +139,12 @@ enum MistiaCreditCardStatementMaintenance {
             transactions: snapshot.activeTransactions,
             calendar: calendar
         )
+        let activeTransactionByID = Dictionary(
+            snapshot.activeTransactions.map { ($0.id, $0) },
+            uniquingKeysWith: { existing, candidate in
+                existing.updatedAt >= candidate.updatedAt ? existing : candidate
+            }
+        )
 
         for account in accounts {
             let statements = statementsByWalletID[account.walletID] ?? []
@@ -154,6 +160,25 @@ enum MistiaCreditCardStatementMaintenance {
                     calendar: calendar
                 )
                 let occurrence = occurrenceResult.record
+                if let linkedTransactionID = statement.linkedTransactionID,
+                   let linkedTransaction = activeTransactionByID[linkedTransactionID] {
+                    markOccurrencePaid(
+                        occurrence,
+                        for: statement,
+                        linkedTransaction: linkedTransaction,
+                        modelContext: modelContext,
+                        sessionStore: sessionStore,
+                        calendar: calendar
+                    )
+                } else {
+                    markOccurrencePendingIfNeeded(
+                        occurrence,
+                        for: statement,
+                        modelContext: modelContext,
+                        sessionStore: sessionStore,
+                        calendar: calendar
+                    )
+                }
                 upsertStatementReadyNotification(
                     statement,
                     modelContext: modelContext,
@@ -384,12 +409,80 @@ enum MistiaCreditCardStatementMaintenance {
         sessionStore: SessionStore,
         calendar: Calendar
     ) {
-        occurrence.status = .paid
-        occurrence.selectedMonthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
-        occurrence.paidAt = linkedTransaction.occurredAt
-        occurrence.linkedTransactionID = linkedTransaction.id
-        occurrence.amountMinorSnapshot = statement.amountMinor
-        occurrence.scheduledDate = statement.dueDate
+        var didChange = false
+        let statementMonthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
+
+        if occurrence.status != .paid {
+            occurrence.status = .paid
+            didChange = true
+        }
+        if occurrence.selectedMonthKey != statementMonthKey {
+            occurrence.selectedMonthKey = statementMonthKey
+            didChange = true
+        }
+        if occurrence.paidAt != linkedTransaction.occurredAt {
+            occurrence.paidAt = linkedTransaction.occurredAt
+            didChange = true
+        }
+        if occurrence.linkedTransactionID != linkedTransaction.id {
+            occurrence.linkedTransactionID = linkedTransaction.id
+            didChange = true
+        }
+        if occurrence.amountMinorSnapshot != statement.amountMinor {
+            occurrence.amountMinorSnapshot = statement.amountMinor
+            didChange = true
+        }
+        if occurrence.scheduledDate != statement.dueDate {
+            occurrence.scheduledDate = statement.dueDate
+            didChange = true
+        }
+        guard didChange else { return }
+
+        occurrence.updatedAt = Date()
+        try? modelContext.save()
+        sessionStore.recordUpsert(
+            entity: .dueOccurrenceRecord,
+            recordID: occurrence.id,
+            modifiedAt: occurrence.updatedAt
+        )
+    }
+
+    private static func markOccurrencePendingIfNeeded(
+        _ occurrence: DueOccurrenceRecord,
+        for statement: PlanningCreditCardStatementSnapshot,
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        calendar: Calendar
+    ) {
+        var didChange = false
+        let statementMonthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
+
+        if occurrence.status != .pending {
+            occurrence.status = .pending
+            didChange = true
+        }
+        if occurrence.selectedMonthKey != statementMonthKey {
+            occurrence.selectedMonthKey = statementMonthKey
+            didChange = true
+        }
+        if occurrence.paidAt != nil {
+            occurrence.paidAt = nil
+            didChange = true
+        }
+        if occurrence.linkedTransactionID != nil {
+            occurrence.linkedTransactionID = nil
+            didChange = true
+        }
+        if occurrence.amountMinorSnapshot != statement.amountMinor {
+            occurrence.amountMinorSnapshot = statement.amountMinor
+            didChange = true
+        }
+        if occurrence.scheduledDate != statement.dueDate {
+            occurrence.scheduledDate = statement.dueDate
+            didChange = true
+        }
+        guard didChange else { return }
+
         occurrence.updatedAt = Date()
         try? modelContext.save()
         sessionStore.recordUpsert(
