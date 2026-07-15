@@ -154,8 +154,6 @@ struct ManagementView: View {
     private var postedTransactions: [LedgerTransaction]
     @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
     private var storedSettlementGroups: [SettlementGroup]
-    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
-    private var storedOccurrences: [DueOccurrenceRecord]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
@@ -246,43 +244,16 @@ struct ManagementView: View {
             records: transactionSnapshots
         )
 
-        let occurrenceSnapshots = storedOccurrences.lazy.filter { $0.deletedAt == nil }.map(\.planningSnapshot)
-        let recordSnapshots = postedTransactions.lazy.filter { $0.deletedAt == nil }.map(\.snapshot)
-
         var balancesByID: [UUID: Int64] = [:]
-        for wallet in activeWallets {
+        for (wallet, walletSnapshot) in zip(activeWallets, activeWalletSnapshots) {
             if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
-                let account = PlanningCreditCardAccountSnapshot(
-                    id: wallet.id,
-                    walletID: wallet.id,
-                    walletName: wallet.name,
-                    issuerName: profile.issuerName,
-                    network: profile.network,
-                    last4: profile.last4,
-                    dueDay: profile.paymentDueDay,
-                    statementClosingDay: profile.statementClosingDay,
-                    paymentSourceWalletID: profile.paymentSourceWallet?.id,
-                    paymentSourceWalletName: profile.paymentSourceWallet?.name,
-                    currencyCode: wallet.currencyCode,
-                    currentDebtMinor: 0,
-                    availableCreditMinor: 0,
-                    openedAt: wallet.createdAt,
-                    autoPayEnabled: profile.autoPayEnabled
-                )
-                let result = PlanningLogic.calculateCreditCardDebtAndAvailable(
-                    account: account,
+                balancesByID[wallet.id] = TransactionLogic.creditCardBalance(
                     creditLimitMinor: profile.creditLimitMinor,
-                    records: Array(recordSnapshots),
-                    occurrences: Array(occurrenceSnapshots)
-                )
-                balancesByID[wallet.id] = result.debt
+                    wallet: walletSnapshot,
+                    balanceIndex: balanceIndex
+                ).currentDebtMinor
             } else {
-                let snapshot = TransactionWalletSnapshot(
-                    id: wallet.id,
-                    kind: wallet.kind,
-                    openingBalanceMinor: wallet.openingBalanceMinor
-                )
-                balancesByID[wallet.id] = balanceIndex.balance(for: snapshot)
+                balancesByID[wallet.id] = balanceIndex.balance(for: walletSnapshot)
             }
         }
 

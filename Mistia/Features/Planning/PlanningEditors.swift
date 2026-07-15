@@ -2177,39 +2177,29 @@ struct PlanningCreditCardEditorSheet: View {
     }
 
     private func calculateDebtAndAvailable(for wallet: LedgerWallet, creditLimitMinor: Int64) -> (debt: Int64, available: Int64) {
-        let profile = wallet.creditCardProfile ?? CreditCardProfile()
-        let account = PlanningCreditCardAccountSnapshot(
-            id: wallet.id,
-            walletID: wallet.id,
-            walletName: wallet.name,
-            issuerName: profile.issuerName,
-            network: profile.network,
-            last4: profile.last4,
-            dueDay: profile.paymentDueDay,
-            statementClosingDay: profile.statementClosingDay,
-            paymentSourceWalletID: profile.paymentSourceWallet?.id,
-            paymentSourceWalletName: profile.paymentSourceWallet?.name,
-            currencyCode: wallet.currencyCode,
-            currentDebtMinor: 0,
-            availableCreditMinor: 0,
-            openedAt: wallet.createdAt,
-            autoPayEnabled: profile.autoPayEnabled
-        )
-        
-        let snapshots = storedTransactions
-            .lazy
-            .filter { $0.deletedAt == nil }
-            .map(\.snapshot)
-        let occurrenceSnapshots = storedOccurrences
-            .lazy
-            .filter { $0.deletedAt == nil }
-            .map(\.planningSnapshot)
-            
-        return PlanningLogic.calculateCreditCardDebtAndAvailable(
-            account: account,
+        let walletSnapshot = transactionWalletSnapshot(for: wallet)
+        let balance = TransactionLogic.creditCardBalance(
             creditLimitMinor: creditLimitMinor,
-            records: Array(snapshots),
-            occurrences: Array(occurrenceSnapshots)
+            wallet: walletSnapshot,
+            balanceIndex: balanceIndex(for: walletSnapshot)
+        )
+        return (balance.currentDebtMinor, balance.availableCreditMinor)
+    }
+
+    private func transactionWalletSnapshot(for wallet: LedgerWallet) -> TransactionWalletSnapshot {
+        TransactionWalletSnapshot(
+            id: wallet.id,
+            kind: wallet.kind,
+            openingBalanceMinor: wallet.openingBalanceMinor
+        )
+    }
+
+    private func balanceIndex(for walletSnapshot: TransactionWalletSnapshot) -> TransactionWalletBalanceIndex {
+        TransactionLogic.walletBalanceIndex(
+            wallets: [walletSnapshot],
+            records: storedTransactions.lazy
+                .filter { $0.deletedAt == nil }
+                .map(\.snapshot)
         )
     }
 
@@ -2257,9 +2247,12 @@ struct PlanningCreditCardEditorSheet: View {
         let currentDebtMinor: Int64
         let targetDebt = max(creditLimitMinor - availableCreditMinor, 0)
         if let wallet = target.wallet {
-            let result = calculateDebtAndAvailable(for: wallet, creditLimitMinor: wallet.creditCardProfile?.creditLimitMinor ?? 0)
-            let unpaidTransactions = result.debt - wallet.openingBalanceMinor
-            currentDebtMinor = max(targetDebt - unpaidTransactions, 0)
+            let walletSnapshot = transactionWalletSnapshot(for: wallet)
+            currentDebtMinor = TransactionLogic.creditCardOpeningDebtMinor(
+                targetCurrentDebtMinor: targetDebt,
+                wallet: walletSnapshot,
+                balanceIndex: balanceIndex(for: walletSnapshot)
+            )
         } else {
             currentDebtMinor = targetDebt
         }

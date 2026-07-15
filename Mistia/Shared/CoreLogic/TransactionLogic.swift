@@ -22,6 +22,15 @@ nonisolated struct TransactionWalletBalanceIndex: Equatable {
     }
 }
 
+nonisolated struct TransactionCreditCardBalance: Equatable {
+    let currentDebtMinor: Int64
+    let availableCreditMinor: Int64
+
+    func canCover(amountMinor: Int64) -> Bool {
+        amountMinor <= availableCreditMinor
+    }
+}
+
 nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
     let id: UUID
     let primaryKind: TransactionPrimaryKind
@@ -1814,6 +1823,27 @@ nonisolated enum TransactionLogic {
             balance += balanceDelta(for: wallet, record: record)
         }
         return balance
+    }
+
+    static func creditCardBalance(
+        creditLimitMinor: Int64,
+        wallet: TransactionWalletSnapshot,
+        balanceIndex: TransactionWalletBalanceIndex
+    ) -> TransactionCreditCardBalance {
+        let currentDebtMinor = max(balanceIndex.balance(for: wallet), 0)
+        return TransactionCreditCardBalance(
+            currentDebtMinor: currentDebtMinor,
+            availableCreditMinor: max(creditLimitMinor - currentDebtMinor, 0)
+        )
+    }
+
+    static func creditCardOpeningDebtMinor(
+        targetCurrentDebtMinor: Int64,
+        wallet: TransactionWalletSnapshot,
+        balanceIndex: TransactionWalletBalanceIndex
+    ) -> Int64 {
+        let postedDelta = balanceIndex.balance(for: wallet) - wallet.openingBalanceMinor
+        return max(targetCurrentDebtMinor - postedDelta, 0)
     }
 
     static func walletBalanceIndex<Records: Sequence>(

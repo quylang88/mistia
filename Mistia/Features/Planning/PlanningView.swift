@@ -462,7 +462,7 @@ struct PlanningView: View {
             records: transactionSnapshots
         )
         let creditCardAccounts = visibleWallets.compactMap {
-            $0.planningCreditCardSnapshot(records: transactionSnapshots, occurrences: occurrenceSnapshots)
+            $0.planningCreditCardSnapshot(balanceIndex: balanceIndex)
         }
         let creditCardStatements = PlanningLogic.creditCardStatementsDue(
             in: selectedMonth,
