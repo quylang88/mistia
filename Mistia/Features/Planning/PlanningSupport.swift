@@ -302,15 +302,17 @@ enum PlanningPersistenceSupport {
             kind: sourceWallet.kind,
             openingBalanceMinor: sourceWallet.openingBalanceMinor
         )
-        let currentBalance = balanceIndex.balance(for: sourceSnapshot)
-
         if sourceWallet.kind == .creditCard {
-            let currentDebt = max(currentBalance, 0)
-            let availableCredit = max((sourceWallet.creditCardProfile?.creditLimitMinor ?? 0) - currentDebt, 0)
-            guard availableCredit >= amountMinor else {
+            let balance = TransactionLogic.creditCardBalance(
+                creditLimitMinor: sourceWallet.creditCardProfile?.creditLimitMinor ?? 0,
+                wallet: sourceSnapshot,
+                balanceIndex: balanceIndex
+            )
+            guard balance.canCover(amountMinor: amountMinor) else {
                 throw PlanningPersistenceError.insufficientWalletBalance
             }
         } else {
+            let currentBalance = balanceIndex.balance(for: sourceSnapshot)
             guard currentBalance >= amountMinor else {
                 throw PlanningPersistenceError.insufficientWalletBalance
             }

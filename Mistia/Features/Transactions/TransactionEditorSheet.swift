@@ -3096,13 +3096,10 @@ struct TransactionEditorSheet: View {
                     return
                 }
 
-                let availableCredit: Int64
-                if let profile = sourceWallet.creditCardProfile {
-                    availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
-                } else {
-                    availableCredit = 0
-                }
-                if amountMinor > availableCredit {
+                if !creditCardBalance(
+                    for: sourceWallet,
+                    balanceIndex: validationBalanceIndex
+                ).canCover(amountMinor: amountMinor) {
                     alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                     return
                 }
@@ -3194,13 +3191,10 @@ struct TransactionEditorSheet: View {
                             return
                         }
 
-                        let availableCredit: Int64
-                        if let profile = sourceWallet.creditCardProfile {
-                            availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
-                        } else {
-                            availableCredit = 0
-                        }
-                        if purchaseCostMinor > availableCredit {
+                        if !creditCardBalance(
+                            for: sourceWallet,
+                            balanceIndex: validationBalanceIndex
+                        ).canCover(amountMinor: purchaseCostMinor) {
                             alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                             return
                         }
@@ -3238,13 +3232,10 @@ struct TransactionEditorSheet: View {
                             return
                         }
 
-                        let availableCredit: Int64
-                        if let profile = sourceWallet.creditCardProfile {
-                            availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
-                        } else {
-                            availableCredit = 0
-                        }
-                        if amountMinor > availableCredit {
+                        if !creditCardBalance(
+                            for: sourceWallet,
+                            balanceIndex: validationBalanceIndex
+                        ).canCover(amountMinor: amountMinor) {
                             alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                             return
                         }
@@ -3645,7 +3636,7 @@ struct TransactionEditorSheet: View {
             records: records
         )
 
-        guard let account = wallet.planningCreditCardSnapshot(records: Array(records), occurrences: Array(occurrenceSnapshots)) else {
+        guard let account = wallet.planningCreditCardSnapshot(balanceIndex: resolvedBalanceIndex) else {
             return nil
         }
 
@@ -3656,6 +3647,21 @@ struct TransactionEditorSheet: View {
             occurredAt: occurredAt,
             referenceDate: .now,
             calendar: calendar
+        )
+    }
+
+    private func creditCardBalance(
+        for wallet: LedgerWallet,
+        balanceIndex: TransactionWalletBalanceIndex
+    ) -> TransactionCreditCardBalance {
+        TransactionLogic.creditCardBalance(
+            creditLimitMinor: wallet.creditCardProfile?.creditLimitMinor ?? 0,
+            wallet: TransactionWalletSnapshot(
+                id: wallet.id,
+                kind: wallet.kind,
+                openingBalanceMinor: wallet.openingBalanceMinor
+            ),
+            balanceIndex: balanceIndex
         )
     }
 

@@ -4,6 +4,57 @@ import XCTest
 
 @MainActor
 final class PlanningDuePaymentPersistenceTests: XCTestCase {
+    func testSaveDuePaymentAcceptsExactAvailableCreditAfterLimitIncrease() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let card = LedgerWallet(
+            name: "Credit card",
+            kind: .creditCard,
+            iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
+            iconColorHex: LedgerWalletKind.creditCard.defaultColorHex,
+            openingBalanceMinor: 20_000
+        )
+        let profile = CreditCardProfile(
+            creditLimitMinor: 100_000,
+            wallet: card
+        )
+        card.creditCardProfile = profile
+        context.insert(card)
+        context.insert(profile)
+        try context.save()
+
+        profile.creditLimitMinor = 120_000
+        try context.save()
+
+        let draft = PlanningDuePaymentDraft(
+            primaryKind: .expense,
+            transferSubtype: nil,
+            title: "Exact available credit",
+            amountMinor: 100_000,
+            sourceWalletID: card.id,
+            destinationWalletID: nil,
+            categorySystemKey: .billing
+        )
+
+        _ = try PlanningPersistenceSupport.saveDuePayment(
+            draft: draft,
+            sourceKind: .recurringBill,
+            sourceID: UUID(),
+            selectedMonth: makeDate(year: 2026, month: 7, day: 1),
+            scheduledDate: makeDate(year: 2026, month: 7, day: 25),
+            wallets: [card],
+            occurrences: [],
+            modelContext: context,
+            actorUserID: nil,
+            calendar: calendar
+        )
+
+        let transactions = try context.fetch(FetchDescriptor<LedgerTransaction>())
+        let occurrences = try context.fetch(FetchDescriptor<DueOccurrenceRecord>())
+        XCTAssertEqual(transactions.count, 1)
+        XCTAssertEqual(occurrences.count, 1)
+    }
+
     func testSaveDuePaymentRejectsRecurringBillWhenLinkedWalletBalanceIsInsufficient() throws {
         let container = try makeContainer()
         let context = container.mainContext
