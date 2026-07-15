@@ -2550,19 +2550,25 @@ nonisolated enum PlanningLogic {
             return nil
         }
 
-        let inferredPayment = firstMatchingCreditCardPaymentRecord(
+        let linkedPayment = matchedOccurrence?.linkedTransactionID.flatMap { linkedTransactionID in
+            sortedPaymentRecords.first { record in
+                record.id == linkedTransactionID
+                    && isMatchingCreditCardPaymentRecord(
+                        record,
+                        amountMinor: amount,
+                        closingDate: closingDate,
+                        calendar: calendar
+                    )
+            }
+        }
+        let resolvedPayment = linkedPayment ?? firstMatchingCreditCardPaymentRecord(
             amountMinor: amount,
             closingDate: closingDate,
             sortedPaymentRecords: sortedPaymentRecords,
             calendar: calendar
         )
-        let status: PlanningDueOccurrenceStatus =
-            matchedOccurrence?.status == .paid || inferredPayment != nil
-            ? .paid
-            : .pending
-        let linkedTransactionID = matchedOccurrence?.status == .paid
-            ? matchedOccurrence?.linkedTransactionID ?? inferredPayment?.id
-            : inferredPayment?.id ?? matchedOccurrence?.linkedTransactionID
+        let status: PlanningDueOccurrenceStatus = resolvedPayment == nil ? .pending : .paid
+        let linkedTransactionID = resolvedPayment?.id
         let state = creditCardStatementState(
             status: status,
             amountMinor: amount,
@@ -2651,13 +2657,31 @@ nonisolated enum PlanningLogic {
         calendar: Calendar
     ) -> TransactionRecordSnapshot? {
         guard amountMinor > 0 else { return nil }
-        let closingDay = calendar.startOfDay(for: closingDate)
 
         return sortedPaymentRecords.first { record in
-            guard record.occurredAt >= closingDay else { return false }
-            let paidAmount = record.destinationAmountMinor ?? record.amountMinor
-            return paidAmount >= amountMinor
+            isMatchingCreditCardPaymentRecord(
+                record,
+                amountMinor: amountMinor,
+                closingDate: closingDate,
+                calendar: calendar
+            )
         }
+    }
+
+    private static func isMatchingCreditCardPaymentRecord(
+        _ record: TransactionRecordSnapshot,
+        amountMinor: Int64,
+        closingDate: Date,
+        calendar: Calendar
+    ) -> Bool {
+        guard amountMinor > 0,
+              record.occurredAt >= calendar.startOfDay(for: closingDate)
+        else {
+            return false
+        }
+
+        let paidAmount = record.destinationAmountMinor ?? record.amountMinor
+        return paidAmount >= amountMinor
     }
 
     private static func creditCardPaymentRecordSort(

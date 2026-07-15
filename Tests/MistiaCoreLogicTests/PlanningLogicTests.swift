@@ -1915,10 +1915,11 @@ final class PlanningLogicTests: XCTestCase {
 
     func testPaidCreditCardStatementForExpenseDetectsClosedPaidMonth() {
         let cardWalletID = UUID()
+        let paymentWalletID = UUID()
         let paymentTransactionID = UUID()
         let account = makeCreditCardAccount(
             walletID: cardWalletID,
-            paymentWalletID: UUID(),
+            paymentWalletID: paymentWalletID,
             dueDay: 26,
             statementClosingDay: 10
         )
@@ -1930,6 +1931,18 @@ final class PlanningLogicTests: XCTestCase {
                 categoryID: nil,
                 sourceWalletID: cardWalletID,
                 sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                id: paymentTransactionID,
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 3, day: 26),
+                categoryID: nil,
+                sourceWalletID: paymentWalletID,
+                sourceWalletKind: .bank,
+                destinationWalletID: cardWalletID,
+                destinationWalletKind: .creditCard
             )
         ]
         let occurrence = PlanningDueOccurrenceSnapshot(
@@ -1959,10 +1972,11 @@ final class PlanningLogicTests: XCTestCase {
 
     func testPaidCreditCardStatementFallsBackToLegacyDueMonthOccurrence() {
         let cardWalletID = UUID()
+        let paymentWalletID = UUID()
         let paymentTransactionID = UUID()
         let account = makeCreditCardAccount(
             walletID: cardWalletID,
-            paymentWalletID: UUID(),
+            paymentWalletID: paymentWalletID,
             dueDay: 26,
             statementClosingDay: 10
         )
@@ -1974,6 +1988,18 @@ final class PlanningLogicTests: XCTestCase {
                 categoryID: nil,
                 sourceWalletID: cardWalletID,
                 sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                id: paymentTransactionID,
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 23_456,
+                occurredAt: makeDate(year: 2026, month: 3, day: 26),
+                categoryID: nil,
+                sourceWalletID: paymentWalletID,
+                sourceWalletKind: .bank,
+                destinationWalletID: cardWalletID,
+                destinationWalletKind: .creditCard
             )
         ]
         let legacyOccurrence = PlanningDueOccurrenceSnapshot(
@@ -2040,6 +2066,49 @@ final class PlanningLogicTests: XCTestCase {
         ).first
 
         XCTAssertEqual(statement?.amountMinor, 6_666)
+        XCTAssertEqual(statement?.status, .pending)
+        XCTAssertEqual(statement?.state, .overdue)
+        XCTAssertNil(statement?.linkedTransactionID)
+    }
+
+    func testCreditCardStatementDoesNotTrustPaidOccurrenceWithoutActivePayment() {
+        let cardWalletID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+        let stalePaidOccurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .creditCard,
+            sourceID: cardWalletID,
+            selectedMonthKey: "2026-02",
+            scheduledDate: makeDate(year: 2026, month: 3, day: 26),
+            amountMinorSnapshot: 32_456,
+            status: .paid,
+            linkedTransactionID: UUID()
+        )
+
+        let statement = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [stalePaidOccurrence],
+            statementMonths: [makeDate(year: 2026, month: 2, day: 1)],
+            referenceDate: makeDate(year: 2026, month: 3, day: 27),
+            calendar: calendar
+        ).first
+
         XCTAssertEqual(statement?.status, .pending)
         XCTAssertEqual(statement?.state, .overdue)
         XCTAssertNil(statement?.linkedTransactionID)
