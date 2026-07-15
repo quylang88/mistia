@@ -114,7 +114,7 @@ enum MistiaCreditCardStatementMaintenance {
         )
 
         let accounts = snapshot.activeWallets.compactMap {
-            $0.planningCreditCardSnapshot(records: snapshot.activeTransactionRecords, occurrences: snapshot.activeOccurrences.map(\.planningSnapshot))
+            $0.planningCreditCardSnapshot(balanceIndex: snapshot.balanceIndex)
         }
         guard !accounts.isEmpty else { return }
 

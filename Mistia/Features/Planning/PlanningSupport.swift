@@ -684,51 +684,18 @@ extension LedgerWallet {
 
     func planningCreditCardSnapshot(
         records: [TransactionRecordSnapshot],
-        occurrences: [PlanningDueOccurrenceSnapshot]
+        occurrences _: [PlanningDueOccurrenceSnapshot]
     ) -> PlanningCreditCardAccountSnapshot? {
-        guard kind == .creditCard, !isArchived, let profile = creditCardProfile else {
-            return nil
-        }
-        let account = PlanningCreditCardAccountSnapshot(
+        let walletSnapshot = TransactionWalletSnapshot(
             id: id,
-            walletID: id,
-            walletName: name,
-            issuerName: profile.issuerName,
-            network: profile.network,
-            last4: profile.last4,
-            dueDay: profile.paymentDueDay,
-            statementClosingDay: profile.statementClosingDay,
-            paymentSourceWalletID: profile.paymentSourceWallet?.id,
-            paymentSourceWalletName: profile.paymentSourceWallet?.name,
-            currencyCode: currencyCode,
-            currentDebtMinor: 0,
-            availableCreditMinor: 0,
-            openedAt: createdAt,
-            autoPayEnabled: profile.autoPayEnabled
+            kind: kind,
+            openingBalanceMinor: openingBalanceMinor
         )
-        let result = PlanningLogic.calculateCreditCardDebtAndAvailable(
-            account: account,
-            creditLimitMinor: profile.creditLimitMinor,
-            records: records,
-            occurrences: occurrences
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [walletSnapshot],
+            records: records
         )
-        return PlanningCreditCardAccountSnapshot(
-            id: id,
-            walletID: id,
-            walletName: name,
-            issuerName: profile.issuerName,
-            network: profile.network,
-            last4: profile.last4,
-            dueDay: profile.paymentDueDay,
-            statementClosingDay: profile.statementClosingDay,
-            paymentSourceWalletID: profile.paymentSourceWallet?.id,
-            paymentSourceWalletName: profile.paymentSourceWallet?.name,
-            currencyCode: currencyCode,
-            currentDebtMinor: result.debt,
-            availableCreditMinor: result.available,
-            openedAt: createdAt,
-            autoPayEnabled: profile.autoPayEnabled
-        )
+        return planningCreditCardSnapshot(balanceIndex: balanceIndex)
     }
 
     func planningCreditCardSnapshot(
@@ -738,18 +705,16 @@ extension LedgerWallet {
             return nil
         }
 
-        let debt = max(
-            balanceIndex.balance(
-                for: TransactionWalletSnapshot(
-                    id: id,
-                    kind: kind,
-                    openingBalanceMinor: openingBalanceMinor
-                )
-            ),
-            0
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: id,
+            kind: kind,
+            openingBalanceMinor: openingBalanceMinor
         )
-        
-        let availableCredit = max(profile.creditLimitMinor - debt, 0)
+        let balance = TransactionLogic.creditCardBalance(
+            creditLimitMinor: profile.creditLimitMinor,
+            wallet: walletSnapshot,
+            balanceIndex: balanceIndex
+        )
 
         return PlanningCreditCardAccountSnapshot(
             id: id,
@@ -763,8 +728,8 @@ extension LedgerWallet {
             paymentSourceWalletID: profile.paymentSourceWallet?.id,
             paymentSourceWalletName: profile.paymentSourceWallet?.name,
             currencyCode: currencyCode,
-            currentDebtMinor: debt,
-            availableCreditMinor: availableCredit,
+            currentDebtMinor: balance.currentDebtMinor,
+            availableCreditMinor: balance.availableCreditMinor,
             openedAt: createdAt,
             autoPayEnabled: profile.autoPayEnabled
         )

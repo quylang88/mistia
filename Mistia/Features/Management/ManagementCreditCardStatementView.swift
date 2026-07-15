@@ -77,7 +77,7 @@ struct ManagementCreditCardStatementView: View {
         }
 
         let statement: PlanningCreditCardStatementSnapshot?
-        if let accountSnapshot = wallet.planningCreditCardSnapshot(records: transactionRecords, occurrences: storedOccurrences.map(\.planningSnapshot)) {
+        if let accountSnapshot = wallet.planningCreditCardSnapshot(balanceIndex: balanceIndex) {
             statement = PlanningLogic.creditCardStatementItems(
                 accounts: [accountSnapshot],
                 records: transactionRecords,
