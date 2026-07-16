@@ -1405,11 +1405,11 @@ struct PlanningView: View {
             return
         }
 
+        walletPermissionPrompt = prompt
         Task { @MainActor in
             if await resolvePendingCreditCardWalletPermissionBeforePrompt(prompt) {
                 return
             }
-            walletPermissionPrompt = prompt
         }
     }
 
@@ -1547,6 +1547,11 @@ struct PlanningView: View {
         _ prompt: PlanningWalletPermissionPrompt,
         scope: MistiaFamilyPermissionScope
     ) {
+        walletPermissionPrompt = nil
+        infoAlert = PlanningInfoAlert(
+            title: L10n.planning.planning.requestSent2,
+            message: L10n.planning.planning.theRequestIsWaitingForTheData
+        )
         Task { @MainActor in
             let isApproved = await familyContextStore.refreshPermissionGrant(
                 ownerUserID: prompt.ownerUserID,
@@ -1557,13 +1562,8 @@ struct PlanningView: View {
             )
 
             if isApproved {
+                infoAlert = nil
                 performApprovedWalletPermissionAction(prompt, scope: scope)
-            } else {
-                walletPermissionPrompt = nil
-                infoAlert = PlanningInfoAlert(
-                    title: L10n.planning.planning.requestSent2,
-                    message: familyContextStore.lastErrorMessage ?? L10n.planning.planning.theRequestIsWaitingForTheData
-                )
             }
         }
     }
@@ -1605,6 +1605,14 @@ struct PlanningView: View {
             scope: .edit
         )
         if isPending {
+            showEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceID: resourceID,
+                resourceName: resourceName,
+                isPending: true,
+                onGranted: onGranted
+            )
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1615,16 +1623,7 @@ struct PlanningView: View {
                 ) {
                     permissionPrompt = nil
                     onGranted()
-                    return
                 }
-                showEditPermissionPrompt(
-                    ownerUserID: ownerUserID,
-                    resourceType: resourceType,
-                    resourceID: resourceID,
-                    resourceName: resourceName,
-                    isPending: true,
-                    onGranted: onGranted
-                )
             }
             return
         }
@@ -1681,6 +1680,13 @@ struct PlanningView: View {
             scope: .create
         )
         if isPending {
+            showCreatePermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceName: resourceName,
+                isPending: true,
+                onGranted: onGranted
+            )
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1691,15 +1697,7 @@ struct PlanningView: View {
                 ) {
                     permissionPrompt = nil
                     onGranted()
-                    return
                 }
-                showCreatePermissionPrompt(
-                    ownerUserID: ownerUserID,
-                    resourceType: resourceType,
-                    resourceName: resourceName,
-                    isPending: true,
-                    onGranted: onGranted
-                )
             }
             return
         }
@@ -1750,6 +1748,11 @@ struct PlanningView: View {
     ) {
         Task { @MainActor in
             if wasPending {
+                permissionPrompt = nil
+                infoAlert = PlanningInfoAlert(
+                    title: L10n.planning.planning.requestSent2,
+                    message: L10n.planning.planning.theRequestIsWaitingForTheData
+                )
                 let isApproved = await familyContextStore.refreshPermissionGrant(
                     ownerUserID: ownerUserID,
                     resourceType: resourceType,
@@ -1759,19 +1762,17 @@ struct PlanningView: View {
                 )
 
                 if isApproved {
-                    permissionPrompt = nil
+                    infoAlert = nil
                     onGranted()
-                    return
                 }
-
-                permissionPrompt = nil
-                infoAlert = PlanningInfoAlert(
-                    title: L10n.planning.planning.requestSent2,
-                    message: familyContextStore.lastErrorMessage ?? L10n.planning.planning.theRequestIsWaitingForTheData
-                )
                 return
             }
 
+            permissionPrompt = nil
+            infoAlert = PlanningInfoAlert(
+                title: L10n.shared.family.permissionRequest.sendingTitle,
+                message: L10n.shared.family.permissionRequest.sendingMessage
+            )
             let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
@@ -1781,7 +1782,6 @@ struct PlanningView: View {
                 sessionStore: sessionStore
             )
 
-            permissionPrompt = nil
             infoAlert = PlanningInfoAlert(
                 title: didSend
                     ? L10n.planning.planning.requestSent
@@ -1801,6 +1801,12 @@ struct PlanningView: View {
         resourceName: String
     ) {
         Task { @MainActor in
+            walletPermissionPrompt = nil
+            permissionPrompt = nil
+            infoAlert = PlanningInfoAlert(
+                title: L10n.shared.family.permissionRequest.sendingTitle,
+                message: L10n.shared.family.permissionRequest.sendingMessage
+            )
             let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
@@ -1810,8 +1816,6 @@ struct PlanningView: View {
                 sessionStore: sessionStore
             )
 
-            walletPermissionPrompt = nil
-            permissionPrompt = nil
             infoAlert = PlanningInfoAlert(
                 title: didSend
                     ? L10n.planning.planning.requestSent

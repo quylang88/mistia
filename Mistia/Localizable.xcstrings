@@ -30006,6 +30006,50 @@
         }
       }
     },
+    "shared.family.permissionRequest.sendingMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistia is sending your request. You can keep using the app."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リクエストを送信しています。このままアプリをお使いいただけます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistia đang gửi yêu cầu. Bạn có thể tiếp tục sử dụng ứng dụng."
+          }
+        }
+      }
+    },
+    "shared.family.permissionRequest.sendingTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending request..."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リクエストを送信中..."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đang gửi yêu cầu..."
+          }
+        }
+      }
+    },
     "shared.notifications.mistiacreditcardstatementmaintenance.autoPaymentComplete" : {
       "extractionState" : "stale",
       "localizations" : {

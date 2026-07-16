@@ -1334,6 +1334,9 @@ struct SettlementEditorSheet: View {
                 resourceID: nil,
                 scope: scope
             ) {
+                alertMessage = scope == .create
+                    ? L10n.planning.planning.youDoNotHavePermissionToCreate(L10n.shared.persistence.notification.event)
+                    : L10n.planning.planning.youDoNotHavePermissionToEdit(L10n.shared.persistence.notification.event)
                 Task { @MainActor in
                     let isApproved = await familyContextStore.resolvePendingPermissionBeforePrompt(
                         ownerUserID: ownerUserID,
@@ -1343,11 +1346,8 @@ struct SettlementEditorSheet: View {
                         sessionStore: sessionStore
                     )
                     if isApproved {
+                        alertMessage = nil
                         retryAction?()
-                    } else {
-                        alertMessage = scope == .create
-                            ? L10n.planning.planning.youDoNotHavePermissionToCreate(L10n.shared.persistence.notification.event)
-                            : L10n.planning.planning.youDoNotHavePermissionToEdit(L10n.shared.persistence.notification.event)
                     }
                 }
                 return false

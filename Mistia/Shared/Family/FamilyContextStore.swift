@@ -821,7 +821,20 @@ final class FamilyContextStore {
             lastErrorMessage = L10n.shared.family.familycontext.familyDataHasNotLoadedYetSync
             return false
         }
+        let requestKey = permissionRequestKey(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope
+        )
+        guard !pendingPermissionRequestKeys.contains(requestKey) else {
+            lastErrorMessage = nil
+            return true
+        }
+        pendingPermissionRequestKeys.insert(requestKey)
+
         guard let session = await prepareRemoteSession(using: sessionStore) else {
+            rollbackProvisionalPermissionRequestKey(requestKey)
             lastErrorMessage = L10n.shared.family.familycontext.signInAndEnableCloudSyncTo
             return false
         }
@@ -851,18 +864,11 @@ final class FamilyContextStore {
         do {
             let request = try await service.createFamilyPermissionRequest(input: input, session: session)
             upsertPendingPermissionRequest(request)
-            pendingPermissionRequestKeys.insert(
-                permissionRequestKey(
-                    ownerUserID: ownerUserID,
-                    resourceType: resourceType,
-                    resourceID: resourceID,
-                    scope: scope
-                )
-            )
             persistCachedState(currentSnapshot)
             lastErrorMessage = nil
             return true
         } catch {
+            rollbackProvisionalPermissionRequestKey(requestKey)
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
             return false
         }
@@ -1634,6 +1640,17 @@ final class FamilyContextStore {
             resourceID: request.resourceID,
             scope: scope
         )
+    }
+
+    private func rollbackProvisionalPermissionRequestKey(
+        _ key: FamilyPendingPermissionRequestKey
+    ) {
+        let hasRemotePendingRecord = pendingPermissionRequests.contains {
+            pendingPermissionRequestKey(from: $0) == key
+        }
+        if !hasRemotePendingRecord {
+            pendingPermissionRequestKeys.remove(key)
+        }
     }
 
     private func removeGrantedPendingPermissionRequests() {

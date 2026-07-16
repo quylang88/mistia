@@ -1859,6 +1859,7 @@ struct TransactionEditorSheet: View {
             return
         }
 
+        transferPermissionPrompt = prompt
         Task { @MainActor in
             let isApproved = await familyContextStore.resolvePendingPermissionBeforePrompt(
                 ownerUserID: prompt.ownerUserID,
@@ -1867,10 +1868,7 @@ struct TransactionEditorSheet: View {
                 scope: .create,
                 sessionStore: sessionStore
             )
-            guard isApproved, transferPermissionPrompt(for: prompt.subtype) == nil else {
-                transferPermissionPrompt = prompt
-                return
-            }
+            guard isApproved, transferPermissionPrompt(for: prompt.subtype) == nil else { return }
             transferPermissionPrompt = nil
             onGranted()
         }
@@ -1879,6 +1877,7 @@ struct TransactionEditorSheet: View {
     private func refreshTransferPermissionPrompt() {
         guard let prompt = transferPermissionPrompt else { return }
         transferPermissionPrompt = nil
+        alertMessage = L10n.transactions.transactions.requestSent
         Task { @MainActor in
             let isApproved = await familyContextStore.resolvePendingPermissionBeforePrompt(
                 ownerUserID: prompt.ownerUserID,
@@ -1895,6 +1894,7 @@ struct TransactionEditorSheet: View {
 
     private func requestTransferCreatePermission(_ prompt: TransferCreatePermissionPrompt) {
         transferPermissionPrompt = nil
+        alertMessage = L10n.shared.family.permissionRequest.sendingMessage
         Task { @MainActor in
             let didSend = await familyContextStore.requestPermission(
                 resourceType: prompt.resourceType,

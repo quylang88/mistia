@@ -4,6 +4,61 @@ import XCTest
 
 @MainActor
 final class FamilyPermissionResolutionTests: XCTestCase {
+    func testPermissionSurfacesPresentCachedPendingStateBeforeRefreshing() throws {
+        let directRefresh = "await familyContextStore.resolvePendingPermissionBeforePrompt("
+        let expectations: [(file: String, function: String, presentation: String, refresh: String)] = [
+            ("Overview/OverviewView.swift", "presentTransactionEditPermissionPrompt", "showTransactionEditPermissionPrompt(", directRefresh),
+            ("Overview/OverviewView.swift", "presentEventPermissionPrompt", "showEventPermissionPrompt(", directRefresh),
+            ("Planning/PlanningView.swift", "presentCreditCardWalletPermissionPrompt", "walletPermissionPrompt = prompt", "await resolvePendingCreditCardWalletPermissionBeforePrompt("),
+            ("Planning/PlanningView.swift", "presentEditPermissionPrompt", "showEditPermissionPrompt(", directRefresh),
+            ("Planning/PlanningView.swift", "presentCreatePermissionPrompt", "showCreatePermissionPrompt(", directRefresh),
+            ("Management/ManagementView.swift", "presentWalletPermissionPrompt", "walletPermissionPrompt = prompt", "await resolvePendingWalletPermissionBeforePrompt("),
+            ("Management/ManagementView.swift", "presentCreatePermissionPrompt", "showCreatePermissionPrompt(", directRefresh),
+            ("Management/ManagementView.swift", "presentCategoryEditPermissionPrompt", "showCategoryEditPermissionPrompt(", directRefresh),
+            ("Management/ManagementView.swift", "presentCategoryCreatePermissionPrompt", "showCategoryCreatePermissionPrompt(", directRefresh),
+            ("Transactions/TransactionsView.swift", "presentEventPermissionPrompt", "showEventPermissionPrompt(", directRefresh),
+            ("Transactions/TransactionsView.swift", "presentTransactionEditPermissionPrompt", "showTransactionEditPermissionPrompt(", directRefresh),
+            ("Transactions/TransactionEditorSheet.swift", "presentTransferPermissionPrompt", "transferPermissionPrompt = prompt", directRefresh),
+            ("Transactions/SettlementSheets.swift", "guardSharedExpenseEventPermission", "alertMessage =", directRefresh)
+        ]
+
+        for expectation in expectations {
+            let source = try featureSource(relativePath: expectation.file)
+            let body = try functionBody(named: expectation.function, in: source)
+            assertMarker(
+                expectation.presentation,
+                appearsBefore: expectation.refresh,
+                in: body,
+                message: "\(expectation.file) \(expectation.function) must present cached pending state before refreshing cloud permissions."
+            )
+        }
+    }
+
+    func testPermissionSubmissionHandlersShowSendingFeedbackBeforeAwaitingRemoteRequest() throws {
+        let expectations: [(file: String, function: String, feedback: String)] = [
+            ("Overview/OverviewView.swift", "showEventPermissionPrompt", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Overview/OverviewView.swift", "sendPermissionRequest", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Planning/PlanningView.swift", "resolvePermissionPromptAction", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Planning/PlanningView.swift", "sendPermissionRequest", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Management/ManagementView.swift", "resolvePermissionPromptAction", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Management/ManagementView.swift", "sendPermissionRequest", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Transactions/TransactionsView.swift", "showEventPermissionPrompt", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Transactions/TransactionsView.swift", "showTransactionEditPermissionPrompt", "L10n.shared.family.permissionRequest.sendingTitle"),
+            ("Transactions/TransactionEditorSheet.swift", "requestTransferCreatePermission", "L10n.shared.family.permissionRequest.sendingMessage")
+        ]
+
+        for expectation in expectations {
+            let source = try featureSource(relativePath: expectation.file)
+            let body = try functionBody(named: expectation.function, in: source)
+            assertMarker(
+                expectation.feedback,
+                appearsBefore: "await familyContextStore.requestPermission(",
+                in: body,
+                message: "\(expectation.file) \(expectation.function) must show sending feedback before awaiting the remote request."
+            )
+        }
+    }
+
     func testPendingBillEditRequestRefreshesApprovedGrantBeforePrompting() async throws {
         let currentUserID = UUID(uuidString: "10000000-0000-4000-8000-000000000001")!
         let ownerUserID = UUID(uuidString: "10000000-0000-4000-8000-000000000002")!
@@ -87,6 +142,51 @@ final class FamilyPermissionResolutionTests: XCTestCase {
                 resourceID: billID
             )
         )
+    }
+
+    private func featureSource(relativePath: String) throws -> String {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
+        let sourceURL = repoRoot
+            .appendingPathComponent("Mistia")
+            .appendingPathComponent("Features")
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: sourceURL, encoding: .utf8)
+    }
+
+    private func functionBody(named functionName: String, in source: String) throws -> String {
+        let marker = "private func \(functionName)("
+        guard let range = source.range(of: marker) else {
+            XCTFail("Missing \(marker)")
+            return ""
+        }
+        let tail = String(source[range.lowerBound...])
+        let searchStart = tail.index(after: tail.startIndex)
+        guard let nextFunction = tail.range(
+            of: "\n    private func ",
+            options: [],
+            range: searchStart..<tail.endIndex
+        ) else {
+            return tail
+        }
+        return String(tail[..<nextFunction.lowerBound])
+    }
+
+    private func assertMarker(
+        _ firstMarker: String,
+        appearsBefore secondMarker: String,
+        in source: String,
+        message: String
+    ) {
+        guard let firstRange = source.range(of: firstMarker) else {
+            XCTFail("\(message) Missing first marker: \(firstMarker)")
+            return
+        }
+        guard let secondRange = source.range(of: secondMarker) else {
+            XCTFail("\(message) Missing second marker: \(secondMarker)")
+            return
+        }
+        XCTAssertLessThan(firstRange.lowerBound, secondRange.lowerBound, message)
     }
 
     private func makeContainer() throws -> ModelContainer {

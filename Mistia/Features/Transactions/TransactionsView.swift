@@ -1755,6 +1755,12 @@ struct TransactionsView: View {
             scope: scope
         )
         if isPending {
+            showEventPermissionPrompt(
+                ownerUserID: ownerUserID,
+                scope: scope,
+                isPending: true,
+                onGranted: onGranted
+            )
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1765,14 +1771,7 @@ struct TransactionsView: View {
                 ) {
                     permissionPrompt = nil
                     onGranted()
-                    return
                 }
-                showEventPermissionPrompt(
-                    ownerUserID: ownerUserID,
-                    scope: scope,
-                    isPending: true,
-                    onGranted: onGranted
-                )
             }
             return
         }
@@ -1804,6 +1803,11 @@ struct TransactionsView: View {
         ) {
             Task { @MainActor in
                 if isPending {
+                    permissionPrompt = nil
+                    infoAlert = TransactionsInfoAlert(
+                        title: L10n.transactions.transactions.requestSent,
+                        message: L10n.transactions.transactions.thePermissionRequestWasSentToThe
+                    )
                     let isApproved = await familyContextStore.refreshPermissionGrant(
                         ownerUserID: ownerUserID,
                         resourceType: .event,
@@ -1812,12 +1816,17 @@ struct TransactionsView: View {
                         sessionStore: sessionStore
                     )
                     if isApproved {
-                        permissionPrompt = nil
+                        infoAlert = nil
                         onGranted()
                     }
                     return
                 }
 
+                permissionPrompt = nil
+                infoAlert = TransactionsInfoAlert(
+                    title: L10n.shared.family.permissionRequest.sendingTitle,
+                    message: L10n.shared.family.permissionRequest.sendingMessage
+                )
                 let didSend = await familyContextStore.requestPermission(
                     resourceType: .event,
                     resourceID: nil,
@@ -1826,8 +1835,6 @@ struct TransactionsView: View {
                     resourceName: L10n.shared.persistence.notification.event,
                     sessionStore: sessionStore
                 )
-                permissionPrompt = nil
-                try? await Task.sleep(nanoseconds: 150_000_000)
                 infoAlert = TransactionsInfoAlert(
                     title: didSend
                         ? L10n.transactions.transactions.requestSent
@@ -1850,6 +1857,12 @@ struct TransactionsView: View {
             scope: .edit
         )
         if isPending {
+            showTransactionEditPermissionPrompt(
+                transaction,
+                ownerUserID: ownerUserID,
+                resourceName: resourceName,
+                isPending: true
+            )
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1860,14 +1873,7 @@ struct TransactionsView: View {
                 ) {
                     permissionPrompt = nil
                     editorTarget = TransactionEditorTarget(transaction: transaction)
-                    return
                 }
-                showTransactionEditPermissionPrompt(
-                    transaction,
-                    ownerUserID: ownerUserID,
-                    resourceName: resourceName,
-                    isPending: true
-                )
             }
             return
         }
@@ -1895,6 +1901,11 @@ struct TransactionsView: View {
         ) {
             Task { @MainActor in
                 if isPending {
+                    permissionPrompt = nil
+                    infoAlert = TransactionsInfoAlert(
+                        title: L10n.transactions.transactions.requestSent,
+                        message: L10n.transactions.transactions.thePermissionRequestWasSentToThe
+                    )
                     let isApproved = await familyContextStore.refreshPermissionGrant(
                         ownerUserID: ownerUserID,
                         resourceType: .transaction,
@@ -1903,12 +1914,17 @@ struct TransactionsView: View {
                         sessionStore: sessionStore
                     )
                     if isApproved {
-                        permissionPrompt = nil
+                        infoAlert = nil
                         editorTarget = TransactionEditorTarget(transaction: transaction)
                     }
                     return
                 }
 
+                permissionPrompt = nil
+                infoAlert = TransactionsInfoAlert(
+                    title: L10n.shared.family.permissionRequest.sendingTitle,
+                    message: L10n.shared.family.permissionRequest.sendingMessage
+                )
                 let didSend = await familyContextStore.requestPermission(
                     resourceType: .transaction,
                     resourceID: nil,
@@ -1917,8 +1933,6 @@ struct TransactionsView: View {
                     resourceName: resourceName,
                     sessionStore: sessionStore
                 )
-                permissionPrompt = nil
-                try? await Task.sleep(nanoseconds: 150_000_000)
                 infoAlert = TransactionsInfoAlert(
                     title: didSend
                         ? L10n.transactions.transactions.requestSent

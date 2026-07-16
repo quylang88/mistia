@@ -1108,6 +1108,121 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertFalse(familyStore.canCreate(ownerUserID: ownerUserID, resourceType: .category))
     }
 
+    func testFamilyPermissionRequestBecomesPendingBeforeRemoteCompletionAndCoalescesDuplicate() async throws {
+        let currentUserID = UUID()
+        let ownerUserID = UUID()
+        let walletID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: ownerUserID)
+        )
+        familyService.createPermissionRequestDelayNanoseconds = 500_000_000
+        let familyStore = FamilyContextStore(
+            modelContainer: try storeTestContainer(),
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        let didRefresh = await familyStore.refresh(sessionStore: store)
+        XCTAssertTrue(didRefresh)
+
+        let firstRequest = Task { @MainActor in
+            await familyStore.requestPermission(
+                resourceType: .wallet,
+                resourceID: walletID,
+                ownerUserID: ownerUserID,
+                scope: .use,
+                resourceName: "Shared Wallet",
+                sessionStore: store
+            )
+        }
+        for _ in 0..<100 where familyService.createPermissionRequestCallCount == 0 {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(
+            familyStore.hasPendingPermissionRequest(
+                ownerUserID: ownerUserID,
+                resourceType: .wallet,
+                resourceID: walletID,
+                scope: .use
+            )
+        )
+
+        let duplicateRequest = Task { @MainActor in
+            await familyStore.requestPermission(
+                resourceType: .wallet,
+                resourceID: walletID,
+                ownerUserID: ownerUserID,
+                scope: .use,
+                resourceName: "Shared Wallet",
+                sessionStore: store
+            )
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(familyService.createPermissionRequestCallCount, 1)
+        let firstResult = await firstRequest.value
+        let duplicateResult = await duplicateRequest.value
+        XCTAssertTrue(firstResult)
+        XCTAssertTrue(duplicateResult)
+    }
+
+    func testFailedFamilyPermissionRequestRollsBackOptimisticPendingState() async throws {
+        let currentUserID = UUID()
+        let ownerUserID = UUID()
+        let walletID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: ownerUserID)
+        )
+        familyService.createPermissionRequestError = SupabaseServiceError.serverMessage("request failed")
+        let familyStore = FamilyContextStore(
+            modelContainer: try storeTestContainer(),
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        let didRefresh = await familyStore.refresh(sessionStore: store)
+        XCTAssertTrue(didRefresh)
+
+        let didRequestPermission = await familyStore.requestPermission(
+            resourceType: .wallet,
+            resourceID: walletID,
+            ownerUserID: ownerUserID,
+            scope: .use,
+            resourceName: "Shared Wallet",
+            sessionStore: store
+        )
+
+        XCTAssertFalse(didRequestPermission)
+        XCTAssertFalse(
+            familyStore.hasPendingPermissionRequest(
+                ownerUserID: ownerUserID,
+                resourceType: .wallet,
+                resourceID: walletID,
+                scope: .use
+            )
+        )
+        XCTAssertEqual(familyStore.lastErrorMessage, "request failed")
+    }
+
     func testFamilyRefreshClearsPendingWalletUseRequestAfterGrantArrives() async throws {
         let currentUserID = UUID()
         let ownerUserID = UUID()
@@ -2767,6 +2882,8 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
     var fetchStateDelayNanoseconds: UInt64?
     var fetchFinanceDelayNanoseconds: UInt64?
     var fetchStateError: Error?
+    var createPermissionRequestDelayNanoseconds: UInt64?
+    var createPermissionRequestError: Error?
 
     init(snapshot: FamilyStateSnapshot) {
         self.snapshot = snapshot
@@ -2857,6 +2974,12 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
         session: SupabaseAuthSession
     ) async throws -> FamilyPermissionRequestRemoteRecord {
         createPermissionRequestCallCount += 1
+        if let createPermissionRequestDelayNanoseconds {
+            try await Task.sleep(nanoseconds: createPermissionRequestDelayNanoseconds)
+        }
+        if let createPermissionRequestError {
+            throw createPermissionRequestError
+        }
         let now = Date()
         return FamilyPermissionRequestRemoteRecord(
             id: UUID(),

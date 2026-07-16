@@ -818,11 +818,11 @@ struct ManagementView: View {
             return
         }
 
+        walletPermissionPrompt = prompt
         Task { @MainActor in
             if await resolvePendingWalletPermissionBeforePrompt(prompt) {
                 return
             }
-            walletPermissionPrompt = prompt
         }
     }
 
@@ -961,6 +961,11 @@ struct ManagementView: View {
         _ prompt: ManagementWalletPermissionPrompt,
         scope: MistiaFamilyPermissionScope
     ) {
+        walletPermissionPrompt = nil
+        infoAlert = ManagementInfoAlert(
+            title: L10n.management.management.requestSent2,
+            message: L10n.management.management.theRequestIsWaitingForTheData
+        )
         Task { @MainActor in
             let isApproved = await familyContextStore.refreshPermissionGrant(
                 ownerUserID: prompt.ownerUserID,
@@ -971,12 +976,8 @@ struct ManagementView: View {
             )
 
             if isApproved {
+                infoAlert = nil
                 performApprovedWalletPermissionAction(prompt, scope: scope)
-            } else {
-                infoAlert = ManagementInfoAlert(
-                    title: L10n.management.management.requestSent2,
-                    message: familyContextStore.lastErrorMessage ?? L10n.management.management.theRequestIsWaitingForTheData
-                )
             }
         }
     }
@@ -1006,6 +1007,12 @@ struct ManagementView: View {
         resourceName: String
     ) {
         Task { @MainActor in
+            walletPermissionPrompt = nil
+            permissionPrompt = nil
+            infoAlert = ManagementInfoAlert(
+                title: L10n.shared.family.permissionRequest.sendingTitle,
+                message: L10n.shared.family.permissionRequest.sendingMessage
+            )
             let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
@@ -1015,8 +1022,6 @@ struct ManagementView: View {
                 sessionStore: sessionStore
             )
 
-            walletPermissionPrompt = nil
-            permissionPrompt = nil
             infoAlert = ManagementInfoAlert(
                 title: didSend
                     ? L10n.management.management.requestSent
@@ -1045,6 +1050,14 @@ struct ManagementView: View {
             scope: .create
         )
         if isPending {
+            showCreatePermissionPrompt(
+                resourceType: resourceType,
+                resourceName: resourceName,
+                actionTitle: actionTitle,
+                ownerUserID: ownerUserID,
+                isPending: true,
+                onGranted: onGranted
+            )
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1055,16 +1068,7 @@ struct ManagementView: View {
                 ) {
                     permissionPrompt = nil
                     onGranted()
-                    return
                 }
-                showCreatePermissionPrompt(
-                    resourceType: resourceType,
-                    resourceName: resourceName,
-                    actionTitle: actionTitle,
-                    ownerUserID: ownerUserID,
-                    isPending: true,
-                    onGranted: onGranted
-                )
             }
             return
         }
@@ -1117,6 +1121,11 @@ struct ManagementView: View {
     ) {
         Task { @MainActor in
             if wasPending {
+                permissionPrompt = nil
+                infoAlert = ManagementInfoAlert(
+                    title: L10n.management.management.requestSent2,
+                    message: L10n.management.management.theRequestIsWaitingForTheData
+                )
                 let isApproved = await familyContextStore.refreshPermissionGrant(
                     ownerUserID: ownerUserID,
                     resourceType: resourceType,
@@ -1126,19 +1135,17 @@ struct ManagementView: View {
                 )
 
                 if isApproved {
-                    permissionPrompt = nil
+                    infoAlert = nil
                     onGranted()
-                    return
                 }
-
-                permissionPrompt = nil
-                infoAlert = ManagementInfoAlert(
-                    title: L10n.management.management.requestSent2,
-                    message: familyContextStore.lastErrorMessage ?? L10n.management.management.theRequestIsWaitingForTheData
-                )
                 return
             }
 
+            permissionPrompt = nil
+            infoAlert = ManagementInfoAlert(
+                title: L10n.shared.family.permissionRequest.sendingTitle,
+                message: L10n.shared.family.permissionRequest.sendingMessage
+            )
             let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
@@ -1148,7 +1155,6 @@ struct ManagementView: View {
                 sessionStore: sessionStore
             )
 
-            permissionPrompt = nil
             infoAlert = ManagementInfoAlert(
                 title: didSend
                     ? L10n.management.management.requestSent
@@ -1357,6 +1363,7 @@ struct ManagementView: View {
             scope: .edit
         )
         if isPending {
+            showCategoryEditPermissionPrompt(ownerUserID: ownerUserID, isPending: true, onGranted: onGranted)
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1367,9 +1374,7 @@ struct ManagementView: View {
                 ) {
                     permissionPrompt = nil
                     onGranted()
-                    return
                 }
-                showCategoryEditPermissionPrompt(ownerUserID: ownerUserID, isPending: true, onGranted: onGranted)
             }
             return
         }
@@ -1414,6 +1419,7 @@ struct ManagementView: View {
             scope: .create
         )
         if isPending {
+            showCategoryCreatePermissionPrompt(ownerUserID: ownerUserID, isPending: true, onGranted: onGranted)
             Task { @MainActor in
                 if await familyContextStore.resolvePendingPermissionBeforePrompt(
                     ownerUserID: ownerUserID,
@@ -1424,9 +1430,7 @@ struct ManagementView: View {
                 ) {
                     permissionPrompt = nil
                     onGranted()
-                    return
                 }
-                showCategoryCreatePermissionPrompt(ownerUserID: ownerUserID, isPending: true, onGranted: onGranted)
             }
             return
         }

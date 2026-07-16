@@ -3327,6 +3327,13 @@ nonisolated enum L10n {
                 static var exitTitle: String { L10n.tr("shared.family.memberViewing.exitTitle", vi: "Thoát khỏi chế độ xem dữ liệu?", en: "Leave data view?", ja: "データ表示を終了しますか？") }
                 static func exitTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.memberViewing.exitTitle", vi: "Thoát khỏi chế độ xem dữ liệu?", en: "Leave data view?", ja: "データ表示を終了しますか？", language: language) }
             }
+
+            nonisolated enum permissionRequest {
+                static var sendingMessage: String { L10n.tr("shared.family.permissionRequest.sendingMessage", vi: "Mistia đang gửi yêu cầu. Bạn có thể tiếp tục sử dụng ứng dụng.", en: "Mistia is sending your request. You can keep using the app.", ja: "リクエストを送信しています。このままアプリをお使いいただけます。") }
+                static func sendingMessage(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.permissionRequest.sendingMessage", vi: "Mistia đang gửi yêu cầu. Bạn có thể tiếp tục sử dụng ứng dụng.", en: "Mistia is sending your request. You can keep using the app.", ja: "リクエストを送信しています。このままアプリをお使いいただけます。", language: language) }
+                static var sendingTitle: String { L10n.tr("shared.family.permissionRequest.sendingTitle", vi: "Đang gửi yêu cầu...", en: "Sending request...", ja: "リクエストを送信中...") }
+                static func sendingTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.permissionRequest.sendingTitle", vi: "Đang gửi yêu cầu...", en: "Sending request...", ja: "リクエストを送信中...", language: language) }
+            }
         }
 
         nonisolated enum notifications {
