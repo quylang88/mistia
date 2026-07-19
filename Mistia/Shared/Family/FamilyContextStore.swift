@@ -47,7 +47,6 @@ final class FamilyContextStore {
     var isLoading = false
     var isRefreshingLatest = false
     var refreshingMemberUserID: UUID?
-    var isSwitchingContext = false
     var didBootstrap = false
 
     @ObservationIgnored private let service: any FamilyRemoteServicing
@@ -136,10 +135,6 @@ final class FamilyContextStore {
         return userID != currentUserID
     }
 
-    var isRefreshingViewedMemberFinance: Bool {
-        guard case .member(let userID) = activeContext.scope else { return false }
-        return refreshingMemberUserID == userID
-    }
 
     var viewedMember: FamilyMember? {
         guard case .member(let userID) = activeContext.scope else { return nil }
@@ -1026,9 +1021,6 @@ final class FamilyContextStore {
     func activateMemberView(_ member: FamilyMember) {
         let capabilities = capabilities(for: member)
         guard capabilities.canViewTarget else { return }
-
-        isSwitchingContext = true
-        defer { isSwitchingContext = false }
 
         if member.userID == currentUserID {
             cancelMemberFinanceRefresh()

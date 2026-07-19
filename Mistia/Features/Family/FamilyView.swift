@@ -2881,7 +2881,6 @@ private struct FamilyMemberProfileScreen: View {
                 memberActionRowContent(action)
             }
             .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 0))
-            .disabled(familyContextStore.isSwitchingContext)
 
         case .destructive:
             Button(role: .destructive) {
@@ -2927,15 +2926,10 @@ private struct FamilyMemberProfileScreen: View {
 
     private func memberActionRowContent(_ action: FamilyMemberProfileAction) -> some View {
         HStack(spacing: 14) {
-            if action == .viewData && familyContextStore.isSwitchingContext {
-                ProgressView()
-                    .frame(width: 32)
-            } else {
-                Image(systemName: memberActionIcon(action))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(memberActionTint(action))
-                    .frame(width: 32)
-            }
+            Image(systemName: memberActionIcon(action))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(memberActionTint(action))
+                .frame(width: 32)
 
             Text(memberActionTitle(action))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
