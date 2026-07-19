@@ -845,7 +845,7 @@ nonisolated enum FamilyLogic {
 
         let targetIsKid = targetRole == .kid
         let canViewTarget = viewerPolicy.canViewOthers && (!targetIsKid || viewerPolicy.canViewKids)
-        let canEditTarget = viewerPolicy.canEditOthers && (!targetIsKid || viewerPolicy.canEditKids)
+        let canEditTarget = targetIsKid && viewerPolicy.canEditKids
 
         return FamilyMemberAccessCapabilities(
             canOpenFamilyHome: viewerPolicy.canViewFamilyDashboard,
@@ -854,7 +854,7 @@ nonisolated enum FamilyLogic {
             canViewTarget: canViewTarget,
             canEditTarget: canEditTarget,
             canViewTargetWallets: canViewTarget && viewerPolicy.canViewWallets,
-            canViewTargetDebts: canViewTarget && viewerPolicy.canViewDebts
+            canViewTargetDebts: canViewTarget
         )
     }
 
