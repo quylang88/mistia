@@ -12101,19 +12101,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep both sides, merge by record ID, and avoid risky automatic cashflow item dedupe."
+            "value" : "Combine device and cloud records, preventing any data loss or duplicate transactions."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "両側のデータを保持し、レコード ID で統合しつつ危険な自動重複排除は行いません。"
+            "value" : "端末とクラウドの両方のデータを統合し、データの消失や重複を防ぎます。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng thu chi giống nhau."
+            "value" : "Kết hợp dữ liệu từ thiết bị này và đám mây, bảo toàn tất cả các giao dịch mà không ghi đè."
           }
         }
       }
@@ -12377,19 +12377,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Merge safely"
+            "value" : "Merge Data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "安全にマージ"
+            "value" : "データをマージする"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gộp an toàn"
+            "value" : "Hợp nhất dữ liệu"
           }
         }
       }
@@ -13044,19 +13044,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Replace the current local snapshot with the full cloud state."
+            "value" : "Replace this device's data with the data downloaded from the cloud."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "現在のローカルスナップショットを置き換えて、クラウド全体を取得します。"
+            "value" : "この端末のデータをクラウドからダウンロードしたデータで上書きします。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Xóa snapshot local hiện tại rồi kéo toàn bộ cloud về máy."
+            "value" : "Ghi đè dữ liệu trên thiết bị này bằng dữ liệu tải về từ đám mây."
           }
         }
       }
@@ -13843,19 +13843,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The cloud has no data yet (except your profile). This device has %@ records. Choose how you want to start."
+            "value" : "The cloud has no data yet. This device has %@ records. Choose how you want to initialize synchronization."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "クラウドにはまだデータがありません（プロフィールを除く）。この端末には %@ 件のレコードがあります。開始方法を選択してください。"
+            "value" : "クラウドにデータがありません。この端末には %@ 件のレコードがあります。同期の開始方法を選択してください。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cloud hiện chưa có dữ liệu nào (ngoại trừ hồ sơ của bạn). Máy này đang có %@ bản ghi. Hãy chọn cách bạn muốn bắt đầu."
+            "value" : "Đám mây hiện chưa có dữ liệu. Thiết bị này đang có %@ bản ghi. Vui lòng chọn cách bạn muốn bắt đầu đồng bộ."
           }
         }
       }
@@ -13935,19 +13935,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This device has %@ records and the cloud has %@ records. Mistia will prioritize data safety first."
+            "value" : "This device has %@ records and the cloud has %@ records. Select an option to resolve and start syncing."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この端末には %@ 件、クラウドには %@ 件のレコードがあります。ミスティアはまずデータの安全性を優先します。"
+            "value" : "この端末には %@ 件、クラウドには %@ 件のレコードがあります。同期を開始するための解決方法を選択してください。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Máy này đang có %@ bản ghi và cloud đang có %@ bản ghi. Mistia sẽ ưu tiên an toàn dữ liệu trước."
+            "value" : "Thiết bị này có %@ bản ghi và đám mây có %@ bản ghi. Vui lòng chọn phương án xử lý để bắt đầu đồng bộ."
           }
         }
       }
@@ -13981,19 +13981,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Upload local data to the cloud and tombstone cloud-only records."
+            "value" : "Replace cloud data with the current data from this device."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカルデータをクラウドへアップロードし、クラウドにしかないレコードは tombstone 化します。"
+            "value" : "クラウド上のデータをこの端末のデータで上書きします。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đẩy local lên cloud và tombstone các bản chỉ có trên cloud."
+            "value" : "Ghi đè dữ liệu trên đám mây bằng dữ liệu hiện tại từ thiết bị này."
           }
         }
       }
@@ -14027,19 +14027,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use cloud"
+            "value" : "Use Cloud Data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "クラウドを使う"
+            "value" : "クラウドのデータを使用"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dùng dữ liệu trên cloud"
+            "value" : "Sử dụng dữ liệu đám mây"
           }
         }
       }
@@ -14096,19 +14096,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use this device"
+            "value" : "Use Device Data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この端末を使う"
+            "value" : "端末のデータを使用"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dùng dữ liệu trên máy này"
+            "value" : "Sử dụng dữ liệu thiết bị"
           }
         }
       }

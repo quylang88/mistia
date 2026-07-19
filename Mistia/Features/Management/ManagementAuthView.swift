@@ -1973,6 +1973,55 @@ private struct ManagementStatusBadge: View {
     }
 }
 
+private struct ManagementInitialSyncChoiceButtonBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let accent: Color
+    let isRecommended: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(baseFillColor)
+
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(nativeGlassStyle, in: .rect(cornerRadius: 20))
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 0.75)
+        }
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.44)
+    }
+
+    private var baseFillColor: Color {
+        if isRecommended {
+            return colorScheme == .dark ? accent.opacity(0.18) : accent.opacity(0.08)
+        } else {
+            return colorScheme == .dark
+                ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
+                : Color.white.opacity(0.72)
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        let tint: Color
+        if isRecommended {
+            tint = colorScheme == .dark ? accent.opacity(0.18) : accent.opacity(0.08)
+        } else {
+            tint = colorScheme == .dark ? .white.opacity(0.07) : .white.opacity(0.18)
+        }
+        return Glass.regular.tint(tint).interactive(true)
+    }
+}
+
 private struct ManagementInitialSyncChoiceSheet: View {
     let preview: MistiaInitialSyncPreview
     let accent: Color
@@ -1986,20 +2035,34 @@ private struct ManagementInitialSyncChoiceSheet: View {
                     .ignoresSafeArea()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
-                        Text(
-                            preview.remoteActiveCount == 0
-                            ? L10n.management.managementauth.theCloudHasNoDataYetExcept(String(describing: preview.localActiveCount))
-                            : L10n.management.managementauth.thisDeviceHasValueRecordsAndThe(String(describing: preview.localActiveCount), String(describing: preview.remoteActiveCount))
-                        )
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
+                    VStack(alignment: .center, spacing: 28) {
+                        Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
+                            .font(.system(size: 56))
+                            .foregroundStyle(accent)
+                            .padding(.top, 24)
+
+                        VStack(spacing: 8) {
+                            Text(L10n.management.managementauth.firstSync)
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .multilineTextAlignment(.center)
+
+                            Text(
+                                preview.remoteActiveCount == 0
+                                ? L10n.management.managementauth.theCloudHasNoDataYetExcept(String(describing: preview.localActiveCount))
+                                : L10n.management.managementauth.thisDeviceHasValueRecordsAndThe(String(describing: preview.localActiveCount), String(describing: preview.remoteActiveCount))
+                            )
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
 
                         VStack(spacing: 12) {
                             ManagementInitialSyncChoiceButton(
                                 title: L10n.management.managementauth.mergeSafely,
                                 detail: L10n.management.managementauth.keepBothSidesMergeByRecordID,
+                                systemImage: "arrow.triangle.2.circlepath",
                                 accent: accent,
                                 isRecommended: true
                             ) {
@@ -2009,6 +2072,7 @@ private struct ManagementInitialSyncChoiceSheet: View {
                             ManagementInitialSyncChoiceButton(
                                 title: L10n.management.managementauth.useThisDevice,
                                 detail: L10n.management.managementauth.uploadLocalDataToTheCloudAnd,
+                                systemImage: "iphone",
                                 accent: accent,
                                 isRecommended: false
                             ) {
@@ -2018,6 +2082,7 @@ private struct ManagementInitialSyncChoiceSheet: View {
                             ManagementInitialSyncChoiceButton(
                                 title: L10n.management.managementauth.useCloud2,
                                 detail: L10n.management.managementauth.replaceTheCurrentLocalSnapshotWithThe,
+                                systemImage: "icloud",
                                 accent: .secondary,
                                 isRecommended: false
                             ) {
@@ -2026,13 +2091,10 @@ private struct ManagementInitialSyncChoiceSheet: View {
                         }
                     }
                     .padding(.horizontal, 18)
-                    .padding(.top, 10)
                     .padding(.bottom, 30)
                 }
             }
-            .navigationTitle(
-                L10n.management.managementauth.firstSync
-            )
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -2052,38 +2114,69 @@ private struct ManagementInitialSyncChoiceSheet: View {
 private struct ManagementInitialSyncChoiceButton: View {
     let title: String
     let detail: String
+    let systemImage: String
     let accent: Color
     let isRecommended: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var iconForegroundTint: Color {
+        isRecommended ? accent : (colorScheme == .dark ? .white.opacity(0.92) : .secondary)
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(iconForegroundTint.opacity(colorScheme == .dark ? 0.18 : 0.12))
 
-                    if isRecommended {
-                        Text(L10n.management.managementauth.recommended)
-                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(accent)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(accent.opacity(0.12), in: Capsule())
+                    Image(systemName: systemImage)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(iconForegroundTint)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        if isRecommended {
+                            Text(L10n.management.managementauth.recommended)
+                                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                                .foregroundStyle(accent)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(accent.opacity(0.12), in: Capsule())
+                        }
                     }
+
+                    Text(detail)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text(detail)
-                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 10)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(isRecommended ? accent : .secondary.opacity(0.72))
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 15)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background {
+                ManagementInitialSyncChoiceButtonBackground(
+                    accent: accent,
+                    isRecommended: isRecommended
+                )
+            }
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+        .buttonStyle(.plain)
     }
 }
 
