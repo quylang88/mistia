@@ -1434,7 +1434,27 @@ final class FamilyContextStore {
         }
     }
 
-    private func updateCachedAvatar(_ avatarURL: URL, for userID: UUID) {
+    func updateMemberProfile(userID: UUID, displayName: String, avatarURL: URL?) {
+        guard let memberIndex = members.firstIndex(where: { $0.userID == userID }) else {
+            return
+        }
+
+        var changed = false
+        if members[memberIndex].displayName != displayName {
+            members[memberIndex].displayName = displayName
+            changed = true
+        }
+        if members[memberIndex].avatarURL?.absoluteString != avatarURL?.absoluteString {
+            members[memberIndex].avatarURL = avatarURL
+            changed = true
+        }
+
+        if changed {
+            persistCachedState(currentSnapshot)
+        }
+    }
+
+    func updateCachedAvatar(_ avatarURL: URL, for userID: UUID) {
         guard let memberIndex = members.firstIndex(where: { $0.userID == userID }),
               members[memberIndex].avatarURL?.absoluteString != avatarURL.absoluteString else {
             return

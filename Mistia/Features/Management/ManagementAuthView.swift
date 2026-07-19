@@ -2726,6 +2726,7 @@ private struct ManagementEditProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     let summary: SessionSummary
     let accent: Color
@@ -2988,6 +2989,13 @@ private struct ManagementEditProfileView: View {
                 if let refreshedSummary = sessionStore.summary {
                     draftDisplayName = refreshedSummary.displayName
                     draftAvatarURL = refreshedSummary.avatarURL
+                    
+                    // Update familyContextStore members with the new local profile info!
+                    familyContextStore.updateMemberProfile(
+                        userID: refreshedSummary.userID,
+                        displayName: refreshedSummary.displayName,
+                        avatarURL: refreshedSummary.avatarURL
+                    )
                 }
 
                 if let birthday {

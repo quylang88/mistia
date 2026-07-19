@@ -42,14 +42,26 @@ nonisolated enum MistiaProfileAvatarCache {
             latestByUserID[userID] = (fileURL, modifiedAt)
         }
 
-        return latestByUserID.mapValues { $0.url }
+        return latestByUserID.mapValues { entry in
+            let timestamp = Int(entry.modifiedAt.timeIntervalSince1970)
+            var components = URLComponents(url: entry.url, resolvingAgainstBaseURL: false)
+            components?.queryItems = [URLQueryItem(name: "v", value: "\(timestamp)")]
+            return components?.url ?? entry.url
+        }
     }
 
     static func cachedAvatarURL(forFileName fileName: String) -> URL? {
         guard let directoryURL = try? avatarDirectoryURL(create: false) else { return nil }
         let fileURL = directoryURL.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
-        return fileURL
+        
+        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let modificationDate = attrs?[.modificationDate] as? Date ?? Date()
+        let timestamp = Int(modificationDate.timeIntervalSince1970)
+        
+        var components = URLComponents(url: fileURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "v", value: "\(timestamp)")]
+        return components?.url ?? fileURL
     }
 
     static func cacheRemoteAvatarIfNeeded(

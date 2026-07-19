@@ -400,42 +400,33 @@ final class SessionStore {
         birthday: Date?,
         avatarJPEGData: Data? = nil
     ) async throws {
-        let validSession = try await prepareRemoteSession()
+        guard let currentUserID = summary?.userID,
+              let currentEmail = summary?.email else {
+            throw NSError(domain: "Mistia", code: 401, userInfo: [NSLocalizedDescriptionKey: "No active session"])
+        }
 
-        let baseSummary = SessionSummary(user: validSession.user)
+        let baseSummary = summary ?? SessionSummary(userID: currentUserID, displayName: displayName, email: currentEmail, avatarURL: nil)
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedDisplayName = trimmedName.isEmpty ? baseSummary.displayName : trimmedName
+        
         let profile = try ensureStoredProfileExists(
             for: baseSummary,
             preferredDisplayName: resolvedDisplayName
         )
-        let existingRemoteProfile = try await userProfileStore.fetchProfile(session: validSession)
-        var remoteAvatarURL = existingRemoteProfile?.avatarURL ?? baseSummary.avatarURL
-
+        
         if let avatarJPEGData {
             profile.avatarFileName = try saveAvatarImageData(avatarJPEGData, for: baseSummary.userID)
-            remoteAvatarURL = try await userProfileStore.uploadAvatarImageData(
-                avatarJPEGData,
-                session: validSession
-            )
         }
-
-        let remoteProfile = try await userProfileStore.upsertProfile(
-            displayName: resolvedDisplayName,
-            avatarURL: remoteAvatarURL,
-            birthday: birthday,
-            session: validSession
-        )
-        await cacheRemoteAvatarIfNeeded(
-            for: profile,
-            remoteAvatarURL: remoteProfile.avatarURL ?? remoteAvatarURL
-        )
-        syncStoredProfile(profile, with: remoteProfile, email: baseSummary.email)
+        
+        profile.displayName = resolvedDisplayName
+        profile.birthday = birthday
+        profile.updatedAt = .now
+        
         try modelContainer.mainContext.save()
+        
         summary = applyStoredProfile(
             profile,
-            to: baseSummary,
-            remoteAvatarURL: remoteProfile.avatarURL
+            to: baseSummary
         )
     }
 
@@ -2432,6 +2423,26 @@ final class SessionStore {
             let pushedFamilyOwnerMutations = try await pushQueuedFamilyOwnerMutations(
                 session: validSession
             )
+            
+            // Sync user profile during synchronization
+            if let userID = summary?.userID, let profile = storedProfile(for: userID) {
+                let baseSummary = SessionSummary(userID: userID, displayName: profile.displayName, email: profile.email, avatarURL: summary?.avatarURL)
+                if let remoteProfile = try? await syncProfileWithRemote(
+                    session: validSession,
+                    baseSummary: baseSummary,
+                    storedProfile: profile
+                ) {
+                    await cacheRemoteAvatarIfNeeded(
+                        for: profile,
+                        remoteAvatarURL: remoteProfile.avatarURL ?? baseSummary.avatarURL
+                    )
+                    summary = applyStoredProfile(
+                        profile,
+                        to: baseSummary,
+                        remoteAvatarURL: remoteProfile.avatarURL
+                    )
+                }
+            }
             if normalizesBeforeSync {
                 try await normalizeCategoryHierarchyIfNeeded()
             }
@@ -3077,7 +3088,10 @@ private extension SessionStore {
 
         let baseAvatarURL = baseSummary.avatarURL
         let remoteMirrorsBaseAvatar = existingRemoteProfile?.avatarURL?.absoluteString == baseAvatarURL?.absoluteString
-        let shouldUploadLocalAvatar = (existingRemoteProfile?.avatarURL == nil || remoteMirrorsBaseAvatar)
+        
+        let localIsNewer = storedProfile.updatedAt > (existingRemoteProfile?.updatedAt ?? .distantPast)
+        
+        let shouldUploadLocalAvatar = (existingRemoteProfile?.avatarURL == nil || remoteMirrorsBaseAvatar || localIsNewer)
             && storedProfile.avatarFileName != nil
 
         var resolvedRemoteAvatarURL = existingRemoteProfile?.avatarURL ?? baseAvatarURL
@@ -3091,6 +3105,9 @@ private extension SessionStore {
         }
 
         let resolvedRemoteDisplayName: String = {
+            if localIsNewer {
+                return localDisplayName
+            }
             guard let existingRemoteProfile else { return localDisplayName }
             let remoteDisplayName = existingRemoteProfile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             let baseDisplayName = baseSummary.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3106,7 +3123,7 @@ private extension SessionStore {
             return existingRemoteProfile.displayName
         }()
 
-        let resolvedRemoteBirthday = existingRemoteProfile?.birthday ?? storedProfile.birthday
+        let resolvedRemoteBirthday = localIsNewer ? storedProfile.birthday : (existingRemoteProfile?.birthday ?? storedProfile.birthday)
 
         let needsRemoteUpsert = {
             guard let existingRemoteProfile else { return true }
@@ -3328,7 +3345,13 @@ private extension SessionStore {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return nil
         }
-        return fileURL
+        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let modificationDate = attrs?[.modificationDate] as? Date ?? Date()
+        let timestamp = Int(modificationDate.timeIntervalSince1970)
+        
+        var components = URLComponents(url: fileURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "v", value: "\(timestamp)")]
+        return components?.url ?? fileURL
     }
 
     func avatarFileExtension(mimeType: String?, sourceURL: URL) -> String {
