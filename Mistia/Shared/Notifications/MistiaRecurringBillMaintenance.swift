@@ -33,14 +33,15 @@ enum MistiaRecurringBillMaintenance {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) async {
-        removeStaleBillNotifications(
+        let pausedBillIDs = Set(snapshot.activeBills.lazy.filter(\.isPaused).map(\.id))
+        var notificationBatch = MistiaRecurringBillNotificationBatch(
+            modelContext: modelContext,
             billOwnerMap: snapshot.billOwnerMap,
             activeUserID: snapshot.activeUserID,
-            modelContext: modelContext
+            pausedBillIDs: pausedBillIDs
         )
-
-        for bill in snapshot.activeBills where bill.isPaused {
-            resolveNotifications(for: bill.id, modelContext: modelContext)
+        defer {
+            notificationBatch.saveIfNeeded()
         }
 
         let activeBills = snapshot.activeBills.filter { !$0.isPaused }
@@ -93,6 +94,7 @@ enum MistiaRecurringBillMaintenance {
                             occurrences: snapshot.activeOccurrences,
                             ownershipScopes: snapshot.ownershipScopes,
                             modelContext: modelContext,
+                            notificationBatch: &notificationBatch,
                             sessionStore: sessionStore,
                             referenceDate: referenceDate
                         )
@@ -107,7 +109,8 @@ enum MistiaRecurringBillMaintenance {
                             dueItem: dueItem,
                             monthKey: cycleMonthKey,
                             recipientUserID: snapshot.activeUserID,
-                            modelContext: modelContext
+                            modelContext: modelContext,
+                            notificationBatch: &notificationBatch
                         )
                     }
                 } else if isAutoPayToday && dueItem.autoPayEnabled {
@@ -120,7 +123,8 @@ enum MistiaRecurringBillMaintenance {
                         dueItem: dueItem,
                         monthKey: cycleMonthKey,
                         recipientUserID: snapshot.activeUserID,
-                        modelContext: modelContext
+                        modelContext: modelContext,
+                        notificationBatch: &notificationBatch
                     )
                 }
 
@@ -149,7 +153,8 @@ enum MistiaRecurringBillMaintenance {
                         dueItem: dueItem,
                         monthKey: cycleMonthKey,
                         recipientUserID: snapshot.activeUserID,
-                        modelContext: modelContext
+                        modelContext: modelContext,
+                        notificationBatch: &notificationBatch
                     )
                 }
 
@@ -172,6 +177,7 @@ enum MistiaRecurringBillMaintenance {
                         monthKey: cycleMonthKey,
                         recipientUserID: snapshot.activeUserID,
                         modelContext: modelContext,
+                        notificationBatch: &notificationBatch,
                         forceUnread: true
                     )
                 }
@@ -216,6 +222,7 @@ enum MistiaRecurringBillMaintenance {
         occurrences: [DueOccurrenceRecord],
         ownershipScopes: [OwnedRecordScope],
         modelContext: ModelContext,
+        notificationBatch: inout MistiaRecurringBillNotificationBatch,
         sessionStore: SessionStore,
         referenceDate: Date
     ) async {
@@ -292,7 +299,8 @@ enum MistiaRecurringBillMaintenance {
                 dueItem: dueItem,
                 monthKey: monthKey,
                 recipientUserID: sessionStore.activeLocalProfileUserID,
-                modelContext: modelContext
+                modelContext: modelContext,
+                notificationBatch: &notificationBatch
             )
         } catch {
             upsertNotification(
@@ -304,7 +312,8 @@ enum MistiaRecurringBillMaintenance {
                 dueItem: dueItem,
                 monthKey: monthKey,
                 recipientUserID: sessionStore.activeLocalProfileUserID,
-                modelContext: modelContext
+                modelContext: modelContext,
+                notificationBatch: &notificationBatch
             )
         }
     }
@@ -385,6 +394,7 @@ enum MistiaRecurringBillMaintenance {
         monthKey: String,
         recipientUserID: UUID?,
         modelContext: ModelContext,
+        notificationBatch: inout MistiaRecurringBillNotificationBatch,
         forceUnread: Bool = false
     ) {
         guard MistiaNotificationPreferences.reminderEnabled(.bills) else { return }
@@ -405,45 +415,16 @@ enum MistiaRecurringBillMaintenance {
             return String(data: data, encoding: .utf8)
         }()
 
-        let existing = (try? modelContext.fetch(
-            FetchDescriptor<AppNotificationRecord>(
-                predicate: #Predicate { $0.key == key }
-            )
-        ))?.first
-
-        if let existing {
-            existing.title = title
-            existing.body = body
-            existing.kind = kind
-            existing.source = .system
-            existing.recipientUserID = recipientUserID
-            existing.resourceType = .bill
-            existing.resourceID = bill.id
-            existing.metadataJSON = metadataJSON
-            existing.updatedAt = .now
-            if forceUnread {
-                existing.createdAt = .now
-                existing.isRead = false
-                existing.readAt = nil
-            }
-        } else {
-            modelContext.insert(AppNotificationRecord(
-                key: key,
-                createdAt: .now,
-                updatedAt: .now,
-                title: title,
-                body: body,
-                kind: kind,
-                source: .system,
-                isRead: false,
-                recipientUserID: recipientUserID,
-                resourceType: .bill,
-                resourceID: bill.id,
-                metadataJSON: metadataJSON
-            ))
-        }
-
-        try? modelContext.save()
+        notificationBatch.upsert(
+            key: key,
+            title: title,
+            body: body,
+            kind: kind,
+            recipientUserID: recipientUserID,
+            billID: bill.id,
+            metadataJSON: metadataJSON,
+            forceUnread: forceUnread
+        )
     }
 
     // MARK: - Balance check
@@ -529,45 +510,4 @@ enum MistiaRecurringBillMaintenance {
         )
     }
 
-    private static func removeStaleBillNotifications(
-        billOwnerMap: [UUID: UUID],
-        activeUserID: UUID,
-        modelContext: ModelContext
-    ) {
-        let billResourceTypeRawValue = MistiaFamilyNotificationResourceType.bill.rawValue
-        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
-        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
-        let rows = (try? modelContext.fetch(
-            FetchDescriptor<AppNotificationRecord>(
-                predicate: #Predicate<AppNotificationRecord> { row in
-                    row.resourceTypeRawValue == billResourceTypeRawValue
-                        && (
-                            row.sourceRawValue == localReminderSourceRawValue
-                                || row.sourceRawValue == systemSourceRawValue
-                        )
-                }
-            )
-        )) ?? []
-        let billKinds: Set<MistiaAppNotificationKind> = [
-            .billPaymentRequired,
-            .billAutoPaymentSucceeded,
-            .billAutoPaymentFailed,
-            .billOverdue
-        ]
-        var didDelete = false
-
-        for row in rows where billKinds.contains(row.kind) {
-            guard let resourceID = row.resourceID,
-                  let ownerUserID = billOwnerMap[resourceID],
-                  ownerUserID != activeUserID else {
-                continue
-            }
-            modelContext.delete(row)
-            didDelete = true
-        }
-
-        if didDelete {
-            try? modelContext.save()
-        }
-    }
 }
