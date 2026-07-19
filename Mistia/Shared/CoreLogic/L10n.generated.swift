@@ -289,8 +289,8 @@ nonisolated enum L10n {
             static func budgets(language: MistiaAppLanguage) -> String { L10n.tr("family.family.budgets", vi: "Ngân sách", en: "Budgets", ja: "予算", language: language) }
             static var categories: String { L10n.tr("family.family.categories", vi: "Danh mục", en: "Categories", ja: "カテゴリ") }
             static func categories(language: MistiaAppLanguage) -> String { L10n.tr("family.family.categories", vi: "Danh mục", en: "Categories", ja: "カテゴリ", language: language) }
-            static var childSupervision: String { L10n.tr("family.family.childSupervision", vi: "Giám sát trẻ em", en: "Child supervision", ja: "子どもの管理") }
-            static func childSupervision(language: MistiaAppLanguage) -> String { L10n.tr("family.family.childSupervision", vi: "Giám sát trẻ em", en: "Child supervision", ja: "子どもの管理", language: language) }
+            static var childSupervision: String { L10n.tr("family.family.childSupervision", vi: "Giám sát trẻ em", en: "Child supervision", ja: "キッズの管理") }
+            static func childSupervision(language: MistiaAppLanguage) -> String { L10n.tr("family.family.childSupervision", vi: "Giám sát trẻ em", en: "Child supervision", ja: "キッズの管理", language: language) }
             static var close: String { L10n.tr("family.family.close", vi: "Đóng", en: "Close", ja: "閉じる") }
             static func close(language: MistiaAppLanguage) -> String { L10n.tr("family.family.close", vi: "Đóng", en: "Close", ja: "閉じる", language: language) }
             static var confirm: String { L10n.tr("family.family.confirm", vi: "Đồng ý", en: "Confirm", ja: "確認") }
@@ -391,10 +391,10 @@ nonisolated enum L10n {
             static func inviteRoleValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("family.family.inviteRoleValue", vi: "Vai trò được mời: %@", en: "Invite role: %@", ja: "招待する役割: %@", language: language, value)
             }
-            static var kid: String { L10n.tr("family.family.kid", vi: "Trẻ em", en: "Kid", ja: "子ども") }
-            static func kid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kid", vi: "Trẻ em", en: "Kid", ja: "子ども", language: language) }
-            static var kidsAreLimitedByDefaultAndCan: String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。") }
-            static func kidsAreLimitedByDefaultAndCan(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。", language: language) }
+            static var kid: String { L10n.tr("family.family.kid", vi: "Trẻ em", en: "Kid", ja: "キッズ") }
+            static func kid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kid", vi: "Trẻ em", en: "Kid", ja: "キッズ", language: language) }
+            static var kidsAreLimitedByDefaultAndCan: String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "キッズは初期状態で制限され、保護者または所有者が管理できます。") }
+            static func kidsAreLimitedByDefaultAndCan(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "キッズは初期状態で制限され、保護者または所有者が管理できます。", language: language) }
             static var leave: String { L10n.tr("family.family.leave", vi: "Rời khỏi", en: "Leave", ja: "退会") }
             static func leave(language: MistiaAppLanguage) -> String { L10n.tr("family.family.leave", vi: "Rời khỏi", en: "Leave", ja: "退会", language: language) }
             static var leaveFamily: String { L10n.tr("family.family.leaveFamily", vi: "Rời khỏi gia đình?", en: "Leave family?", ja: "家族を退会しますか？") }

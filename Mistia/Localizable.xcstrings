@@ -2451,7 +2451,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "子どもの管理"
+            "value" : "キッズの管理"
           }
         },
         "vi" : {
@@ -3486,7 +3486,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "子ども"
+            "value" : "キッズ"
           }
         },
         "vi" : {
@@ -3509,7 +3509,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "子どもは初期状態で制限され、保護者または所有者が管理できます。"
+            "value" : "キッズは初期状態で制限され、保護者または所有者が管理できます。"
           }
         },
         "vi" : {
