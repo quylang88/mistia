@@ -2740,6 +2740,8 @@ private struct ManagementEditProfileView: View {
     @State private var showsAvatarSourceDialog = false
     @State private var showsPrivacySheet = false
     @State private var profileErrorMessage: String?
+    @State private var selectedImageForCrop: UIImage?
+    @State private var showsImageCropper = false
 
     init(summary: SessionSummary, accent: Color) {
         self.summary = summary
@@ -2896,7 +2898,23 @@ private struct ManagementEditProfileView: View {
         }
         .sheet(item: $avatarSource) { source in
             ManagementProfileImagePicker(sourceType: source.uiImagePickerSourceType) { image in
-                handlePickedAvatar(image)
+                self.selectedImageForCrop = image
+            }
+            .onDisappear {
+                if selectedImageForCrop != nil {
+                    showsImageCropper = true
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showsImageCropper) {
+            if let selectedImageForCrop {
+                MistiaImageCropper(image: selectedImageForCrop, accent: accent) { croppedImage in
+                    showsImageCropper = false
+                    self.selectedImageForCrop = nil
+                    if let croppedImage {
+                        handlePickedAvatar(croppedImage)
+                    }
+                }
             }
         }
         .confirmationDialog(
@@ -3286,7 +3304,7 @@ private struct ManagementProfileImagePicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.sourceType = sourceType
         picker.mediaTypes = ["public.image"]
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         picker.delegate = context.coordinator
         return picker
     }
@@ -3316,6 +3334,236 @@ private struct ManagementProfileImagePicker: UIViewControllerRepresentable {
                 onImagePicked(image)
             }
         }
+    }
+}
+
+private struct MistiaImageCropper: View {
+    let image: UIImage
+    let accent: Color
+    let onCrop: (UIImage?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    @State private var containerSize: CGSize = .zero
+
+    private let cropDiameterRatio: CGFloat = 0.8
+
+    private var chooseButtonTitle: String {
+        switch MistiaAppLanguage.current {
+        case .vietnamese:
+            return "Chọn"
+        case .japanese:
+            return "選択"
+        case .english:
+            return "Choose"
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                if containerSize != .zero {
+                    let cropDiameter = min(containerSize.width, containerSize.height) * cropDiameterRatio
+                    let baseSize = calculateBaseSize(imageSize: image.size, containerSize: containerSize)
+                    let minScale = calculateMinScale(baseSize: baseSize, cropDiameter: cropDiameter)
+                    
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: baseSize.width, height: baseSize.height)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newOffset = CGSize(
+                                        width: lastOffset.width + value.translation.width,
+                                        height: lastOffset.height + value.translation.height
+                                    )
+                                    let scaledSize = CGSize(
+                                        width: baseSize.width * scale,
+                                        height: baseSize.height * scale
+                                    )
+                                    offset = clampOffset(newOffset, scaledSize: scaledSize, cropDiameter: cropDiameter)
+                                }
+                                .onEnded { _ in
+                                    lastOffset = offset
+                                }
+                        )
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let newScale = lastScale * value
+                                    scale = max(minScale, min(newScale, minScale * 5.0))
+                                    
+                                    let scaledSize = CGSize(
+                                        width: baseSize.width * scale,
+                                        height: baseSize.height * scale
+                                    )
+                                    offset = clampOffset(offset, scaledSize: scaledSize, cropDiameter: cropDiameter)
+                                }
+                                .onEnded { _ in
+                                    lastScale = scale
+                                    lastOffset = offset
+                                }
+                        )
+                        .onAppear {
+                            scale = minScale
+                            lastScale = minScale
+                        }
+                }
+
+                CircularCutoutOverlay(cropDiameterRatio: cropDiameterRatio)
+                    .allowsHitTesting(false)
+
+                VStack {
+                    Spacer()
+                    
+                    HStack {
+                        Button {
+                            onCrop(nil)
+                            dismiss()
+                        } label: {
+                            Text(L10n.common.cancel)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.white.opacity(0.15), in: Capsule())
+                        }
+
+                        Spacer()
+
+                        Button {
+                            cropAndSubmit(containerSize: containerSize)
+                        } label: {
+                            Text(chooseButtonTitle)
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 10)
+                                .background(accent, in: Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 30)
+                    .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? geometry.safeAreaInsets.bottom + 12 : 30)
+                }
+            }
+            .onAppear {
+                containerSize = geometry.size
+            }
+            .onChange(of: geometry.size) { _, newSize in
+                containerSize = newSize
+            }
+        }
+        .ignoresSafeArea()
+        .statusBarHidden(true)
+    }
+
+    private func calculateBaseSize(imageSize: CGSize, containerSize: CGSize) -> CGSize {
+        guard imageSize.width > 0 && imageSize.height > 0 else { return .zero }
+        let imageAspect = imageSize.width / imageSize.height
+        
+        let baseWidth: CGFloat
+        let baseHeight: CGFloat
+        if containerSize.width / containerSize.height > imageAspect {
+            baseHeight = containerSize.height
+            baseWidth = baseHeight * imageAspect
+        } else {
+            baseWidth = containerSize.width
+            baseHeight = baseWidth / imageAspect
+        }
+        return CGSize(width: baseWidth, height: baseHeight)
+    }
+
+    private func calculateMinScale(baseSize: CGSize, cropDiameter: CGFloat) -> CGFloat {
+        guard baseSize.width > 0 && baseSize.height > 0 else { return 1.0 }
+        return max(cropDiameter / baseSize.width, cropDiameter / baseSize.height)
+    }
+
+    private func clampOffset(_ offset: CGSize, scaledSize: CGSize, cropDiameter: CGFloat) -> CGSize {
+        let maxW = max(0, (scaledSize.width - cropDiameter) / 2)
+        let maxH = max(0, (scaledSize.height - cropDiameter) / 2)
+        
+        let clampedW = min(max(offset.width, -maxW), maxW)
+        let clampedH = min(max(offset.height, -maxH), maxH)
+        
+        return CGSize(width: clampedW, height: clampedH)
+    }
+
+    private func cropAndSubmit(containerSize: CGSize) {
+        let cropDiameter = min(containerSize.width, containerSize.height) * cropDiameterRatio
+        let baseSize = calculateBaseSize(imageSize: image.size, containerSize: containerSize)
+        let scaledSize = CGSize(width: baseSize.width * scale, height: baseSize.height * scale)
+        
+        let cropXOnScreen = (scaledSize.width - cropDiameter) / 2 - offset.width
+        let cropYOnScreen = (scaledSize.height - cropDiameter) / 2 - offset.height
+        
+        let scaleRatio = image.size.width / scaledSize.width
+        
+        let cropXInImage = cropXOnScreen * scaleRatio
+        let cropYInImage = cropYOnScreen * scaleRatio
+        let cropSizeInImage = cropDiameter * scaleRatio
+        
+        if let croppedImage = cropImage(image, cropX: cropXInImage, cropY: cropYInImage, cropSize: cropSizeInImage) {
+            onCrop(croppedImage)
+        } else {
+            onCrop(image)
+        }
+        dismiss()
+    }
+
+    private func cropImage(_ uiImage: UIImage, cropX: CGFloat, cropY: CGFloat, cropSize: CGFloat) -> UIImage? {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: cropSize, height: cropSize))
+        let cropped = renderer.image { context in
+            uiImage.draw(in: CGRect(x: -cropX, y: -cropY, width: uiImage.size.width, height: uiImage.size.height))
+        }
+        return cropped
+    }
+}
+
+private struct CircularCutoutOverlay: View {
+    let cropDiameterRatio: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            let cropDiameter = min(geometry.size.width, geometry.size.height) * cropDiameterRatio
+            let circleRect = CGRect(
+                x: geometry.size.width / 2 - cropDiameter / 2,
+                y: geometry.size.height / 2 - cropDiameter / 2,
+                width: cropDiameter,
+                height: cropDiameter
+            )
+
+            ZStack {
+                Color.black.opacity(0.55)
+                    .mask(
+                        CutoutShape(circleRect: circleRect)
+                            .fill(style: FillStyle(eoFill: true))
+                    )
+
+                Circle()
+                    .stroke(Color.white.opacity(0.85), lineWidth: 1.5)
+                    .frame(width: cropDiameter, height: cropDiameter)
+            }
+        }
+    }
+}
+
+private struct CutoutShape: Shape {
+    let circleRect: CGRect
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRect(rect)
+        path.addEllipse(in: circleRect)
+        return path
     }
 }
 
