@@ -4285,6 +4285,7 @@ private struct FamilyPermissionsSheet: View {
                         }
                     }
                     .pickerStyle(.inline)
+                    .labelsHidden()
                 }
 
                 if role == .member {

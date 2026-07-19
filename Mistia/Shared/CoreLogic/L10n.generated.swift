@@ -391,8 +391,8 @@ nonisolated enum L10n {
             static func inviteRoleValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("family.family.inviteRoleValue", vi: "Vai trò được mời: %@", en: "Invite role: %@", ja: "招待する役割: %@", language: language, value)
             }
-            static var kid: String { L10n.tr("family.family.kid", vi: "Trẻ con", en: "Kid", ja: "子ども") }
-            static func kid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kid", vi: "Trẻ con", en: "Kid", ja: "子ども", language: language) }
+            static var kid: String { L10n.tr("family.family.kid", vi: "Trẻ em", en: "Kid", ja: "子ども") }
+            static func kid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kid", vi: "Trẻ em", en: "Kid", ja: "子ども", language: language) }
             static var kidsAreLimitedByDefaultAndCan: String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。") }
             static func kidsAreLimitedByDefaultAndCan(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。", language: language) }
             static var leave: String { L10n.tr("family.family.leave", vi: "Rời khỏi", en: "Leave", ja: "退会") }
