@@ -4279,7 +4279,7 @@ private struct FamilyPermissionsSheet: View {
                 }
 
                 Section(L10n.family.family.role) {
-                    Picker(L10n.family.family.role, selection: $role) {
+                    Picker("", selection: $role) {
                         ForEach([FamilyRole.member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }
@@ -4287,28 +4287,45 @@ private struct FamilyPermissionsSheet: View {
                     .pickerStyle(.inline)
                 }
 
-                Section(L10n.family.family.permissions) {
-                    Toggle(L10n.family.family.viewFamilyDashboard, isOn: $policy.canViewFamilyDashboard)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
-                    Toggle(L10n.family.family.viewOthers, isOn: $policy.canViewOthers)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
-                    Toggle(L10n.family.family.editOthers, isOn: $policy.canEditOthers)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
-                    Toggle(L10n.family.family.viewWallets, isOn: $policy.canViewWallets)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
-                    Toggle(L10n.family.family.viewDebts, isOn: $policy.canViewDebts)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
-                    Toggle(L10n.family.family.viewKids, isOn: $policy.canViewKids)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
-                    Toggle(L10n.family.family.editKids, isOn: $policy.canEditKids)
-                        .tint(MistiaAccent.purple.color)
-                    .toggleStyle(.switch)
+                if role == .member {
+                    Section(L10n.family.family.familyOverview) {
+                        Toggle(L10n.family.family.viewFamilyDashboard, isOn: $policy.canViewFamilyDashboard)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                    }
+
+                    Section(L10n.family.family.otherMemberData) {
+                        Toggle(L10n.family.family.viewOthers, isOn: $policy.canViewOthers)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                    }
+
+                    Section(L10n.family.family.walletsAndAccounts) {
+                        Toggle(L10n.family.family.viewWallets, isOn: $policy.canViewWallets)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                    }
+
+                    Section(L10n.family.family.childSupervision) {
+                        Toggle(L10n.family.family.viewKids, isOn: $policy.canViewKids)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                        Toggle(L10n.family.family.editKids, isOn: $policy.canEditKids)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                    }
+                } else if role == .kid {
+                    Section(L10n.family.family.familyOverview) {
+                        Toggle(L10n.family.family.viewFamilyDashboard, isOn: $policy.canViewFamilyDashboard)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                    }
+
+                    Section(L10n.family.family.walletsAndAccounts) {
+                        Toggle(L10n.family.family.viewWallets, isOn: $policy.canViewWallets)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                    }
                 }
 
             }
@@ -4325,11 +4342,14 @@ private struct FamilyPermissionsSheet: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.common.save) {
+                        var finalPolicy = policy
+                        finalPolicy.canEditOthers = false
+                        finalPolicy.canViewDebts = finalPolicy.canViewOthers
                         Task {
                             await familyContextStore.updateMember(
                                 member,
                                 role: role,
-                                policy: policy,
+                                policy: finalPolicy,
                                 sessionStore: sessionStore
                             )
                             dismiss()
