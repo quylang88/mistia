@@ -289,6 +289,8 @@ nonisolated enum L10n {
             static func budgets(language: MistiaAppLanguage) -> String { L10n.tr("family.family.budgets", vi: "Ngân sách", en: "Budgets", ja: "予算", language: language) }
             static var categories: String { L10n.tr("family.family.categories", vi: "Danh mục", en: "Categories", ja: "カテゴリ") }
             static func categories(language: MistiaAppLanguage) -> String { L10n.tr("family.family.categories", vi: "Danh mục", en: "Categories", ja: "カテゴリ", language: language) }
+            static var childSupervision: String { L10n.tr("family.family.childSupervision", vi: "Giám sát trẻ em", en: "Child supervision", ja: "子どもの管理") }
+            static func childSupervision(language: MistiaAppLanguage) -> String { L10n.tr("family.family.childSupervision", vi: "Giám sát trẻ em", en: "Child supervision", ja: "子どもの管理", language: language) }
             static var close: String { L10n.tr("family.family.close", vi: "Đóng", en: "Close", ja: "閉じる") }
             static func close(language: MistiaAppLanguage) -> String { L10n.tr("family.family.close", vi: "Đóng", en: "Close", ja: "閉じる", language: language) }
             static var confirm: String { L10n.tr("family.family.confirm", vi: "Đồng ý", en: "Confirm", ja: "確認") }
@@ -333,8 +335,8 @@ nonisolated enum L10n {
             static func done(language: MistiaAppLanguage) -> String { L10n.tr("family.family.done", vi: "Xong", en: "Done", ja: "完了", language: language) }
             static var editAccess: String { L10n.tr("family.family.editAccess", vi: "Quyền chỉnh sửa", en: "Edit access", ja: "編集権限") }
             static func editAccess(language: MistiaAppLanguage) -> String { L10n.tr("family.family.editAccess", vi: "Quyền chỉnh sửa", en: "Edit access", ja: "編集権限", language: language) }
-            static var editKids: String { L10n.tr("family.family.editKids", vi: "Sửa kid", en: "Edit kids", ja: "kid を編集") }
-            static func editKids(language: MistiaAppLanguage) -> String { L10n.tr("family.family.editKids", vi: "Sửa kid", en: "Edit kids", ja: "kid を編集", language: language) }
+            static var editKids: String { L10n.tr("family.family.editKids", vi: "Quản lý dữ liệu của trẻ em", en: "Edit kids", ja: "kid を編集") }
+            static func editKids(language: MistiaAppLanguage) -> String { L10n.tr("family.family.editKids", vi: "Quản lý dữ liệu của trẻ em", en: "Edit kids", ja: "kid を編集", language: language) }
             static var editOthers: String { L10n.tr("family.family.editOthers", vi: "Sửa dữ liệu người khác", en: "Edit others", ja: "他メンバーを編集") }
             static func editOthers(language: MistiaAppLanguage) -> String { L10n.tr("family.family.editOthers", vi: "Sửa dữ liệu người khác", en: "Edit others", ja: "他メンバーを編集", language: language) }
             static var expired: String { L10n.tr("family.family.expired", vi: "Hết hạn", en: "Expired", ja: "期限切れ") }
@@ -437,6 +439,8 @@ nonisolated enum L10n {
             static func noUpcomingItems(language: MistiaAppLanguage) -> String { L10n.tr("family.family.noUpcomingItems", vi: "Không có khoản nào sắp tới", en: "No upcoming items", ja: "間もなく期限の項目はありません", language: language) }
             static var other: String { L10n.tr("family.family.other", vi: "Khác", en: "Other", ja: "その他") }
             static func other(language: MistiaAppLanguage) -> String { L10n.tr("family.family.other", vi: "Khác", en: "Other", ja: "その他", language: language) }
+            static var otherMemberData: String { L10n.tr("family.family.otherMemberData", vi: "Dữ liệu thành viên khác", en: "Other members' data", ja: "他メンバーのデータ") }
+            static func otherMemberData(language: MistiaAppLanguage) -> String { L10n.tr("family.family.otherMemberData", vi: "Dữ liệu thành viên khác", en: "Other members' data", ja: "他メンバーのデータ", language: language) }
             static var owner: String { L10n.tr("family.family.owner", vi: "Chủ sở hữu", en: "Owner", ja: "オーナー") }
             static func owner(language: MistiaAppLanguage) -> String { L10n.tr("family.family.owner", vi: "Chủ sở hữu", en: "Owner", ja: "オーナー", language: language) }
             static var pending: String { L10n.tr("family.family.pending", vi: "Đang chờ", en: "Pending", ja: "待機中") }
@@ -537,24 +541,26 @@ nonisolated enum L10n {
             static func viewDebts(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewDebts", vi: "Xem vay & cho vay", en: "View loans", ja: "負債を見る", language: language) }
             static var viewDetails: String { L10n.tr("family.family.viewDetails", vi: "Xem chi tiết", en: "View details", ja: "詳細を見る") }
             static func viewDetails(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewDetails", vi: "Xem chi tiết", en: "View details", ja: "詳細を見る", language: language) }
-            static var viewFamilyDashboard: String { L10n.tr("family.family.viewFamilyDashboard", vi: "Xem dashboard gia đình", en: "View family dashboard", ja: "家族ダッシュボードを見る") }
-            static func viewFamilyDashboard(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewFamilyDashboard", vi: "Xem dashboard gia đình", en: "View family dashboard", ja: "家族ダッシュボードを見る", language: language) }
-            static var viewKids: String { L10n.tr("family.family.viewKids", vi: "Xem kid", en: "View kids", ja: "kid を表示") }
-            static func viewKids(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewKids", vi: "Xem kid", en: "View kids", ja: "kid を表示", language: language) }
-            static var viewOthers: String { L10n.tr("family.family.viewOthers", vi: "Xem dữ liệu người khác", en: "View others", ja: "他メンバーを表示") }
-            static func viewOthers(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewOthers", vi: "Xem dữ liệu người khác", en: "View others", ja: "他メンバーを表示", language: language) }
+            static var viewFamilyDashboard: String { L10n.tr("family.family.viewFamilyDashboard", vi: "Xem báo cáo tổng quan gia đình", en: "View family dashboard", ja: "家族ダッシュボードを見る") }
+            static func viewFamilyDashboard(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewFamilyDashboard", vi: "Xem báo cáo tổng quan gia đình", en: "View family dashboard", ja: "家族ダッシュボードを見る", language: language) }
+            static var viewKids: String { L10n.tr("family.family.viewKids", vi: "Xem dữ liệu của trẻ em", en: "View kids", ja: "kid を表示") }
+            static func viewKids(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewKids", vi: "Xem dữ liệu của trẻ em", en: "View kids", ja: "kid を表示", language: language) }
+            static var viewOthers: String { L10n.tr("family.family.viewOthers", vi: "Xem dữ liệu của thành viên khác", en: "View others", ja: "他メンバーを表示") }
+            static func viewOthers(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewOthers", vi: "Xem dữ liệu của thành viên khác", en: "View others", ja: "他メンバーを表示", language: language) }
             static func viewValueSData(_ value: String) -> String {
                 L10n.format("family.family.viewValueSData", vi: "Xem dữ liệu của %@", en: "View %@'s data", ja: "%@のデータを見る", value)
             }
             static func viewValueSData(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("family.family.viewValueSData", vi: "Xem dữ liệu của %@", en: "View %@'s data", ja: "%@のデータを見る", language: language, value)
             }
-            static var viewWallets: String { L10n.tr("family.family.viewWallets", vi: "Xem ví / tài khoản", en: "View wallets", ja: "ウォレットを見る") }
-            static func viewWallets(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewWallets", vi: "Xem ví / tài khoản", en: "View wallets", ja: "ウォレットを見る", language: language) }
+            static var viewWallets: String { L10n.tr("family.family.viewWallets", vi: "Xem số dư ví và tài khoản", en: "View wallets", ja: "ウォレットを見る") }
+            static func viewWallets(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewWallets", vi: "Xem số dư ví và tài khoản", en: "View wallets", ja: "ウォレットを見る", language: language) }
             static var walletEditAccess: String { L10n.tr("family.family.walletEditAccess", vi: "Quyền chỉnh sửa ví", en: "Wallet edit access", ja: "ウォレット編集権限") }
             static func walletEditAccess(language: MistiaAppLanguage) -> String { L10n.tr("family.family.walletEditAccess", vi: "Quyền chỉnh sửa ví", en: "Wallet edit access", ja: "ウォレット編集権限", language: language) }
             static var walletUseAccess: String { L10n.tr("family.family.walletUseAccess", vi: "Quyền sử dụng ví", en: "Wallet use access", ja: "ウォレット使用権限") }
             static func walletUseAccess(language: MistiaAppLanguage) -> String { L10n.tr("family.family.walletUseAccess", vi: "Quyền sử dụng ví", en: "Wallet use access", ja: "ウォレット使用権限", language: language) }
+            static var walletsAndAccounts: String { L10n.tr("family.family.walletsAndAccounts", vi: "Ví và tài khoản", en: "Wallets and accounts", ja: "ウォレットとアカウント") }
+            static func walletsAndAccounts(language: MistiaAppLanguage) -> String { L10n.tr("family.family.walletsAndAccounts", vi: "Ví và tài khoản", en: "Wallets and accounts", ja: "ウォレットとアカウント", language: language) }
             static var walletsCards: String { L10n.tr("family.family.walletsCards", vi: "Ví / thẻ", en: "Wallets / cards", ja: "ウォレット・カード") }
             static func walletsCards(language: MistiaAppLanguage) -> String { L10n.tr("family.family.walletsCards", vi: "Ví / thẻ", en: "Wallets / cards", ja: "ウォレット・カード", language: language) }
             static var week: String { L10n.tr("family.family.week", vi: "Tuần", en: "Week", ja: "週") }

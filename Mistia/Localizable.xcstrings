@@ -2439,6 +2439,29 @@
         }
       }
     },
+    "family.family.childSupervision" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Child supervision"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "子どもの管理"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giám sát trẻ em"
+          }
+        }
+      }
+    },
     "family.family.close" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2917,7 +2940,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sửa kid"
+            "value" : "Quản lý dữ liệu của trẻ em"
           }
         }
       }
@@ -3957,6 +3980,29 @@
         }
       }
     },
+    "family.family.otherMemberData" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other members' data"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他メンバーのデータ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dữ liệu thành viên khác"
+          }
+        }
+      }
+    },
     "family.family.owner" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4849,7 +4895,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Xem dashboard gia đình"
+            "value" : "Xem báo cáo tổng quan gia đình"
           }
         }
       }
@@ -4872,7 +4918,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Xem kid"
+            "value" : "Xem dữ liệu của trẻ em"
           }
         }
       }
@@ -4895,7 +4941,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Xem dữ liệu người khác"
+            "value" : "Xem dữ liệu của thành viên khác"
           }
         }
       }
@@ -4941,7 +4987,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Xem ví / tài khoản"
+            "value" : "Xem số dư ví và tài khoản"
           }
         }
       }
@@ -4965,6 +5011,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quyền chỉnh sửa ví"
+          }
+        }
+      }
+    },
+    "family.family.walletsAndAccounts" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wallets and accounts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウォレットとアカウント"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ví và tài khoản"
           }
         }
       }
