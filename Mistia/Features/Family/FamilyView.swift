@@ -3296,23 +3296,41 @@ private struct FamilyInviteManagementScreen: View {
     }
 
     private var inviteSummarySection: some View {
-        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 16) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 14) {
+        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 14) {
+            HStack(spacing: 0) {
                 inviteSummaryMetric(
                     title: L10n.family.family.pending,
                     count: pendingCount,
                     tint: .orange
                 )
+                
+                Divider()
+                    .frame(height: 24)
+                    .background(Color.secondary.opacity(0.18))
+                    .padding(.horizontal, 4)
+                
                 inviteSummaryMetric(
                     title: L10n.family.family.used,
                     count: acceptedCount,
                     tint: .mint
                 )
+                
+                Divider()
+                    .frame(height: 24)
+                    .background(Color.secondary.opacity(0.18))
+                    .padding(.horizontal, 4)
+                
                 inviteSummaryMetric(
                     title: L10n.family.family.declined,
                     count: declinedCount,
                     tint: .red
                 )
+                
+                Divider()
+                    .frame(height: 24)
+                    .background(Color.secondary.opacity(0.18))
+                    .padding(.horizontal, 4)
+                
                 inviteSummaryMetric(
                     title: L10n.family.family.expired,
                     count: expiredCount,
@@ -3344,7 +3362,7 @@ private struct FamilyInviteManagementScreen: View {
 
                     if index < sortedInvites.count - 1 {
                         Divider()
-                            .padding(.leading, 60)
+                            .padding(.leading, 64)
                     }
                 }
             }
@@ -3352,17 +3370,17 @@ private struct FamilyInviteManagementScreen: View {
     }
 
     private func inviteSummaryMetric(title: String, count: Int, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 3) {
             Text(verbatim: "\(count)")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
             Text(title)
-                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.82)
+                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
     }
 
     private func acceptedDisplayName(for invite: FamilyInviteRecord) -> String? {
@@ -3421,15 +3439,44 @@ private struct FamilyInviteTimelineRow: View {
         return L10n.family.family.copy
     }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            timelineMarker
+    private var statusIconName: String {
+        switch invite.status {
+        case .pending:
+            return "envelope.fill"
+        case .accepted:
+            return "person.fill.checkmark"
+        case .declined:
+            return "person.fill.xmark"
+        case .expired:
+            return "clock.fill"
+        case .revoked:
+            return "trash.fill"
+        case .invalid:
+            return "exclamationmark.circle.fill"
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
+    private var statusIconBackdrop: some View {
+        ZStack {
+            Circle()
+                .fill(statusTint.opacity(0.14))
+                .frame(width: 36, height: 36)
+            
+            Image(systemName: statusIconName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(statusTint)
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            statusIconBackdrop
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(title)
-                            .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         Text(roleDetail)
@@ -3439,70 +3486,71 @@ private struct FamilyInviteTimelineRow: View {
 
                     Spacer(minLength: 8)
 
-                    Text(familyInviteStatusTitle(invite.status))
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(statusTint)
-                        .lineLimit(1)
+                    MistiaMiniBadge(
+                        title: familyInviteStatusTitle(invite.status),
+                        tint: statusTint
+                    )
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(familyInviteCreatedText(invite))
-                    Text(familyInviteLifecycleText(invite))
+                    if invite.status != .pending {
+                        Text(familyInviteLifecycleText(invite))
+                    }
                 }
-                .font(.caption)
+                .font(.system(size: 12, weight: .regular, design: .rounded))
                 .foregroundStyle(.secondary)
 
-                Text(linkText)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
-
-                HStack(spacing: 14) {
-                    if invite.status == .pending {
+                if invite.status == .pending {
+                    HStack(spacing: 8) {
                         Button(action: onShare) {
-                            Label(L10n.family.family.share, systemImage: "square.and.arrow.up")
+                            HStack(spacing: 4) {
+                                Image(systemName: "square.and.arrow.up")
+                                Text(L10n.family.family.share)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Capsule())
                         }
-                    }
+                        .buttonStyle(.plain)
 
-                    Button(action: onCopy) {
-                        Label(copyTitle, systemImage: copiedInviteID == invite.id ? "checkmark" : "doc.on.doc")
-                    }
+                        Button(action: onCopy) {
+                            HStack(spacing: 4) {
+                                Image(systemName: copiedInviteID == invite.id ? "checkmark" : "doc.on.doc")
+                                Text(copyTitle)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
 
-                    if invite.status == .pending {
-                        Spacer(minLength: 0)
+                        Spacer()
 
                         Button(role: .destructive, action: onRevoke) {
-                            Label(L10n.family.family.revoke, systemImage: "xmark.circle")
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle")
+                                Text(L10n.family.family.revoke)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.1))
+                            .clipShape(Capsule())
                         }
+                        .buttonStyle(.plain)
                         .disabled(!canRevoke)
                         .opacity(canRevoke ? 1 : 0.45)
                     }
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .padding(.top, 4)
                 }
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
             }
-            .padding(.vertical, 14)
-            .padding(.trailing, 14)
+            .padding(.vertical, 12)
+            .padding(.trailing, 16)
         }
-        .padding(.leading, 14)
-    }
-
-    private var timelineMarker: some View {
-        ZStack(alignment: .top) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.18))
-                    .frame(width: 2)
-                    .padding(.top, 24)
-            }
-
-            Circle()
-                .fill(statusTint)
-                .frame(width: 10, height: 10)
-                .padding(.top, 19)
-        }
-        .frame(width: 20)
-        .frame(maxHeight: .infinity)
+        .padding(.leading, 16)
     }
 }
 
