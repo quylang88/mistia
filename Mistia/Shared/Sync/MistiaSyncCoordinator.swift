@@ -668,7 +668,7 @@ final class SyncCoordinator {
             }
 
             let created = try await remoteStore.create(
-                localRecord.preparedForCreate(deviceID: deviceID),
+                localRecord.preparedForCreate(deviceID: deviceID, lastModifiedByUserID: session.user.id),
                 subjectUserID: subjectUserID,
                 session: session
             )
@@ -727,7 +727,7 @@ final class SyncCoordinator {
         }
 
         if let updated = try await remoteStore.conditionalUpdate(
-            localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID),
+            localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID, lastModifiedByUserID: session.user.id),
             expectedVersion: mutation.baseVersion,
             subjectUserID: subjectUserID,
             session: session
@@ -888,7 +888,7 @@ final class SyncCoordinator {
             }
 
             let created = try await remoteStore.create(
-                localRecord.preparedForCreate(deviceID: deviceID),
+                localRecord.preparedForCreate(deviceID: deviceID, lastModifiedByUserID: session.user.id),
                 subjectUserID: subjectUserID,
                 session: session
             )
@@ -915,7 +915,7 @@ final class SyncCoordinator {
         }
 
         guard let updated = try await remoteStore.conditionalUpdate(
-            localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID),
+            localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID, lastModifiedByUserID: session.user.id),
             expectedVersion: mutation.baseVersion,
             subjectUserID: subjectUserID,
             session: session
@@ -1591,7 +1591,8 @@ final class SyncCoordinator {
         let nextVersion = max(max(remoteVersion, localRecord.syncVersion), 0) + 1
         let authoritativeRecord = localRecord.preparedForMutation(
             nextVersion: nextVersion,
-            deviceID: deviceID
+            deviceID: deviceID,
+            lastModifiedByUserID: session.user.id
         )
         let pushedRecord = try await remoteStore.forceUpsert(
             authoritativeRecord,

@@ -1607,8 +1607,8 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         }
     }
 
-    func preparedForCreate(deviceID: UUID) -> MistiaSyncUploadRecord {
-        preparedForMutation(nextVersion: 1, deviceID: deviceID)
+    func preparedForCreate(deviceID: UUID, lastModifiedByUserID: UUID? = nil) -> MistiaSyncUploadRecord {
+        preparedForMutation(nextVersion: 1, deviceID: deviceID, lastModifiedByUserID: lastModifiedByUserID)
     }
 
     func remappingCategoryReferences(_ mappings: [UUID: UUID]) -> MistiaSyncUploadRecord {
@@ -1647,7 +1647,7 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         }
     }
 
-    func preparedForMutation(nextVersion: Int64, deviceID: UUID) -> MistiaSyncUploadRecord {
+    func preparedForMutation(nextVersion: Int64, deviceID: UUID, lastModifiedByUserID: UUID? = nil) -> MistiaSyncUploadRecord {
         switch self {
         case .wallet(var row):
             row.syncVersion = nextVersion
@@ -1672,6 +1672,9 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .transaction(var row):
             row.syncVersion = nextVersion
             row.lastModifiedByDeviceID = deviceID
+            if let lastModifiedByUserID {
+                row.lastModifiedByUserID = lastModifiedByUserID
+            }
             return .transaction(row)
         case .budgetPlan(var row):
             row.syncVersion = nextVersion

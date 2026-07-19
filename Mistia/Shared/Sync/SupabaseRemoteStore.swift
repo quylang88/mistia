@@ -124,7 +124,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
         let prepared = record.preparedForCreate(
-            deviceID: record.lastModifiedByDeviceID ?? MistiaSyncDeviceIdentity.current()
+            deviceID: record.lastModifiedByDeviceID ?? MistiaSyncDeviceIdentity.current(),
+            lastModifiedByUserID: session.user.id
         )
 
         switch prepared {
@@ -162,7 +163,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         let nextVersion = expectedVersion + 1
         let prepared = record.preparedForMutation(
             nextVersion: nextVersion,
-            deviceID: record.lastModifiedByDeviceID ?? MistiaSyncDeviceIdentity.current()
+            deviceID: record.lastModifiedByDeviceID ?? MistiaSyncDeviceIdentity.current(),
+            lastModifiedByUserID: session.user.id
         )
 
         switch prepared {
