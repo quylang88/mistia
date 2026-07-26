@@ -592,6 +592,13 @@ private struct DeletePatch: Encodable {
     let deletedAt: Date
     let syncVersion: Int64
     let lastModifiedByDeviceID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
 }
 
 private struct TransactionDeletePatch: Encodable {
