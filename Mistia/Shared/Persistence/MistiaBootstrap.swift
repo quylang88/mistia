@@ -36,7 +36,16 @@ nonisolated enum MistiaBootstrap {
         modelContext: ModelContext,
         sessionStore: SessionStore
     ) throws {
-        guard sessionStore.canManageSync else { return }
+        guard sessionStore.canManageSync,
+              let signedInUserID = sessionStore.signedInUserID else {
+            return
+        }
+
+        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [.transaction, .wallet, .category]
+        )
 
         let thresholdDate = MistiaCalendar.current.date(
             byAdding: .day,
@@ -49,6 +58,13 @@ nonisolated enum MistiaBootstrap {
         var txDescriptor = FetchDescriptor<LedgerTransaction>()
         txDescriptor.predicate = #Predicate<LedgerTransaction> { $0.isArchived == true }
         for transaction in try modelContext.fetch(txDescriptor) {
+            guard MistiaArchiveRetention.canAutomaticallyCleanup(
+                recordOwnerUserID: ownerMaps[.transaction][transaction.id],
+                signedInUserID: signedInUserID
+            ) else {
+                continue
+            }
+
             if let archivedAt = transaction.archivedAt, archivedAt < thresholdDate {
                 if transaction.deletedAt == nil {
                     transaction.markDeleted(at: .now)
@@ -73,6 +89,13 @@ nonisolated enum MistiaBootstrap {
         var walletDescriptor = FetchDescriptor<LedgerWallet>()
         walletDescriptor.predicate = #Predicate<LedgerWallet> { $0.isArchived == true }
         for wallet in try modelContext.fetch(walletDescriptor) {
+            guard MistiaArchiveRetention.canAutomaticallyCleanup(
+                recordOwnerUserID: ownerMaps[.wallet][wallet.id],
+                signedInUserID: signedInUserID
+            ) else {
+                continue
+            }
+
             if let archivedAt = wallet.archivedAt, archivedAt < thresholdDate {
                 if wallet.deletedAt == nil {
                     wallet.markDeleted(at: .now)
@@ -92,6 +115,13 @@ nonisolated enum MistiaBootstrap {
         var categoryDescriptor = FetchDescriptor<TransactionCategory>()
         categoryDescriptor.predicate = #Predicate<TransactionCategory> { $0.isArchived == true }
         for category in try modelContext.fetch(categoryDescriptor) {
+            guard MistiaArchiveRetention.canAutomaticallyCleanup(
+                recordOwnerUserID: ownerMaps[.category][category.id],
+                signedInUserID: signedInUserID
+            ) else {
+                continue
+            }
+
             if let archivedAt = category.archivedAt, archivedAt < thresholdDate {
                 if category.deletedAt == nil {
                     category.markDeleted(at: .now)

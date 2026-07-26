@@ -3,6 +3,13 @@ import Foundation
 nonisolated enum MistiaArchiveRetention {
     static let retentionDays = 30
 
+    static func canAutomaticallyCleanup(
+        recordOwnerUserID: UUID?,
+        signedInUserID: UUID
+    ) -> Bool {
+        recordOwnerUserID == signedInUserID
+    }
+
     static func deletionDate(
         archivedAt: Date,
         calendar: Calendar = MistiaCalendar.current
