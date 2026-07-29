@@ -46,6 +46,7 @@ nonisolated enum MistiaBootstrap {
             from: ownershipScopes,
             entities: [.transaction, .wallet, .category]
         )
+        let cleanupProtectionIndex = sessionStore.archiveCleanupProtectionIndex()
 
         let thresholdDate = MistiaCalendar.current.date(
             byAdding: .day,
@@ -74,7 +75,10 @@ nonisolated enum MistiaBootstrap {
                         modifiedAt: transaction.updatedAt
                     )
                     didDelete = true
-                } else if sessionStore.canHardPurge(entity: .transaction, recordID: transaction.id) {
+                } else if cleanupProtectionIndex.canHardPurge(
+                    entity: .transaction,
+                    recordID: transaction.id
+                ) {
                     try TransactionReceiptImageStore().deleteReceipt(
                         for: transaction.id,
                         context: modelContext,
@@ -105,7 +109,10 @@ nonisolated enum MistiaBootstrap {
                         modifiedAt: wallet.updatedAt
                     )
                     didDelete = true
-                } else if sessionStore.canHardPurge(entity: .wallet, recordID: wallet.id) {
+                } else if cleanupProtectionIndex.canHardPurge(
+                    entity: .wallet,
+                    recordID: wallet.id
+                ) {
                     modelContext.delete(wallet)
                     didDelete = true
                 }
@@ -131,7 +138,10 @@ nonisolated enum MistiaBootstrap {
                         modifiedAt: category.updatedAt
                     )
                     didDelete = true
-                } else if sessionStore.canHardPurge(entity: .category, recordID: category.id) {
+                } else if cleanupProtectionIndex.canHardPurge(
+                    entity: .category,
+                    recordID: category.id
+                ) {
                     modelContext.delete(category)
                     didDelete = true
                 }

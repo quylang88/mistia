@@ -251,10 +251,6 @@ final class SyncCoordinator {
         outbox.enqueue(mutations)
     }
 
-    func hasQueuedMutation(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
-        outbox.contains(entity: entity, recordID: recordID)
-    }
-
     func queuedMutationIDs() -> Set<String> {
         Set(outbox.allMutations.map { $0.id.lowercased() })
     }

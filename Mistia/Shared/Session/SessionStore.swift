@@ -1227,17 +1227,11 @@ final class SessionStore {
         }
     }
 
-    func canHardPurge(
-        entity: MistiaSyncEntity,
-        recordID: UUID
-    ) -> Bool {
-        let hasQueuedMutation = syncCoordinator.hasQueuedMutation(entity: entity, recordID: recordID)
-        let hasConflict = (try? MistiaSyncLocalStore.hasConflict(
-            entity: entity,
-            recordID: recordID,
-            in: modelContainer
-        )) ?? false
-        return !hasQueuedMutation && !hasConflict
+    func archiveCleanupProtectionIndex() -> MistiaArchiveCleanupProtectionIndex {
+        MistiaArchiveCleanupProtectionIndex(
+            queuedRecordIDs: syncCoordinator.queuedMutationIDs(),
+            conflictedRecordIDs: (try? MistiaSyncLocalStore.conflictedRecordIDs(in: modelContainer)) ?? []
+        )
     }
 
     func recordUpsert(

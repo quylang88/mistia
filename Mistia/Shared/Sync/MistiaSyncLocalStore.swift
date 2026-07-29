@@ -1126,15 +1126,21 @@ nonisolated enum MistiaSyncLocalStore {
         try context.save()
     }
 
-    static func hasConflict(
-        entity: MistiaSyncEntity,
-        recordID: UUID,
+    static func conflictedRecordIDs(
         in container: ModelContainer
-    ) throws -> Bool {
+    ) throws -> Set<String> {
         let context = ModelContext(container)
-        return try fetchConflicts(context).contains {
-            $0.entityRawValue == entity.rawValue && $0.recordID == recordID
-        }
+        return Set(
+            try fetchConflicts(context).compactMap { conflict in
+                guard let entity = MistiaSyncEntity(rawValue: conflict.entityRawValue) else {
+                    return nil
+                }
+                return MistiaArchiveCleanupProtectionIndex.recordKey(
+                    entity: entity,
+                    recordID: conflict.recordID
+                )
+            }
+        )
     }
 
     static func possibleDuplicateTransactions(

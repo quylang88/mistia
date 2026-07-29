@@ -162,6 +162,8 @@ struct MistiaApp: App {
 
         do {
             let context = sessionStore.currentModelContainer.mainContext
+            let signpostID = MistiaPerformanceSignpost.begin("Archive Cleanup")
+            defer { MistiaPerformanceSignpost.end("Archive Cleanup", id: signpostID) }
             try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context, sessionStore: sessionStore)
         } catch {
             print("Failed to clean up expired archived data: \(error)")

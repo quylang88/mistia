@@ -1,5 +1,35 @@
 import Foundation
 
+nonisolated struct MistiaArchiveCleanupProtectionIndex: Sendable {
+    private let protectedRecordIDs: Set<String>
+
+    init(
+        queuedRecordIDs: Set<String>,
+        conflictedRecordIDs: Set<String>
+    ) {
+        protectedRecordIDs = Set(
+            queuedRecordIDs
+                .union(conflictedRecordIDs)
+                .lazy
+                .map { $0.lowercased() }
+        )
+    }
+
+    func canHardPurge(
+        entity: MistiaSyncEntity,
+        recordID: UUID
+    ) -> Bool {
+        !protectedRecordIDs.contains(Self.recordKey(entity: entity, recordID: recordID))
+    }
+
+    static func recordKey(
+        entity: MistiaSyncEntity,
+        recordID: UUID
+    ) -> String {
+        "\(entity.rawValue):\(recordID.uuidString.lowercased())"
+    }
+}
+
 nonisolated enum MistiaArchiveRetention {
     static let retentionDays = 30
 
