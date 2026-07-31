@@ -2166,6 +2166,7 @@ final class SessionStore {
         }
 
         let rawMessage = rawServerMessage ?? error.localizedDescription
+        print("🚨 [SessionStore Error] \(rawMessage)")
         let message = rawMessage.lowercased()
 
         if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {

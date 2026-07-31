@@ -563,6 +563,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         }()
 
         let message = responseMessage ?? "The sync request failed."
+        print("🚨 [SupabaseRemoteStore] Error [\(operation) \(request.url?.absoluteString ?? tableName)] HTTP \(statusCode): \(message)")
         return .serverMessage("[\(operation) \(tableName)] HTTP \(statusCode): \(message)")
     }
 

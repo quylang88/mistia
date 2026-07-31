@@ -1375,10 +1375,13 @@ struct FamilyRemoteService: FamilyRemoteServicing {
 
         guard 200..<300 ~= httpResponse.statusCode else {
             let errorResponse = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data)
+            let rawBody = String(data: data, encoding: .utf8) ?? ""
+            let msg = errorResponse?.message ?? errorResponse?.errorDescription ?? rawBody
+            print("🚨 [FamilyRemoteService] Error [\(request.httpMethod ?? "REQ") \(request.url?.absoluteString ?? "")] HTTP \(httpResponse.statusCode): \(msg)")
             throw SupabaseServiceError.serverMessage(
                 errorResponse?.message
                     ?? errorResponse?.errorDescription
-                    ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                    ?? (rawBody.isEmpty ? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode) : rawBody)
             )
         }
 
