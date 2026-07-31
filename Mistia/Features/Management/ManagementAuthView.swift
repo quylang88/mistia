@@ -70,13 +70,7 @@ private struct ManagementAutoSyncDetailView: View {
                 .padding(.vertical, 15)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(autoSyncDescription)
-                    .descriptionTextStyle()
-                    .lineSpacing(3)
-                    .padding(.horizontal, 2)
-            }
-            .cardDescriptionStyle()
+            MistiaSectionFooter(autoSyncDescription)
         }
     }
 }
@@ -4307,7 +4301,8 @@ struct ManagementSyncSettingsView: View {
 
                     if !lastSyncValue.isEmpty, !sessionStore.isManualSyncInProgress {
                         Text(lastSyncValue)
-                            .descriptionTextStyle()
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 4)
@@ -4929,7 +4924,8 @@ struct ManagementBackupRestoreView: View {
                         Text(
                             L10n.management.managementauth.mistiaCreatedASafetySnapshotBeforeReplacing
                         )
-                        .descriptionTextStyle()
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                         Button {
                             shareItem = TransactionShareItem(url: safetySnapshotURL)
@@ -4957,7 +4953,8 @@ struct ManagementBackupRestoreView: View {
                 ScrollView {
                     if let latestSummary {
                         Text(latestSummary.localizedBreakdown)
-                            .descriptionTextStyle()
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }

@@ -287,10 +287,7 @@ struct NotificationsSettingsView: View {
     }
 
     private func textDetailLayout(_ text: String) -> some View {
-        Text(text)
-            .descriptionTextStyle()
-            .cardDescriptionStyle()
-            .fixedSize(horizontal: false, vertical: true)
+        MistiaSectionFooter(text)
     }
 
     private func notificationDivider() -> some View {

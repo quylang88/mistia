@@ -435,7 +435,7 @@ struct ManagementCreditCardStatementView: View {
                 Text(L10n.management.managementcreditcardstatement.noStatementYet)
                     .font(.system(.headline, design: .rounded))
                 Text(L10n.management.managementcreditcardstatement.thisCardHasNoSpendingDataFor)
-                    .descriptionTextStyle()
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }

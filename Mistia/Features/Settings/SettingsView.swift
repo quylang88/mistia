@@ -234,9 +234,7 @@ struct SettingsView: View {
                     onTap: handleTap
                 )
 
-                Text(L10n.settings.shortcut.description)
-                .descriptionTextStyle()
-                .cardDescriptionStyle()
+                MistiaSectionFooter(L10n.settings.shortcut.description)
 
                 SettingsCardSection(
                     section: resetDataSection,
@@ -630,9 +628,7 @@ private struct CurrencySettingsView: View {
     }
 
     private func textDetailLayout(_ text: String) -> some View {
-        Text(text)
-            .descriptionTextStyle()
-            .cardDescriptionStyle()
+        MistiaSectionFooter(text)
     }
 
     private func enabledBinding(for code: String) -> Binding<Bool> {
@@ -1428,17 +1424,18 @@ private struct LanguageOptionRow: View {
 
 private struct SettingsVersionFooter: View {
     var body: some View {
-        VStack(spacing: 3) {
-            Text(L10n.common.appName)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
+        MistiaSectionFooter {
+            VStack(spacing: 3) {
+                Text(L10n.common.appName)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
 
-            Text(L10n.settings.footer.version)
-                .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                .foregroundStyle(.tertiary)
+                Text(L10n.settings.footer.version)
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(maxWidth: .infinity)
-        .multilineTextAlignment(.center)
     }
 }
 

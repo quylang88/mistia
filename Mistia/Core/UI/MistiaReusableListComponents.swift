@@ -70,6 +70,39 @@ struct MistiaFooterAddButton: View {
     }
 }
 
+struct MistiaSectionFooter<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+    }
+}
+
+extension MistiaSectionFooter where Content == Text {
+    init(_ text: String) {
+        self.init {
+            Text(text)
+        }
+    }
+
+    init(_ localizedKey: LocalizedStringKey) {
+        self.init {
+            Text(localizedKey)
+        }
+    }
+}
+
 struct MistiaEmptyStateContent: View {
     @Environment(\.colorScheme) private var colorScheme
 

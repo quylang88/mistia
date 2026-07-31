@@ -53,8 +53,7 @@ struct MistiaDestructiveActionSection: View {
             }
         } footer: {
             if let descriptionText {
-                Text(descriptionText)
-                    .fixedSize(horizontal: false, vertical: true)
+                MistiaSectionFooter(descriptionText)
             }
         }
     }

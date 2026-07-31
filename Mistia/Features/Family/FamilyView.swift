@@ -296,36 +296,27 @@ struct FamilyManagementView: View {
                 }
 
             // Member description
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.family.family.youCanCheckWhatFamilyMembersCan)
-                .descriptionTextStyle()
-                .padding(.horizontal, 2)
-            }
-            .cardDescriptionStyle()
+            MistiaSectionFooter(L10n.family.family.youCanCheckWhatFamilyMembersCan)
 
             FamilyHubRouteSection(rows: familyHubRouteRows, tint: cardTint) { row in
                 destination = row.destination
             }
 
             // Privacy Link
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.family.family.mistiaWillUseDataToSecurelySync)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.leading)
-                .padding(.horizontal, 4)
+            MistiaSectionFooter {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.family.family.mistiaWillUseDataToSecurelySync)
 
-                Button {
-                    activeSheet = .privacy
-                } label: {
-                    Text(L10n.family.family.confirmDataPersonalInformationUsage)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(accent)
+                    Button {
+                        activeSheet = .privacy
+                    } label: {
+                        Text(L10n.family.family.confirmDataPersonalInformationUsage)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(accent)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 4)
             }
-            .cardDescriptionStyle()
         }
     }
 
@@ -3143,12 +3134,6 @@ private struct FamilyJoinSheet: View {
                 }
 
                 Section {
-                    Text(L10n.family.family.ifYouVeCopiedAnInviteLink)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                }
-
-                Section(L10n.family.family.inviteLink) {
                     TextField(L10n.family.invite.linkPlaceholder, text: $inviteLink)
                         .focused($focusedField, equals: .inviteCode)
                         .keyboardType(.URL)
@@ -3160,6 +3145,10 @@ private struct FamilyJoinSheet: View {
                             .font(.footnote)
                             .foregroundStyle(.orange)
                     }
+                } header: {
+                    Text(L10n.family.family.inviteLink)
+                } footer: {
+                    MistiaSectionFooter(L10n.family.family.ifYouVeCopiedAnInviteLink)
                 }
             }
             .disabled(!sessionStore.canPerformRemoteActions)
@@ -3288,8 +3277,9 @@ private struct FamilyInviteManagementScreen: View {
                 .foregroundStyle(.primary)
 
                 Text(L10n.family.family.createdLinksWillAppearHereWithPending)
-                .descriptionTextStyle()
-                .fixedSize(horizontal: false, vertical: true)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -3587,7 +3577,7 @@ private struct FamilyInviteSheet: View {
                     }
                 }
 
-                Section(L10n.family.family.inviteRole) {
+                Section {
                     ForEach([FamilyRole.member, .kid], id: \.self) { role in
                         Button {
                             selectedRole = role
@@ -3600,15 +3590,17 @@ private struct FamilyInviteSheet: View {
                         }
                         .buttonStyle(.plain)
                     }
-
-                    Text(roleDescription(selectedRole))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    if let inviteLimitMessage {
-                        Text(inviteLimitMessage)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.orange)
+                } header: {
+                    Text(L10n.family.family.inviteRole)
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        MistiaSectionFooter(roleDescription(selectedRole))
+                        if let inviteLimitMessage {
+                            Text(inviteLimitMessage)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 16)
+                        }
                     }
                 }
             }
