@@ -12124,13 +12124,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep unrelated local records, but if the snapshot contains the same ID, the snapshot version wins."
+            "value" : "Merge data from the backup file into existing data on this device."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "関係のないローカルレコードは維持しつつ、同じ ID がある場合はスナップショット側を優先します。"
+            "value" : "バックアップファイルの内容を、端末上の既存データへ統合します。"
           }
         },
         "vi" : {
@@ -12308,19 +12308,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Merge"
+            "value" : "Merge Data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "マージ"
+            "value" : "データを統合"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Merge"
+            "value" : "Gộp dữ liệu"
           }
         }
       }
@@ -12400,19 +12400,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mistia first creates an internal safety snapshot, clears the current local dataset, then restores exactly what the selected snapshot contains."
+            "value" : "Mistia will restore data from the selected backup file, replacing existing data on this device."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最初に内部の安全用スナップショットを作成し、現在のローカルデータを消去してから、選択したスナップショットの内容をそのまま復元します。"
+            "value" : "選択したバックアップファイルからデータを復元し、端末上の既存データを置き換えます。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mistia sẽ tạo safety snapshot nội bộ, xóa toàn bộ dữ liệu local hiện tại rồi khôi phục đúng nội dung snapshot bạn đã chọn."
+            "value" : "Mistia sẽ khôi phục dữ liệu từ tệp sao lưu đã chọn, thay thế dữ liệu hiện có trên thiết bị."
           }
         }
       }
@@ -12975,19 +12975,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Replace local"
+            "value" : "Replace Data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカルを置換"
+            "value" : "データを置換"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thay local"
+            "value" : "Thay thế dữ liệu"
           }
         }
       }
