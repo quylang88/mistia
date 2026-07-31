@@ -21,32 +21,40 @@ struct MistiaCollectionChangeSignature: Hashable {
         archivedCount: 0
     )
 
-    static func make<Record>(
-        _ records: [Record],
+    static func make<Records: Sequence, Record>(
+        _ records: Records,
         updatedAt: KeyPath<Record, Date>,
         deletedAt: KeyPath<Record, Date?>,
         isArchived: KeyPath<Record, Bool>? = nil,
         remoteVersion: KeyPath<Record, Int64>? = nil
-    ) -> MistiaCollectionChangeSignature {
+    ) -> MistiaCollectionChangeSignature where Records.Element == Record {
         let signpostID = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: "MistiaCollectionChangeSignature.make", signpostID: signpostID)
         defer {
             os_signpost(.end, log: log, name: "MistiaCollectionChangeSignature.make", signpostID: signpostID)
         }
 
-        var latestUpdatedAt: TimeInterval?
-        var latestDeletedAt: TimeInterval?
+        var latestUpdatedAtDate: Date?
+        var latestDeletedAtDate: Date?
         var latestRemoteVersion: Int64 = 0
         var archivedCount = 0
+        var count = 0
 
         for record in records {
-            latestUpdatedAt = max(
-                latestUpdatedAt,
-                record[keyPath: updatedAt].timeIntervalSince1970
-            )
+            count += 1
+            let updateDate = record[keyPath: updatedAt]
+            if let maxDate = latestUpdatedAtDate {
+                if updateDate > maxDate { latestUpdatedAtDate = updateDate }
+            } else {
+                latestUpdatedAtDate = updateDate
+            }
 
-            if let deletedAt = record[keyPath: deletedAt]?.timeIntervalSince1970 {
-                latestDeletedAt = max(latestDeletedAt, deletedAt)
+            if let delDate = record[keyPath: deletedAt] {
+                if let maxDel = latestDeletedAtDate {
+                    if delDate > maxDel { latestDeletedAtDate = delDate }
+                } else {
+                    latestDeletedAtDate = delDate
+                }
             }
 
             if let isArchived, record[keyPath: isArchived] {
@@ -59,40 +67,48 @@ struct MistiaCollectionChangeSignature: Hashable {
         }
 
         return MistiaCollectionChangeSignature(
-            count: records.count,
-            latestUpdatedAt: latestUpdatedAt,
-            latestDeletedAt: latestDeletedAt,
+            count: count,
+            latestUpdatedAt: latestUpdatedAtDate?.timeIntervalSince1970,
+            latestDeletedAt: latestDeletedAtDate?.timeIntervalSince1970,
             latestRemoteVersion: latestRemoteVersion,
             archivedCount: archivedCount
         )
     }
 
-    static func make<Record>(
-        _ records: [Record],
+    static func make<Records: Sequence, Record>(
+        _ records: Records,
         updatedAt: KeyPath<Record, Date>,
         deletedAt: (Record) -> Date?,
         isArchived: ((Record) -> Bool)? = nil,
         remoteVersion: ((Record) -> Int64)? = nil
-    ) -> MistiaCollectionChangeSignature {
+    ) -> MistiaCollectionChangeSignature where Records.Element == Record {
         let signpostID = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: "MistiaCollectionChangeSignature.makeClosure", signpostID: signpostID)
         defer {
             os_signpost(.end, log: log, name: "MistiaCollectionChangeSignature.makeClosure", signpostID: signpostID)
         }
 
-        var latestUpdatedAt: TimeInterval?
-        var latestDeletedAt: TimeInterval?
+        var latestUpdatedAtDate: Date?
+        var latestDeletedAtDate: Date?
         var latestRemoteVersion: Int64 = 0
         var archivedCount = 0
+        var count = 0
 
         for record in records {
-            latestUpdatedAt = max(
-                latestUpdatedAt,
-                record[keyPath: updatedAt].timeIntervalSince1970
-            )
+            count += 1
+            let updateDate = record[keyPath: updatedAt]
+            if let maxDate = latestUpdatedAtDate {
+                if updateDate > maxDate { latestUpdatedAtDate = updateDate }
+            } else {
+                latestUpdatedAtDate = updateDate
+            }
 
-            if let deletedAt = deletedAt(record)?.timeIntervalSince1970 {
-                latestDeletedAt = max(latestDeletedAt, deletedAt)
+            if let delDate = deletedAt(record) {
+                if let maxDel = latestDeletedAtDate {
+                    if delDate > maxDel { latestDeletedAtDate = delDate }
+                } else {
+                    latestDeletedAtDate = delDate
+                }
             }
 
             if isArchived?(record) == true {
@@ -105,15 +121,11 @@ struct MistiaCollectionChangeSignature: Hashable {
         }
 
         return MistiaCollectionChangeSignature(
-            count: records.count,
-            latestUpdatedAt: latestUpdatedAt,
-            latestDeletedAt: latestDeletedAt,
+            count: count,
+            latestUpdatedAt: latestUpdatedAtDate?.timeIntervalSince1970,
+            latestDeletedAt: latestDeletedAtDate?.timeIntervalSince1970,
             latestRemoteVersion: latestRemoteVersion,
             archivedCount: archivedCount
         )
-    }
-
-    private static func max(_ lhs: TimeInterval?, _ rhs: TimeInterval) -> TimeInterval {
-        Swift.max(lhs ?? rhs, rhs)
     }
 }

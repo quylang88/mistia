@@ -57,7 +57,9 @@ nonisolated enum MistiaBootstrap {
         var didDelete = false
         
         var txDescriptor = FetchDescriptor<LedgerTransaction>()
-        txDescriptor.predicate = #Predicate<LedgerTransaction> { $0.isArchived == true }
+        txDescriptor.predicate = #Predicate<LedgerTransaction> {
+            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+        }
         for transaction in try modelContext.fetch(txDescriptor) {
             guard MistiaArchiveRetention.canAutomaticallyCleanup(
                 recordOwnerUserID: ownerMaps[.transaction][transaction.id],
@@ -66,32 +68,32 @@ nonisolated enum MistiaBootstrap {
                 continue
             }
 
-            if let archivedAt = transaction.archivedAt, archivedAt < thresholdDate {
-                if transaction.deletedAt == nil {
-                    transaction.markDeleted(at: .now)
-                    sessionStore.recordDelete(
-                        entity: .transaction,
-                        recordID: transaction.id,
-                        modifiedAt: transaction.updatedAt
-                    )
-                    didDelete = true
-                } else if cleanupProtectionIndex.canHardPurge(
+            if transaction.deletedAt == nil {
+                transaction.markDeleted(at: .now)
+                sessionStore.recordDelete(
                     entity: .transaction,
-                    recordID: transaction.id
-                ) {
-                    try TransactionReceiptImageStore().deleteReceipt(
-                        for: transaction.id,
-                        context: modelContext,
-                        saveContext: false
-                    )
-                    modelContext.delete(transaction)
-                    didDelete = true
-                }
+                    recordID: transaction.id,
+                    modifiedAt: transaction.updatedAt
+                )
+                didDelete = true
+            } else if cleanupProtectionIndex.canHardPurge(
+                entity: .transaction,
+                recordID: transaction.id
+            ) {
+                try TransactionReceiptImageStore().deleteReceipt(
+                    for: transaction.id,
+                    context: modelContext,
+                    saveContext: false
+                )
+                modelContext.delete(transaction)
+                didDelete = true
             }
         }
         
         var walletDescriptor = FetchDescriptor<LedgerWallet>()
-        walletDescriptor.predicate = #Predicate<LedgerWallet> { $0.isArchived == true }
+        walletDescriptor.predicate = #Predicate<LedgerWallet> {
+            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+        }
         for wallet in try modelContext.fetch(walletDescriptor) {
             guard MistiaArchiveRetention.canAutomaticallyCleanup(
                 recordOwnerUserID: ownerMaps[.wallet][wallet.id],
@@ -100,27 +102,27 @@ nonisolated enum MistiaBootstrap {
                 continue
             }
 
-            if let archivedAt = wallet.archivedAt, archivedAt < thresholdDate {
-                if wallet.deletedAt == nil {
-                    wallet.markDeleted(at: .now)
-                    sessionStore.recordDelete(
-                        entity: .wallet,
-                        recordID: wallet.id,
-                        modifiedAt: wallet.updatedAt
-                    )
-                    didDelete = true
-                } else if cleanupProtectionIndex.canHardPurge(
+            if wallet.deletedAt == nil {
+                wallet.markDeleted(at: .now)
+                sessionStore.recordDelete(
                     entity: .wallet,
-                    recordID: wallet.id
-                ) {
-                    modelContext.delete(wallet)
-                    didDelete = true
-                }
+                    recordID: wallet.id,
+                    modifiedAt: wallet.updatedAt
+                )
+                didDelete = true
+            } else if cleanupProtectionIndex.canHardPurge(
+                entity: .wallet,
+                recordID: wallet.id
+            ) {
+                modelContext.delete(wallet)
+                didDelete = true
             }
         }
         
         var categoryDescriptor = FetchDescriptor<TransactionCategory>()
-        categoryDescriptor.predicate = #Predicate<TransactionCategory> { $0.isArchived == true }
+        categoryDescriptor.predicate = #Predicate<TransactionCategory> {
+            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+        }
         for category in try modelContext.fetch(categoryDescriptor) {
             guard MistiaArchiveRetention.canAutomaticallyCleanup(
                 recordOwnerUserID: ownerMaps[.category][category.id],
@@ -129,22 +131,20 @@ nonisolated enum MistiaBootstrap {
                 continue
             }
 
-            if let archivedAt = category.archivedAt, archivedAt < thresholdDate {
-                if category.deletedAt == nil {
-                    category.markDeleted(at: .now)
-                    sessionStore.recordDelete(
-                        entity: .category,
-                        recordID: category.id,
-                        modifiedAt: category.updatedAt
-                    )
-                    didDelete = true
-                } else if cleanupProtectionIndex.canHardPurge(
+            if category.deletedAt == nil {
+                category.markDeleted(at: .now)
+                sessionStore.recordDelete(
                     entity: .category,
-                    recordID: category.id
-                ) {
-                    modelContext.delete(category)
-                    didDelete = true
-                }
+                    recordID: category.id,
+                    modifiedAt: category.updatedAt
+                )
+                didDelete = true
+            } else if cleanupProtectionIndex.canHardPurge(
+                entity: .category,
+                recordID: category.id
+            ) {
+                modelContext.delete(category)
+                didDelete = true
             }
         }
         

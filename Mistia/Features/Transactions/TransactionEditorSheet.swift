@@ -2517,6 +2517,7 @@ struct TransactionEditorSheet: View {
         }
 
         let validationRecordSnapshots = postedTransactions
+            .lazy
             .filter { $0.id != target.transaction?.id }
             .map(\.snapshot)
         let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
@@ -3056,6 +3057,7 @@ struct TransactionEditorSheet: View {
         }
 
         let validationRecordSnapshots = postedTransactions
+            .lazy
             .filter { $0.id != target.transaction?.id }
             .map(\.snapshot)
         let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
@@ -3594,23 +3596,27 @@ struct TransactionEditorSheet: View {
     private func paidCreditCardStatement(
         for wallet: LedgerWallet,
         occurredAt: Date,
-        transactionRecords: [TransactionRecordSnapshot]? = nil,
         balanceIndex: TransactionWalletBalanceIndex? = nil
     ) -> PlanningCreditCardStatementSnapshot? {
-        if let transactionRecords {
-            return paidCreditCardStatement(
-                for: wallet,
-                occurredAt: occurredAt,
-                transactionRecords: transactionRecords,
-                occurrenceSnapshots: storedDueOccurrences.lazy.map(\.planningSnapshot),
-                balanceIndex: balanceIndex
-            )
-        }
-
-        return paidCreditCardStatement(
+        paidCreditCardStatement(
             for: wallet,
             occurredAt: occurredAt,
             transactionRecords: postedTransactions.lazy.map(\.planningRecordSnapshot),
+            occurrenceSnapshots: storedDueOccurrences.lazy.map(\.planningSnapshot),
+            balanceIndex: balanceIndex
+        )
+    }
+
+    private func paidCreditCardStatement<Records: Sequence>(
+        for wallet: LedgerWallet,
+        occurredAt: Date,
+        transactionRecords: Records,
+        balanceIndex: TransactionWalletBalanceIndex? = nil
+    ) -> PlanningCreditCardStatementSnapshot? where Records.Element == TransactionRecordSnapshot {
+        paidCreditCardStatement(
+            for: wallet,
+            occurredAt: occurredAt,
+            transactionRecords: transactionRecords,
             occurrenceSnapshots: storedDueOccurrences.lazy.map(\.planningSnapshot),
             balanceIndex: balanceIndex
         )

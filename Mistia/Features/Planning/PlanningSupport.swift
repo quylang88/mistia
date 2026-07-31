@@ -282,9 +282,13 @@ enum PlanningPersistenceSupport {
     ) throws {
         guard amountMinor > 0 else { return }
 
+        let sourceWalletID = sourceWallet.id
         let activeTransactions = try modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
-                predicate: #Predicate<LedgerTransaction> { $0.deletedAt == nil }
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.deletedAt == nil &&
+                    (transaction.sourceWallet?.id == sourceWalletID || transaction.destinationWallet?.id == sourceWalletID)
+                }
             )
         )
         let balanceIndex = TransactionLogic.walletBalanceIndex(
@@ -681,7 +685,16 @@ extension LedgerWallet {
     func planningCreditCardSnapshot<Records: Sequence>(
         records: Records
     ) -> PlanningCreditCardAccountSnapshot? where Records.Element == TransactionRecordSnapshot {
-        return planningCreditCardSnapshot(records: Array(records), occurrences: [])
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: id,
+            kind: kind,
+            openingBalanceMinor: openingBalanceMinor
+        )
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [walletSnapshot],
+            records: records
+        )
+        return planningCreditCardSnapshot(balanceIndex: balanceIndex)
     }
 
     func planningCreditCardSnapshot(

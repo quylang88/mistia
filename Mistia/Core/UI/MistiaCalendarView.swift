@@ -262,10 +262,7 @@ struct MistiaMonthYearWheelPicker: View {
         calendar: Calendar,
         language: MistiaAppLanguage
     ) -> [String] {
-        let formatter = DateFormatter()
-        formatter.locale = language.locale
-        formatter.calendar = calendar
-        return formatter.monthSymbols
+        MonthSymbolsCache.symbols(for: calendar, language: language)
     }
 
     var body: some View {
@@ -351,5 +348,33 @@ extension EnvironmentValues {
 extension View {
     func calendarHeaderHidden(_ hidden: Bool = true) -> some View {
         environment(\.mistiaCalendarHeaderHidden, hidden)
+    }
+}
+
+private struct MonthSymbolsKey: Hashable {
+    let calendarIdentifier: Calendar.Identifier
+    let localeIdentifier: String
+}
+
+private enum MonthSymbolsCache {
+    private static var cache: [MonthSymbolsKey: [String]] = [:]
+    private static let lock = NSLock()
+
+    static func symbols(for calendar: Calendar, language: MistiaAppLanguage) -> [String] {
+        let key = MonthSymbolsKey(
+            calendarIdentifier: calendar.identifier,
+            localeIdentifier: language.locale.identifier
+        )
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = cache[key] {
+            return cached
+        }
+        let formatter = DateFormatter()
+        formatter.locale = language.locale
+        formatter.calendar = calendar
+        let symbols = formatter.monthSymbols ?? []
+        cache[key] = symbols
+        return symbols
     }
 }
