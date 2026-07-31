@@ -12308,19 +12308,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Merge Data"
+            "value" : "Merge"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "データを統合"
+            "value" : "統合"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gộp dữ liệu"
+            "value" : "Gộp"
           }
         }
       }
@@ -12975,19 +12975,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Replace Data"
+            "value" : "Replace"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "データを置換"
+            "value" : "置換"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thay thế dữ liệu"
+            "value" : "Thay thế"
           }
         }
       }
@@ -13297,19 +13297,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign out & delete device data"
+            "value" : "Sign out & delete data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サインアウト（端末データを削除）"
+            "value" : "サインアウト（データ削除）"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đăng xuất & xóa dữ liệu trên thiết bị"
+            "value" : "Đăng xuất & xóa dữ liệu"
           }
         }
       }
@@ -13320,19 +13320,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign out & keep device data"
+            "value" : "Sign out & keep data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サインアウト（端末データを保持）"
+            "value" : "サインアウト（データ保持）"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đăng xuất & giữ dữ liệu trên thiết bị"
+            "value" : "Đăng xuất & giữ dữ liệu"
           }
         }
       }

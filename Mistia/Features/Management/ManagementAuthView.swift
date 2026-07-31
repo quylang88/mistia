@@ -4876,7 +4876,7 @@ struct ManagementBackupRestoreView: View {
                     backupActionRow(
                         title: L10n.management.managementauth.importSnapshot,
                         systemImage: "square.and.arrow.down.fill",
-                        tint: .mint,
+                        tint: .accentColor,
                         isDisabled: isBusy,
                         action: { isImporting = true }
                     )
@@ -4899,7 +4899,7 @@ struct ManagementBackupRestoreView: View {
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
-                        .tint(accent)
+                        .tint(.accentColor)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 15)
