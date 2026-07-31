@@ -1,30 +1,27 @@
-# Backup & Restore Screen Redesign Implementation Plan
+# Backup & Restore Screen Redesign V2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Redesign `ManagementBackupRestoreView` in `Mistia/Features/Management/ManagementAuthView.swift` according to iOS 26 native minimalist standards with a Hero Status card, streamlined Grouped Action list, compact Menu Picker for Restore Mode, and a summary breakdown sheet.
+**Goal:** Refactor `ManagementBackupRestoreView` in `Mistia/Features/Management/ManagementAuthView.swift` to match Ultra-Minimalist Apple iOS 26 HIG.
 
-**Architecture:** Refactor `ManagementBackupRestoreView` body and subcomponents. Add `@State private var showSummaryDetailSheet = false`. Replace the top emergency message card and noisy summary text block with a sleek Hero Status card, compact actions card, and menu picker options card. Add a detail sheet to present `latestSummary.localizedBreakdown`.
+**Architecture:**
+- Remove emergency message card.
+- Simplify `heroStatusCard` to show concise timestamp status and a small detail pill button.
+- Remove redundant subtitles on action rows ("Tạo bản sao lưu ngay", "Khôi phục từ tệp...").
+- Clean up restore mode options card to contain a single clean row with a menu picker, placing the restore mode description as a standard section footer outside the card.
 
 **Tech Stack:** SwiftUI, SwiftData, Swift Package Manager.
 
 ---
 
-### Task 1: Redesign ManagementBackupRestoreView Layout & Components
+### Task 1: Refactor ManagementBackupRestoreView to Ultra-Minimalist V2
 
 **Files:**
-- Modify: `Mistia/Features/Management/ManagementAuthView.swift:4821-4988`
+- Modify: `Mistia/Features/Management/ManagementAuthView.swift:4821-5040`
 
-- [ ] **Step 1: Add summary detail sheet state and build Hero Status Card & Menu Picker**
+- [ ] **Step 1: Update ManagementBackupRestoreView layout and remove subtitles/emergency card**
 
-Update `ManagementBackupRestoreView` state and body layout in `Mistia/Features/Management/ManagementAuthView.swift`:
-
-```swift
-// Add new state variable inside ManagementBackupRestoreView:
-@State private var showSummaryDetailSheet = false
-```
-
-Replace the content of `MistiaPinnedTopBarScaffold` with:
+Modify `ManagementBackupRestoreView` in `Mistia/Features/Management/ManagementAuthView.swift`:
 
 ```swift
         MistiaPinnedTopBarScaffold(
@@ -47,7 +44,7 @@ Replace the content of `MistiaPinnedTopBarScaffold` with:
                 VStack(spacing: 0) {
                     backupActionRow(
                         title: L10n.management.managementauth.createSnapshot,
-                        subtitle: L10n.management.managementauth.exportTheCurrentLocalDataIntoA,
+                        subtitle: nil,
                         systemImage: "square.and.arrow.up.fill",
                         tint: .blue,
                         isDisabled: isBusy,
@@ -58,9 +55,7 @@ Replace the content of `MistiaPinnedTopBarScaffold` with:
 
                     backupActionRow(
                         title: L10n.management.managementauth.importSnapshot,
-                        subtitle: restoreMode == .merge
-                            ? L10n.management.managementauth.importTheFileAndLetSnapshotValues
-                            : L10n.management.managementauth.importTheFileAndReplaceTheCurrent,
+                        subtitle: nil,
                         systemImage: "square.and.arrow.down.fill",
                         tint: .mint,
                         isDisabled: isBusy,
@@ -69,20 +64,13 @@ Replace the content of `MistiaPinnedTopBarScaffold` with:
                 }
             }
 
-            // Restore Mode Options Card with Menu Picker
-            ManagementProfileListCard(tint: cardTint) {
-                VStack(alignment: .leading, spacing: 10) {
+            // Restore Mode Section Header & Card
+            VStack(alignment: .leading, spacing: 8) {
+                ManagementProfileListCard(tint: cardTint) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.management.managementauth.restoreMode)
-                                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.primary)
-
-                            Text(restoreMode.localizedDescription)
-                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
+                        Text(L10n.management.managementauth.restoreMode)
+                            .font(.system(size: 15.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
 
                         Spacer()
 
@@ -93,10 +81,17 @@ Replace the content of `MistiaPinnedTopBarScaffold` with:
                         }
                         .pickerStyle(.menu)
                         .tint(accent)
+                        .labelsHidden()
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+
+                // Section Footer Outside Card
+                Text(restoreMode.localizedDescription)
+                    .font(.system(size: 12.5, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
             }
 
             if sessionStore.isManualSyncRequiredAfterRestore {
@@ -139,107 +134,115 @@ Replace the content of `MistiaPinnedTopBarScaffold` with:
         }
 ```
 
-- [ ] **Step 2: Define heroStatusCard and summary detail sheet helper**
+- [ ] **Step 2: Update heroStatusCard & backupActionRow**
 
-Add `heroStatusCard` property and detail sheet modifier inside `ManagementBackupRestoreView`:
+Update `heroStatusCard` and optional subtitle support in `backupActionRow`:
 
 ```swift
     private var heroStatusCard: some View {
         ManagementProfileListCard(tint: cardTint) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(latestSummary != nil ? Color.green.opacity(0.15) : Color.blue.opacity(0.15))
-                            .frame(width: 44, height: 44)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(latestSummary != nil ? Color.blue.opacity(0.12) : Color.gray.opacity(0.12))
+                        .frame(width: 52, height: 52)
 
-                        Image(systemName: latestSummary != nil ? "checkmark.shield.fill" : "clock.arrow.circlepath")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(latestSummary != nil ? Color.green : Color.blue)
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(latestSummary != nil ? L10n.management.managementauth.latestSnapshotSummary : L10n.management.managementauth.backupRestore)
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-
-                        if let summary = latestSummary {
-                            Text("v\(summary.manifest.appVersion) (\(summary.manifest.appBuild)) • \(summary.activeRecordCount) bản ghi")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text(L10n.management.managementauth.createAMistiabackupFileToCaptureThe)
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-
-                    Spacer()
+                    Image(systemName: latestSummary != nil ? "icloud.circle.fill" : "icloud.slash")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(latestSummary != nil ? Color.blue : Color.secondary)
                 }
 
-                if let summary = latestSummary {
-                    Divider()
+                VStack(spacing: 4) {
+                    Text(L10n.management.managementauth.backupRestore)
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
 
-                    HStack {
-                        Label("Sẵn sàng khôi phục", systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundStyle(.green)
-
-                        Spacer()
+                    if let summary = latestSummary {
+                        Text("v\(summary.manifest.appVersion) (\(summary.manifest.appBuild))")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
 
                         Button {
                             showSummaryDetailSheet = true
                         } label: {
-                            Text("Chi tiết")
-                                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                                .foregroundStyle(accent)
+                            HStack(spacing: 4) {
+                                Text("\(summary.activeRecordCount) bản ghi")
+                                Image(systemName: "info.circle")
+                            }
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(accent.opacity(0.1))
+                            .clipShape(Capsule())
                         }
+                        .padding(.top, 4)
+                    } else {
+                        Text("Chưa có bản sao lưu nào trên thiết bị")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func backupActionRow(
+        title: String,
+        subtitle: String?,
+        systemImage: String,
+        tint: Color,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28, height: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 12.5, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+
+                Spacer()
+
+                if isDisabled {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 15)
+            .padding(.vertical, 14)
         }
-        .sheet(isPresented: $showSummaryDetailSheet) {
-            if let summary = latestSummary {
-                NavigationStack {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(L10n.management.managementauth.backupFormatVValueAppValueValue(String(describing: summary.manifest.backupFormatVersion), String(describing: summary.manifest.appVersion), String(describing: summary.manifest.appBuild), String(describing: summary.manifest.localSchemaVersion)))
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-
-                            Text(summary.localizedBreakdown)
-                                .font(.system(size: 14, weight: .regular, design: .rounded))
-                                .foregroundStyle(.primary)
-                        }
-                        .padding(20)
-                    }
-                    .navigationTitle(L10n.management.managementauth.latestSnapshotSummary)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(L10n.common.ok) {
-                                showSummaryDetailSheet = false
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium])
-            }
-        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 ```
 
-- [ ] **Step 3: Verify build with swift build or Xcode scheme**
+- [ ] **Step 3: Verify build with swift build**
 
-Run swift build or check compilation:
+Run swift build with bypass sandbox:
 ```bash
 swift build
 ```
-Expected output: Build succeeds with 0 errors.
 
-- [ ] **Step 4: Commit (if auto_commit enabled)**
-
-Check `.agent/config.yml` for `auto_commit`. Since `auto_commit: false`, skip git commit and print message.
+- [ ] **Step 4: Check auto_commit setting**
+If `auto_commit: false`, skip git commit.

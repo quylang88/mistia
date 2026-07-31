@@ -4865,7 +4865,6 @@ struct ManagementBackupRestoreView: View {
                 VStack(spacing: 0) {
                     backupActionRow(
                         title: L10n.management.managementauth.createSnapshot,
-                        subtitle: L10n.management.managementauth.exportTheCurrentLocalDataIntoA,
                         systemImage: "square.and.arrow.up.fill",
                         tint: .blue,
                         isDisabled: isBusy,
@@ -4876,9 +4875,6 @@ struct ManagementBackupRestoreView: View {
 
                     backupActionRow(
                         title: L10n.management.managementauth.importSnapshot,
-                        subtitle: restoreMode == .merge
-                            ? L10n.management.managementauth.importTheFileAndLetSnapshotValues
-                            : L10n.management.managementauth.importTheFileAndReplaceTheCurrent,
                         systemImage: "square.and.arrow.down.fill",
                         tint: .mint,
                         isDisabled: isBusy,
@@ -4887,29 +4883,32 @@ struct ManagementBackupRestoreView: View {
                 }
             }
 
-            ManagementProfileListCard(tint: cardTint) {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                ManagementProfileListCard(tint: cardTint) {
+                    HStack(alignment: .center, spacing: 14) {
                         Text(L10n.management.managementauth.restoreMode)
                             .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
 
-                        Text(restoreMode.localizedDescription)
-                            .descriptionTextStyle()
-                    }
+                        Spacer()
 
-                    Spacer()
-
-                    Picker(String(), selection: $restoreMode) {
-                        ForEach(MistiaBackupRestoreMode.allCases) { mode in
-                            Text(mode.localizedTitle).tag(mode)
+                        Picker(String(), selection: $restoreMode) {
+                            ForEach(MistiaBackupRestoreMode.allCases) { mode in
+                                Text(mode.localizedTitle).tag(mode)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .tint(accent)
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 15)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 15)
+                
+                Text(restoreMode.localizedDescription)
+                    .font(.system(size: 12.5, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
             }
 
             if sessionStore.isManualSyncRequiredAfterRestore {
@@ -4993,47 +4992,58 @@ struct ManagementBackupRestoreView: View {
 
     @ViewBuilder
     private var heroStatusCard: some View {
-        if let latestSummary {
-            ManagementProfileListCard(tint: cardTint) {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.green)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.management.managementauth.latestSnapshotSummary)
-                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-                        
-                        Text(L10n.management.managementauth.backupFormatVValueAppValueValue(String(describing: latestSummary.manifest.backupFormatVersion), String(describing: latestSummary.manifest.appVersion), String(describing: latestSummary.manifest.appBuild), String(describing: latestSummary.manifest.localSchemaVersion)))
-                            .descriptionTextStyle()
-                    }
-                    
-                    Spacer()
-                    
-                    Button {
-                        showSummaryDetailSheet = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 20))
+        ManagementProfileListCard(tint: cardTint) {
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(latestSummary != nil ? Color.blue.opacity(0.12) : Color.gray.opacity(0.12))
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: latestSummary != nil ? "icloud.circle.fill" : "icloud.slash")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(latestSummary != nil ? Color.blue : Color.secondary)
+                }
+
+                VStack(spacing: 4) {
+                    Text(L10n.management.managementauth.backupRestore)
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    if let summary = latestSummary {
+                        Text("v\(summary.manifest.appVersion) (\(summary.manifest.appBuild))")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            showSummaryDetailSheet = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("\(summary.activeRecordCount) bản ghi")
+                                Image(systemName: "info.circle")
+                            }
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundStyle(accent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(accent.opacity(0.1))
+                            .clipShape(Capsule())
+                        }
+                        .padding(.top, 4)
+                    } else {
+                        Text("Chưa có bản sao lưu nào trên thiết bị")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 15)
             }
-        } else {
-            ManagementInlineMessageCard(
-                title: L10n.management.managementauth.emergencySnapshot,
-                message: L10n.management.managementauth.createAMistiabackupFileToCaptureThe,
-                accent: .mint
-            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .padding(.horizontal, 16)
         }
     }
 
     private func backupActionRow(
         title: String,
-        subtitle: String,
         systemImage: String,
         tint: Color,
         isDisabled: Bool,
@@ -5046,16 +5056,9 @@ struct ManagementBackupRestoreView: View {
                     .foregroundStyle(tint)
                     .frame(width: 28, height: 28)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text(subtitle)
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                }
+                Text(title)
+                    .font(.system(size: 15.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
@@ -5069,7 +5072,7 @@ struct ManagementBackupRestoreView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 15)
+            .padding(.vertical, 14)
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)

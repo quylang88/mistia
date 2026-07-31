@@ -11106,29 +11106,6 @@
         }
       }
     },
-    "management.managementauth.createAMistiabackupFileToCaptureThe" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Create a `.mistiabackup` file to capture the current local state. When you restore it, Mistia updates local data first and won't push to the cloud until you manually tap Sync now."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "現在のローカル状態を `.mistiabackup` ファイルとして保存できます。復元時はまずローカルデータだけを更新し、手動で「今すぐ同期」を押すまでクラウドへは自動送信しません。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tạo file `.mistiabackup` để lưu lại toàn bộ dữ liệu local hiện tại. Khi nhập lại snapshot, Mistia chỉ khôi phục local trước và sẽ không tự đẩy lên cloud cho tới khi bạn tự bấm Đồng bộ ngay."
-          }
-        }
-      }
-    },
     "management.managementauth.createSnapshot" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11147,7 +11124,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tạo snapshot"
+            "value" : "Tạo bản sao lưu ngay"
           }
         }
       }
@@ -11727,29 +11704,6 @@
         }
       }
     },
-    "management.managementauth.emergencySnapshot" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Emergency snapshot"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "緊急スナップショット"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Snapshot khẩn cấp"
-          }
-        }
-      }
-    },
     "management.managementauth.enterTheEmailYouUseWithMistia" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11792,29 +11746,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nhập mật khẩu để tiếp tục."
-          }
-        }
-      }
-    },
-    "management.managementauth.exportTheCurrentLocalDataIntoA" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Export the current local data into a single `.mistiabackup` file."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "現在のローカルデータを 1 つの `.mistiabackup` ファイルとして書き出します。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Xuất dữ liệu local hiện tại thành một file `.mistiabackup`."
           }
         }
       }
@@ -12090,53 +12021,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nhập snapshot"
-          }
-        }
-      }
-    },
-    "management.managementauth.importTheFileAndLetSnapshotValues" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import the file and let snapshot values win on matching IDs while keeping unrelated local records."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同じ ID はスナップショット側を優先しつつ、関係ないローカルレコードは維持して読み込みます。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nhập file và ưu tiên dữ liệu trong snapshot khi trùng ID, nhưng vẫn giữ các mục local khác."
-          }
-        }
-      }
-    },
-    "management.managementauth.importTheFileAndReplaceTheCurrent" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import the file and replace the current local dataset after Mistia creates an internal safety snapshot first."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "先に内部の安全用スナップショットを作成したうえで、現在のローカルデータ全体を置き換えて読み込みます。"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nhập file và thay toàn bộ dữ liệu local hiện tại sau khi Mistia tạo một safety snapshot nội bộ."
+            "value" : "Khôi phục từ tệp..."
           }
         }
       }
@@ -12251,7 +12136,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Giữ dữ liệu local không liên quan, nhưng nếu snapshot có cùng ID thì bản trong snapshot sẽ ghi đè lên local."
+            "value" : "Gộp dữ liệu từ tệp sao lưu vào dữ liệu hiện có trên thiết bị."
           }
         }
       }
