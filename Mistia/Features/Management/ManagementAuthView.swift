@@ -4832,6 +4832,7 @@ struct ManagementBackupRestoreView: View {
     @State private var latestSummary: MistiaBackupValidationSummary?
     @State private var latestRestoreResult: MistiaBackupRestoreResult?
     @State private var alert: ManagementBackupAlert?
+    @State private var showSummaryDetailSheet = false
 
     private var accent: Color {
         MistiaAccent.income.color
@@ -4858,11 +4859,7 @@ struct ManagementBackupRestoreView: View {
             contentSpacing: 18,
             contentBottomPadding: isModalPresentation ? 40 : 150
         ) {
-            ManagementInlineMessageCard(
-                title: L10n.management.managementauth.emergencySnapshot,
-                message: L10n.management.managementauth.createAMistiabackupFileToCaptureThe,
-                accent: .mint
-            )
+            heroStatusCard
 
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
@@ -4891,43 +4888,28 @@ struct ManagementBackupRestoreView: View {
             }
 
             ManagementProfileListCard(tint: cardTint) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(L10n.management.managementauth.restoreMode)
-                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.management.managementauth.restoreMode)
+                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text(restoreMode.localizedDescription)
+                            .descriptionTextStyle()
+                    }
+
+                    Spacer()
 
                     Picker(String(), selection: $restoreMode) {
                         ForEach(MistiaBackupRestoreMode.allCases) { mode in
                             Text(mode.localizedTitle).tag(mode)
                         }
                     }
-                    .pickerStyle(.segmented)
-
-                    Text(restoreMode.localizedDescription)
-                        .descriptionTextStyle()
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 15)
-            }
-
-            if let latestSummary {
-                ManagementProfileListCard(tint: cardTint) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(L10n.management.managementauth.latestSnapshotSummary)
-                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-
-                        Text(
-                            L10n.management.managementauth.backupFormatVValueAppValueValue(String(describing: latestSummary.manifest.backupFormatVersion), String(describing: latestSummary.manifest.appVersion), String(describing: latestSummary.manifest.appBuild), String(describing: latestSummary.manifest.localSchemaVersion))
-                        )
-                        .descriptionTextStyle()
-
-                        Text(latestSummary.localizedBreakdown)
-                            .descriptionTextStyle()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 15)
-                }
             }
 
             if sessionStore.isManualSyncRequiredAfterRestore {
@@ -4971,6 +4953,28 @@ struct ManagementBackupRestoreView: View {
         .sheet(item: $shareItem) { item in
             TransactionShareSheet(url: item.url)
         }
+        .sheet(isPresented: $showSummaryDetailSheet) {
+            NavigationStack {
+                ScrollView {
+                    if let latestSummary {
+                        Text(latestSummary.localizedBreakdown)
+                            .descriptionTextStyle()
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .navigationTitle(L10n.management.managementauth.latestSnapshotSummary)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(L10n.common.ok) {
+                            showSummaryDetailSheet = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .fileImporter(
             isPresented: $isImporting,
             allowedContentTypes: [.mistiaBackup],
@@ -4983,6 +4987,46 @@ struct ManagementBackupRestoreView: View {
                 title: Text((alert.title)),
                 message: Text((alert.message)),
                 dismissButton: .default(Text(L10n.common.ok))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var heroStatusCard: some View {
+        if let latestSummary {
+            ManagementProfileListCard(tint: cardTint) {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.green)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.management.managementauth.latestSnapshotSummary)
+                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                        
+                        Text(L10n.management.managementauth.backupFormatVValueAppValueValue(String(describing: latestSummary.manifest.backupFormatVersion), String(describing: latestSummary.manifest.appVersion), String(describing: latestSummary.manifest.appBuild), String(describing: latestSummary.manifest.localSchemaVersion)))
+                            .descriptionTextStyle()
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        showSummaryDetailSheet = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 20))
+                            .foregroundStyle(accent)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 15)
+            }
+        } else {
+            ManagementInlineMessageCard(
+                title: L10n.management.managementauth.emergencySnapshot,
+                message: L10n.management.managementauth.createAMistiabackupFileToCaptureThe,
+                accent: .mint
             )
         }
     }
