@@ -13412,19 +13412,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign out and delete local"
+            "value" : "Sign out & delete device data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ログアウトしてローカルを削除"
+            "value" : "サインアウト（端末データを削除）"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đăng xuất và xóa local"
+            "value" : "Đăng xuất & xóa dữ liệu trên thiết bị"
           }
         }
       }
@@ -13435,19 +13435,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign out and keep local"
+            "value" : "Sign out & keep device data"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ログアウトしてローカルを保持"
+            "value" : "サインアウト（端末データを保持）"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đăng xuất và giữ local"
+            "value" : "Đăng xuất & giữ dữ liệu trên thiết bị"
           }
         }
       }
@@ -14464,19 +14464,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You will be signed out and the current profile's local data on this device will be deleted. Other local profiles on this device will stay untouched."
+            "value" : "You will be signed out and all data for the current profile on this device will be deleted. Other profiles on this device will remain unaffected."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ログアウトして、この端末にある現在のプロフィールのローカルデータを削除します。この端末上の他のローカルプロフィールは保持されます。"
+            "value" : "サインアウトし、この端末にある現在のプロフィールのデータをすべて削除します。端末上の他のプロフィールには影響しません。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bạn sẽ bị đăng xuất và toàn bộ dữ liệu local của profile hiện tại trên máy này sẽ bị xóa. Các profile local khác trên thiết bị vẫn được giữ nguyên."
+            "value" : "Bạn sẽ đăng xuất và toàn bộ dữ liệu của hồ sơ hiện tại trên thiết bị này sẽ bị xóa. Các hồ sơ khác trên thiết bị (nếu có) không bị ảnh hưởng."
           }
         }
       }
@@ -14487,19 +14487,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You will be signed out of Mistia on this device. Existing local data will stay on the device."
+            "value" : "You will be signed out of your account on this device. Existing data on this device will be preserved."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この端末でミスティアからログアウトします。既存のローカルデータは保持されます。"
+            "value" : "この端末からアカウントをサインアウトします。端末に保存されているデータはそのまま保持されます。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bạn sẽ bị đăng xuất khỏi Mistia trên thiết bị này. Dữ liệu local hiện có vẫn được giữ lại."
+            "value" : "Bạn sẽ đăng xuất khỏi tài khoản trên thiết bị này. Dữ liệu hiện có trên thiết bị vẫn được giữ nguyên."
           }
         }
       }
