@@ -268,7 +268,7 @@ struct MistiaCategorySpendingChartView: View {
     }
 
     private static func rootVisibleSliceCount(for snapshot: OverviewCategorySpendingMonthSnapshot) -> Int {
-        let positiveSliceCount = snapshot.slices.filter { $0.amountMinor > 0 }.count
+        let positiveSliceCount = snapshot.slices.lazy.filter { $0.amountMinor > 0 }.count
         guard positiveSliceCount > maximumVisibleSlices else {
             return positiveSliceCount
         }

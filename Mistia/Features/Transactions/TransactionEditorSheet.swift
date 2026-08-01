@@ -2066,6 +2066,7 @@ struct TransactionEditorSheet: View {
     private func refreshSuggestionRecordSnapshots() {
         cachedSuggestionRecordSnapshots = Array(
             visiblePostedTransactions
+                .lazy
                 .prefix(500)
                 .map(\.snapshot)
         )

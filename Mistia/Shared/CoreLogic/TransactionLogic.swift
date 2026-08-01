@@ -1720,14 +1720,14 @@ nonisolated enum TransactionLogic {
         .map(\.0)
     }
 
-    static func titleSuggestions(
-        from records: [TransactionRecordSnapshot],
+    static func titleSuggestions<Records: Sequence>(
+        from records: Records,
         query: String,
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype? = nil,
         excludingTransactionID: UUID? = nil,
         limit: Int = 5
-    ) -> [TransactionTitleSuggestion] {
+    ) -> [TransactionTitleSuggestion] where Records.Element == TransactionRecordSnapshot {
         guard limit > 0,
               let normalizedQuery = normalizeCounterpartyName(query),
               !normalizedQuery.isEmpty
