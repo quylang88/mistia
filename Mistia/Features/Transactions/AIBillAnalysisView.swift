@@ -46,8 +46,19 @@ struct AIBillAnalysisView: View {
         let renderContextKey = renderContextCacheKey
         let renderContext = renderContextKey.map(cachedRenderContext)
 
-        ScrollView {
-            VStack(spacing: 18) {
+        MistiaPinnedTopBarScaffold(
+            tone: .modal,
+            title: L10n.transactions.aibill.aiBill,
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { requestDismiss() },
+            contentSpacing: 16,
+            contentBottomPadding: shouldShowAnalyzeButton ? 120 : 60
+        ) {
+            VStack(spacing: 16) {
                 actionSection
                 modeSection
                 if bills.isEmpty {
@@ -58,24 +69,9 @@ struct AIBillAnalysisView: View {
                     }
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-            .padding(.bottom, shouldShowAnalyzeButton ? 128 : 96)
         }
-        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             bottomAnalyzeSection
-        }
-        .navigationTitle(L10n.transactions.aibill.aiBill)
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
         }
         .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .onChange(of: photoItems) { _, newItems in
@@ -196,19 +192,18 @@ struct AIBillAnalysisView: View {
     }
 
     private var actionSection: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             PhotosPicker(
                 selection: $photoItems,
                 maxSelectionCount: max(1, imageLimit - bills.count),
                 matching: .images
             ) {
-                Label {
-                    Text(L10n.transactions.aibill.addBills)
-                } icon: {
-                    Image(systemName: "photo.on.rectangle")
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.stack")
                         .font(.system(size: 15, weight: .bold))
+                    Text(bills.isEmpty ? L10n.transactions.aibill.addBills : "\(L10n.transactions.aibill.addBills) (\(bills.count)/\(imageLimit))")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                 }
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(actionControlForeground)
                 .frame(maxWidth: .infinity, minHeight: 46)
             }
@@ -256,18 +251,19 @@ struct AIBillAnalysisView: View {
                     }
                     Text(isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze)
                 }
-                .font(.system(size: 16.5, weight: .bold, design: .rounded))
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
             }
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .tint(MistiaAccent.purple.color)
             .disabled(isAnalyzing || !hasPendingAnalyzableBills)
-            .padding(.horizontal, 32)
-            .padding(.top, 4)
-            .padding(.bottom, 18)
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
     }
 
@@ -282,25 +278,30 @@ struct AIBillAnalysisView: View {
     }
 
     private func billCard(_ bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Image(uiImage: bill.thumbnail)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 52, height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .frame(width: 50, height: 50)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                    )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(bill.result?.merchantName ?? L10n.transactions.aibill.billValue(String(describing: billIndexTitle(for: bill))))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     if let totalMinor = bill.result?.totalMinor {
                         Text(totalMinor.formattedCurrency(code: bill.currencyCode))
-                            .font(.footnote)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                     } else {
                         Text(billFileSizeText(for: bill.imageData.count))
-                            .font(.footnote)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -318,11 +319,12 @@ struct AIBillAnalysisView: View {
                             removeBill(bill.id)
                         } label: {
                             Image(systemName: "trash")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(.red)
-                                .frame(width: 40, height: 40)
+                                .frame(width: 34, height: 34)
+                                .background(Color.red.opacity(0.12), in: Circle())
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.plain)
                         .accessibilityLabel(L10n.transactions.transactioneditor.removeImage)
                     }
                 }
@@ -332,18 +334,32 @@ struct AIBillAnalysisView: View {
                 Text(message)
                     .font(.footnote)
                     .foregroundStyle(.red)
+                    .padding(.top, 2)
             }
 
             if bill.result != nil, !bill.isMultipleBillImage {
-                walletPicker(for: bill, renderContext: renderContext)
-                lockedGroupList(for: bill)
+                Divider()
+                    .opacity(0.6)
+                walletRow(for: bill, renderContext: renderContext)
+
+                if !bill.lockedGroups.isEmpty {
+                    Divider()
+                        .opacity(0.6)
+                    lockedGroupList(for: bill)
+                }
+
+                Divider()
+                    .opacity(0.6)
                 itemList(for: bill, renderContext: renderContext)
+
                 if !selectedCandidates(for: bill, snapshot: renderContext.selectionSnapshot).isEmpty {
+                    Divider()
+                        .opacity(0.6)
                     billSelectionSummary(for: bill, renderContext: renderContext)
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .background {
             MistiaRoundedGlassBackground(
                 cornerRadius: 20,
@@ -352,14 +368,27 @@ struct AIBillAnalysisView: View {
         }
     }
 
-    private func walletPicker(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
-        Picker(L10n.transactions.aibill.walletForBill, selection: bindingForBillWallet(bill.id)) {
-            Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
-            ForEach(renderContext.availableWallets) { wallet in
-                Text(renderContext.walletLabelsByID[wallet.id] ?? wallet.name).tag(Optional(wallet.id))
+    private func walletRow(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "creditcard.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MistiaAccent.purple.color)
+
+            Text(L10n.transactions.aibill.walletForBill)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Picker(L10n.transactions.aibill.walletForBill, selection: bindingForBillWallet(bill.id)) {
+                Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
+                ForEach(renderContext.availableWallets) { wallet in
+                    Text(renderContext.walletLabelsByID[wallet.id] ?? wallet.name).tag(Optional(wallet.id))
+                }
             }
+            .pickerStyle(.menu)
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
         }
-        .pickerStyle(.menu)
     }
 
     private func itemList(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
@@ -369,6 +398,7 @@ struct AIBillAnalysisView: View {
                 if item.id != bill.result?.items.last?.id {
                     Divider()
                         .padding(.leading, 36)
+                        .opacity(0.5)
                 }
             }
         }
@@ -381,22 +411,22 @@ struct AIBillAnalysisView: View {
         let isSelected = candidate.selectedQuantity > 0
         let canSelect = renderContext.selectableIDs.contains(candidate.id) || isSelected
 
-        return HStack(alignment: .top, spacing: 10) {
+        return HStack(alignment: .center, spacing: 12) {
             Button {
                 toggleSelection(candidate)
             } label: {
                 Image(systemName: itemIconName(isSelected: isSelected, isCreated: candidate.isCreated, isLocked: candidate.isLocked))
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(itemIconColor(isSelected: isSelected, isCreated: candidate.isCreated, isLocked: candidate.isLocked, canSelect: canSelect))
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
             .disabled(!canSelect && !isSelected)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(item.originalName)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(candidate.isCreated || candidate.isLocked ? .secondary : .primary)
                         .lineLimit(2)
 
@@ -404,19 +434,19 @@ struct AIBillAnalysisView: View {
                 }
                 if let translatedName = item.translatedName {
                     Text(translatedName)
-                        .font(.footnote)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if item.lineType == .discount {
                     HStack(spacing: 8) {
                         Text(L10n.transactions.aibill.discountLine)
-                            .font(.footnote)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                         if item.finalAmountMinor < 0 {
                             Button(L10n.transactions.aibill.allocateDiscount) {
                                 allocateDiscount(itemID: item.lineID, billID: bill.id)
                             }
-                            .font(.footnote.weight(.semibold))
+                            .font(.caption.weight(.bold))
                             .disabled(candidate.isCreated || candidate.isLocked)
                         }
                     }
@@ -425,7 +455,7 @@ struct AIBillAnalysisView: View {
                     Button {
                         categoryPickerTarget = AIBillCategoryPickerTarget(billID: bill.id, itemID: item.lineID)
                     } label: {
-                        categoryEditLink(
+                        categoryBadgeTag(
                             title: categoryLabel(for: item.categoryID, renderContext: renderContext),
                             isMissing: item.categoryID == nil,
                             isEditable: isCategoryEditable
@@ -455,8 +485,32 @@ struct AIBillAnalysisView: View {
                 }
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .opacity(canSelect || isSelected ? 1 : 0.45)
+    }
+
+    private func categoryBadgeTag(title: String, isMissing: Bool, isEditable: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: isMissing ? "exclamationmark.triangle.fill" : "tag.fill")
+                .font(.system(size: 9, weight: .bold))
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+            if isEditable {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .opacity(0.7)
+            }
+        }
+        .foregroundStyle(isMissing ? Color.red : (isEditable ? MistiaAccent.purple.color : Color.secondary))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            isMissing
+                ? Color.red.opacity(0.1)
+                : (isEditable ? MistiaAccent.purple.color.opacity(0.1) : Color(UIColor.tertiarySystemGroupedBackground)),
+            in: Capsule()
+        )
     }
 
     @ViewBuilder
@@ -559,11 +613,11 @@ struct AIBillAnalysisView: View {
     private func lockedGroupRow(_ group: BillItemLockedGroup, bill: AIBillDraft) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.transactions.aibill.lockedGroupValue(group.amountMinor.formattedCurrency(code: bill.currencyCode)))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                 Text(modeTitle(group.mode))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -572,28 +626,32 @@ struct AIBillAnalysisView: View {
             Button {
                 cancelLockedGroup(group.id, billID: bill.id)
             } label: {
-                Label(L10n.common.cancel, systemImage: "xmark")
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(Color(UIColor.tertiarySystemFill), in: Circle())
             }
-            .font(.caption.weight(.semibold))
-            .buttonStyle(.glass)
-            .buttonBorderShape(.capsule)
-            .tint(Color.secondary)
+            .buttonStyle(.plain)
 
             Button {
                 createTransaction(from: group, bill: bill)
             } label: {
-                Label(L10n.transactions.aibill.createTransaction, systemImage: "plus")
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(L10n.transactions.aibill.createTransaction)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(MistiaAccent.purple.color, in: Capsule())
             }
-            .font(.caption.weight(.bold))
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.capsule)
-            .tint(actionControlForeground)
+            .buttonStyle(.plain)
         }
         .padding(10)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(UIColor.tertiarySystemGroupedBackground))
-        }
+        .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func billSelectionSummary(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
@@ -605,9 +663,10 @@ struct AIBillAnalysisView: View {
         )
 
         return HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.transactions.aibill.selectedAmountValue(selectedAmount.formattedCurrency(code: bill.currencyCode)))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
                 Text(L10n.transactions.aibill.remainingAmountValue(remainingAmount.formattedCurrency(code: bill.currencyCode)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -616,24 +675,25 @@ struct AIBillAnalysisView: View {
             Button {
                 confirmSelectionGroup(for: bill)
             } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                    .frame(width: 30, height: 30)
+                HStack(spacing: 4) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(L10n.common.ok)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(selectedAmount > 0 ? Color.white : Color.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    selectedAmount > 0 ? MistiaAccent.purple.color : Color(UIColor.tertiarySystemFill),
+                    in: Capsule()
+                )
             }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.circle)
-            .tint(MistiaAccent.purple.color)
+            .buttonStyle(.plain)
             .disabled(selectedAmount <= 0)
-            .accessibilityLabel(L10n.common.ok)
         }
         .padding(12)
-        .background {
-            MistiaRoundedGlassBackground(
-                cornerRadius: 16,
-                tint: Color(UIColor.tertiarySystemGroupedBackground)
-            )
-        }
+        .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var selectedCandidates: [BillItemSelectionCandidate] {
@@ -911,27 +971,6 @@ struct AIBillAnalysisView: View {
     private func categoryLabel(for category: TransactionCategory) -> String {
         let parentName = category.parentCategory?.localizedDisplayName ?? category.branchDisplayName
         return "\(parentName) / \(category.localizedDisplayName)"
-    }
-
-    private func categoryEditLink(title: String, isMissing: Bool, isEditable: Bool) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(.footnote)
-                .lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 8.5, weight: .bold))
-                .opacity(isEditable ? 0.72 : 0)
-        }
-        .foregroundStyle(categoryLinkColor(isMissing: isMissing, isEditable: isEditable))
-        .contentShape(Rectangle())
-        .opacity(isEditable ? 1 : 0.58)
-    }
-
-    private func categoryLinkColor(isMissing: Bool, isEditable: Bool) -> Color {
-        if !isEditable {
-            return .secondary
-        }
-        return isMissing ? .red : .blue
     }
 
     private func itemIconName(isSelected: Bool, isCreated: Bool, isLocked: Bool) -> String {
