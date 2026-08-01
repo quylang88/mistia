@@ -268,7 +268,7 @@ struct DuePaymentSheet: View {
             walletMenuRow(dueItem: dueItem)
         } footer: {
             if target.requiresAmountInput {
-                MistiaSectionFooter(L10n.planning.duepayment.thisBillHasNoDefaultAmount)
+                MistiaSectionFooter(L10n.planning.duepayment.thisBillHasNoDefaultAmount, isFormSection: true)
             }
         }
     }

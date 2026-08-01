@@ -53,7 +53,7 @@ struct MistiaDestructiveActionSection: View {
             }
         } footer: {
             if let descriptionText {
-                MistiaSectionFooter(descriptionText)
+                MistiaSectionFooter(descriptionText, isFormSection: true)
             }
         }
     }

@@ -72,8 +72,10 @@ struct MistiaFooterAddButton: View {
 
 struct MistiaSectionFooter<Content: View>: View {
     let content: Content
+    var isFormSection: Bool
 
-    init(@ViewBuilder content: () -> Content) {
+    init(isFormSection: Bool = false, @ViewBuilder content: () -> Content) {
+        self.isFormSection = isFormSection
         self.content = content()
     }
 
@@ -84,20 +86,20 @@ struct MistiaSectionFooter<Content: View>: View {
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
+            .padding(.horizontal, isFormSection ? 0 : 16)
+            .padding(.top, isFormSection ? 4 : 6)
     }
 }
 
 extension MistiaSectionFooter where Content == Text {
-    init(_ text: String) {
-        self.init {
+    init(_ text: String, isFormSection: Bool = false) {
+        self.init(isFormSection: isFormSection) {
             Text(text)
         }
     }
 
-    init(_ localizedKey: LocalizedStringKey) {
-        self.init {
+    init(_ localizedKey: LocalizedStringKey, isFormSection: Bool = false) {
+        self.init(isFormSection: isFormSection) {
             Text(localizedKey)
         }
     }

@@ -1785,7 +1785,7 @@ struct PlanningInstallmentEditorSheet: View {
                     } header: {
                         Text(L10n.planning.planning.earlyPayment)
                     } footer: {
-                        MistiaSectionFooter(L10n.planning.planning.thisPaymentWillBeRecordedAsA)
+                        MistiaSectionFooter(L10n.planning.planning.thisPaymentWillBeRecordedAsA, isFormSection: true)
                     }
                 }
 

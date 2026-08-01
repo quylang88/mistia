@@ -3148,7 +3148,7 @@ private struct FamilyJoinSheet: View {
                 } header: {
                     Text(L10n.family.family.inviteLink)
                 } footer: {
-                    MistiaSectionFooter(L10n.family.family.ifYouVeCopiedAnInviteLink)
+                    MistiaSectionFooter(L10n.family.family.ifYouVeCopiedAnInviteLink, isFormSection: true)
                 }
             }
             .disabled(!sessionStore.canPerformRemoteActions)
@@ -3594,12 +3594,11 @@ private struct FamilyInviteSheet: View {
                     Text(L10n.family.family.inviteRole)
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
-                        MistiaSectionFooter(roleDescription(selectedRole))
+                        MistiaSectionFooter(roleDescription(selectedRole), isFormSection: true)
                         if let inviteLimitMessage {
                             Text(inviteLimitMessage)
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.orange)
-                                .padding(.horizontal, 16)
                         }
                     }
                 }
