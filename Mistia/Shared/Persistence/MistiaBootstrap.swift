@@ -28,6 +28,13 @@ actor MistiaStartupMaintenanceWorker {
         let context = ModelContext(modelContainer)
         return try MistiaBootstrap.seedDefaultCategoriesForLaunchIfNeeded(modelContext: context)
     }
+
+    func populateMissingBudgetCategorySnapshots() throws -> [MistiaBootstrapSyncMutation] {
+        let context = ModelContext(modelContainer)
+        return try PlanningBudgetSnapshotMaintenance.populateMissingCategorySnapshots(
+            modelContext: context
+        )
+    }
 }
 
 nonisolated enum MistiaBootstrap {

@@ -150,8 +150,11 @@ struct MistiaApp: App {
 
     @MainActor
     private func runDeferredStartupWork() async {
+        let worker = MistiaStartupMaintenanceWorker(
+            modelContainer: sessionStore.currentModelContainer
+        )
+
         do {
-            let worker = MistiaStartupMaintenanceWorker(modelContainer: sessionStore.currentModelContainer)
             let signpostID = MistiaPerformanceSignpost.begin("Category Launch Repair")
             defer { MistiaPerformanceSignpost.end("Category Launch Repair", id: signpostID) }
             let syncMutations = try await worker.seedDefaultCategoriesForLaunchIfNeeded()
@@ -170,11 +173,16 @@ struct MistiaApp: App {
         }
 
         do {
-            let context = sessionStore.currentModelContainer.mainContext
-            try PlanningBudgetSnapshotMaintenance.populateMissingCategorySnapshots(
-                modelContext: context,
-                sessionStore: sessionStore
-            )
+            let signpostID = MistiaPerformanceSignpost.begin("Budget Snapshot Repair")
+            defer { MistiaPerformanceSignpost.end("Budget Snapshot Repair", id: signpostID) }
+            let syncMutations = try await worker.populateMissingBudgetCategorySnapshots()
+            for mutation in syncMutations {
+                sessionStore.recordUpsert(
+                    entity: mutation.entity,
+                    recordID: mutation.recordID,
+                    modifiedAt: mutation.modifiedAt
+                )
+            }
         } catch {
             print("Failed to populate budget category snapshots: \(error)")
         }

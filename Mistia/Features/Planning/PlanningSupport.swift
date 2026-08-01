@@ -519,36 +519,61 @@ extension BudgetPlan {
     }
 }
 
-enum PlanningBudgetSnapshotMaintenance {
+nonisolated enum PlanningBudgetSnapshotMaintenance {
+    @discardableResult
+    static func populateMissingCategorySnapshots(
+        modelContext: ModelContext
+    ) throws -> [MistiaBootstrapSyncMutation] {
+        let missingIDDescriptor = FetchDescriptor<BudgetPlan>(
+            predicate: #Predicate { budget in
+                budget.deletedAt == nil && budget.categoryIDSnapshot == nil
+            }
+        )
+        let missingNameDescriptor = FetchDescriptor<BudgetPlan>(
+            predicate: #Predicate { budget in
+                budget.deletedAt == nil && budget.categoryNameSnapshot == nil
+            }
+        )
+        var budgets = try modelContext.fetch(missingIDDescriptor)
+        var fetchedBudgetIDs = Set(budgets.map(\.id))
+        for budget in try modelContext.fetch(missingNameDescriptor)
+            where fetchedBudgetIDs.insert(budget.id).inserted {
+            budgets.append(budget)
+        }
+        let now = Date()
+        var mutations: [MistiaBootstrapSyncMutation] = []
+        mutations.reserveCapacity(budgets.count)
+
+        for budget in budgets {
+            guard budget.category != nil else { continue }
+
+            budget.refreshCategorySnapshot()
+            budget.updatedAt = now
+            mutations.append(
+                MistiaBootstrapSyncMutation(
+                    entity: .budgetPlan,
+                    recordID: budget.id,
+                    modifiedAt: now
+                )
+            )
+        }
+
+        guard !mutations.isEmpty else { return [] }
+        try modelContext.save()
+        return mutations
+    }
+
     @MainActor
     static func populateMissingCategorySnapshots(
         modelContext: ModelContext,
         sessionStore: SessionStore
     ) throws {
-        let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
-        let now = Date()
-        var updatedBudgets: [BudgetPlan] = []
-
-        for budget in budgets {
-            guard budget.deletedAt == nil,
-                  budget.category != nil,
-                  budget.categoryIDSnapshot == nil || budget.categoryNameSnapshot == nil
-            else {
-                continue
-            }
-
-            budget.refreshCategorySnapshot()
-            budget.updatedAt = now
-            updatedBudgets.append(budget)
-        }
-
-        guard !updatedBudgets.isEmpty else { return }
-        try modelContext.save()
-        for budget in updatedBudgets {
+        let mutations = try populateMissingCategorySnapshots(modelContext: modelContext)
+        for mutation in mutations {
             sessionStore.recordUpsert(
-                entity: .budgetPlan,
-                recordID: budget.id,
-                modifiedAt: budget.updatedAt
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                modifiedAt: mutation.modifiedAt
             )
         }
     }
