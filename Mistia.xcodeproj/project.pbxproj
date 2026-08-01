@@ -73,6 +73,7 @@
 			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXNativeTarget "Mistia" */;
 			buildPhases = (
 				A10000000000000000000020 /* Generate L10n */,
+				A10000000000000000000021 /* Update Build Number */,
 				A10000000000000000000009 /* Sources */,
 				A10000000000000000000003 /* Frameworks */,
 				A10000000000000000000008 /* Resources */,
@@ -204,6 +205,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -euo pipefail\ncd \"$SRCROOT\"\nxcrun --sdk macosx swift Scripts/generate-l10n.swift --input Mistia/Localizable.xcstrings --output Mistia/Shared/CoreLogic/L10n.generated.swift\n";
+		};
+		A10000000000000000000021 /* Update Build Number */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Scripts/update-build-number.sh",
+			);
+			name = "Update Build Number";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\ncd \"$SRCROOT\"\nbash Scripts/update-build-number.sh\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

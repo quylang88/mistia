@@ -1423,6 +1423,12 @@ private struct LanguageOptionRow: View {
 }
 
 private struct SettingsVersionFooter: View {
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "v\(version) (\(build)) powered by Quý Lăng"
+    }
+
     var body: some View {
         MistiaSectionFooter {
             VStack(spacing: 3) {
@@ -1430,7 +1436,7 @@ private struct SettingsVersionFooter: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                Text(L10n.settings.footer.version)
+                Text(versionText)
                     .font(.system(size: 11.5, weight: .medium, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
