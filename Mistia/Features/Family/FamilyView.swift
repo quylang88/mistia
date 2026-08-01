@@ -3739,23 +3739,23 @@ private struct FamilyInviteActivitySheet: UIViewControllerRepresentable {
 }
 
 private func familyInviteCreatedText(_ invite: FamilyInviteRecord) -> String {
-    L10n.family.family.sentValue(String(describing: invite.createdAt.formatted(date: .abbreviated, time: .shortened)))
+    L10n.family.family.sentValue(String(describing: MistiaDateFormatting.dateTimeString(for: invite.createdAt)))
 }
 
 private func familyInviteLifecycleText(_ invite: FamilyInviteRecord) -> String {
     if invite.status == .accepted, let acceptedAt = invite.acceptedAt {
-        return L10n.family.family.acceptedValue(String(describing: acceptedAt.formatted(date: .abbreviated, time: .shortened)))
+        return L10n.family.family.acceptedValue(String(describing: MistiaDateFormatting.dateTimeString(for: acceptedAt)))
     }
 
     if invite.status == .revoked, let revokedAt = invite.revokedAt {
-        return L10n.family.family.revokedValue(String(describing: revokedAt.formatted(date: .abbreviated, time: .shortened)))
+        return L10n.family.family.revokedValue(String(describing: MistiaDateFormatting.dateTimeString(for: revokedAt)))
     }
 
     if invite.status == .declined, let declinedAt = invite.declinedAt {
-        return L10n.family.family.declinedValue(String(describing: declinedAt.formatted(date: .abbreviated, time: .shortened)))
+        return L10n.family.family.declinedValue(String(describing: MistiaDateFormatting.dateTimeString(for: declinedAt)))
     }
 
-    return L10n.family.family.expiresValue(String(describing: invite.expiresAt.formatted(date: .abbreviated, time: .shortened)))
+    return L10n.family.family.expiresValue(String(describing: MistiaDateFormatting.dateTimeString(for: invite.expiresAt)))
 }
 
 private func familyInviteStatusTitle(_ status: FamilyInviteStatus) -> String {
