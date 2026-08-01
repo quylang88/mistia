@@ -546,7 +546,7 @@ final class SyncCoordinator {
         var pushedMutations = false
         var conflicts: [MistiaSyncMutation] = []
         let groupedByOwner = Dictionary(grouping: familyMutations, by: \.subjectUserID)
-        let ownerIDs = groupedByOwner.keys.sorted { $0.uuidString < $1.uuidString }
+        let ownerIDs = groupedByOwner.keys.sorted(by: MistiaStableUUIDOrdering.precedes)
 
         for ownerID in ownerIDs {
             let ownerMutations = groupedByOwner[ownerID] ?? []

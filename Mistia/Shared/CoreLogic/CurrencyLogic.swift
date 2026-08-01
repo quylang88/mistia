@@ -49,6 +49,29 @@ nonisolated struct MistiaExchangeRateIndex: Equatable {
     }
 }
 
+nonisolated private final class MistiaExchangeRateDataCache: @unchecked Sendable {
+    private struct Entry {
+        let data: Data
+        let rates: [MistiaExchangeRate]
+    }
+
+    private let lock = NSLock()
+    private var entry: Entry?
+
+    func rates(from data: Data) -> [MistiaExchangeRate] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let entry, entry.data == data {
+            return entry.rates
+        }
+
+        let rates = (try? JSONDecoder().decode([MistiaExchangeRate].self, from: data)) ?? []
+        entry = Entry(data: data, rates: rates)
+        return rates
+    }
+}
+
 nonisolated enum MistiaCurrencyConversionMode: String, Codable, CaseIterable, Identifiable {
     case appRate
     case manual
@@ -64,6 +87,8 @@ nonisolated enum MistiaCurrencyRateMode: String, Codable, CaseIterable, Identifi
 }
 
 enum MistiaCurrencySettings {
+    private static let exchangeRateDataCache = MistiaExchangeRateDataCache()
+
     enum StorageKey {
         static let primaryCurrencyCode = "mistia.settings.currency.code"
         static let enabledCurrencyCodes = "mistia.settings.currency.enabled-codes"
@@ -112,12 +137,14 @@ enum MistiaCurrencySettings {
     }
 
     static func cachedRates(defaults: UserDefaults = .standard) -> [MistiaExchangeRate] {
-        guard let data = defaults.data(forKey: StorageKey.cachedRatesData),
-              let rates = try? JSONDecoder().decode([MistiaExchangeRate].self, from: data)
-        else {
+        guard let data = defaults.data(forKey: StorageKey.cachedRatesData) else {
             return []
         }
-        return rates
+        return cachedRates(from: data)
+    }
+
+    static func cachedRates(from data: Data) -> [MistiaExchangeRate] {
+        exchangeRateDataCache.rates(from: data)
     }
 
     static func saveCachedRates(_ rates: [MistiaExchangeRate], defaults: UserDefaults = .standard) {

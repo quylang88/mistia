@@ -9,6 +9,19 @@ private enum MistiaSyncSerializationError: LocalizedError {
     }
 }
 
+nonisolated enum MistiaStableUUIDOrdering {
+    @inline(__always)
+    static func precedes(_ lhs: UUID, _ rhs: UUID) -> Bool {
+        var lhsBytes = lhs.uuid
+        var rhsBytes = rhs.uuid
+        return withUnsafeBytes(of: &lhsBytes) { lhsBuffer in
+            withUnsafeBytes(of: &rhsBytes) { rhsBuffer in
+                lhsBuffer.lexicographicallyPrecedes(rhsBuffer)
+            }
+        }
+    }
+}
+
 nonisolated enum MistiaISO8601DateCoding {
     private static let withFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withFractionalSeconds"
     private static let withoutFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withoutFractionalSeconds"
@@ -1113,17 +1126,17 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
 
     var fingerprint: String {
         let normalized = MistiaRemoteSnapshot(
-            wallets: wallets.sorted { $0.id.uuidString < $1.id.uuidString },
-            creditCardProfiles: creditCardProfiles.sorted { $0.id.uuidString < $1.id.uuidString },
-            categories: categories.sorted { $0.id.uuidString < $1.id.uuidString },
-            settlementGroups: settlementGroups.sorted { $0.id.uuidString < $1.id.uuidString },
-            settlementParticipants: settlementParticipants.sorted { $0.id.uuidString < $1.id.uuidString },
-            transactions: transactions.sorted { $0.id.uuidString < $1.id.uuidString },
-            budgetPlans: budgetPlans.sorted { $0.id.uuidString < $1.id.uuidString },
-            savingsGoals: savingsGoals.sorted { $0.id.uuidString < $1.id.uuidString },
-            recurringBillPlans: recurringBillPlans.sorted { $0.id.uuidString < $1.id.uuidString },
-            installmentPlans: installmentPlans.sorted { $0.id.uuidString < $1.id.uuidString },
-            dueOccurrences: dueOccurrences.sorted { $0.id.uuidString < $1.id.uuidString }
+            wallets: wallets.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            creditCardProfiles: creditCardProfiles.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            categories: categories.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            settlementGroups: settlementGroups.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            settlementParticipants: settlementParticipants.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            transactions: transactions.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            budgetPlans: budgetPlans.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            savingsGoals: savingsGoals.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            recurringBillPlans: recurringBillPlans.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            installmentPlans: installmentPlans.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            dueOccurrences: dueOccurrences.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) }
         )
 
         let encoder = JSONEncoder()

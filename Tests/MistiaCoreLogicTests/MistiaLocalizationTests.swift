@@ -333,9 +333,70 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput(""), "")
     }
 
+    func testCurrencyInputSanitizationKeepsOnlyASCIIDigitsAndLeadingMinus() {
+        XCTAssertEqual(
+            MistiaCurrencyInputFormatting.sanitizedDigitsAndSign(from: " -1,2a３4 "),
+            "-124"
+        )
+        XCTAssertEqual(
+            MistiaCurrencyInputFormatting.sanitizedDigitsAndSign(from: "1-2 3"),
+            "123"
+        )
+    }
+
     func testCurrencyInputParsingIgnoresGroupingSeparators() {
         XCTAssertEqual("1,234,567".currencyInputToMinorUnits(currencyCode: "JPY"), 1_234_567)
         XCTAssertEqual("12,34a56".currencyInputToMinorUnits(currencyCode: "VND"), 123_456)
+    }
+
+    func testCachedRatesFromDataRefreshesWhenPayloadChanges() throws {
+        func encodedRate(_ value: String) throws -> Data {
+            try JSONEncoder().encode([
+                MistiaExchangeRate(
+                    baseCurrencyCode: "JPY",
+                    quoteCurrencyCode: "VND",
+                    rateDecimalString: value,
+                    provider: "test",
+                    fetchedAt: referenceDate,
+                    rateDate: "2026-04-02"
+                )
+            ])
+        }
+
+        let firstPayload = try encodedRate("165")
+        let secondPayload = try encodedRate("170")
+
+        XCTAssertEqual(
+            MistiaCurrencySettings.cachedRates(from: firstPayload).first?.rateDecimalString,
+            "165"
+        )
+        XCTAssertEqual(
+            MistiaCurrencySettings.cachedRates(from: firstPayload).first?.rateDecimalString,
+            "165"
+        )
+        XCTAssertEqual(
+            MistiaCurrencySettings.cachedRates(from: secondPayload).first?.rateDecimalString,
+            "170"
+        )
+    }
+
+    func testStableUUIDOrderingMatchesCanonicalByteOrder() throws {
+        let values = try [
+            "ff000000-0000-0000-0000-000000000000",
+            "00000000-0000-0000-0001-000000000000",
+            "00000000-0000-0000-0000-000000000001",
+            "01000000-0000-0000-0000-000000000000"
+        ].map { try XCTUnwrap(UUID(uuidString: $0)) }
+
+        XCTAssertEqual(
+            values.sorted(by: MistiaStableUUIDOrdering.precedes).map(\.uuidString),
+            [
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0001-000000000000",
+                "01000000-0000-0000-0000-000000000000",
+                "FF000000-0000-0000-0000-000000000000"
+            ]
+        )
     }
 
     func testApproximatePrimaryAmountOnlyShowsForDifferentCurrencies() {

@@ -43,19 +43,18 @@ nonisolated enum MistiaCurrencyInputFormatting {
 
         guard !digits.isEmpty else { return isNegative ? "-" : "" }
 
-        let reversedDigits = Array(digits.reversed())
-        var grouped = ""
-        grouped.reserveCapacity(digits.count + digits.count / 3)
+        let digitCount = digits.count
+        var grouped = isNegative ? "-" : ""
+        grouped.reserveCapacity(sanitized.count + digitCount / 3)
 
-        for (index, character) in reversedDigits.enumerated() {
-            if index > 0, index % 3 == 0 {
+        for (index, character) in digits.enumerated() {
+            if index > 0, (digitCount - index).isMultiple(of: 3) {
                 grouped.append(",")
             }
             grouped.append(character)
         }
 
-        let result = String(grouped.reversed())
-        return isNegative ? "-" + result : result
+        return grouped
     }
 
     static func minorUnits(from input: String, currencyCode: String) -> Int64 {
@@ -69,15 +68,20 @@ nonisolated enum MistiaCurrencyInputFormatting {
         return value
     }
 
-    private static func sanitizedDigitsAndSign(from input: String) -> String {
+    static func sanitizedDigitsAndSign(from input: String) -> String {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sign = trimmed.hasPrefix("-") ? "-" : ""
-        let digits = trimmed.replacingOccurrences(
-            of: "[^0-9]",
-            with: "",
-            options: .regularExpression
-        )
-        return sign + digits
+        var sanitized = ""
+        sanitized.reserveCapacity(trimmed.utf8.count)
+
+        if trimmed.first == "-" {
+            sanitized.append("-")
+        }
+
+        for scalar in trimmed.unicodeScalars where scalar.value >= 48 && scalar.value <= 57 {
+            sanitized.unicodeScalars.append(scalar)
+        }
+
+        return sanitized
     }
 }
 
