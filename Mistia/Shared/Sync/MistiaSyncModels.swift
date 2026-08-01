@@ -1784,12 +1784,12 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
     }
 }
 
-extension MistiaRemoteSnapshot {
-    var uploadRecords: [MistiaSyncUploadRecord] {
+nonisolated extension MistiaRemoteSnapshot {
+    nonisolated var uploadRecords: [MistiaSyncUploadRecord] {
         uploadRecords(where: { _ in true })
     }
 
-    func uploadRecords(
+    nonisolated func uploadRecords(
         where shouldInclude: (MistiaSyncUploadRecord) -> Bool
     ) -> [MistiaSyncUploadRecord] {
         var records: [MistiaSyncUploadRecord] = []
@@ -1798,7 +1798,7 @@ extension MistiaRemoteSnapshot {
         return records
     }
 
-    var uploadRecordsByStorageKey: [String: MistiaSyncUploadRecord] {
+    nonisolated var uploadRecordsByStorageKey: [String: MistiaSyncUploadRecord] {
         var recordsByKey: [String: MistiaSyncUploadRecord] = [:]
         recordsByKey.reserveCapacity(totalRowCount)
         forEachUploadRecord { record in
@@ -1807,7 +1807,7 @@ extension MistiaRemoteSnapshot {
         return recordsByKey
     }
 
-    var uploadRecordStorageKeys: Set<String> {
+    nonisolated var uploadRecordStorageKeys: Set<String> {
         var keys: Set<String> = []
         keys.reserveCapacity(totalRowCount)
         forEachUploadRecord { record in
@@ -1816,7 +1816,7 @@ extension MistiaRemoteSnapshot {
         return keys
     }
 
-    func containsUploadRecord(
+    nonisolated func containsUploadRecord(
         where predicate: (MistiaSyncUploadRecord) -> Bool
     ) -> Bool {
         for row in wallets where predicate(.wallet(row)) { return true }
@@ -1833,7 +1833,7 @@ extension MistiaRemoteSnapshot {
         return false
     }
 
-    private func forEachUploadRecord(_ body: (MistiaSyncUploadRecord) -> Void) {
+    nonisolated private func forEachUploadRecord(_ body: (MistiaSyncUploadRecord) -> Void) {
         for row in wallets { body(.wallet(row)) }
         for row in creditCardProfiles { body(.creditCardProfile(row)) }
         for row in categories { body(.category(row)) }

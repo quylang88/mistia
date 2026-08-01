@@ -1013,7 +1013,7 @@ final class SessionStore {
         }
 
         cancelQueuedAutoSync()
-        syncCoordinator.clearQueuedMutations()
+        syncCoordinator.outbox.clear()
 
         do {
             let fallbackOwnerUserID = summary?.userID
@@ -1027,7 +1027,7 @@ final class SessionStore {
                 fallbackOwnerUserID: fallbackOwnerUserID
             )
 
-            syncCoordinator.clearQueuedMutations()
+            syncCoordinator.outbox.clear()
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
             let startupWorker = MistiaStartupMaintenanceWorker(modelContainer: modelContainer)
@@ -1072,14 +1072,14 @@ final class SessionStore {
         isWorking = true
         lastErrorMessage = nil
         cancelQueuedAutoSync()
-        syncCoordinator.clearQueuedMutations()
+        syncCoordinator.outbox.clear()
         setAutoSyncEnabled(false)
 
         do {
             let context = modelContainer.mainContext
             try MistiaSyncLocalStore.clearLocalDeviceLiveData(context: context)
             try MistiaBootstrap.resetCategoriesToSystemDefaults(modelContext: context)
-            syncCoordinator.clearQueuedMutations()
+            syncCoordinator.outbox.clear()
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
             lastSyncAt = nil
@@ -1267,7 +1267,7 @@ final class SessionStore {
             ]
         )
         guard !queuedMutations.isEmpty else { return }
-        syncCoordinator.queue(queuedMutations)
+        syncCoordinator.outbox.enqueue(queuedMutations)
         schedulePush(for: queuedMutations)
     }
 
@@ -1304,7 +1304,7 @@ final class SessionStore {
             ]
         )
         guard !queuedMutations.isEmpty else { return }
-        syncCoordinator.queue(queuedMutations)
+        syncCoordinator.outbox.enqueue(queuedMutations)
         schedulePush(for: queuedMutations)
     }
 
@@ -1312,7 +1312,7 @@ final class SessionStore {
         guard currentSession != nil else { return }
         let queuedMutations = queueReadyMutations(for: mutations)
         guard !queuedMutations.isEmpty else { return }
-        syncCoordinator.queue(queuedMutations)
+        syncCoordinator.outbox.enqueue(queuedMutations)
         schedulePush(for: queuedMutations)
     }
 
@@ -1341,7 +1341,7 @@ final class SessionStore {
             return
         }
 
-        syncCoordinator.removeQueuedMutation(entity: entity, recordID: recordID)
+        syncCoordinator.outbox.remove(entity: entity, recordID: recordID)
         clearFamilyOwnerPushConflict(entity: entity, recordID: recordID)
         lastErrorMessage = nil
         pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
@@ -1360,7 +1360,7 @@ final class SessionStore {
         guard !conflicts.isEmpty else { return }
 
         for conflict in conflicts {
-            syncCoordinator.removeQueuedMutation(
+            syncCoordinator.outbox.remove(
                 entity: conflict.entity,
                 recordID: conflict.recordID
             )
@@ -2861,7 +2861,7 @@ final class SessionStore {
     ) -> [MistiaSyncMutation] {
         let resolvedActiveUserID = activeUserID ?? activeLocalProfileUserID ?? currentSession?.user.id
         guard let resolvedActiveUserID else { return [] }
-        return syncCoordinator.queuedMutations().filter { mutation in
+        return syncCoordinator.outbox.allMutations.filter { mutation in
             mutation.subjectUserID != resolvedActiveUserID
         }
     }
@@ -2877,7 +2877,7 @@ final class SessionStore {
     ) -> Bool {
         let resolvedActiveUserID = activeUserID ?? activeLocalProfileUserID ?? currentSession?.user.id
         guard let resolvedActiveUserID else { return false }
-        return syncCoordinator.queuedMutations().contains { mutation in
+        return syncCoordinator.outbox.allMutations.contains { mutation in
             mutation.subjectUserID == resolvedActiveUserID
         }
     }
@@ -2937,7 +2937,7 @@ final class SessionStore {
         isLoadingAccountDevices = false
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
-        syncCoordinator.clearQueuedMutations()
+        syncCoordinator.outbox.clear()
         clearFamilyOwnerPushConflicts()
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         clearPendingAuthenticationState()
@@ -3200,8 +3200,8 @@ private extension SessionStore {
     }
 
     func configureSyncCoordinator() {
-        syncCoordinator.onProgressUpdate = { [weak self] progress in
-            Task { @MainActor in
+        Task {
+            await syncCoordinator.setProgressHandler { [weak self] progress in
                 guard let self, self.shouldShowSyncProgress else { return }
                 self.syncProgress = progress
 

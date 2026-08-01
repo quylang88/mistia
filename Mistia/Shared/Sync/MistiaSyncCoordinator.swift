@@ -154,6 +154,18 @@ actor MistiaSyncPersistenceWorker {
         )
         try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
     }
+
+    func fetchWalletName(id: UUID) throws -> String? {
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<LedgerWallet>(
+            predicate: #Predicate { $0.id == id }
+        )
+        guard let wallet = try context.fetch(descriptor).first else {
+            return nil
+        }
+        let name = wallet.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
 }
 
 enum MistiaSyncResult {
@@ -214,8 +226,7 @@ private nonisolated struct SyncRemoteSystemCategoryKey: Hashable {
     let systemKey: String
 }
 
-@MainActor
-final class SyncCoordinator {
+actor SyncCoordinator {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Mistia",
         category: "SyncCoordinator"
@@ -224,10 +235,10 @@ final class SyncCoordinator {
     private let modelContainer: ModelContainer
     private let persistenceWorker: MistiaSyncPersistenceWorker
     private let remoteStore: MistiaRemoteStore
-    private let outbox: MistiaSyncOutbox
+    nonisolated let outbox: MistiaSyncOutbox
     private let deviceID: UUID
 
-    var onProgressUpdate: ((Double) -> Void)?
+    private var _onProgressUpdate: (@Sendable (Double) -> Void)?
     private var lastSnapshotFingerprint: String?
 
     init(
@@ -243,33 +254,29 @@ final class SyncCoordinator {
         self.deviceID = deviceID
     }
 
-    func queue(_ mutation: MistiaSyncMutation) {
-        outbox.enqueue(mutation)
+    func setProgressHandler(_ handler: (@Sendable @MainActor (Double) -> Void)?) {
+        if let handler {
+            _onProgressUpdate = { value in
+                Task { @MainActor in handler(value) }
+            }
+        } else {
+            _onProgressUpdate = nil
+        }
     }
 
-    func queue(_ mutations: [MistiaSyncMutation]) {
-        outbox.enqueue(mutations)
+    private func reportProgress(_ value: Double) {
+        _onProgressUpdate?(value)
     }
 
-    func queuedMutationIDs() -> Set<String> {
-        Set(outbox.allMutations.map { $0.id.lowercased() })
-    }
-
-    func queuedMutations() -> [MistiaSyncMutation] {
-        outbox.allMutations
-    }
-
-    func removeQueuedMutation(entity: MistiaSyncEntity, recordID: UUID) {
-        outbox.remove(entity: entity, recordID: recordID)
-    }
-
-    func clearQueuedMutations() {
-        outbox.clear()
-    }
-
-    func clearLocalCache() throws {
+    func clearLocalCache() async throws {
         lastSnapshotFingerprint = nil
-        try MistiaSyncLocalStore.clearAllData(in: modelContainer)
+        try await MainActor.run {
+            try MistiaSyncLocalStore.clearAllData(in: modelContainer)
+        }
+    }
+
+    nonisolated func queuedMutationIDs() -> Set<String> {
+        Set(outbox.allMutations.map { $0.id.lowercased() })
     }
 
     func previewInitialSync(session: SupabaseAuthSession) async throws -> MistiaInitialSyncPreview {
@@ -298,15 +305,15 @@ final class SyncCoordinator {
         session: SupabaseAuthSession,
         choice: MistiaInitialSyncChoice
     ) async throws -> MistiaSyncResult {
-        onProgressUpdate?(0.05)
+        reportProgress(0.05)
         let localSnapshot = try await persistenceWorker.exportSnapshot(for: session.user.id)
         let uploadReadyLocalSnapshot = try await persistenceWorker.exportSnapshotForUpload(
             for: session.user.id
         )
-        onProgressUpdate?(0.1)
+        reportProgress(0.1)
         let rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         let remoteSnapshot = rawRemoteSnapshot
-        onProgressUpdate?(0.2)
+        reportProgress(0.2)
 
         try Task.checkCancellation()
 
@@ -315,7 +322,7 @@ final class SyncCoordinator {
 
         if localCount == 0 && remoteCount == 0 {
             lastSnapshotFingerprint = await persistenceWorker.fingerprint(of: remoteSnapshot)
-            onProgressUpdate?(1.0)
+            reportProgress(1.0)
             return .idle
         }
 
@@ -328,22 +335,22 @@ final class SyncCoordinator {
                 progressEnd: 0.8
             )
             let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
-            onProgressUpdate?(0.9)
+            reportProgress(0.9)
             let mergedCount = mergedSnapshot.activeRowCount
             try await applySnapshot(mergedSnapshot)
-            onProgressUpdate?(1.0)
+            reportProgress(1.0)
             return .seeded(mergedCount)
         }
 
         if localCount == 0 || choice == .useCloud {
             outbox.clear()
-            try clearLocalCache()
-            onProgressUpdate?(0.3)
+            try await clearLocalCache()
+            reportProgress(0.3)
             let freshSnapshot = try await fetchReconciledSnapshot(session: session)
-            onProgressUpdate?(0.6)
+            reportProgress(0.6)
             let freshCount = freshSnapshot.activeRowCount
             try await applySnapshot(freshSnapshot)
-            onProgressUpdate?(1.0)
+            reportProgress(1.0)
             return .pulled(freshCount)
         }
 
@@ -370,17 +377,17 @@ final class SyncCoordinator {
             break
         }
 
-        onProgressUpdate?(0.85)
+        reportProgress(0.85)
         let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
-        onProgressUpdate?(0.9)
+        reportProgress(0.9)
         let mergedCount = mergedSnapshot.activeRowCount
         try await applySnapshot(mergedSnapshot)
-        onProgressUpdate?(1.0)
+        reportProgress(1.0)
         return .synced(mergedCount)
     }
 
     func sync(session: SupabaseAuthSession) async throws -> MistiaSyncResult {
-        onProgressUpdate?(0.05)
+        reportProgress(0.05)
         var pushedMutations = false
         var seededMissingRows = false
 
@@ -394,7 +401,7 @@ final class SyncCoordinator {
         for (index, mutation) in sortedMutations.enumerated() {
             try Task.checkCancellation()
             let progress = 0.05 + (Double(index) / Double(max(1, mutationCount))) * 0.45
-            onProgressUpdate?(progress)
+            reportProgress(progress)
 
             switch mutation.kind {
             case .upsert:
@@ -410,7 +417,7 @@ final class SyncCoordinator {
 
         try Task.checkCancellation()
 
-        onProgressUpdate?(0.55)
+        reportProgress(0.55)
         let localSnapshot = try await persistenceWorker.exportSnapshotForUpload(for: session.user.id)
         var rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         let remoteWasEmpty = rawRemoteSnapshot.activeRowCount == 0
@@ -426,7 +433,7 @@ final class SyncCoordinator {
             seededMissingRows = true
             rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         } else {
-            onProgressUpdate?(0.8)
+            reportProgress(0.8)
         }
 
         try Task.checkCancellation()
@@ -448,7 +455,7 @@ final class SyncCoordinator {
         let previousFingerprint = lastSnapshotFingerprint
         let snapshotActiveCount = snapshot.activeRowCount
         let snapshotFingerprint = try await applySnapshot(snapshot)
-        onProgressUpdate?(1.0)
+        reportProgress(1.0)
 
         if seededMissingRows && remoteWasEmpty {
             return .seeded(snapshotActiveCount)
@@ -1005,7 +1012,7 @@ final class SyncCoordinator {
 
         for (index, localRecord) in localRecords.enumerated() {
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
-            onProgressUpdate?(progress)
+            reportProgress(progress)
 
             let key = localRecord.storageKey
             guard let remoteRecord = remoteByID[key] else {
@@ -1063,7 +1070,7 @@ final class SyncCoordinator {
 
         for (index, localRecord) in localRecords.enumerated() {
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart) * 0.8
-            onProgressUpdate?(progress)
+            reportProgress(progress)
 
             let remoteVersion = remoteByKey[localRecord.storageKey]?.syncVersion ?? 0
             let prepared = localRecord.preparedForMutation(
@@ -1104,7 +1111,7 @@ final class SyncCoordinator {
         for (index, localRecord) in localOnly.enumerated() {
             try Task.checkCancellation()
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
-            onProgressUpdate?(progress)
+            reportProgress(progress)
 
             try await ensureRemoteCategoryDependenciesExistIfNeeded(
                 for: localRecord,
@@ -1493,7 +1500,7 @@ final class SyncCoordinator {
         )
 
         guard !locallyNewer.isEmpty else {
-            onProgressUpdate?(progressEnd)
+            reportProgress(progressEnd)
             return false
         }
 
@@ -1501,7 +1508,7 @@ final class SyncCoordinator {
         for (index, localRecord) in locallyNewer.enumerated() {
             try Task.checkCancellation()
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
-            onProgressUpdate?(progress)
+            reportProgress(progress)
 
             guard let remoteRecord = remoteByKey[localRecord.storageKey] else { continue }
             _ = try await forcePushLocalRecord(
@@ -1512,7 +1519,7 @@ final class SyncCoordinator {
             )
         }
 
-        onProgressUpdate?(progressEnd)
+        reportProgress(progressEnd)
         return true
     }
 
@@ -1628,7 +1635,7 @@ final class SyncCoordinator {
                 actorUserID: session.user.id
             ),
             title: familyActivityTitle(action: action, resourceType: resourceType),
-            body: familyActivityBody(
+            body: await familyActivityBody(
                 record: record,
                 action: action,
                 resourceType: resourceType,
@@ -1744,11 +1751,11 @@ final class SyncCoordinator {
         action: FamilyActivityNotificationAction,
         resourceType: MistiaFamilyNotificationResourceType,
         actorName: String
-    ) -> String {
+    ) async -> String {
         switch (record, action) {
         case (.transaction(let row), .created):
             let label = row.title.isEmpty ? L10n.shared.sync.mistiasynccoordinator.aTransaction : row.title
-            if let walletName = familyActivityWalletName(for: row.sourceWalletID) {
+            if let walletName = await familyActivityWalletName(for: row.sourceWalletID) {
                 return L10n.shared.sync.mistiasynccoordinator.valueUsedYourValueWalletToCreate(String(describing: actorName), String(describing: walletName), String(describing: label))
             }
             return L10n.shared.sync.mistiasynccoordinator.valueUsedYourWalletToCreateValue(String(describing: actorName), String(describing: label))
@@ -1815,20 +1822,12 @@ final class SyncCoordinator {
         return metadata.filter { !$0.value.isEmpty }
     }
 
-    private func familyActivityWalletName(for walletID: UUID?) -> String? {
+    private func familyActivityWalletName(for walletID: UUID?) async -> String? {
         guard let walletID else {
             return nil
         }
 
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<LedgerWallet>(
-            predicate: #Predicate { $0.id == walletID }
-        )
-        guard let wallet = try? context.fetch(descriptor).first else {
-            return nil
-        }
-        let name = wallet.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? nil : name
+        return try? await persistenceWorker.fetchWalletName(id: walletID)
     }
 
     private func preferredAuthority(
