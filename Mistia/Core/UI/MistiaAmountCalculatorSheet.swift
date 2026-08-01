@@ -83,7 +83,7 @@ struct MistiaAmountCalculatorSheet: View {
     private func displayPanel(metrics: CalculatorSheetMetrics) -> some View {
         VStack(alignment: .trailing, spacing: metrics.displayTextSpacing) {
             Text(expressionText)
-                .font(.system(size: metrics.expressionFontSize, weight: .medium, design: .rounded))
+                .font(.system(size: metrics.expressionFontSize, weight: .medium, design: .rounded).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -91,7 +91,7 @@ struct MistiaAmountCalculatorSheet: View {
                 .accessibilityLabel(L10n.shared.amountCalculator.expression)
 
             Text(resultText)
-                .font(.system(size: metrics.resultFontSize, weight: .bold, design: .rounded))
+                .font(.system(size: metrics.resultFontSize, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(evaluation.canCommit ? .primary : .secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.58)
@@ -102,8 +102,22 @@ struct MistiaAmountCalculatorSheet: View {
         .padding(.vertical, metrics.displayVerticalPadding)
         .frame(height: metrics.displayHeight)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color(UIColor.secondarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(0.25),
+                            Color.primary.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
         )
     }
 
