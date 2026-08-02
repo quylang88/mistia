@@ -141,6 +141,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
   private var shortcutPulseLayer: CAShapeLayer?
   private var wasMenuVisible = false
+  private var draggedFocusedTab: MistiaTab?
+  private var draggedFocusedIndex: Int?
 
   private lazy var quickCreateController = UIHostingController(
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
@@ -289,6 +291,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       tabBarMinimizeBehavior = .never
     }
     applyChromeAppearance()
+    setupTabBarDragGesture()
   }
 
   private func configureQuickCreateButtonIfNeeded() {
@@ -846,11 +849,12 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       ? mistiaDarkModeUnselectedTabTintColor : mistiaLightModeUnselectedTabTintColor
   }
 
-  private func syncTabSymbols(selectedTab: MistiaTab?) {
+  private func syncTabSymbols(selectedTab: MistiaTab?, focusedTab: MistiaTab? = nil) {
+    let activeTab = focusedTab ?? selectedTab
     if #available(iOS 18.0, *) {
       let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
       for tab in MistiaTab.nativeShellTabs {
-        let isSelected = tab == selectedTab
+        let isSelected = tab == activeTab
         let tint = isSelected ? currentSelectedTint : currentUnselectedTint
         cachedRootTabs[tab]?.image = UIImage(
           systemName: tab.systemImage(isSelected: isSelected),
@@ -864,6 +868,162 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
         controller.tabBarItem.selectedImage = UIImage(systemName: tab.selectedSystemImage)
       }
     }
+  }
+
+  private func setupTabBarDragGesture() {
+    let gesture = UILongPressGestureRecognizer(
+      target: self, action: #selector(handleTabBarDragGesture(_:)))
+    gesture.minimumPressDuration = 0
+    gesture.delaysTouchesBegan = false
+    gesture.delegate = self
+    tabBar.addGestureRecognizer(gesture)
+  }
+
+  @objc private func handleTabBarDragGesture(_ gesture: UILongPressGestureRecognizer) {
+    let location = gesture.location(in: tabBar)
+
+    switch gesture.state {
+    case .began:
+      updateFocusedTabForGesture(at: location)
+
+    case .changed:
+      updateFocusedTabForGesture(at: location)
+
+    case .ended:
+      if let focusedTab = draggedFocusedTab {
+        if currentSelectedMistiaTab != focusedTab {
+          currentSelectedMistiaTab = focusedTab
+          if #available(iOS 18.0, *) {
+            if let rootTab = cachedRootTabs[focusedTab] {
+              self.selectedTab = rootTab
+            }
+          } else if let index = MistiaTab.nativeShellTabs.firstIndex(of: focusedTab) {
+            self.selectedIndex = index
+          }
+          chromeDelegate?.nativeTabBarController(self, didSelect: focusedTab)
+        }
+      } else if let focusedIndex = draggedFocusedIndex, focusedIndex == 4, currentShowsShortcutTab {
+        chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
+      }
+
+      clearTabHoverHighlight()
+
+    case .cancelled, .failed:
+      clearTabHoverHighlight()
+
+    default:
+      break
+    }
+  }
+
+  private var orderedTabControls: [UIControl] {
+    tabBar.subviews
+      .compactMap { $0 as? UIControl }
+      .filter { !$0.isHidden && $0.alpha > 0.01 && $0.bounds.width > 10 }
+      .sorted { $0.frame.minX < $1.frame.minX }
+  }
+
+  private func targetIndex(for location: CGPoint) -> Int? {
+    guard tabBar.bounds.contains(CGPoint(x: location.x, y: tabBar.bounds.midY))
+            || (location.y >= -30 && location.y <= tabBar.bounds.height + 30) else {
+      return nil
+    }
+
+    let controls = orderedTabControls
+    let totalCount = currentShowsShortcutTab ? 5 : 4
+
+    if controls.count == totalCount {
+      for (index, control) in controls.enumerated() {
+        let frame = control.frame
+        if location.x >= frame.minX && location.x <= frame.maxX {
+          return index
+        }
+      }
+    }
+
+    guard tabBar.bounds.width > 0 else { return nil }
+    let itemWidth = tabBar.bounds.width / CGFloat(totalCount)
+    let index = min(max(0, Int(location.x / itemWidth)), totalCount - 1)
+    return index
+  }
+
+  private func updateFocusedTabForGesture(at location: CGPoint) {
+    let index = targetIndex(for: location)
+    guard index != draggedFocusedIndex else { return }
+
+    draggedFocusedIndex = index
+    let newFocusedTab = (index != nil && index! < 4) ? MistiaTab.nativeShellTabs[index!] : nil
+    draggedFocusedTab = newFocusedTab
+
+    applyTabHoverHighlight(focusedIndex: index, focusedTab: newFocusedTab)
+  }
+
+  private func applyTabHoverHighlight(focusedIndex: Int?, focusedTab: MistiaTab?) {
+    let activeTab = focusedTab ?? (focusedIndex == nil ? currentSelectedMistiaTab : nil)
+    syncTabSymbols(selectedTab: currentSelectedMistiaTab, focusedTab: activeTab)
+
+    let controls = orderedTabControls
+    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+
+    for (idx, control) in controls.enumerated() {
+      let isFocused = (idx == focusedIndex)
+
+      UIView.animate(
+        withDuration: 0.18,
+        delay: 0,
+        usingSpringWithDamping: 0.75,
+        initialSpringVelocity: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction]
+      ) {
+        control.transform = isFocused ? CGAffineTransform(scaleX: 1.15, y: 1.15) : .identity
+      }
+
+      if idx < 4 {
+        let tab = MistiaTab.nativeShellTabs[idx]
+        let isTabActive = (tab == activeTab)
+        let tint = isTabActive ? currentSelectedTint : currentUnselectedTint
+        let image = UIImage(
+          systemName: tab.systemImage(isSelected: isTabActive),
+          withConfiguration: config
+        )?.mistiaRasterized(with: tint)
+
+        if let imageView = findImageView(in: control) {
+          imageView.image = image
+        }
+      }
+    }
+  }
+
+  private func clearTabHoverHighlight() {
+    draggedFocusedIndex = nil
+    draggedFocusedTab = nil
+
+    let controls = orderedTabControls
+    UIView.animate(
+      withDuration: 0.2,
+      delay: 0,
+      usingSpringWithDamping: 0.85,
+      initialSpringVelocity: 0,
+      options: [.beginFromCurrentState, .allowUserInteraction]
+    ) {
+      for control in controls {
+        control.transform = .identity
+      }
+    }
+
+    syncTabSymbols(selectedTab: currentSelectedMistiaTab)
+  }
+
+  private func findImageView(in view: UIView) -> UIImageView? {
+    if let imageView = view as? UIImageView {
+      return imageView
+    }
+    for subview in view.subviews {
+      if let found = findImageView(in: subview) {
+        return found
+      }
+    }
+    return nil
   }
 
   @available(iOS 18.0, *)
@@ -1094,5 +1254,14 @@ extension UIView {
       }
       accumulateDescendantControls(in: subview, result: &result)
     }
+  }
+}
+
+extension MistiaNativeTabBarController: UIGestureRecognizerDelegate {
+  func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+  ) -> Bool {
+    true
   }
 }
