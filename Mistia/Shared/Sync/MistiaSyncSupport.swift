@@ -189,6 +189,27 @@ nonisolated extension SyncConflict {
         ).recordSummary) ?? fallbackRecordSummary(from: remotePayloadJSON)
     }
 
+    var localRecord: MistiaSyncUploadRecord? {
+        try? MistiaSyncUploadRecord.decode(entity: entity, jsonString: localPayloadJSON)
+    }
+
+    var remoteRecord: MistiaSyncUploadRecord? {
+        try? MistiaSyncUploadRecord.decode(entity: entity, jsonString: remotePayloadJSON)
+    }
+
+    var localUpdatedAt: Date? {
+        localRecord?.updatedAt
+    }
+
+    var remoteUpdatedAt: Date? {
+        remoteRecord?.updatedAt
+    }
+
+    var isRemoteNewer: Bool {
+        guard let r = remoteUpdatedAt, let l = localUpdatedAt else { return false }
+        return r > l
+    }
+
     var conflictDifferences: [MistiaSyncConflictDifference] {
         guard
             let localRecord = try? MistiaSyncUploadRecord.decode(entity: entity, jsonString: localPayloadJSON),

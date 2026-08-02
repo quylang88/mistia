@@ -2339,53 +2339,15 @@ private struct ManagementSyncConflictCard: View {
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                 )
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) {
-                        conflictButtons
-                    }
-
-                    VStack(spacing: 10) {
-                        conflictButtons
-                    }
-                }
+                ManagementSyncConflictSegmentedPicker(
+                    conflict: conflict,
+                    accent: accent,
+                    isDisabled: isDisabled,
+                    onResolve: onResolve
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    @ViewBuilder
-    private var conflictButtons: some View {
-        Button {
-            onResolve(.useLocal)
-        } label: {
-            Label(
-                L10n.management.managementauth.syncConflictKeepThisDevice,
-                systemImage: "iphone"
-            )
-            .font(.system(size: 13.5, weight: .bold, design: .rounded))
-            .lineLimit(2)
-            .minimumScaleFactor(0.88)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.glassProminent)
-        .tint(accent)
-        .disabled(isDisabled)
-
-        Button {
-            onResolve(.useRemote)
-        } label: {
-            Label(
-                L10n.management.managementauth.syncConflictKeepCloud,
-                systemImage: "icloud"
-            )
-            .font(.system(size: 13.5, weight: .bold, design: .rounded))
-            .lineLimit(2)
-            .minimumScaleFactor(0.88)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.glass)
-        .tint(accent)
-        .disabled(isDisabled)
     }
 
     private var cardTint: Color {
@@ -2402,6 +2364,159 @@ private struct ManagementSyncConflictCard: View {
 
     private var iconTileBorder: Color {
         colorScheme == .dark ? Color.white.opacity(0.08) : Color.clear
+    }
+}
+
+private struct ManagementSyncConflictSegmentedPicker: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let conflict: SyncConflict
+    let accent: Color
+    let isDisabled: Bool
+    let onResolve: (MistiaSyncConflictResolution) -> Void
+
+    @State private var selectedResolution: MistiaSyncConflictResolution
+
+    init(
+        conflict: SyncConflict,
+        accent: Color,
+        isDisabled: Bool,
+        onResolve: @escaping (MistiaSyncConflictResolution) -> Void
+    ) {
+        self.conflict = conflict
+        self.accent = accent
+        self.isDisabled = isDisabled
+        self.onResolve = onResolve
+        _selectedResolution = State(initialValue: conflict.isRemoteNewer ? .useRemote : .useLocal)
+    }
+
+    private var localTimeString: String {
+        guard let date = conflict.localUpdatedAt else { return "" }
+        return MistiaDateFormatting.dateTimeString(for: date)
+    }
+
+    private var remoteTimeString: String {
+        guard let date = conflict.remoteUpdatedAt else { return "" }
+        return MistiaDateFormatting.dateTimeString(for: date)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 4) {
+                // Segment 1: Local
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        selectedResolution = .useLocal
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "iphone")
+                            .font(.system(size: 13, weight: .bold))
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Text(L10n.management.managementauth.syncConflictKeepThisDevice)
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .lineLimit(1)
+
+                                if !conflict.isRemoteNewer {
+                                    Text(L10n.management.managementauth.newer)
+                                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1.5)
+                                        .background(MistiaAccent.mint.color, in: Capsule())
+                                }
+                            }
+
+                            if !localTimeString.isEmpty {
+                                Text(localTimeString)
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(selectedResolution == .useLocal ? .primary : .secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 6)
+                    .background(
+                        selectedResolution == .useLocal
+                            ? (colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white)
+                            : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .shadow(color: selectedResolution == .useLocal ? .black.opacity(0.08) : .clear, radius: 4, y: 2)
+                }
+                .buttonStyle(.plain)
+
+                // Segment 2: Remote
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        selectedResolution = .useRemote
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "icloud.fill")
+                            .font(.system(size: 13, weight: .bold))
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Text(L10n.management.managementauth.syncConflictKeepCloud)
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .lineLimit(1)
+
+                                if conflict.isRemoteNewer {
+                                    Text(L10n.management.managementauth.newer)
+                                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1.5)
+                                        .background(MistiaAccent.mint.color, in: Capsule())
+                                }
+                            }
+
+                            if !remoteTimeString.isEmpty {
+                                Text(remoteTimeString)
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(selectedResolution == .useRemote ? .primary : .secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 6)
+                    .background(
+                        selectedResolution == .useRemote
+                            ? (colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white)
+                            : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .shadow(color: selectedResolution == .useRemote ? .black.opacity(0.08) : .clear, radius: 4, y: 2)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(3)
+            .background(
+                Color(UIColor.tertiarySystemFill),
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+
+            Button {
+                onResolve(selectedResolution)
+            } label: {
+                Text(selectedResolution == .useLocal ? L10n.management.managementauth.syncConflictKeepThisDevice : L10n.management.managementauth.syncConflictKeepCloud)
+                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(isDisabled)
+            .opacity(isDisabled ? 0.55 : 1)
+        }
     }
 }
 
@@ -2720,8 +2835,11 @@ private struct ManagementDataConflictsView: View {
                 VStack(spacing: 20) {
                     ManagementConflictReviewSummaryCard(
                         count: activeConflicts.count,
-                        accent: accent
-                    )
+                        accent: accent,
+                        isDisabled: !sessionStore.canPerformRemoteActions
+                    ) {
+                        applyNewestToAll()
+                    }
 
                     ForEach(conflictSections) { section in
                         VStack(alignment: .leading, spacing: 12) {
@@ -2749,6 +2867,15 @@ private struct ManagementDataConflictsView: View {
             }
         }
     }
+
+    private func applyNewestToAll() {
+        Task {
+            for conflict in activeConflicts {
+                let resolution: MistiaSyncConflictResolution = conflict.isRemoteNewer ? .useRemote : .useLocal
+                await sessionStore.resolveSyncConflict(id: conflict.id, resolution: resolution)
+            }
+        }
+    }
 }
 
 private struct ManagementConflictReviewSummaryCard: View {
@@ -2756,40 +2883,68 @@ private struct ManagementConflictReviewSummaryCard: View {
 
     let count: Int
     let accent: Color
+    let isDisabled: Bool
+    let onApplyNewestToAll: () -> Void
 
     var body: some View {
         MistiaGlassCard(cornerRadius: 20, tint: cardTint) {
-            HStack(alignment: .center, spacing: 13) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(iconFill)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 13) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(iconFill)
 
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 17, weight: .bold))
+                        Image(systemName: "arrow.triangle.2.circlepath.icloud")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(accent)
+                    }
+                    .frame(width: 44, height: 44)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.management.managementauth.syncConflictReviewTitle)
+                            .font(.system(size: 16.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text(L10n.management.managementauth.syncConflictReviewSubtitle)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text(verbatim: "\(count)")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(accent, in: Capsule())
+                }
+
+                if count >= 1 {
+                    Button {
+                        onApplyNewestToAll()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 13, weight: .bold))
+
+                            Text(L10n.management.managementauth.applyNewestToAll)
+                                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        }
                         .foregroundStyle(accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            accent.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isDisabled)
+                    .opacity(isDisabled ? 0.55 : 1)
                 }
-                .frame(width: 42, height: 42)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.management.managementauth.syncConflictReviewTitle)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text(L10n.management.managementauth.syncConflictReviewSubtitle)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                Text(verbatim: "\(count)")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(accent, in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
