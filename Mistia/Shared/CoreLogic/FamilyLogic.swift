@@ -1041,7 +1041,7 @@ nonisolated enum FamilyLogic {
         if let reportingIncomeMinor = transaction.reportingIncomeMinor {
             return reportingIncomeMinor
         }
-        return transaction.kind == .income ? transaction.amountMinor : 0
+        return (transaction.kind == .income && !transaction.isAdjustment) ? transaction.amountMinor : 0
     }
 
     nonisolated private static func isDebtReportingTransfer(

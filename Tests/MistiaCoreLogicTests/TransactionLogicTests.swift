@@ -1094,6 +1094,38 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeMinor, 0)
     }
 
+    func testBalanceAdjustmentIsAdjustmentWithTitleOrCategoryID() {
+        let now = Date()
+        let expenseAdjustment = makeRecord(
+            primaryKind: .expense,
+            title: "Điều chỉnh số dư",
+            amountMinor: 50_000,
+            occurredAt: now,
+            categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+        )
+        let incomeAdjustment = makeRecord(
+            primaryKind: .income,
+            title: "Balance adjustment",
+            amountMinor: 100_000,
+            occurredAt: now,
+            categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+        )
+        let customCategoryAdjustment = makeRecord(
+            primaryKind: .income,
+            title: "Điều chỉnh số dư",
+            amountMinor: 200_000,
+            occurredAt: now,
+            categoryID: UUID()
+        )
+
+        XCTAssertTrue(TransactionLogic.isAdjustment(expenseAdjustment))
+        XCTAssertTrue(TransactionLogic.isAdjustment(incomeAdjustment))
+        XCTAssertTrue(TransactionLogic.isAdjustment(customCategoryAdjustment))
+
+        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: expenseAdjustment), 0)
+        XCTAssertEqual(TransactionLogic.reportedIncomeAmount(for: incomeAdjustment), 0)
+    }
+
     func testExpenseFiltersCombineTypeTimeWalletCategoryAmountStatusAndSearch() {
         let walletID = UUID()
         let otherWalletID = UUID()

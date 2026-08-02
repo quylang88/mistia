@@ -19,6 +19,10 @@ nonisolated enum TransactionGeneratedTitle {
         L10n.transactions.generatedTitle.balanceAdjustment(language: language)
     }
 
+    static func isBalanceAdjustmentTitle(_ title: String) -> Bool {
+        isKnownGeneratedTitle(title, titleProvider: balanceAdjustment(language:))
+    }
+
     static func debt(_ intent: TransactionDebtIntent, language: MistiaAppLanguage = .current) -> String {
         intent.title(language: language)
     }

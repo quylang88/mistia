@@ -296,8 +296,7 @@ struct TransactionEditorSheet: View {
     @State private var alertMessage: String?
     private var isAdjustment: Bool {
         if let transaction = target.transaction {
-            return transaction.category?.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
-                   transaction.category?.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+            return TransactionLogic.isAdjustment(transaction)
         }
         return false
     }

@@ -1677,12 +1677,15 @@ struct ManagementBalanceAdjustmentSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Query private var storedCategories: [TransactionCategory]
     @Query private var storedWallets: [LedgerWallet]
+    @Query private var storedTransactions: [LedgerTransaction]
 
     let wallet: LedgerWallet
     let currentBalance: Int64
 
     @State private var newBalanceText: String = ""
     @State private var reason: String = ""
+    @State private var selectedCategory: TransactionCategory?
+    @State private var showsCategoryPicker = false
     @State private var showsConfirmation = false
 
     init(wallet: LedgerWallet, currentBalance: Int64) {
@@ -1691,11 +1694,28 @@ struct ManagementBalanceAdjustmentSheet: View {
         _newBalanceText = State(initialValue: "\(currentBalance)")
     }
 
+    private var newBalance: Int64 {
+        newBalanceText.currencyInputToMinorUnits(currencyCode: wallet.currencyCode)
+    }
+
+    private var balanceDiff: Int64 {
+        newBalance - currentBalance
+    }
+
+    private var isIncomeAdjustment: Bool {
+        balanceDiff > 0
+    }
+
+    private var categoryLabelText: String {
+        selectedCategory?.localizedDisplayName ?? L10n.transactions.transactioneditor.chooseCategory
+    }
+
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
         MistiaDismissGuardConfiguration(
             mode: .creating,
-            hasUnsavedChanges: newBalanceText != "\(currentBalance)"
+            hasUnsavedChanges: balanceDiff != 0
                 || !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || selectedCategory != nil
         )
     }
 
@@ -1710,6 +1730,26 @@ struct ManagementBalanceAdjustmentSheet: View {
                     )
                 }
 
+                Section {
+                    Button {
+                        showsCategoryPicker = true
+                    } label: {
+                        HStack {
+                            Text(L10n.transactions.transactioneditor.category)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(categoryLabelText)
+                                .foregroundStyle(selectedCategory == nil ? .tertiary : .secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                    .disabled(balanceDiff == 0)
+                    .opacity(balanceDiff == 0 ? 0.6 : 1.0)
+                }
+
                 Section(L10n.management.management.adjustmentReason) {
                     TextField(L10n.management.management.eGAuditError, text: $reason, axis: .vertical)
                         .lineLimit(3...5)
@@ -1719,6 +1759,14 @@ struct ManagementBalanceAdjustmentSheet: View {
             .dismissKeyboardOnTap()
             .navigationTitle(L10n.management.management.balanceAdjustment2)
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: newBalanceText) { _, _ in
+                let diff = balanceDiff
+                if diff == 0 {
+                    selectedCategory = nil
+                } else if let cat = selectedCategory, cat.kind != (diff > 0 ? .income : .expense) {
+                    selectedCategory = nil
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
@@ -1730,7 +1778,29 @@ struct ManagementBalanceAdjustmentSheet: View {
                     Button(L10n.common.save) {
                         showsConfirmation = true
                     }
-                    .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(balanceDiff == 0 || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .sheet(isPresented: $showsCategoryPicker) {
+                let isIncome = isIncomeAdjustment
+                let targetKind: TransactionCategoryKind = isIncome ? .income : .expense
+                let sections = MistiaCategoryHierarchy.groupedSections(from: storedCategories, kind: targetKind)
+                let recent = MistiaCategoryPickerSupport.recentCategories(from: storedTransactions, categories: storedCategories, kind: targetKind)
+                let favorite = MistiaCategoryPickerSupport.favoriteCategories(from: storedCategories, kind: targetKind)
+                MistiaCategoryPickerSheet(
+                    title: isIncome
+                        ? L10n.management.balanceEditor.categoryPickerTitleIncome
+                        : L10n.management.balanceEditor.categoryPickerTitleExpense,
+                    selectedCategoryID: selectedCategory?.id,
+                    sections: sections,
+                    recentCategories: recent,
+                    favoriteCategories: favorite,
+                    allowsParentSelectionInAll: false,
+                    allModeSubtitle: { _ in nil },
+                    quickModeSubtitle: { _ in nil }
+                ) { category in
+                    selectedCategory = category
+                    showsCategoryPicker = false
                 }
             }
             .alert(L10n.management.management.notice, isPresented: $showsConfirmation) {
@@ -1746,9 +1816,7 @@ struct ManagementBalanceAdjustmentSheet: View {
     }
 
     private func save() {
-        let newBalance = newBalanceText.currencyInputToMinorUnits(currencyCode: wallet.currencyCode)
-        
-        let diff = newBalance - currentBalance
+        let diff = balanceDiff
         guard diff != 0 else {
             dismiss()
             return
@@ -1757,8 +1825,13 @@ struct ManagementBalanceAdjustmentSheet: View {
         let isIncome = diff > 0
         let absDiff = abs(diff)
 
-        let categoryID = isIncome ? MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID : MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
-        let category = storedCategories.first(where: { $0.id == categoryID })
+        let category: TransactionCategory?
+        if let selectedCategory, selectedCategory.kind == (isIncome ? .income : .expense) {
+            category = selectedCategory
+        } else {
+            let categoryID = isIncome ? MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID : MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+            category = storedCategories.first(where: { $0.id == categoryID })
+        }
 
         let transaction = LedgerTransaction(
             primaryKind: isIncome ? .income : .expense,

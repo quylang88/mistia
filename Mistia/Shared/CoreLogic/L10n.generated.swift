@@ -692,6 +692,10 @@ nonisolated enum L10n {
             static func availableCreditPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.availableCreditPlaceholder", vi: "Nhập số tiền khả dụng", en: "Enter available credit", ja: "利用可能額を入力", language: language) }
             static var availableCreditTitle: String { L10n.tr("management.balanceEditor.availableCreditTitle", vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額") }
             static func availableCreditTitle(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.availableCreditTitle", vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額", language: language) }
+            static var categoryPickerTitleExpense: String { L10n.tr("management.balanceEditor.categoryPickerTitleExpense", vi: "Chọn danh mục chi tiêu", en: "Select expense category", ja: "支出カテゴリを選択") }
+            static func categoryPickerTitleExpense(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.categoryPickerTitleExpense", vi: "Chọn danh mục chi tiêu", en: "Select expense category", ja: "支出カテゴリを選択", language: language) }
+            static var categoryPickerTitleIncome: String { L10n.tr("management.balanceEditor.categoryPickerTitleIncome", vi: "Chọn danh mục thu nhập", en: "Select income category", ja: "収入カテゴリを選択") }
+            static func categoryPickerTitleIncome(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.categoryPickerTitleIncome", vi: "Chọn danh mục thu nhập", en: "Select income category", ja: "収入カテゴリを選択", language: language) }
             static var currentBalancePlaceholder: String { L10n.tr("management.balanceEditor.currentBalancePlaceholder", vi: "Nhập số dư hiện tại", en: "Enter current balance", ja: "現在の残高を入力") }
             static func currentBalancePlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.currentBalancePlaceholder", vi: "Nhập số dư hiện tại", en: "Enter current balance", ja: "現在の残高を入力", language: language) }
         }

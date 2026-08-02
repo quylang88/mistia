@@ -6280,6 +6280,50 @@
         }
       }
     },
+    "management.balanceEditor.categoryPickerTitleExpense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select expense category"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支出カテゴリを選択"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn danh mục chi tiêu"
+          }
+        }
+      }
+    },
+    "management.balanceEditor.categoryPickerTitleIncome" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select income category"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "収入カテゴリを選択"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn danh mục thu nhập"
+          }
+        }
+      }
+    },
     "management.categoryEditor.editTitle" : {
       "extractionState" : "stale",
       "localizations" : {

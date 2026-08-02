@@ -1238,9 +1238,38 @@ nonisolated enum TransactionLogic {
         return collapsed.lowercased()
     }
 
+    static func isAdjustment(
+        categoryID: UUID?,
+        categorySystemKey: String? = nil,
+        title: String? = nil
+    ) -> Bool {
+        if categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+           categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID {
+            return true
+        }
+        if categorySystemKey == MistiaSystemCategoryKey.balanceAdjustmentExpense.rawValue ||
+           categorySystemKey == MistiaSystemCategoryKey.balanceAdjustmentIncome.rawValue {
+            return true
+        }
+        if let title = title, TransactionGeneratedTitle.isBalanceAdjustmentTitle(title) {
+            return true
+        }
+        return false
+    }
+
     static func isAdjustment(_ record: TransactionRecordSnapshot) -> Bool {
-        record.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
-        record.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+        isAdjustment(
+            categoryID: record.categoryID,
+            title: record.title
+        )
+    }
+
+    static func isAdjustment(_ transaction: LedgerTransaction) -> Bool {
+        isAdjustment(
+            categoryID: transaction.category?.id,
+            categorySystemKey: transaction.category?.systemKey,
+            title: transaction.title
+        )
     }
 
     static func isInstallmentPayment(_ record: TransactionRecordSnapshot) -> Bool {
@@ -1295,6 +1324,10 @@ nonisolated enum TransactionLogic {
             && !isInstallmentPayment(record)
     }
 
+    static func isIncomeEarning(_ record: TransactionRecordSnapshot) -> Bool {
+        record.primaryKind == .income && !isAdjustment(record)
+    }
+
     static func reportedExpenseAmount(for record: TransactionRecordSnapshot) -> Int64 {
         if let reportingExpenseMinor = record.reportingExpenseMinor {
             return reportingExpenseMinor
@@ -1311,7 +1344,7 @@ nonisolated enum TransactionLogic {
         if let reportingIncomeMinor = record.reportingIncomeMinor {
             return reportingIncomeMinor
         }
-        return record.primaryKind == .income ? record.amountMinor : 0
+        return isIncomeEarning(record) ? record.amountMinor : 0
     }
 
     private static func isDebtReportingRecord(_ record: TransactionRecordSnapshot) -> Bool {
