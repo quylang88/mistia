@@ -73,10 +73,10 @@
 			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXNativeTarget "Mistia" */;
 			buildPhases = (
 				A10000000000000000000020 /* Generate L10n */,
-				A10000000000000000000021 /* Update Build Number */,
 				A10000000000000000000009 /* Sources */,
 				A10000000000000000000003 /* Frameworks */,
 				A10000000000000000000008 /* Resources */,
+				A10000000000000000000021 /* Update Build Number */,
 			);
 			buildRules = (
 			);
