@@ -696,6 +696,8 @@ nonisolated enum L10n {
             static func categoryPickerTitleExpense(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.categoryPickerTitleExpense", vi: "Chọn danh mục chi tiêu", en: "Select expense category", ja: "支出カテゴリを選択", language: language) }
             static var categoryPickerTitleIncome: String { L10n.tr("management.balanceEditor.categoryPickerTitleIncome", vi: "Chọn danh mục thu nhập", en: "Select income category", ja: "収入カテゴリを選択") }
             static func categoryPickerTitleIncome(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.categoryPickerTitleIncome", vi: "Chọn danh mục thu nhập", en: "Select income category", ja: "収入カテゴリを選択", language: language) }
+            static var categorySectionTitle: String { L10n.tr("management.balanceEditor.categorySectionTitle", vi: "Tính vào danh mục", en: "Assign to category", ja: "カテゴリに割り当て") }
+            static func categorySectionTitle(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.categorySectionTitle", vi: "Tính vào danh mục", en: "Assign to category", ja: "カテゴリに割り当て", language: language) }
             static var currentBalancePlaceholder: String { L10n.tr("management.balanceEditor.currentBalancePlaceholder", vi: "Nhập số dư hiện tại", en: "Enter current balance", ja: "現在の残高を入力") }
             static func currentBalancePlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("management.balanceEditor.currentBalancePlaceholder", vi: "Nhập số dư hiện tại", en: "Enter current balance", ja: "現在の残高を入力", language: language) }
         }

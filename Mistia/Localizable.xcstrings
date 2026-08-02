@@ -6280,6 +6280,28 @@
         }
       }
     },
+    "management.balanceEditor.categorySectionTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assign to category"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カテゴリに割り当て"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tính vào danh mục"
+          }
+        }
+      }
+    },
     "management.balanceEditor.categoryPickerTitleExpense" : {
       "localizations" : {
         "en" : {

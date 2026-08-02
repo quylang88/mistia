@@ -1730,7 +1730,7 @@ struct ManagementBalanceAdjustmentSheet: View {
                     )
                 }
 
-                Section {
+                Section(L10n.management.balanceEditor.categorySectionTitle) {
                     Button {
                         showsCategoryPicker = true
                     } label: {
