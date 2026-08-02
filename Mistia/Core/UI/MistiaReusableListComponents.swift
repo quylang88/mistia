@@ -87,7 +87,7 @@ struct MistiaSectionFooter<Content: View>: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, isFormSection ? 0 : 16)
-            .padding(.top, isFormSection ? 4 : 6)
+            .padding(.top, isFormSection ? 4 : 0)
     }
 }
 
