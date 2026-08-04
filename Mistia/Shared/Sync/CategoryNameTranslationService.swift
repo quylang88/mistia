@@ -290,39 +290,22 @@ enum CategoryNameTranslationMaintenance {
         modelContext: ModelContext,
         limit: Int
     ) -> [TransactionCategory] {
-        let pendingDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.pendingTranslationSourceName != nil
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
+        func makeDescriptor(where predicate: Predicate<TransactionCategory>) -> FetchDescriptor<TransactionCategory> {
+            FetchDescriptor<TransactionCategory>(
+                predicate: predicate,
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+            )
+        }
 
-        let missingEngDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.nameEnglish == nil
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-
-        let missingJpnDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.nameJapanese == nil
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-
-        let pendingList = (try? modelContext.fetch(pendingDescriptor)) ?? []
-        let missingEngList = (try? modelContext.fetch(missingEngDescriptor)) ?? []
-        let missingJpnList = (try? modelContext.fetch(missingJpnDescriptor)) ?? []
+        let pendingList = (try? modelContext.fetch(makeDescriptor(where: #Predicate {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.pendingTranslationSourceName != nil
+        }))) ?? []
+        let missingEngList = (try? modelContext.fetch(makeDescriptor(where: #Predicate {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.nameEnglish == nil
+        }))) ?? []
+        let missingJpnList = (try? modelContext.fetch(makeDescriptor(where: #Predicate {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.nameJapanese == nil
+        }))) ?? []
 
         var seenIDs = Set<UUID>()
         var results: [TransactionCategory] = []

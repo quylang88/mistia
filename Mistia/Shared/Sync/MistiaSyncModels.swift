@@ -1967,128 +1967,92 @@ extension MistiaSyncConflictKind {
 }
 
 extension JSONDecoder {
-    nonisolated static var mistiaSyncDecoder: JSONDecoder {
-        let cacheKey = "MistiaSyncJSONDecoder.mistiaSyncDecoder"
-        let threadDictionary = Thread.current.threadDictionary
-        if let cached = threadDictionary[cacheKey] as? JSONDecoder {
-            return cached
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let value = try container.decode(String.self)
-            if let date = MistiaISO8601DateCoding.date(from: value) {
-                return date
-            }
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Invalid ISO8601 date: \(value)"
-            )
-        }
-        threadDictionary[cacheKey] = decoder
+    fileprivate static func threadCached(key: String, configure: () -> JSONDecoder) -> JSONDecoder {
+        let threadDict = Thread.current.threadDictionary
+        if let cached = threadDict[key] as? JSONDecoder { return cached }
+        let decoder = configure()
+        threadDict[key] = decoder
         return decoder
+    }
+
+    nonisolated static var mistiaSyncDecoder: JSONDecoder {
+        threadCached(key: "MistiaSyncJSONDecoder.mistiaSyncDecoder") {
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let value = try container.decode(String.self)
+                if let date = MistiaISO8601DateCoding.date(from: value) {
+                    return date
+                }
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid ISO8601 date: \(value)"
+                )
+            }
+            return decoder
+        }
     }
 
     static var mistiaBackupDecoder: JSONDecoder {
-        let cacheKey = "MistiaSyncJSONDecoder.mistiaBackupDecoder"
-        let threadDictionary = Thread.current.threadDictionary
-        if let cached = threadDictionary[cacheKey] as? JSONDecoder {
-            return cached
-        }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let value = try container.decode(String.self)
-            if let date = MistiaISO8601DateCoding.date(from: value) {
-                return date
+        threadCached(key: "MistiaSyncJSONDecoder.mistiaBackupDecoder") {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let value = try container.decode(String.self)
+                if let date = MistiaISO8601DateCoding.date(from: value) {
+                    return date
+                }
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid ISO8601 date: \(value)"
+                )
             }
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Invalid ISO8601 date: \(value)"
-            )
+            return decoder
         }
-        threadDictionary[cacheKey] = decoder
-        return decoder
     }
 
     nonisolated static var mistiaRemoteAPIDecoder: JSONDecoder {
-        let cacheKey = "MistiaSyncJSONDecoder.mistiaRemoteAPIDecoder"
-        let threadDictionary = Thread.current.threadDictionary
-        if let cached = threadDictionary[cacheKey] as? JSONDecoder {
-            return cached
-        }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let value = try container.decode(String.self)
-            if let date = MistiaISO8601DateCoding.date(from: value) {
-                return date
-            }
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Invalid ISO8601 date: \(value)"
-            )
-        }
-        threadDictionary[cacheKey] = decoder
-        return decoder
+        mistiaBackupDecoder
     }
 }
 
 extension JSONEncoder {
-    nonisolated static var mistiaSyncEncoder: JSONEncoder {
-        let cacheKey = "MistiaSyncJSONEncoder.mistiaSyncEncoder"
-        let threadDictionary = Thread.current.threadDictionary
-        if let cached = threadDictionary[cacheKey] as? JSONEncoder {
-            return cached
-        }
-
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.dateEncodingStrategy = .custom { date, encoder in
-            var container = encoder.singleValueContainer()
-            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
-        }
-        threadDictionary[cacheKey] = encoder
+    fileprivate static func threadCached(key: String, configure: () -> JSONEncoder) -> JSONEncoder {
+        let threadDict = Thread.current.threadDictionary
+        if let cached = threadDict[key] as? JSONEncoder { return cached }
+        let encoder = configure()
+        threadDict[key] = encoder
         return encoder
+    }
+
+    nonisolated static var mistiaSyncEncoder: JSONEncoder {
+        threadCached(key: "MistiaSyncJSONEncoder.mistiaSyncEncoder") {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.outputFormatting = [.sortedKeys]
+            encoder.dateEncodingStrategy = .custom { date, encoder in
+                var container = encoder.singleValueContainer()
+                try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
+            }
+            return encoder
+        }
     }
 
     nonisolated static var mistiaBackupEncoder: JSONEncoder {
-        let cacheKey = "MistiaSyncJSONEncoder.mistiaBackupEncoder"
-        let threadDictionary = Thread.current.threadDictionary
-        if let cached = threadDictionary[cacheKey] as? JSONEncoder {
-            return cached
+        threadCached(key: "MistiaSyncJSONEncoder.mistiaBackupEncoder") {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            encoder.dateEncodingStrategy = .custom { date, encoder in
+                var container = encoder.singleValueContainer()
+                try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
+            }
+            return encoder
         }
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.dateEncodingStrategy = .custom { date, encoder in
-            var container = encoder.singleValueContainer()
-            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
-        }
-        threadDictionary[cacheKey] = encoder
-        return encoder
     }
 
     static var mistiaRemoteAPIEncoder: JSONEncoder {
-        let cacheKey = "MistiaSyncJSONEncoder.mistiaRemoteAPIEncoder"
-        let threadDictionary = Thread.current.threadDictionary
-        if let cached = threadDictionary[cacheKey] as? JSONEncoder {
-            return cached
-        }
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.dateEncodingStrategy = .custom { date, encoder in
-            var container = encoder.singleValueContainer()
-            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
-        }
-        threadDictionary[cacheKey] = encoder
-        return encoder
+        mistiaBackupEncoder
     }
 }
 
