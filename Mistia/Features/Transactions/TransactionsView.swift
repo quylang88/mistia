@@ -362,8 +362,10 @@ struct TransactionsView: View {
 
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived }, sort: \LedgerTransaction.occurredAt, order: .reverse)
     private var storedTransactions: [LedgerTransaction]
-    @Query private var storedWallets: [LedgerWallet]
-    @Query private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    private var storedWallets: [LedgerWallet]
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil }, sort: \SettlementGroup.occurredAt, order: .reverse)
     private var storedSettlementGroups: [SettlementGroup]
     @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)

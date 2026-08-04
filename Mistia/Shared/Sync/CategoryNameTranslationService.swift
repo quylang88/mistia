@@ -290,25 +290,50 @@ enum CategoryNameTranslationMaintenance {
         modelContext: ModelContext,
         limit: Int
     ) -> [TransactionCategory] {
-        let descriptor = FetchDescriptor<TransactionCategory>(
+        let pendingDescriptor = FetchDescriptor<TransactionCategory>(
             predicate: #Predicate { category in
                 category.deletedAt == nil
                     && category.isArchived == false
                     && category.isSystem == false
+                    && category.pendingTranslationSourceName != nil
             },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
 
-        let fetched = (try? modelContext.fetch(descriptor)) ?? []
-        let candidates = fetched.filter { category in
-            category.pendingTranslationSourceName != nil
-                || category.nameEnglish == nil
-                || category.nameEnglish == ""
-                || category.nameJapanese == nil
-                || category.nameJapanese == ""
+        let missingEngDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.nameEnglish == nil
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+
+        let missingJpnDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.nameJapanese == nil
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+
+        let pendingList = (try? modelContext.fetch(pendingDescriptor)) ?? []
+        let missingEngList = (try? modelContext.fetch(missingEngDescriptor)) ?? []
+        let missingJpnList = (try? modelContext.fetch(missingJpnDescriptor)) ?? []
+
+        var seenIDs = Set<UUID>()
+        var results: [TransactionCategory] = []
+        for cat in pendingList + missingEngList + missingJpnList {
+            if cat.needsCategoryNameTranslationRetry, seenIDs.insert(cat.id).inserted {
+                results.append(cat)
+                if results.count >= limit { break }
+            }
         }
 
-        return Array(candidates.prefix(limit))
+        return results
     }
 }
 

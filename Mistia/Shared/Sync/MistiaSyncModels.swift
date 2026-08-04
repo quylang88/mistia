@@ -44,7 +44,7 @@ nonisolated enum MistiaISO8601DateCoding {
         ).string(from: date)
     }
 
-    private static func formatter(
+    fileprivate static func formatter(
         cacheKey: String,
         formatOptions: ISO8601DateFormatter.Options
     ) -> ISO8601DateFormatter {
@@ -2052,17 +2052,17 @@ extension JSONEncoder {
 
 extension ISO8601DateFormatter {
     static var mistiaSyncWithFractionalSeconds: ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        formatter.timeZone = .gmt
-        return formatter
+        MistiaISO8601DateCoding.formatter(
+            cacheKey: "MistiaSyncISO8601WithFractionalSecondsFormatter",
+            formatOptions: [.withInternetDateTime, .withFractionalSeconds]
+        )
     }
 
     static var mistiaSyncWithoutFractionalSeconds: ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        formatter.timeZone = .gmt
-        return formatter
+        MistiaISO8601DateCoding.formatter(
+            cacheKey: "MistiaSyncISO8601WithoutFractionalSecondsFormatter",
+            formatOptions: [.withInternetDateTime]
+        )
     }
 
     static var mistiaRemoteAPI: ISO8601DateFormatter {
