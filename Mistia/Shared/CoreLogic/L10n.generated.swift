@@ -2596,8 +2596,8 @@ nonisolated enum L10n {
             static func categoryFeature(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryFeature", vi: "Góp ý tính năng", en: "Feature Request", ja: "機能リクエスト", language: language) }
             static var categoryGeneral: String { L10n.tr("settings.feedback.categoryGeneral", vi: "Ý kiến chung", en: "General Feedback", ja: "一般的な意見") }
             static func categoryGeneral(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryGeneral", vi: "Ý kiến chung", en: "General Feedback", ja: "一般的な意見", language: language) }
-            static var categoryTitle: String { L10n.tr("settings.feedback.categoryTitle", vi: "Phân loại feedback", en: "Feedback Category", ja: "フィードバックの分類") }
-            static func categoryTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryTitle", vi: "Phân loại feedback", en: "Feedback Category", ja: "フィードバックの分類", language: language) }
+            static var categoryTitle: String { L10n.tr("settings.feedback.categoryTitle", vi: "Phân loại", en: "Category", ja: "分類") }
+            static func categoryTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryTitle", vi: "Phân loại", en: "Category", ja: "分類", language: language) }
             static var contentPlaceholder: String { L10n.tr("settings.feedback.contentPlaceholder", vi: "Chia sẻ với chúng tôi cảm nhận hoặc vấn đề bạn gặp phải...", en: "Share your thoughts or issues you encountered with us...", ja: "ご意見や遭遇した問題をお聞かせください...") }
             static func contentPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.contentPlaceholder", vi: "Chia sẻ với chúng tôi cảm nhận hoặc vấn đề bạn gặp phải...", en: "Share your thoughts or issues you encountered with us...", ja: "ご意見や遭遇した問題をお聞かせください...", language: language) }
             static var contentTitle: String { L10n.tr("settings.feedback.contentTitle", vi: "Nội dung phản hồi", en: "Feedback Content", ja: "フィードバック内容") }

@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Darwin
 
 struct SendFeedbackView: View {
     @Environment(\.dismiss) private var dismiss
@@ -173,8 +174,18 @@ struct SendFeedbackView: View {
     private var deviceInfoPreview: String {
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let osVersion = UIDevice.current.systemVersion
-        let deviceModel = UIDevice.current.model
-        return "Mistia v\(appVersion) • iOS \(osVersion) • \(deviceModel)"
+        return "Mistia v\(appVersion) • iOS \(osVersion) • \(Self.deviceModelName)"
+    }
+
+    /// Returns the actual device model identifier via sysctlbyname, e.g. "iPhone15,2".
+    /// On simulator it returns the simulated model.
+    static var deviceModelName: String {
+        var size = 0
+        sysctlbyname("hw.machine", nil, &size, nil, 0)
+        var machine = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.machine", &machine, &size, nil, 0)
+        let identifier = String(cString: machine)
+        return identifier.isEmpty ? UIDevice.current.model : identifier
     }
 
     private func submitFeedback() {
@@ -185,7 +196,7 @@ struct SendFeedbackView: View {
             let info: [String: String]? = includeDeviceInfo ? [
                 "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                 "os_version": UIDevice.current.systemVersion,
-                "device_model": UIDevice.current.model
+                "device_model": Self.deviceModelName
             ] : nil
 
             let submission = MistiaFeedbackSubmission(

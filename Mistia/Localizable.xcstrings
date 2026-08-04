@@ -24073,19 +24073,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Feedback Category"
+            "value": "Category"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "フィードバックの分類"
+            "value": "分類"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Phân loại feedback"
+            "value": "Phân loại"
           }
         }
       }
