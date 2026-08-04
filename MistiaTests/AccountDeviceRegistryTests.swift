@@ -24,9 +24,19 @@ final class AccountDeviceRegistryTests: XCTestCase {
             user: SupabaseAuthUser(id: UUID(), email: nil, userMetadata: nil)
         )
 
+        let info = CurrentDeviceInfo(
+            deviceName: "Test",
+            modelIdentifier: "iPhone16,2",
+            modelDisplayName: DeviceModelResolver.marketingName(for: "iPhone16,2"),
+            systemName: "iOS",
+            systemVersion: "18.0",
+            appVersion: "1.0",
+            appBuild: "1"
+        )
+
         let device = MistiaAccountDevice.current(
             session: session,
-            modelIdentifierProvider: { "iPhone16,2" }
+            deviceInfo: info
         )
 
         XCTAssertEqual(device.modelIdentifier, "iPhone16,2")
@@ -42,9 +52,19 @@ final class AccountDeviceRegistryTests: XCTestCase {
             user: SupabaseAuthUser(id: UUID(), email: nil, userMetadata: nil)
         )
 
+        let info = CurrentDeviceInfo(
+            deviceName: "Test",
+            modelIdentifier: "iPhone99,9",
+            modelDisplayName: DeviceModelResolver.marketingName(for: "iPhone99,9"),
+            systemName: "iOS",
+            systemVersion: "18.0",
+            appVersion: "1.0",
+            appBuild: "1"
+        )
+
         let device = MistiaAccountDevice.current(
             session: session,
-            modelIdentifierProvider: { "iPhone99,9" }
+            deviceInfo: info
         )
 
         XCTAssertEqual(device.modelIdentifier, "iPhone99,9")

@@ -1,10 +1,53 @@
 import UIKit
 
-/// Resolves a device's hardware identifier (e.g. "iPhone15,2") to its
-/// marketing name (e.g. "iPhone 14 Pro").
-///
-/// Single source of truth — used by both `MistiaAccountDeviceRegistry`
-/// and `SendFeedbackView`.
+// MARK: - Current Device Info Snapshot
+
+/// Immutable snapshot of the current device's metadata.
+/// Single source of truth — used by `MistiaAccountDeviceRegistry`,
+/// `SendFeedbackView`, and anywhere else that needs device info.
+struct CurrentDeviceInfo: Sendable {
+    let deviceName: String       // User-assigned name, e.g. "Quy's iPhone"
+    let modelIdentifier: String  // Hardware identifier, e.g. "iPhone15,2"
+    let modelDisplayName: String // Marketing name, e.g. "iPhone 14 Pro"
+    let systemName: String       // "iOS"
+    let systemVersion: String    // "18.5"
+    let appVersion: String       // "1.2.3"
+    let appBuild: String         // "42"
+
+    /// Convenience summary for user-facing display.
+    var displaySummary: String {
+        "Mistia v\(appVersion) • \(systemName) \(systemVersion) • \(modelDisplayName)"
+    }
+
+    /// Dictionary payload suitable for API submission.
+    var asDictionary: [String: String] {
+        [
+            "app_version": appVersion,
+            "os_version": systemVersion,
+            "device_model": modelDisplayName,
+        ]
+    }
+
+    static func current(
+        bundle: Bundle = .main,
+        device: UIDevice = .current
+    ) -> CurrentDeviceInfo {
+        let identifier = DeviceModelResolver.currentIdentifier()
+        return CurrentDeviceInfo(
+            deviceName: device.name,
+            modelIdentifier: identifier,
+            modelDisplayName: DeviceModelResolver.marketingName(for: identifier),
+            systemName: device.systemName,
+            systemVersion: device.systemVersion,
+            appVersion: bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            appBuild: bundle.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        )
+    }
+}
+
+// MARK: - Device Model Resolver
+
+/// Resolves hardware identifiers to marketing names.
 enum DeviceModelResolver {
 
     /// Hardware identifier of the current device (e.g. "iPhone15,2").
@@ -25,11 +68,6 @@ enum DeviceModelResolver {
         if identifier.hasPrefix("iPhone") { return "iPhone" }
         let localized = UIDevice.current.localizedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         return localized.isEmpty ? "iPhone" : localized
-    }
-
-    /// Marketing name of the current device.
-    nonisolated static var currentMarketingName: String {
-        marketingName(for: currentIdentifier())
     }
 
     // MARK: - Lookup table

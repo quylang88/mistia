@@ -76,23 +76,19 @@ struct MistiaAccountDevice: Codable, Equatable, Identifiable {
         session: SupabaseAuthSession,
         now: Date = .now,
         deviceID: UUID = MistiaSyncDeviceIdentity.current(),
-        bundle: Bundle = .main,
-        device: UIDevice = .current,
-        modelIdentifierProvider: () -> String = currentModelIdentifier
+        deviceInfo: CurrentDeviceInfo = .current()
     ) -> MistiaAccountDevice {
-        let identifier = modelIdentifierProvider()
-
-        return MistiaAccountDevice(
+        MistiaAccountDevice(
             userID: session.user.id,
             deviceID: deviceID,
             sessionID: sessionID(fromAccessToken: session.accessToken),
-            deviceName: device.name,
-            modelIdentifier: identifier,
-            modelDisplayName: modelDisplayName(for: identifier, fallbackDevice: device),
-            systemName: device.systemName,
-            systemVersion: device.systemVersion,
-            appVersion: bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
-            appBuild: bundle.infoDictionary?["CFBundleVersion"] as? String ?? "",
+            deviceName: deviceInfo.deviceName,
+            modelIdentifier: deviceInfo.modelIdentifier,
+            modelDisplayName: deviceInfo.modelDisplayName,
+            systemName: deviceInfo.systemName,
+            systemVersion: deviceInfo.systemVersion,
+            appVersion: deviceInfo.appVersion,
+            appBuild: deviceInfo.appBuild,
             signedInAt: now,
             lastSeenAt: now,
             signedOutAt: nil,
@@ -132,13 +128,6 @@ struct MistiaAccountDevice: Codable, Equatable, Identifiable {
             && displayName.rangeOfCharacter(from: .decimalDigits) == nil
     }
 
-    static func modelDisplayName(for identifier: String, fallbackDevice device: UIDevice = .current) -> String {
-        DeviceModelResolver.marketingName(for: identifier)
-    }
-
-    nonisolated static func currentModelIdentifier() -> String {
-        DeviceModelResolver.currentIdentifier()
-    }
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"

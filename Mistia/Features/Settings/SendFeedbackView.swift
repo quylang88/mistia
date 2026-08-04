@@ -171,9 +171,7 @@ struct SendFeedbackView: View {
     }
 
     private var deviceInfoPreview: String {
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let osVersion = UIDevice.current.systemVersion
-        return "Mistia v\(appVersion) • iOS \(osVersion) • \(DeviceModelResolver.currentMarketingName)"
+        CurrentDeviceInfo.current().displaySummary
     }
 
     private func submitFeedback() {
@@ -181,11 +179,9 @@ struct SendFeedbackView: View {
         isSubmitting = true
 
         Task {
-            let info: [String: String]? = includeDeviceInfo ? [
-                "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
-                "os_version": UIDevice.current.systemVersion,
-                "device_model": DeviceModelResolver.currentMarketingName
-            ] : nil
+            let info: [String: String]? = includeDeviceInfo
+                ? CurrentDeviceInfo.current().asDictionary
+                : nil
 
             let submission = MistiaFeedbackSubmission(
                 category: selectedCategory,
