@@ -47,6 +47,7 @@ final class FamilyContextStore {
     var isLoading = false
     var isRefreshingLatest = false
     var refreshingMemberUserID: UUID?
+    var isRefreshingViewedMemberFinance: Bool { refreshingMemberUserID != nil }
     var didBootstrap = false
 
     @ObservationIgnored private let service: any FamilyRemoteServicing

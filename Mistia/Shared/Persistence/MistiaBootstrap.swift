@@ -12,6 +12,12 @@ nonisolated struct MistiaBootstrapSyncMutation: Equatable, Sendable {
     let modifiedAt: Date
 }
 
+nonisolated struct MistiaBootstrapDeleteMutation: Equatable, Sendable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+    let modifiedAt: Date
+}
+
 actor MistiaStartupMaintenanceWorker {
     private let modelContainer: ModelContainer
 
@@ -35,17 +41,53 @@ actor MistiaStartupMaintenanceWorker {
             modelContext: context
         )
     }
+
+    func cleanupExpiredArchivedData(
+        signedInUserID: UUID,
+        cleanupProtectionIndex: MistiaArchiveCleanupProtectionIndex
+    ) throws -> [MistiaBootstrapDeleteMutation] {
+        let context = ModelContext(modelContainer)
+        return try MistiaBootstrap.cleanupExpiredArchivedData(
+            modelContext: context,
+            signedInUserID: signedInUserID,
+            cleanupProtectionIndex: cleanupProtectionIndex
+        )
+    }
 }
 
 nonisolated enum MistiaBootstrap {
-    @MainActor
+    @discardableResult
     static func cleanupExpiredArchivedData(
         modelContext: ModelContext,
-        sessionStore: SessionStore
-    ) throws {
-        guard sessionStore.canManageSync,
-              let signedInUserID = sessionStore.signedInUserID else {
-            return
+        signedInUserID: UUID,
+        cleanupProtectionIndex: MistiaArchiveCleanupProtectionIndex
+    ) throws -> [MistiaBootstrapDeleteMutation] {
+        let thresholdDate = MistiaCalendar.current.date(
+            byAdding: .day,
+            value: -MistiaArchiveRetention.retentionDays,
+            to: Date()
+        ) ?? Date()
+
+        var txDescriptor = FetchDescriptor<LedgerTransaction>()
+        txDescriptor.predicate = #Predicate<LedgerTransaction> {
+            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+        }
+        let expiredTransactions = try modelContext.fetch(txDescriptor)
+
+        var walletDescriptor = FetchDescriptor<LedgerWallet>()
+        walletDescriptor.predicate = #Predicate<LedgerWallet> {
+            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+        }
+        let expiredWallets = try modelContext.fetch(walletDescriptor)
+
+        var categoryDescriptor = FetchDescriptor<TransactionCategory>()
+        categoryDescriptor.predicate = #Predicate<TransactionCategory> {
+            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+        }
+        let expiredCategories = try modelContext.fetch(categoryDescriptor)
+
+        guard !expiredTransactions.isEmpty || !expiredWallets.isEmpty || !expiredCategories.isEmpty else {
+            return []
         }
 
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
@@ -53,21 +95,11 @@ nonisolated enum MistiaBootstrap {
             from: ownershipScopes,
             entities: [.transaction, .wallet, .category]
         )
-        let cleanupProtectionIndex = sessionStore.archiveCleanupProtectionIndex()
 
-        let thresholdDate = MistiaCalendar.current.date(
-            byAdding: .day,
-            value: -MistiaArchiveRetention.retentionDays,
-            to: Date()
-        ) ?? Date()
-        
+        var deleteMutations: [MistiaBootstrapDeleteMutation] = []
         var didDelete = false
-        
-        var txDescriptor = FetchDescriptor<LedgerTransaction>()
-        txDescriptor.predicate = #Predicate<LedgerTransaction> {
-            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
-        }
-        for transaction in try modelContext.fetch(txDescriptor) {
+
+        for transaction in expiredTransactions {
             guard MistiaArchiveRetention.canAutomaticallyCleanup(
                 recordOwnerUserID: ownerMaps[.transaction][transaction.id],
                 signedInUserID: signedInUserID
@@ -77,11 +109,11 @@ nonisolated enum MistiaBootstrap {
 
             if transaction.deletedAt == nil {
                 transaction.markDeleted(at: .now)
-                sessionStore.recordDelete(
+                deleteMutations.append(MistiaBootstrapDeleteMutation(
                     entity: .transaction,
                     recordID: transaction.id,
                     modifiedAt: transaction.updatedAt
-                )
+                ))
                 didDelete = true
             } else if cleanupProtectionIndex.canHardPurge(
                 entity: .transaction,
@@ -96,12 +128,8 @@ nonisolated enum MistiaBootstrap {
                 didDelete = true
             }
         }
-        
-        var walletDescriptor = FetchDescriptor<LedgerWallet>()
-        walletDescriptor.predicate = #Predicate<LedgerWallet> {
-            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
-        }
-        for wallet in try modelContext.fetch(walletDescriptor) {
+
+        for wallet in expiredWallets {
             guard MistiaArchiveRetention.canAutomaticallyCleanup(
                 recordOwnerUserID: ownerMaps[.wallet][wallet.id],
                 signedInUserID: signedInUserID
@@ -111,11 +139,11 @@ nonisolated enum MistiaBootstrap {
 
             if wallet.deletedAt == nil {
                 wallet.markDeleted(at: .now)
-                sessionStore.recordDelete(
+                deleteMutations.append(MistiaBootstrapDeleteMutation(
                     entity: .wallet,
                     recordID: wallet.id,
                     modifiedAt: wallet.updatedAt
-                )
+                ))
                 didDelete = true
             } else if cleanupProtectionIndex.canHardPurge(
                 entity: .wallet,
@@ -125,12 +153,8 @@ nonisolated enum MistiaBootstrap {
                 didDelete = true
             }
         }
-        
-        var categoryDescriptor = FetchDescriptor<TransactionCategory>()
-        categoryDescriptor.predicate = #Predicate<TransactionCategory> {
-            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
-        }
-        for category in try modelContext.fetch(categoryDescriptor) {
+
+        for category in expiredCategories {
             guard MistiaArchiveRetention.canAutomaticallyCleanup(
                 recordOwnerUserID: ownerMaps[.category][category.id],
                 signedInUserID: signedInUserID
@@ -140,11 +164,11 @@ nonisolated enum MistiaBootstrap {
 
             if category.deletedAt == nil {
                 category.markDeleted(at: .now)
-                sessionStore.recordDelete(
+                deleteMutations.append(MistiaBootstrapDeleteMutation(
                     entity: .category,
                     recordID: category.id,
                     modifiedAt: category.updatedAt
-                )
+                ))
                 didDelete = true
             } else if cleanupProtectionIndex.canHardPurge(
                 entity: .category,
@@ -154,9 +178,35 @@ nonisolated enum MistiaBootstrap {
                 didDelete = true
             }
         }
-        
+
         if didDelete {
             try modelContext.save()
+        }
+
+        return deleteMutations
+    }
+
+    @MainActor
+    static func cleanupExpiredArchivedData(
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) throws {
+        guard sessionStore.canManageSync,
+              let signedInUserID = sessionStore.signedInUserID else {
+            return
+        }
+        let protectionIndex = sessionStore.archiveCleanupProtectionIndex()
+        let deleteMutations = try cleanupExpiredArchivedData(
+            modelContext: modelContext,
+            signedInUserID: signedInUserID,
+            cleanupProtectionIndex: protectionIndex
+        )
+        for mutation in deleteMutations {
+            sessionStore.recordDelete(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                modifiedAt: mutation.modifiedAt
+            )
         }
     }
 

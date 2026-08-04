@@ -163,13 +163,25 @@ struct MistiaApp: App {
             print("Failed to seed category hierarchy: \(error)")
         }
 
-        do {
-            let context = sessionStore.currentModelContainer.mainContext
-            let signpostID = MistiaPerformanceSignpost.begin("Archive Cleanup")
-            defer { MistiaPerformanceSignpost.end("Archive Cleanup", id: signpostID) }
-            try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context, sessionStore: sessionStore)
-        } catch {
-            print("Failed to clean up expired archived data: \(error)")
+        if sessionStore.canManageSync, let signedInUserID = sessionStore.signedInUserID {
+            do {
+                let signpostID = MistiaPerformanceSignpost.begin("Archive Cleanup")
+                defer { MistiaPerformanceSignpost.end("Archive Cleanup", id: signpostID) }
+                let protectionIndex = sessionStore.archiveCleanupProtectionIndex()
+                let deleteMutations = try await worker.cleanupExpiredArchivedData(
+                    signedInUserID: signedInUserID,
+                    cleanupProtectionIndex: protectionIndex
+                )
+                for mutation in deleteMutations {
+                    sessionStore.recordDelete(
+                        entity: mutation.entity,
+                        recordID: mutation.recordID,
+                        modifiedAt: mutation.modifiedAt
+                    )
+                }
+            } catch {
+                print("Failed to clean up expired archived data: \(error)")
+            }
         }
 
         do {

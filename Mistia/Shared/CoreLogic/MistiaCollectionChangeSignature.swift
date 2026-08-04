@@ -28,6 +28,10 @@ struct MistiaCollectionChangeSignature: Hashable {
         isArchived: KeyPath<Record, Bool>? = nil,
         remoteVersion: KeyPath<Record, Int64>? = nil
     ) -> MistiaCollectionChangeSignature where Records.Element == Record {
+        if let col = records as? any Collection, col.isEmpty {
+            return .empty
+        }
+
         let signpostID = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: "MistiaCollectionChangeSignature.make", signpostID: signpostID)
         defer {
@@ -82,6 +86,10 @@ struct MistiaCollectionChangeSignature: Hashable {
         isArchived: ((Record) -> Bool)? = nil,
         remoteVersion: ((Record) -> Int64)? = nil
     ) -> MistiaCollectionChangeSignature where Records.Element == Record {
+        if let col = records as? any Collection, col.isEmpty {
+            return .empty
+        }
+
         let signpostID = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: "MistiaCollectionChangeSignature.makeClosure", signpostID: signpostID)
         defer {
