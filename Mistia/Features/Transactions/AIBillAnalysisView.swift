@@ -1463,7 +1463,6 @@ struct AIBillAnalysisView: View {
 
 struct AIBillDraft: Identifiable {
     let id = UUID()
-    let image: UIImage
     let thumbnail: UIImage
     let imageData: Data
     let contentType: String
@@ -1475,6 +1474,10 @@ struct AIBillDraft: Identifiable {
     var failureMessage: String?
     var createdAllocations: [String: BillItemQuantityAllocation] = [:]
     var lockedGroups: [BillItemLockedGroup] = []
+
+    var image: UIImage? {
+        UIImage(data: imageData)
+    }
 
     var currencyCode: String {
         result?.currencyCode ?? "JPY"
@@ -1746,7 +1749,6 @@ nonisolated enum AIBillImageProcessor {
         }
 
         return AIBillDraft(
-            image: normalized,
             thumbnail: thumbnail,
             imageData: imageData,
             contentType: "image/jpeg"
