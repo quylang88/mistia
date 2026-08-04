@@ -1968,6 +1968,12 @@ extension MistiaSyncConflictKind {
 
 extension JSONDecoder {
     nonisolated static var mistiaSyncDecoder: JSONDecoder {
+        let cacheKey = "MistiaSyncJSONDecoder.mistiaSyncDecoder"
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? JSONDecoder {
+            return cached
+        }
+
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -1981,10 +1987,17 @@ extension JSONDecoder {
                 debugDescription: "Invalid ISO8601 date: \(value)"
             )
         }
+        threadDictionary[cacheKey] = decoder
         return decoder
     }
 
     static var mistiaBackupDecoder: JSONDecoder {
+        let cacheKey = "MistiaSyncJSONDecoder.mistiaBackupDecoder"
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? JSONDecoder {
+            return cached
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -1997,10 +2010,17 @@ extension JSONDecoder {
                 debugDescription: "Invalid ISO8601 date: \(value)"
             )
         }
+        threadDictionary[cacheKey] = decoder
         return decoder
     }
 
     nonisolated static var mistiaRemoteAPIDecoder: JSONDecoder {
+        let cacheKey = "MistiaSyncJSONDecoder.mistiaRemoteAPIDecoder"
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? JSONDecoder {
+            return cached
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -2013,12 +2033,19 @@ extension JSONDecoder {
                 debugDescription: "Invalid ISO8601 date: \(value)"
             )
         }
+        threadDictionary[cacheKey] = decoder
         return decoder
     }
 }
 
 extension JSONEncoder {
     nonisolated static var mistiaSyncEncoder: JSONEncoder {
+        let cacheKey = "MistiaSyncJSONEncoder.mistiaSyncEncoder"
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? JSONEncoder {
+            return cached
+        }
+
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.outputFormatting = [.sortedKeys]
@@ -2026,26 +2053,41 @@ extension JSONEncoder {
             var container = encoder.singleValueContainer()
             try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
+        threadDictionary[cacheKey] = encoder
         return encoder
     }
 
     nonisolated static var mistiaBackupEncoder: JSONEncoder {
+        let cacheKey = "MistiaSyncJSONEncoder.mistiaBackupEncoder"
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? JSONEncoder {
+            return cached
+        }
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
             try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
+        threadDictionary[cacheKey] = encoder
         return encoder
     }
 
     static var mistiaRemoteAPIEncoder: JSONEncoder {
+        let cacheKey = "MistiaSyncJSONEncoder.mistiaRemoteAPIEncoder"
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? JSONEncoder {
+            return cached
+        }
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
             try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
+        threadDictionary[cacheKey] = encoder
         return encoder
     }
 }
