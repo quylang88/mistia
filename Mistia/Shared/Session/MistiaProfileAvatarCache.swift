@@ -72,8 +72,12 @@ nonisolated enum MistiaProfileAvatarCache {
             return remoteURL
         }
 
-        if let cachedURL = cachedAvatarURL(for: userID) {
-            return cachedURL
+        let existingCachedURL = cachedAvatarURL(for: userID)
+        if let directoryURL = try? avatarDirectoryURL(create: false) {
+            let sourcesMap = loadSourceMetadataMap(in: directoryURL)
+            if existingCachedURL != nil, sourcesMap[userID] == remoteURL.absoluteString {
+                return existingCachedURL
+            }
         }
 
         do {
@@ -81,7 +85,7 @@ nonisolated enum MistiaProfileAvatarCache {
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode),
                   !data.isEmpty else {
-                return nil
+                return existingCachedURL
             }
 
             let fileName = try saveRemoteAvatarImageData(
@@ -92,7 +96,7 @@ nonisolated enum MistiaProfileAvatarCache {
             )
             return cachedAvatarURL(forFileName: fileName)
         } catch {
-            return nil
+            return existingCachedURL
         }
     }
 
@@ -109,6 +113,7 @@ nonisolated enum MistiaProfileAvatarCache {
 
         let fileURL = directoryURL.appendingPathComponent(fileName)
         try data.write(to: fileURL, options: .atomic)
+        saveSourceRemoteURL(sourceURL.absoluteString, for: userID, in: directoryURL)
         return fileName
     }
 
@@ -160,6 +165,39 @@ nonisolated enum MistiaProfileAvatarCache {
         for fileURL in cachedFiles where fileURL.lastPathComponent.hasPrefix(filePrefix)
             && fileURL.lastPathComponent != keptFileName {
             try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
+    private static func sourceMetadataFileURL(in directoryURL: URL) -> URL {
+        directoryURL.appendingPathComponent("avatar_sources.json")
+    }
+
+    private static func loadSourceMetadataMap(in directoryURL: URL) -> [UUID: String] {
+        let fileURL = sourceMetadataFileURL(in: directoryURL)
+        guard let data = try? Data(contentsOf: fileURL),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        var result: [UUID: String] = [:]
+        for (key, val) in dict {
+            if let uuid = UUID(uuidString: key) {
+                result[uuid] = val
+            }
+        }
+        return result
+    }
+
+    private static func saveSourceRemoteURL(_ sourceURLString: String, for userID: UUID, in directoryURL: URL) {
+        var map = loadSourceMetadataMap(in: directoryURL)
+        map[userID] = sourceURLString
+        saveSourceMetadataMap(map, in: directoryURL)
+    }
+
+    private static func saveSourceMetadataMap(_ map: [UUID: String], in directoryURL: URL) {
+        let fileURL = sourceMetadataFileURL(in: directoryURL)
+        let dict = Dictionary(uniqueKeysWithValues: map.map { ($0.key.uuidString.lowercased(), $0.value) })
+        if let data = try? JSONEncoder().encode(dict) {
+            try? data.write(to: fileURL, options: .atomic)
         }
     }
 }

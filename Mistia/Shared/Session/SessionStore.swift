@@ -3174,28 +3174,11 @@ private extension SessionStore {
     ) async {
         guard let remoteAvatarURL else { return }
 
-        if let avatarFileName = storedProfile.avatarFileName,
-           cachedProfileAvatarURL(forFileName: avatarFileName) != nil {
-            return
-        }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(from: remoteAvatarURL)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode),
-                  !data.isEmpty else {
-                return
-            }
-
-            let fileName = try saveRemoteAvatarImageData(
-                data,
-                mimeType: httpResponse.mimeType,
-                sourceURL: remoteAvatarURL,
-                for: storedProfile.userID
-            )
-            storedProfile.avatarFileName = fileName
-        } catch {
-            return
+        if let cachedURL = await MistiaProfileAvatarCache.cacheRemoteAvatarIfNeeded(
+            from: remoteAvatarURL,
+            for: storedProfile.userID
+        ) {
+            storedProfile.avatarFileName = cachedURL.lastPathComponent
         }
     }
 
