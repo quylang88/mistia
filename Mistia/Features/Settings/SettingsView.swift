@@ -273,13 +273,12 @@ struct SettingsView: View {
                 MistiaShortcutSettingsView()
             case .resetData:
                 ResetDataSettingsView()
+            case .feedback:
+                SendFeedbackView()
             }
         }
         .task(id: shortcutNormalizationKey) {
             persistShortcutSelectionIfNeeded(shortcutResolution.selection)
-        }
-        .sheet(isPresented: $showFeedbackSheet) {
-            SendFeedbackView()
         }
     }
 
@@ -304,7 +303,7 @@ struct SettingsView: View {
         case .openResetData:
             destination = .resetData
         case .openFeedback:
-            showFeedbackSheet = true
+            destination = .feedback
         case .placeholder:
             break
         }
@@ -1546,6 +1545,7 @@ private enum SettingsDestination: String, Identifiable {
     case archivedItems
     case shortcut
     case resetData
+    case feedback
 
     var id: String { rawValue }
 }

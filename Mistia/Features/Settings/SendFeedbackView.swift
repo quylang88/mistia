@@ -29,7 +29,7 @@ struct SendFeedbackView: View {
             title: L10n.settings.feedback.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
-            leadingSystemImage: "xmark",
+            leadingSystemImage: "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
