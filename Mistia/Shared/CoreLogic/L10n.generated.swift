@@ -109,6 +109,8 @@ nonisolated enum L10n {
         static func close(language: MistiaAppLanguage) -> String { L10n.tr("common.close", vi: "Đóng", en: "Close", ja: "閉じる", language: language) }
         static var delete: String { L10n.tr("common.delete", vi: "Xóa", en: "Delete", ja: "削除") }
         static func delete(language: MistiaAppLanguage) -> String { L10n.tr("common.delete", vi: "Xóa", en: "Delete", ja: "削除", language: language) }
+        static var error: String { L10n.tr("common.error", vi: "Lỗi", en: "Error", ja: "エラー") }
+        static func error(language: MistiaAppLanguage) -> String { L10n.tr("common.error", vi: "Lỗi", en: "Error", ja: "エラー", language: language) }
         static var off: String { L10n.tr("common.off", vi: "Tắt", en: "Off", ja: "オフ") }
         static func off(language: MistiaAppLanguage) -> String { L10n.tr("common.off", vi: "Tắt", en: "Off", ja: "オフ", language: language) }
         static var ok: String { L10n.tr("common.ok", vi: "OK", en: "OK", ja: "OK") }
@@ -117,6 +119,8 @@ nonisolated enum L10n {
         static func on(language: MistiaAppLanguage) -> String { L10n.tr("common.on", vi: "Bật", en: "On", ja: "オン", language: language) }
         static var save: String { L10n.tr("common.save", vi: "Lưu", en: "Save", ja: "保存") }
         static func save(language: MistiaAppLanguage) -> String { L10n.tr("common.save", vi: "Lưu", en: "Save", ja: "保存", language: language) }
+        static var unknownError: String { L10n.tr("common.unknownError", vi: "Lỗi không xác định", en: "Unknown error", ja: "不明なエラー") }
+        static func unknownError(language: MistiaAppLanguage) -> String { L10n.tr("common.unknownError", vi: "Lỗi không xác định", en: "Unknown error", ja: "不明なエラー", language: language) }
     }
 
     nonisolated enum core {
@@ -2584,6 +2588,30 @@ nonisolated enum L10n {
         }
 
         nonisolated enum feedback {
+            static var addPhoto: String { L10n.tr("settings.feedback.addPhoto", vi: "Thêm ảnh chụp màn hình (tùy chọn)", en: "Add screenshot (optional)", ja: "スクリーンショットを追加（任意）") }
+            static func addPhoto(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.addPhoto", vi: "Thêm ảnh chụp màn hình (tùy chọn)", en: "Add screenshot (optional)", ja: "スクリーンショットを追加（任意）", language: language) }
+            static var categoryBug: String { L10n.tr("settings.feedback.categoryBug", vi: "Báo lỗi", en: "Report Bug", ja: "バグ報告") }
+            static func categoryBug(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryBug", vi: "Báo lỗi", en: "Report Bug", ja: "バグ報告", language: language) }
+            static var categoryFeature: String { L10n.tr("settings.feedback.categoryFeature", vi: "Góp ý tính năng", en: "Feature Request", ja: "機能リクエスト") }
+            static func categoryFeature(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryFeature", vi: "Góp ý tính năng", en: "Feature Request", ja: "機能リクエスト", language: language) }
+            static var categoryGeneral: String { L10n.tr("settings.feedback.categoryGeneral", vi: "Ý kiến chung", en: "General Feedback", ja: "一般的な意見") }
+            static func categoryGeneral(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryGeneral", vi: "Ý kiến chung", en: "General Feedback", ja: "一般的な意見", language: language) }
+            static var categoryTitle: String { L10n.tr("settings.feedback.categoryTitle", vi: "Phân loại feedback", en: "Feedback Category", ja: "フィードバックの分類") }
+            static func categoryTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.categoryTitle", vi: "Phân loại feedback", en: "Feedback Category", ja: "フィードバックの分類", language: language) }
+            static var contentPlaceholder: String { L10n.tr("settings.feedback.contentPlaceholder", vi: "Chia sẻ với chúng tôi cảm nhận hoặc vấn đề bạn gặp phải...", en: "Share your thoughts or issues you encountered with us...", ja: "ご意見や遭遇した問題をお聞かせください...") }
+            static func contentPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.contentPlaceholder", vi: "Chia sẻ với chúng tôi cảm nhận hoặc vấn đề bạn gặp phải...", en: "Share your thoughts or issues you encountered with us...", ja: "ご意見や遭遇した問題をお聞かせください...", language: language) }
+            static var contentTitle: String { L10n.tr("settings.feedback.contentTitle", vi: "Nội dung phản hồi", en: "Feedback Content", ja: "フィードバック内容") }
+            static func contentTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.contentTitle", vi: "Nội dung phản hồi", en: "Feedback Content", ja: "フィードバック内容", language: language) }
+            static var includeDeviceInfoTitle: String { L10n.tr("settings.feedback.includeDeviceInfoTitle", vi: "Kèm thông tin thiết bị", en: "Include device info", ja: "端末情報を含める") }
+            static func includeDeviceInfoTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.includeDeviceInfoTitle", vi: "Kèm thông tin thiết bị", en: "Include device info", ja: "端末情報を含める", language: language) }
+            static var photoAdded: String { L10n.tr("settings.feedback.photoAdded", vi: "Đã chọn 1 ảnh", en: "1 photo selected", ja: "1枚の写真を選択済み") }
+            static func photoAdded(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.photoAdded", vi: "Đã chọn 1 ảnh", en: "1 photo selected", ja: "1枚の写真を選択済み", language: language) }
+            static var submit: String { L10n.tr("settings.feedback.submit", vi: "Gửi phản hồi", en: "Submit Feedback", ja: "送信") }
+            static func submit(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.submit", vi: "Gửi phản hồi", en: "Submit Feedback", ja: "送信", language: language) }
+            static var successMessage: String { L10n.tr("settings.feedback.successMessage", vi: "Ý kiến của bạn đã được ghi nhận. Chúng tôi sẽ liên tục cải thiện Mistia.", en: "Your feedback has been received. We will continuously improve Mistia.", ja: "ご意見を受領しました。ミスティアの改善に役立ててまいります。") }
+            static func successMessage(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.successMessage", vi: "Ý kiến của bạn đã được ghi nhận. Chúng tôi sẽ liên tục cải thiện Mistia.", en: "Your feedback has been received. We will continuously improve Mistia.", ja: "ご意見を受領しました。ミスティアの改善に役立ててまいります。", language: language) }
+            static var successTitle: String { L10n.tr("settings.feedback.successTitle", vi: "Cảm ơn bạn!", en: "Thank you!", ja: "ありがとうございます！") }
+            static func successTitle(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.successTitle", vi: "Cảm ơn bạn!", en: "Thank you!", ja: "ありがとうございます！", language: language) }
             static var title: String { L10n.tr("settings.feedback.title", vi: "Gửi feedback", en: "Send feedback", ja: "フィードバック") }
             static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.title", vi: "Gửi feedback", en: "Send feedback", ja: "フィードバック", language: language) }
         }

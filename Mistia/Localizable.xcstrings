@@ -898,6 +898,52 @@
         }
       }
     },
+    "common.error": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラー"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lỗi"
+          }
+        }
+      }
+    },
+    "common.unknownError": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown error"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明なエラー"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lỗi không xác định"
+          }
+        }
+      }
+    },
     "common.on": {
       "extractionState": "stale",
       "localizations": {
@@ -23925,6 +23971,282 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gửi feedback"
+          }
+        }
+      }
+    },
+    "settings.feedback.addPhoto": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add screenshot (optional)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリーンショットを追加（任意）"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thêm ảnh chụp màn hình (tùy chọn)"
+          }
+        }
+      }
+    },
+    "settings.feedback.categoryBug": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report Bug"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バグ報告"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Báo lỗi"
+          }
+        }
+      }
+    },
+    "settings.feedback.categoryFeature": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feature Request"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "機能リクエスト"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Góp ý tính năng"
+          }
+        }
+      }
+    },
+    "settings.feedback.categoryGeneral": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General Feedback"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般的な意見"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ý kiến chung"
+          }
+        }
+      }
+    },
+    "settings.feedback.categoryTitle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feedback Category"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィードバックの分類"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phân loại feedback"
+          }
+        }
+      }
+    },
+    "settings.feedback.contentPlaceholder": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share your thoughts or issues you encountered with us..."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ご意見や遭遇した問題をお聞かせください..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chia sẻ với chúng tôi cảm nhận hoặc vấn đề bạn gặp phải..."
+          }
+        }
+      }
+    },
+    "settings.feedback.contentTitle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feedback Content"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィードバック内容"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nội dung phản hồi"
+          }
+        }
+      }
+    },
+    "settings.feedback.includeDeviceInfoTitle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include device info"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末情報を含める"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kèm thông tin thiết bị"
+          }
+        }
+      }
+    },
+    "settings.feedback.photoAdded": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 photo selected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1枚の写真を選択済み"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã chọn 1 ảnh"
+          }
+        }
+      }
+    },
+    "settings.feedback.submit": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Submit Feedback"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gửi phản hồi"
+          }
+        }
+      }
+    },
+    "settings.feedback.successMessage": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your feedback has been received. We will continuously improve Mistia."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ご意見を受領しました。ミスティアの改善に役立ててまいります。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ý kiến của bạn đã được ghi nhận. Chúng tôi sẽ liên tục cải thiện Mistia."
+          }
+        }
+      }
+    },
+    "settings.feedback.successTitle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thank you!"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ありがとうございます！"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cảm ơn bạn!"
           }
         }
       }

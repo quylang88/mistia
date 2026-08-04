@@ -71,6 +71,7 @@ let package = Package(
                 "CoreLogic/TransactionLogic+Statement.swift",
                 "CoreLogic/TransactionGeneratedTitle.swift",
                 "CoreLogic/TransactionSearchLogic.swift",
+                "Feedback/FeedbackPromptCoordinator.swift",
                 "Persistence/CategoryHierarchySupport.swift",
                 "Persistence/ManagementModels.swift",
                 "Persistence/MistiaDataStack.swift",
@@ -98,6 +99,12 @@ let package = Package(
         .testTarget(
             name: "MistiaCoreLogicTests",
             dependencies: ["MistiaCoreLogic"]
+        ),
+        .testTarget(
+            name: "MistiaTests",
+            dependencies: ["MistiaCoreLogic"],
+            path: "MistiaTests",
+            sources: ["FeedbackPromptCoordinatorTests.swift"]
         ),
         .testTarget(
             name: "MistiaDataSupportTests",

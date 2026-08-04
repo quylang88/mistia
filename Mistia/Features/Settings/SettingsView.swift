@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage(MistiaAppStorageKey.notificationsEnabled) private var notificationsEnabled = false
 
     @State private var destination: SettingsDestination?
+    @State private var showFeedbackSheet = false
 
     private var cardTint: Color {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
@@ -177,7 +178,7 @@ struct SettingsView: View {
                     icon: "bubble.left.and.bubble.right.fill",
                     accent: .indigo,
                     value: nil,
-                    action: .placeholder
+                    action: .openFeedback
                 )
             ]
         )
@@ -277,6 +278,9 @@ struct SettingsView: View {
         .task(id: shortcutNormalizationKey) {
             persistShortcutSelectionIfNeeded(shortcutResolution.selection)
         }
+        .sheet(isPresented: $showFeedbackSheet) {
+            SendFeedbackView()
+        }
     }
 
     private func handleTap(_ row: SettingsRowDump) {
@@ -299,6 +303,8 @@ struct SettingsView: View {
             destination = .shortcut
         case .openResetData:
             destination = .resetData
+        case .openFeedback:
+            showFeedbackSheet = true
         case .placeholder:
             break
         }
@@ -1526,6 +1532,7 @@ private enum SettingsRowAction {
     case openArchivedItems
     case openShortcut
     case openResetData
+    case openFeedback
     case placeholder
 }
 

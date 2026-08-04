@@ -101,6 +101,7 @@ struct RootTabView: View {
   @State private var quickCreateAccessAlert: RootQuickCreateAccessAlert?
   @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
   @State private var showsReceiptSourceDialog = false
+  @State private var showFeedbackPromptSheet = false
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.08)
 
@@ -198,6 +199,15 @@ struct RootTabView: View {
         prompt: $memberViewingExitPrompt,
         familyContextStore: familyContextStore
       )
+      .onAppear {
+        FeedbackPromptCoordinator.shared.recordAppLaunch()
+        if FeedbackPromptCoordinator.shared.shouldPresentPrompt() {
+          showFeedbackPromptSheet = true
+        }
+      }
+      .sheet(isPresented: $showFeedbackPromptSheet) {
+        FeedbackPromptSheet()
+      }
     }
   }
 
