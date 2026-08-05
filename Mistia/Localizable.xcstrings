@@ -17880,6 +17880,29 @@
         }
       }
     },
+    "transactions.transactioneditor.thisTransactionIsLinkedToABillPayment": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This transaction was automatically created from a bill payment. To undo, please perform undo in the Bills section."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この取引は請求の支払いから自動作成されました。取り消すには、請求セクションで取り消しを行ってください。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giao dịch này được tạo tự động từ thanh toán hóa đơn. Để hoàn tác hoặc xóa, vui lòng thực hiện hoàn tác tại mục Hóa đơn."
+          }
+        }
+      }
+    },
     "planning.planning.aMatchingPaymentWalletCouldNotBe": {
       "extractionState": "stale",
       "localizations": {

@@ -382,6 +382,14 @@ struct TransactionEditorSheet: View {
         )
     }
 
+    private var isLinkedToPaidBillPayment: Bool {
+        guard let transaction = target.transaction else { return false }
+        return storedDueOccurrences.contains { occurrence in
+            occurrence.status == .paid &&
+                occurrence.linkedTransactionID == transaction.id
+        }
+    }
+
     private var isFamilyTransferCreation: Bool {
         target.transaction == nil
             && draft.primaryKind == .transfer
@@ -527,7 +535,8 @@ struct TransactionEditorSheet: View {
     var body: some View {
         let renderContextKey = renderContextCacheKey
         let isLockedByStatement = self.isLockedByStatement
-        let isReadOnlyDetail = isLockedByStatement || isFamilyTransferDetail || isEventGeneratedSharedExpenseDebtDetail
+        let isLinkedToPaidBillPayment = self.isLinkedToPaidBillPayment
+        let isReadOnlyDetail = isLockedByStatement || isLinkedToPaidBillPayment || isFamilyTransferDetail || isEventGeneratedSharedExpenseDebtDetail
         let areEditorControlsDisabled = isReadOnlyDetail || isSaving || isProcessingReceiptImage
         let renderContext = cachedRenderContext(for: renderContextKey)
         let showsSaveButton = shouldShowSaveButton
@@ -548,6 +557,23 @@ struct TransactionEditorSheet: View {
                             Text(L10n.transactions.transactioneditor.thisTransactionIsPartOfAPaid)
                             .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
+                        }
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    }
+                }
+                if isLinkedToPaidBillPayment {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.plaintext.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(MistiaAccent.purple.color)
+                                .padding(8)
+                                .background(MistiaAccent.purple.color.opacity(0.1))
+                                .clipShape(Circle())
+
+                            Text(L10n.transactions.transactioneditor.thisTransactionIsLinkedToABillPayment)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
                         }
                         .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                     }
@@ -1306,6 +1332,7 @@ struct TransactionEditorSheet: View {
                let transaction = target.transaction,
                !transaction.isArchived,
                !isFamilyTransferDetail,
+               !isLinkedToPaidBillPayment,
                !isEventGeneratedSharedExpenseDebtDetail {
                 MistiaDestructiveActionSection(
                     buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
@@ -1395,7 +1422,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var shouldShowSaveButton: Bool {
-        guard !isAdjustment, !isLockedByStatement, !isFamilyTransferDetail else {
+        guard !isAdjustment, !isLockedByStatement, !isLinkedToPaidBillPayment, !isFamilyTransferDetail else {
             return false
         }
 
