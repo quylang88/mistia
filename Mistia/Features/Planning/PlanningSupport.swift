@@ -180,6 +180,11 @@ struct PlanningSavedDuePayment {
     let subjectUserID: UUID?
 }
 
+struct PlanningUndoneDuePayment {
+    let deletedTransactionID: UUID?
+    let deletedOccurrenceID: UUID?
+}
+
 enum PlanningPersistenceSupport {
     static func saveDuePayment(
         draft: PlanningDuePaymentDraft,
@@ -361,6 +366,74 @@ enum PlanningPersistenceSupport {
         }
         try modelContext.save()
         return occurrence
+    }
+
+    @discardableResult
+    static func undoDueSkip(
+        sourceKind: PlanningDueSourceKind,
+        sourceID: UUID,
+        selectedMonth: Date,
+        occurrences: [DueOccurrenceRecord],
+        modelContext: ModelContext,
+        calendar: Calendar = MistiaCalendar.current
+    ) throws -> UUID? {
+        let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+        let matchingOccurrences = occurrences.filter {
+            $0.sourceKind == sourceKind
+                && $0.sourceID == sourceID
+                && $0.selectedMonthKey == monthKey
+                && $0.status == .skipped
+        }
+        guard let targetRecord = matchingOccurrences.first else { return nil }
+        let recordID = targetRecord.id
+        for occurrence in matchingOccurrences {
+            modelContext.delete(occurrence)
+        }
+        try modelContext.save()
+        return recordID
+    }
+
+    @discardableResult
+    static func undoDuePayment(
+        sourceKind: PlanningDueSourceKind,
+        sourceID: UUID,
+        selectedMonth: Date,
+        occurrences: [DueOccurrenceRecord],
+        modelContext: ModelContext,
+        calendar: Calendar = MistiaCalendar.current
+    ) throws -> PlanningUndoneDuePayment {
+        let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+        let matchingOccurrences = occurrences.filter {
+            $0.sourceKind == sourceKind
+                && $0.sourceID == sourceID
+                && $0.selectedMonthKey == monthKey
+                && $0.status == .paid
+        }
+
+        var deletedTransactionID: UUID?
+        var deletedOccurrenceID: UUID?
+
+        for occurrence in matchingOccurrences {
+            deletedOccurrenceID = occurrence.id
+            if let txID = occurrence.linkedTransactionID {
+                deletedTransactionID = txID
+                let txs = try modelContext.fetch(
+                    FetchDescriptor<LedgerTransaction>(
+                        predicate: #Predicate<LedgerTransaction> { $0.id == txID }
+                    )
+                )
+                for tx in txs {
+                    modelContext.delete(tx)
+                }
+            }
+            modelContext.delete(occurrence)
+        }
+
+        try modelContext.save()
+        return PlanningUndoneDuePayment(
+            deletedTransactionID: deletedTransactionID,
+            deletedOccurrenceID: deletedOccurrenceID
+        )
     }
 
     @discardableResult

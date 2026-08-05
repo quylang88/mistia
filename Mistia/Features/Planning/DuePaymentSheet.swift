@@ -52,6 +52,8 @@ struct DuePaymentSheet: View {
     @State private var selectedWalletID: UUID?
     @State private var dismissBaselineSnapshot: DuePaymentDismissalSnapshot?
     @State private var alertMessage: String?
+    @State private var showingUndoSkipAlert = false
+    @State private var showingUndoPaymentAlert = false
 
     // MARK: - Init
 
@@ -256,6 +258,28 @@ struct DuePaymentSheet: View {
         } message: {
             if let alertMessage { Text(alertMessage) }
         }
+        .alert(
+            L10n.planning.duepayment.undoSkip,
+            isPresented: $showingUndoSkipAlert
+        ) {
+            Button(L10n.planning.duepayment.undo, role: .destructive) {
+                undoSkip(dueItem: dueItem)
+            }
+            Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.planning.duepayment.undoSkipMessage)
+        }
+        .alert(
+            L10n.planning.duepayment.undoPayment,
+            isPresented: $showingUndoPaymentAlert
+        ) {
+            Button(L10n.planning.duepayment.undoPayment, role: .destructive) {
+                undoPayment(dueItem: dueItem)
+            }
+            Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.planning.duepayment.undoPaymentMessage)
+        }
     }
 
     @ViewBuilder
@@ -276,18 +300,38 @@ struct DuePaymentSheet: View {
     private func paymentActionSection(dueItem: PlanningRecurringDueSnapshot?) -> some View {
         Section {
             VStack(spacing: 12) {
-                DuePaymentPrimaryActionButton(
-                    title: L10n.planning.duepayment.payNow,
-                    isDisabled: payButtonDisabled(for: dueItem)
-                ) {
-                    pay(dueItem: dueItem)
-                }
-
-                if dueItem?.status == .pending {
-                    DuePaymentSecondaryActionButton(
-                        title: L10n.planning.duepayment.skipThisMonth
+                if dueItem?.status == .skipped {
+                    DuePaymentStatusCard(
+                        title: L10n.planning.duepayment.billSkipped,
+                        subtitle: L10n.planning.duepayment.undoSkip,
+                        iconSymbol: "arrow.uturn.backward.circle.fill",
+                        color: .secondary
                     ) {
-                        skip(dueItem: dueItem)
+                        showingUndoSkipAlert = true
+                    }
+                } else if dueItem?.status == .paid {
+                    DuePaymentStatusCard(
+                        title: L10n.planning.planning.paid,
+                        subtitle: L10n.planning.duepayment.undoPayment,
+                        iconSymbol: "checkmark.circle.fill",
+                        color: .mint
+                    ) {
+                        showingUndoPaymentAlert = true
+                    }
+                } else {
+                    DuePaymentPrimaryActionButton(
+                        title: L10n.planning.duepayment.payNow,
+                        isDisabled: payButtonDisabled(for: dueItem)
+                    ) {
+                        pay(dueItem: dueItem)
+                    }
+
+                    if dueItem?.status == .pending {
+                        DuePaymentSecondaryActionButton(
+                            title: L10n.planning.duepayment.skipThisMonth
+                        ) {
+                            skip(dueItem: dueItem)
+                        }
                     }
                 }
             }
@@ -450,6 +494,99 @@ struct DuePaymentSheet: View {
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+
+    private func undoSkip(dueItem: PlanningRecurringDueSnapshot?) {
+        guard let dueItem else { return }
+
+        do {
+            if let deletedID = try PlanningPersistenceSupport.undoDueSkip(
+                sourceKind: target.sourceKind,
+                sourceID: target.sourceID,
+                selectedMonth: selectedMonthDate,
+                occurrences: Array(occurrences),
+                modelContext: modelContext,
+                calendar: calendar
+            ) {
+                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedID)
+            }
+            onPaid?()
+            dismiss()
+        } catch let error as LocalizedError {
+            alertMessage = error.errorDescription ?? error.localizedDescription
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    private func undoPayment(dueItem: PlanningRecurringDueSnapshot?) {
+        guard let dueItem else { return }
+
+        do {
+            let undone = try PlanningPersistenceSupport.undoDuePayment(
+                sourceKind: target.sourceKind,
+                sourceID: target.sourceID,
+                selectedMonth: selectedMonthDate,
+                occurrences: Array(occurrences),
+                modelContext: modelContext,
+                calendar: calendar
+            )
+            if let deletedTxID = undone.deletedTransactionID {
+                sessionStore.recordDelete(entity: .transaction, recordID: deletedTxID)
+            }
+            if let deletedOccID = undone.deletedOccurrenceID {
+                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedOccID)
+            }
+            onPaid?()
+            dismiss()
+        } catch let error as LocalizedError {
+            alertMessage = error.errorDescription ?? error.localizedDescription
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+}
+
+struct DuePaymentStatusCard: View {
+    let title: String
+    let subtitle: String?
+    let iconSymbol: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: iconSymbol)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(color)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(color)
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                Color(UIColor.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

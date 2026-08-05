@@ -1911,6 +1911,8 @@ nonisolated enum L10n {
         nonisolated enum duepayment {
             static var billSkipped: String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み") }
             static func billSkipped(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み", language: language) }
+            static var cancel: String { L10n.tr("planning.duepayment.cancel", vi: "Hủy", en: "Cancel", ja: "キャンセル") }
+            static func cancel(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.cancel", vi: "Hủy", en: "Cancel", ja: "キャンセル", language: language) }
             static var chooseWallet: String { L10n.tr("planning.duepayment.chooseWallet", vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択") }
             static func chooseWallet(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.chooseWallet", vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択", language: language) }
             static var couldNotFindTheDueItem: String { L10n.tr("planning.duepayment.couldNotFindTheDueItem", vi: "Không tìm thấy khoản cần trả.", en: "Could not find the payment item.", ja: "期限項目が見つかりませんでした。") }
@@ -1933,10 +1935,20 @@ nonisolated enum L10n {
             static func paymentFailed(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.paymentFailed", vi: "Không thể thanh toán", en: "Payment failed", ja: "支払いに失敗しました", language: language) }
             static var paymentWallet: String { L10n.tr("planning.duepayment.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット") }
             static func paymentWallet(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット", language: language) }
-            static var skipThisMonth: String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua tháng này", en: "Skip this month", ja: "今月をスキップ") }
-            static func skipThisMonth(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua tháng này", en: "Skip this month", ja: "今月をスキップ", language: language) }
+            static var skipThisMonth: String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua", en: "Skip", ja: "スキップ") }
+            static func skipThisMonth(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua", en: "Skip", ja: "スキップ", language: language) }
             static var thisBillHasNoDefaultAmount: String { L10n.tr("planning.duepayment.thisBillHasNoDefaultAmount", vi: "Hóa đơn này chưa có số tiền mặc định.", en: "This bill has no default amount.", ja: "この請求にはデフォルトの金額がありません。") }
             static func thisBillHasNoDefaultAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.thisBillHasNoDefaultAmount", vi: "Hóa đơn này chưa có số tiền mặc định.", en: "This bill has no default amount.", ja: "この請求にはデフォルトの金額がありません。", language: language) }
+            static var undo: String { L10n.tr("planning.duepayment.undo", vi: "Hoàn tác", en: "Undo", ja: "元に戻す") }
+            static func undo(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.undo", vi: "Hoàn tác", en: "Undo", ja: "元に戻す", language: language) }
+            static var undoPayment: String { L10n.tr("planning.duepayment.undoPayment", vi: "Hoàn tác thanh toán", en: "Undo payment", ja: "支払いを取り消す") }
+            static func undoPayment(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.undoPayment", vi: "Hoàn tác thanh toán", en: "Undo payment", ja: "支払いを取り消す", language: language) }
+            static var undoPaymentMessage: String { L10n.tr("planning.duepayment.undoPaymentMessage", vi: "Bạn có chắc chắn muốn hoàn tác thanh toán cho hóa đơn này không? Giao dịch thanh toán liên quan sẽ bị xóa.", en: "Are you sure you want to undo payment for this bill? The linked payment transaction will be deleted.", ja: "この請求の支払いを取り消しますか？関連する支払い取引が削除されます。") }
+            static func undoPaymentMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.undoPaymentMessage", vi: "Bạn có chắc chắn muốn hoàn tác thanh toán cho hóa đơn này không? Giao dịch thanh toán liên quan sẽ bị xóa.", en: "Are you sure you want to undo payment for this bill? The linked payment transaction will be deleted.", ja: "この請求の支払いを取り消しますか？関連する支払い取引が削除されます。", language: language) }
+            static var undoSkip: String { L10n.tr("planning.duepayment.undoSkip", vi: "Hoàn tác bỏ qua", en: "Undo skip", ja: "スキップを取り消す") }
+            static func undoSkip(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.undoSkip", vi: "Hoàn tác bỏ qua", en: "Undo skip", ja: "スキップを取り消す", language: language) }
+            static var undoSkipMessage: String { L10n.tr("planning.duepayment.undoSkipMessage", vi: "Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán.", en: "Are you sure you want to undo skipping this bill? It will return to pending status.", ja: "この請求のスキップを取り消しますか？未払い状態に戻ります。") }
+            static func undoSkipMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.undoSkipMessage", vi: "Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán.", en: "Are you sure you want to undo skipping this bill? It will return to pending status.", ja: "この請求のスキップを取り消しますか？未払い状態に戻ります。", language: language) }
         }
 
         nonisolated enum planning {

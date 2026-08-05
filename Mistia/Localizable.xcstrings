@@ -17725,19 +17725,157 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Skip this month"
+            "value": "Skip"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "今月をスキップ"
+            "value": "スキップ"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bỏ qua tháng này"
+            "value": "Bỏ qua"
+          }
+        }
+      }
+    },
+    "planning.duepayment.undoSkip": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo skip"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スキップを取り消す"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoàn tác bỏ qua"
+          }
+        }
+      }
+    },
+    "planning.duepayment.cancel": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセル"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hủy"
+          }
+        }
+      }
+    },
+    "planning.duepayment.undo": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元に戻す"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoàn tác"
+          }
+        }
+      }
+    },
+    "planning.duepayment.undoSkipMessage": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Are you sure you want to undo skipping this bill? It will return to pending status."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この請求のスキップを取り消しますか？未払い状態に戻ります。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán."
+          }
+        }
+      }
+    },
+    "planning.duepayment.undoPayment": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo payment"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支払いを取り消す"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoàn tác thanh toán"
+          }
+        }
+      }
+    },
+    "planning.duepayment.undoPaymentMessage": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Are you sure you want to undo payment for this bill? The linked payment transaction will be deleted."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この請求の支払いを取り消しますか？関連する支払い取引が削除されます。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn có chắc chắn muốn hoàn tác thanh toán cho hóa đơn này không? Giao dịch thanh toán liên quan sẽ bị xóa."
           }
         }
       }
