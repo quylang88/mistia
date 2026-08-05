@@ -156,6 +156,7 @@ enum PlanningDueRowTone {
     case warning
     case overdue
     case paid
+    case skipped
 
     var color: Color {
         switch self {
@@ -167,6 +168,8 @@ enum PlanningDueRowTone {
             Color(hex: "#F45C7E")
         case .paid:
             .mint
+        case .skipped:
+            .secondary
         }
     }
 }
@@ -324,6 +327,43 @@ enum PlanningPersistenceSupport {
     }
 
     @discardableResult
+    static func saveDueSkip(
+        sourceKind: PlanningDueSourceKind,
+        sourceID: UUID,
+        selectedMonth: Date,
+        scheduledDate: Date,
+        occurrences: [DueOccurrenceRecord],
+        modelContext: ModelContext,
+        actorUserID: UUID?,
+        calendar: Calendar = MistiaCalendar.current
+    ) throws -> DueOccurrenceRecord {
+        let occurrence = try upsertOccurrence(
+            sourceKind: sourceKind,
+            sourceID: sourceID,
+            selectedMonth: selectedMonth,
+            scheduledDate: scheduledDate,
+            amountMinor: nil,
+            linkedTransactionID: nil,
+            occurrences: occurrences,
+            modelContext: modelContext,
+            status: .skipped,
+            calendar: calendar
+        )
+        let now = Date()
+        if let actorUserID {
+            try MistiaRecordOwnershipStore.upsert(
+                entity: .dueOccurrenceRecord,
+                recordID: occurrence.id,
+                ownerUserID: actorUserID,
+                updatedAt: now,
+                context: modelContext
+            )
+        }
+        try modelContext.save()
+        return occurrence
+    }
+
+    @discardableResult
     static func upsertOccurrence(
         sourceKind: PlanningDueSourceKind,
         sourceID: UUID,
@@ -334,6 +374,7 @@ enum PlanningPersistenceSupport {
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
         paidAt: Date? = nil,
+        status: PlanningDueOccurrenceStatus? = nil,
         calendar: Calendar = MistiaCalendar.current
     ) throws -> DueOccurrenceRecord {
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
@@ -341,6 +382,7 @@ enum PlanningPersistenceSupport {
             ? PlanningLogic.monthKey(for: scheduledDate, calendar: calendar)
             : monthKey
         let now = Date()
+        let resolvedStatus: PlanningDueOccurrenceStatus = status ?? (paidAt == nil ? .pending : .paid)
         let matchingOccurrences = occurrences.filter {
             $0.sourceKind == sourceKind
                 && $0.sourceID == sourceID
@@ -354,7 +396,7 @@ enum PlanningPersistenceSupport {
                 occurrence.selectedMonthKey = monthKey
                 occurrence.scheduledDate = scheduledDate
                 occurrence.amountMinorSnapshot = amountMinor
-                occurrence.status = paidAt == nil ? .pending : .paid
+                occurrence.status = resolvedStatus
                 occurrence.paidAt = paidAt
                 occurrence.linkedTransactionID = linkedTransactionID
                 occurrence.updatedAt = now
@@ -367,7 +409,7 @@ enum PlanningPersistenceSupport {
                 selectedMonthKey: monthKey,
                 scheduledDate: scheduledDate,
                 amountMinorSnapshot: amountMinor,
-                status: paidAt == nil ? .pending : .paid,
+                status: resolvedStatus,
                 paidAt: paidAt,
                 linkedTransactionID: linkedTransactionID,
                 createdAt: now,
@@ -779,6 +821,7 @@ extension LedgerWallet {
 extension PlanningCreditCardDueSnapshot {
     func tone(referenceDate: Date, calendar: Calendar = MistiaCalendar.current) -> PlanningDueRowTone {
         if status == .paid { return .paid }
+        if status == .skipped { return .skipped }
 
         let startOfToday = calendar.startOfDay(for: referenceDate)
         if calendar.startOfDay(for: dueDate) < startOfToday {
@@ -797,6 +840,7 @@ extension PlanningCreditCardDueSnapshot {
 extension PlanningRecurringDueSnapshot {
     func tone(referenceDate: Date, calendar: Calendar = MistiaCalendar.current) -> PlanningDueRowTone {
         if status == .paid { return .paid }
+        if status == .skipped { return .skipped }
 
         let startOfToday = calendar.startOfDay(for: referenceDate)
         if calendar.startOfDay(for: dueDate) < startOfToday {

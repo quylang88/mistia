@@ -2175,6 +2175,11 @@ nonisolated enum PlanningLogic {
         return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
     }
 
+    static func dateKey(for date: Date, calendar: Calendar = MistiaCalendar.current) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    }
+
     static func month(from key: String, calendar: Calendar = MistiaCalendar.current) -> Date? {
         let parts = key.split(separator: "-")
         guard parts.count == 2,
@@ -2884,7 +2889,7 @@ nonisolated enum PlanningLogic {
         for occurrence in occurrences where occurrence.sourceKind == sourceKind
             && occurrence.sourceID == sourceID
             && occurrence.selectedMonthKey == selectedMonthKey {
-            if occurrence.status == .paid {
+            if occurrence.status == .paid || occurrence.status == .skipped {
                 return occurrence
             }
             fallback = fallback ?? occurrence
@@ -2897,7 +2902,7 @@ nonisolated enum PlanningLogic {
         _ existing: PlanningDueOccurrenceSnapshot,
         _ candidate: PlanningDueOccurrenceSnapshot
     ) -> PlanningDueOccurrenceSnapshot {
-        if existing.status != .paid, candidate.status == .paid {
+        if existing.status == .pending, candidate.status != .pending {
             return candidate
         }
         return existing

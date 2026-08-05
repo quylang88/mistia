@@ -2719,7 +2719,7 @@ private struct PlanningDueRow: View {
                 }
             }
 
-            if item.status != .paid {
+            if item.status != .paid && item.status != .skipped {
                 HStack {
                     Text(dateWindowText)
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
@@ -2754,6 +2754,8 @@ private struct PlanningDueRow: View {
         switch item.status {
         case .paid:
             L10n.planning.planning.paid
+        case .skipped:
+            L10n.planning.duepayment.billSkipped
         case .pending:
             switch item.sourceKind {
             case .recurringBill:
@@ -2767,12 +2769,15 @@ private struct PlanningDueRow: View {
     }
 
     private var showsPayButton: Bool {
-        item.sourceKind == .recurringBill && item.status != .paid
+        item.sourceKind == .recurringBill && item.status == .pending
     }
 
     private var dueDetailText: String {
         if item.status == .paid {
             return L10n.planning.planning.completed
+        }
+        if item.status == .skipped {
+            return L10n.planning.duepayment.billSkipped
         }
 
         let comparisonDate = currentComparisonDate

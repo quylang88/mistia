@@ -158,8 +158,9 @@ enum MistiaRecurringBillMaintenance {
                     )
                 }
 
-                // Overdue handling — resurface daily until paid
+                // Overdue handling — resurface daily until paid or skipped
                 if isOverdue {
+                    let todayDateKey = PlanningLogic.dateKey(for: referenceDate, calendar: calendar)
                     let body: String
                     if let amountText {
                         body = L10n.shared.notifications.mistiarecurringbillmaintenance.valueValueIsPastItsDueDate(String(describing: bill.name), String(describing: amountText))
@@ -168,7 +169,7 @@ enum MistiaRecurringBillMaintenance {
                     }
 
                     upsertNotification(
-                        key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
+                        key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(cycleMonthKey).\(todayDateKey)",
                         title: L10n.shared.notifications.mistiarecurringbillmaintenance.billOverdue,
                         body: body,
                         kind: .billOverdue,
@@ -177,8 +178,7 @@ enum MistiaRecurringBillMaintenance {
                         monthKey: cycleMonthKey,
                         recipientUserID: snapshot.activeUserID,
                         modelContext: modelContext,
-                        notificationBatch: &notificationBatch,
-                        forceUnread: true
+                        notificationBatch: &notificationBatch
                     )
                 }
             }
@@ -322,7 +322,7 @@ enum MistiaRecurringBillMaintenance {
 
     static func resolveNotifications(for billID: UUID, monthKey: String, modelContext: ModelContext) {
         let prefix = "mistia.bill."
-        let suffix = ".\(billID.uuidString.lowercased()).\(monthKey)"
+        let targetSegment = ".\(billID.uuidString.lowercased()).\(monthKey)"
         let resolvedKinds: [MistiaAppNotificationKind] = [
             .billPaymentRequired, .billAutoPaymentFailed, .billOverdue
         ]
@@ -343,7 +343,7 @@ enum MistiaRecurringBillMaintenance {
         let now = Date()
         for row in existing
             where row.key.hasPrefix(prefix)
-            && row.key.hasSuffix(suffix)
+            && row.key.contains(targetSegment)
             && resolvedKinds.contains(row.kind) {
             row.isRead = true
             row.readAt = row.readAt ?? now

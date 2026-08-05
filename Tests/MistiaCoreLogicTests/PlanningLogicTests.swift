@@ -2667,6 +2667,49 @@ final class PlanningLogicTests: XCTestCase {
         )
     }
 
+    func testRecurringBillDueItemsWithSkippedStatus() {
+        let billID = UUID()
+        let selectedMonth = makeDate(year: 2026, month: 8, day: 1)
+        let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+
+        let bill = PlanningBillSnapshot(
+            id: billID,
+            name: "Electricity Bill",
+            iconSymbolName: "bolt",
+            categorySystemKey: nil,
+            categoryName: nil,
+            categoryIconSymbolName: nil,
+            categoryColorHex: nil,
+            amountMinor: 5000,
+            dueDay: 15,
+            frequencyMonths: 1,
+            paymentWalletID: nil,
+            currencyCode: "JPY",
+            createdAt: .now
+        )
+
+        let occurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: monthKey,
+            scheduledDate: makeDate(year: 2026, month: 8, day: 15),
+            amountMinorSnapshot: 5000,
+            status: .skipped,
+            linkedTransactionID: nil
+        )
+
+        let dueItems = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [occurrence],
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(dueItems.count, 1)
+        XCTAssertEqual(dueItems.first?.status, .skipped)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         (try? makeDate(year: year, month: month, day: day, calendar: calendar)) ?? .distantPast
     }

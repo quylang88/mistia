@@ -1909,6 +1909,8 @@ nonisolated enum L10n {
     nonisolated enum planning {
 
         nonisolated enum duepayment {
+            static var billSkipped: String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み") }
+            static func billSkipped(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み", language: language) }
             static var chooseWallet: String { L10n.tr("planning.duepayment.chooseWallet", vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択") }
             static func chooseWallet(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.chooseWallet", vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択", language: language) }
             static var couldNotFindTheDueItem: String { L10n.tr("planning.duepayment.couldNotFindTheDueItem", vi: "Không tìm thấy khoản cần trả.", en: "Could not find the payment item.", ja: "期限項目が見つかりませんでした。") }
@@ -1931,6 +1933,8 @@ nonisolated enum L10n {
             static func paymentFailed(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.paymentFailed", vi: "Không thể thanh toán", en: "Payment failed", ja: "支払いに失敗しました", language: language) }
             static var paymentWallet: String { L10n.tr("planning.duepayment.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット") }
             static func paymentWallet(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット", language: language) }
+            static var skipThisMonth: String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua tháng này", en: "Skip this month", ja: "今月をスキップ") }
+            static func skipThisMonth(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua tháng này", en: "Skip this month", ja: "今月をスキップ", language: language) }
             static var thisBillHasNoDefaultAmount: String { L10n.tr("planning.duepayment.thisBillHasNoDefaultAmount", vi: "Hóa đơn này chưa có số tiền mặc định.", en: "This bill has no default amount.", ja: "この請求にはデフォルトの金額がありません。") }
             static func thisBillHasNoDefaultAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.thisBillHasNoDefaultAmount", vi: "Hóa đơn này chưa có số tiền mặc định.", en: "This bill has no default amount.", ja: "この請求にはデフォルトの金額がありません。", language: language) }
         }

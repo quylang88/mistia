@@ -275,11 +275,21 @@ struct DuePaymentSheet: View {
 
     private func paymentActionSection(dueItem: PlanningRecurringDueSnapshot?) -> some View {
         Section {
-            DuePaymentPrimaryActionButton(
-                title: L10n.planning.duepayment.payNow,
-                isDisabled: payButtonDisabled(for: dueItem)
-            ) {
-                pay(dueItem: dueItem)
+            VStack(spacing: 12) {
+                DuePaymentPrimaryActionButton(
+                    title: L10n.planning.duepayment.payNow,
+                    isDisabled: payButtonDisabled(for: dueItem)
+                ) {
+                    pay(dueItem: dueItem)
+                }
+
+                if dueItem?.status == .pending {
+                    DuePaymentSecondaryActionButton(
+                        title: L10n.planning.duepayment.skipThisMonth
+                    ) {
+                        skip(dueItem: dueItem)
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -399,6 +409,48 @@ struct DuePaymentSheet: View {
             alertMessage = error.localizedDescription
         }
     }
+
+    private func skip(dueItem: PlanningRecurringDueSnapshot?) {
+        guard let dueItem else {
+            alertMessage = L10n.planning.duepayment.couldNotFindTheDueItem
+            return
+        }
+
+        guard dueItem.status == .pending else {
+            dismiss()
+            return
+        }
+
+        do {
+            let occurrence = try PlanningPersistenceSupport.saveDueSkip(
+                sourceKind: target.sourceKind,
+                sourceID: target.sourceID,
+                selectedMonth: selectedMonthDate,
+                scheduledDate: dueItem.dueDate,
+                occurrences: Array(occurrences),
+                modelContext: modelContext,
+                actorUserID: sessionStore.activeLocalProfileUserID,
+                calendar: calendar
+            )
+            sessionStore.recordUpsert(
+                entity: .dueOccurrenceRecord,
+                recordID: occurrence.id,
+                modifiedAt: occurrence.updatedAt
+            )
+            let monthKey = PlanningLogic.monthKey(for: selectedMonthDate, calendar: calendar)
+            MistiaRecurringBillMaintenance.resolveNotifications(
+                for: target.sourceID,
+                monthKey: monthKey,
+                modelContext: modelContext
+            )
+            onPaid?()
+            dismiss()
+        } catch let error as LocalizedError {
+            alertMessage = error.errorDescription ?? error.localizedDescription
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
 }
 
 struct DuePaymentPrimaryActionButton: View {
@@ -416,20 +468,36 @@ struct DuePaymentPrimaryActionButton: View {
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 17)
+                .padding(.vertical, 16)
                 .background(
                     isDisabled ? Color(UIColor.systemGray4) : accent,
-                    in: Capsule()
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                 )
-                .overlay {
-                    Capsule()
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                }
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .scaleEffect(isDisabled ? 0.98 : 1.0)
         .animation(.snappy, value: isDisabled)
+    }
+}
+
+struct DuePaymentSecondaryActionButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    Color(UIColor.secondarySystemFill),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 
