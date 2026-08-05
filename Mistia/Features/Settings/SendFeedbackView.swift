@@ -11,7 +11,8 @@ struct SendFeedbackView: View {
     @State private var showSuccessAlert: Bool = false
     @State private var showErrorAlert: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var loadedImages: [UIImage] = []
 
     private let maxCharacterCount = 1000
 
@@ -90,30 +91,107 @@ struct SendFeedbackView: View {
                     }
                 }
 
-                // Photos Picker
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    HStack(spacing: 10) {
-                        Image(systemName: selectedPhotoItem == nil ? "photo.badge.plus" : "photo.fill")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(selectedPhotoItem == nil ? .secondary : MistiaAccent.purple.color)
-
-                        Text(selectedPhotoItem == nil ? L10n.settings.feedback.addPhoto : L10n.settings.feedback.photoAdded)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.primary)
+                // Photos Section
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(L10n.settings.feedback.photoSectionTitle)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
 
                         Spacer()
 
-                        if selectedPhotoItem != nil {
-                            Button(action: { selectedPhotoItem = nil }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                        Text("\(loadedImages.count)/5")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(loadedImages.count >= 5 ? MistiaAccent.purple.color : .secondary)
+                    }
+                    .padding(.horizontal, 4)
+
+                    if loadedImages.isEmpty {
+                        PhotosPicker(
+                            selection: $selectedPhotoItems,
+                            maxSelectionCount: 5,
+                            matching: .images
+                        ) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "photo.badge.plus")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(MistiaAccent.purple.color)
+
+                                Text(L10n.settings.feedback.addPhoto)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(Color(UIColor.secondarySystemGroupedBackground))
+                            .cornerRadius(16)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(Array(loadedImages.enumerated()), id: \.offset) { index, uiImage in
+                                        ZStack(alignment: .topTrailing) {
+                                            Image(uiImage: uiImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 76, height: 76)
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                                )
+
+                                            Button(action: { removeImage(at: index) }) {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .font(.system(size: 20))
+                                                    .symbolRenderingMode(.palette)
+                                                    .foregroundStyle(Color.white, Color.secondary)
+                                            }
+                                            .offset(x: 6, y: -6)
+                                        }
+                                        .padding(.top, 6)
+                                        .padding(.trailing, 6)
+                                    }
+
+                                    if loadedImages.count < 5 {
+                                        PhotosPicker(
+                                            selection: $selectedPhotoItems,
+                                            maxSelectionCount: 5,
+                                            matching: .images
+                                        ) {
+                                            VStack(spacing: 4) {
+                                                Image(systemName: "plus")
+                                                    .font(.system(size: 20, weight: .semibold))
+                                                    .foregroundStyle(MistiaAccent.purple.color)
+
+                                                Text(L10n.common.add)
+                                                    .font(.system(size: 11, weight: .medium))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .frame(width: 76, height: 76)
+                                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .strokeBorder(MistiaAccent.purple.color.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                                            )
+                                        }
+                                        .padding(.top, 6)
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
                             }
                         }
+                        .background(Color(UIColor.secondarySystemGroupedBackground))
+                        .cornerRadius(16)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(Color(UIColor.secondarySystemGroupedBackground))
-                    .cornerRadius(16)
+                }
+                .onChange(of: selectedPhotoItems) { _, newItems in
+                    loadSelectedImages(from: newItems)
                 }
 
                 // Include Device Info
@@ -200,8 +278,30 @@ struct SendFeedbackView: View {
                     isSubmitting = false
                     errorMessage = error.localizedDescription
                     showErrorAlert = true
+            }
+        }
+    }
+
+    private func loadSelectedImages(from items: [PhotosPickerItem]) {
+        Task {
+            var images: [UIImage] = []
+            for item in items.prefix(5) {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    images.append(uiImage)
                 }
             }
+            await MainActor.run {
+                loadedImages = images
+            }
+        }
+    }
+
+    private func removeImage(at index: Int) {
+        guard index >= 0 && index < loadedImages.count else { return }
+        loadedImages.remove(at: index)
+        if index < selectedPhotoItems.count {
+            selectedPhotoItems.remove(at: index)
         }
     }
 }

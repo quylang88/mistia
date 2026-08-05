@@ -23981,19 +23981,42 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add screenshot (optional)"
+            "value": "Add photos (max 5)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "スクリーンショットを追加（任意）"
+            "value": "写真を添付（最大5枚）"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thêm ảnh chụp màn hình (tùy chọn)"
+            "value": "Thêm ảnh đính kèm (tối đa 5)"
+          }
+        }
+      }
+    },
+    "settings.feedback.photoSectionTitle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attached Photos"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添付画像"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hình ảnh đính kèm"
           }
         }
       }
