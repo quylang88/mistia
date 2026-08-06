@@ -19,6 +19,7 @@ private struct ArchivedSyncMutation {
     let updatedAt: Date
     let subjectUserIDOverride: UUID?
     let action: ArchivedMutationAction
+    let baseVersion: Int64
 }
 
 private struct CategoryDeleteBlockers {
@@ -849,22 +850,24 @@ struct ManagementArchivedItemsView: View {
 
             try modelContext.save()
 
-            for mutation in mutations {
-                switch mutation.action {
-                case .restore:
-                    sessionStore.recordUpsert(
-                        entity: mutation.entity,
-                        recordID: mutation.id,
-                        modifiedAt: mutation.updatedAt,
-                        subjectUserIDOverride: mutation.subjectUserIDOverride
-                    )
-                case .delete:
-                    sessionStore.recordDelete(
-                        entity: mutation.entity,
-                        recordID: mutation.id,
-                        modifiedAt: mutation.updatedAt,
-                        subjectUserIDOverride: mutation.subjectUserIDOverride
-                    )
+            let fallbackUserID = selfUserID ?? UUID()
+            let syncMutations: [MistiaSyncMutation] = mutations.map { mutation in
+                MistiaSyncMutation(
+                    entity: mutation.entity,
+                    recordID: mutation.id,
+                    subjectUserID: mutation.subjectUserIDOverride ?? fallbackUserID,
+                    kind: mutation.action == .restore ? .upsert : .delete,
+                    modifiedAt: mutation.updatedAt,
+                    baseVersion: mutation.baseVersion
+                )
+            }
+
+            sessionStore.recordMutations(syncMutations)
+
+            let ownerUserIDs = Set(syncMutations.map(\.subjectUserID))
+            if ownerUserIDs.contains(where: { $0 != sessionStore.activeLocalProfileUserID }) {
+                Task { @MainActor in
+                    _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
                 }
             }
 
@@ -923,7 +926,8 @@ struct ManagementArchivedItemsView: View {
                 id: transaction.id,
                 updatedAt: transaction.updatedAt,
                 subjectUserIDOverride: transactionOwnerUserID(for: transaction, ownerMaps: snapshot.ownerMaps),
-                action: action
+                action: action,
+                baseVersion: transaction.remoteVersion
             )
         )
     }
@@ -950,7 +954,8 @@ struct ManagementArchivedItemsView: View {
                 id: wallet.id,
                 updatedAt: wallet.updatedAt,
                 subjectUserIDOverride: walletOwnerUserID(for: wallet, ownerMaps: snapshot.ownerMaps),
-                action: action
+                action: action,
+                baseVersion: wallet.remoteVersion
             )
         )
     }
@@ -990,7 +995,8 @@ struct ManagementArchivedItemsView: View {
                 id: category.id,
                 updatedAt: category.updatedAt,
                 subjectUserIDOverride: categoryOwnerUserID(for: category, ownerMaps: snapshot.ownerMaps),
-                action: action
+                action: action,
+                baseVersion: category.remoteVersion
             )
         )
     }
@@ -1015,7 +1021,8 @@ struct ManagementArchivedItemsView: View {
                     id: group.id,
                     updatedAt: group.updatedAt,
                     subjectUserIDOverride: ownerUserID,
-                    action: .restore
+                    action: .restore,
+                    baseVersion: group.remoteVersion
                 )
             )
         case .delete:
@@ -1030,7 +1037,8 @@ struct ManagementArchivedItemsView: View {
                     id: group.id,
                     updatedAt: group.updatedAt,
                     subjectUserIDOverride: ownerUserID,
-                    action: .delete
+                    action: .delete,
+                    baseVersion: group.remoteVersion
                 )
             )
 
@@ -1046,7 +1054,8 @@ struct ManagementArchivedItemsView: View {
                             fallback: ownerUserID,
                             ownerMaps: snapshot.ownerMaps
                         ),
-                        action: .delete
+                        action: .delete,
+                        baseVersion: participant.remoteVersion
                     )
                 )
             }
@@ -1077,7 +1086,8 @@ struct ManagementArchivedItemsView: View {
                                 for: transaction,
                                 ownerMaps: snapshot.ownerMaps
                             ),
-                            action: .restore
+                            action: .restore,
+                            baseVersion: transaction.remoteVersion
                         )
                     )
                 } else if TransactionLogic.isEventGeneratedSharedExpenseDebt(transaction.snapshot) {
@@ -1101,7 +1111,8 @@ struct ManagementArchivedItemsView: View {
                                 for: transaction,
                                 ownerMaps: snapshot.ownerMaps
                             ),
-                            action: .delete
+                            action: .delete,
+                            baseVersion: transaction.remoteVersion
                         )
                     )
                 }
