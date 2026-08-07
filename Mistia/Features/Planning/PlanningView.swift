@@ -903,6 +903,15 @@ struct PlanningView: View {
                         },
                         onPayBill: { item in
                             openDuePaymentIfAllowed(item)
+                        },
+                        onSkipBill: { item in
+                            skipTargetItem = item
+                        },
+                        onUndoSkipBill: { item in
+                            undoSkipTargetItem = item
+                        },
+                        onUndoPaymentBill: { item in
+                            undoPaymentTargetItem = item
                         }
                     )
                 case .goals(let tabSnapshot):
@@ -2034,6 +2043,9 @@ private struct DueTabContent: View {
     let onAddInstallment: () -> Void
     let onEditInstallment: (PlanningRecurringDueSnapshot) -> Void
     let onPayBill: (PlanningRecurringDueSnapshot) -> Void
+    var onSkipBill: ((PlanningRecurringDueSnapshot) -> Void)? = nil
+    var onUndoSkipBill: ((PlanningRecurringDueSnapshot) -> Void)? = nil
+    var onUndoPaymentBill: ((PlanningRecurringDueSnapshot) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 16) {
@@ -2057,7 +2069,10 @@ private struct DueTabContent: View {
                         referenceDate: referenceDate,
                         onAdd: onAddBill,
                         onEdit: onEditBill,
-                        onPay: onPayBill
+                        onPay: onPayBill,
+                        onSkip: onSkipBill,
+                        onUndoSkip: onUndoSkipBill,
+                        onUndoPayment: onUndoPaymentBill
                     )
 
                     if !pausedBills.isEmpty {
@@ -2085,7 +2100,11 @@ private struct DueTabContent: View {
                     addTitle: L10n.planning.planning.addInstallmentLoan,
                     referenceDate: referenceDate,
                     onAdd: onAddInstallment,
-                    onEdit: onEditInstallment
+                    onEdit: onEditInstallment,
+                    onPay: onPayBill,
+                    onSkip: onSkipBill,
+                    onUndoSkip: onUndoSkipBill,
+                    onUndoPayment: onUndoPaymentBill
                 )
             }
         }
