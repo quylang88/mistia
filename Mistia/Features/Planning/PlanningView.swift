@@ -2820,13 +2820,13 @@ private struct PlanningDueRow: View {
                 if item.status == .pending {
                     HStack(spacing: 8) {
                         PlanningDueIconButton(
-                            iconSymbol: "checkmark",
+                            iconSymbol: "creditcard.fill",
                             accent: MistiaAccent.purple.color,
                             action: onPay
                         )
 
                         PlanningDueIconButton(
-                            iconSymbol: "arrow.forward.to.line",
+                            iconSymbol: "forward.fill",
                             accent: .secondary,
                             action: onSkip
                         )
@@ -2847,7 +2847,7 @@ private struct PlanningDueRow: View {
 
                         PlanningDueIconButton(
                             iconSymbol: "arrow.uturn.backward",
-                            accent: .mint,
+                            accent: .secondary,
                             action: onUndoPayment
                         )
                     }
@@ -2950,18 +2950,25 @@ private struct PlanningDueIconButton: View {
     var accent: Color = MistiaAccent.purple.color
     let action: () -> Void
 
+    private var resolvedAccent: Color {
+        if accent == MistiaAccent.purple.color && colorScheme == .dark {
+            return Color(red: 0.72, green: 0.52, blue: 1.0)
+        }
+        return accent
+    }
+
     var body: some View {
         Button(action: action) {
             Image(systemName: iconSymbol)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(accent)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(resolvedAccent)
                 .frame(width: 32, height: 32)
                 .background {
                     Circle()
-                        .fill(accent.opacity(colorScheme == .dark ? 0.22 : 0.12))
+                        .fill(resolvedAccent.opacity(colorScheme == .dark ? 0.28 : 0.12))
                 }
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: accent))
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: resolvedAccent))
     }
 }
 
