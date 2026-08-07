@@ -824,6 +824,42 @@ struct MistiaChip: View {
     }
 }
 
+/// A reusable, prominent glass-styled action button matching Mistia's modern design system.
+/// Uses `.glassProminent` capsule styling with loading indicator support.
+struct MistiaProminentActionButton: View {
+    let title: String
+    var iconSystemName: String? = nil
+    var accent: Color = Color(red: 0.43, green: 0.23, blue: 0.76)
+    var isLoading: Bool = false
+    var isDisabled: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                } else if let iconSystemName {
+                    Image(systemName: iconSystemName)
+                        .font(.system(size: 16, weight: .bold))
+                }
+                Text(title)
+            }
+            .font(.system(size: 16, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .tint(accent)
+        .disabled(isDisabled || isLoading)
+    }
+}
+
 private struct MistiaInteractivePopGestureHelper: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> PopGestureViewController {
         let controller = PopGestureViewController()

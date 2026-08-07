@@ -237,30 +237,14 @@ struct AIBillAnalysisView: View {
     @ViewBuilder
     private var bottomAnalyzeSection: some View {
         if shouldShowAnalyzeButton {
-            Button {
-                analyzeBills()
-            } label: {
-                HStack(spacing: 8) {
-                    if isAnalyzing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    Text(isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze)
-                }
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-            }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.capsule)
-            .tint(MistiaAccent.purple.color)
-            .disabled(isAnalyzing || !hasPendingAnalyzableBills)
+            MistiaProminentActionButton(
+                title: isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze,
+                iconSystemName: isAnalyzing ? nil : "sparkles",
+                accent: MistiaAccent.purple.color,
+                isLoading: isAnalyzing,
+                isDisabled: !hasPendingAnalyzableBills,
+                action: analyzeBills
+            )
             .padding(.horizontal, 24)
             .padding(.top, 8)
             .padding(.bottom, 8)

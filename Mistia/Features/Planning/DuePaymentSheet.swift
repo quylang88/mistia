@@ -550,21 +550,13 @@ struct DuePaymentPrimaryActionButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    isDisabled ? Color(UIColor.systemGray4) : accent,
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .scaleEffect(isDisabled ? 0.98 : 1.0)
-        .animation(.snappy, value: isDisabled)
+        MistiaProminentActionButton(
+            title: title,
+            iconSystemName: "creditcard.fill",
+            accent: accent,
+            isDisabled: isDisabled,
+            action: action
+        )
     }
 }
 
