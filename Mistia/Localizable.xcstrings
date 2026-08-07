@@ -7,6 +7,22 @@
     "-" : {
 
     },
+    "%lld bản ghi" : {
+
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "%lld/5" : {
+
+    },
     "+" : {
 
     },
@@ -1891,7 +1907,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bills \/ utilities"
+            "value" : "Bills / utilities"
           }
         },
         "ja" : {
@@ -1903,7 +1919,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hóa đơn \/ tiện ích"
+            "value" : "Hóa đơn / tiện ích"
           }
         }
       }
@@ -2052,7 +2068,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Goals \/ personal"
+            "value" : "Goals / personal"
           }
         },
         "ja" : {
@@ -2064,7 +2080,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mục tiêu \/ cá nhân"
+            "value" : "Mục tiêu / cá nhân"
           }
         }
       }
@@ -2213,7 +2229,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Work \/ study"
+            "value" : "Work / study"
           }
         },
         "ja" : {
@@ -2225,7 +2241,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Công việc \/ học tập"
+            "value" : "Công việc / học tập"
           }
         }
       }
@@ -2691,7 +2707,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chuyển tiền vay\/cho vay"
+            "value" : "Chuyển tiền vay/cho vay"
           }
         }
       }
@@ -3369,7 +3385,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installments \/ loans"
+            "value" : "Installments / loans"
           }
         },
         "ja" : {
@@ -3381,7 +3397,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trả góp \/ vay"
+            "value" : "Trả góp / vay"
           }
         }
       }
@@ -5025,7 +5041,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wallets \/ cards"
+            "value" : "Wallets / cards"
           }
         },
         "ja" : {
@@ -5037,7 +5053,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ví \/ thẻ"
+            "value" : "Ví / thẻ"
           }
         }
       }
@@ -5991,19 +6007,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mistia:\/\/family-invite\/..."
+            "value" : "mistia://family-invite/..."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mistia:\/\/family-invite\/..."
+            "value" : "mistia://family-invite/..."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mistia:\/\/family-invite\/..."
+            "value" : "mistia://family-invite/..."
           }
         }
       }
@@ -8803,7 +8819,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Request wallet \/ card creation"
+            "value" : "Request wallet / card creation"
           }
         },
         "ja" : {
@@ -8815,7 +8831,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yêu cầu thêm mới ví \/ thẻ"
+            "value" : "Yêu cầu thêm mới ví / thẻ"
           }
         }
       }
@@ -9309,7 +9325,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wallets \/ cards"
+            "value" : "wallets / cards"
           }
         },
         "ja" : {
@@ -9321,7 +9337,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ví \/ thẻ"
+            "value" : "ví / thẻ"
           }
         }
       }
@@ -17241,6 +17257,29 @@
         }
       }
     },
+    "planning.duepayment.skipConfirmationMessage" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Are you sure you want to skip this bill for this month?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今月のこの請求をスキップしてもよろしいですか？"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bạn có chắc chắn muốn bỏ qua hóa đơn này cho kỳ tháng này không?"
+          }
+        }
+      }
+    },
     "planning.duepayment.skipThisMonth" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -17569,7 +17608,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add installment \/ loan"
+            "value" : "Add installment / loan"
           }
         },
         "ja" : {
@@ -17581,7 +17620,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thêm trả góp \/ vay"
+            "value" : "Thêm trả góp / vay"
           }
         }
       }
@@ -20214,7 +20253,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installment \/ loan icon"
+            "value" : "Installment / loan icon"
           }
         },
         "ja" : {
@@ -20226,7 +20265,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Icon khoản trả góp \/ vay"
+            "value" : "Icon khoản trả góp / vay"
           }
         }
       }
@@ -20306,7 +20345,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installment \/ loan"
+            "value" : "Installment / loan"
           }
         },
         "ja" : {
@@ -20318,7 +20357,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Khoản trả góp \/ vay"
+            "value" : "Khoản trả góp / vay"
           }
         }
       }
@@ -20329,7 +20368,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installment \/ loan"
+            "value" : "Installment / loan"
           }
         },
         "ja" : {
@@ -20341,7 +20380,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trả góp \/ vay"
+            "value" : "Trả góp / vay"
           }
         }
       }
@@ -20352,7 +20391,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "installments \/ loans"
+            "value" : "installments / loans"
           }
         },
         "ja" : {
@@ -20364,7 +20403,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "trả góp \/ vay"
+            "value" : "trả góp / vay"
           }
         }
       }
@@ -20375,7 +20414,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installments \/ loans"
+            "value" : "Installments / loans"
           }
         },
         "ja" : {
@@ -20387,7 +20426,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trả góp \/ vay"
+            "value" : "Trả góp / vay"
           }
         }
       }
@@ -20697,7 +20736,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Need %@\/month"
+            "value" : "Need %@/month"
           }
         },
         "ja" : {
@@ -20709,7 +20748,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cần thêm %@\/tháng"
+            "value" : "Cần thêm %@/tháng"
           }
         }
       }
@@ -20939,7 +20978,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chưa có khoản trả góp \/ vay"
+            "value" : "Chưa có khoản trả góp / vay"
           }
         }
       }
@@ -22629,7 +22668,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wallets \/ cards"
+            "value" : "wallets / cards"
           }
         },
         "ja" : {
@@ -22641,7 +22680,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ví \/ thẻ"
+            "value" : "ví / thẻ"
           }
         }
       }
@@ -22760,6 +22799,9 @@
           }
         }
       }
+    },
+    "Rating %lld out of 5" : {
+
     },
     "session.auth.cantResendEmailTitle" : {
       "extractionState" : "stale",
@@ -26999,19 +27041,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crypto \/ Digital Assets"
+            "value" : "Crypto / Digital Assets"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仮想通貨 \/ クリプト"
+            "value" : "仮想通貨 / クリプト"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tiền ảo \/ Crypto"
+            "value" : "Tiền ảo / Crypto"
           }
         }
       }
@@ -27091,19 +27133,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "E-Wallet \/ Barcode"
+            "value" : "E-Wallet / Barcode"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "電子マネー \/ バーコード決済"
+            "value" : "電子マネー / バーコード決済"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ví điện tử \/ Barcode"
+            "value" : "Ví điện tử / Barcode"
           }
         }
       }
@@ -27298,19 +27340,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Investment \/ Stocks"
+            "value" : "Investment / Stocks"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "投資 \/ 証券"
+            "value" : "投資 / 証券"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đầu tư \/ Chứng khoán"
+            "value" : "Đầu tư / Chứng khoán"
           }
         }
       }
@@ -27551,19 +27593,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prepaid \/ IC Card"
+            "value" : "Prepaid / IC Card"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "プリペイド \/ ICカード"
+            "value" : "プリペイド / ICカード"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thẻ trả trước \/ IC"
+            "value" : "Thẻ trả trước / IC"
           }
         }
       }
@@ -30058,19 +30100,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ used %@ \/ %@ (%@)."
+            "value" : "%@ used %@ / %@ (%@)."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ は %@ \/ %@（%@）を使用しました。"
+            "value" : "%@ は %@ / %@（%@）を使用しました。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ đã dùng %@ \/ %@ (%@)."
+            "value" : "%@ đã dùng %@ / %@ (%@)."
           }
         }
       }
@@ -38166,7 +38208,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Không tìm thấy khoản chờ thu \/ chờ trả này."
+            "value" : "Không tìm thấy khoản chờ thu / chờ trả này."
           }
         }
       }
@@ -38235,7 +38277,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nhập ai đã trả bao nhiêu để tính phần cần thu\/trả."
+            "value" : "Nhập ai đã trả bao nhiêu để tính phần cần thu/trả."
           }
         }
       }
@@ -38557,7 +38599,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chọn loại vay\/cho vay."
+            "value" : "Chọn loại vay/cho vay."
           }
         }
       }
@@ -39293,7 +39335,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Loại vay\/cho vay"
+            "value" : "Loại vay/cho vay"
           }
         }
       }
@@ -40822,19 +40864,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Used %@\/%@ receipt scans today."
+            "value" : "Used %@/%@ receipt scans today."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本日のレシート読み取りは %@\/%@ 回使用済みです。"
+            "value" : "本日のレシート読み取りは %@/%@ 回使用済みです。"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đã dùng %@\/%@ lượt quét bill hôm nay."
+            "value" : "Đã dùng %@/%@ lượt quét bill hôm nay."
           }
         }
       }
@@ -42238,6 +42280,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bạn đang nợ"
+          }
+        }
+      }
+    },
+    "v%@ (%@)" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "v%1$@ (%2$@)"
           }
         }
       }

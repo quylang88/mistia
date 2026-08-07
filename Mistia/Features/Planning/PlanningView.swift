@@ -958,54 +958,14 @@ struct PlanningView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
-        .alert(
-            L10n.planning.duepayment.skipThisMonth,
-            isPresented: Binding(
-                get: { skipTargetItem != nil },
-                set: { if !$0 { skipTargetItem = nil } }
-            )
-        ) {
-            if let item = skipTargetItem {
-                Button(L10n.planning.duepayment.skipThisMonth, role: .destructive) {
-                    performSkip(item)
-                }
-                Button(L10n.planning.duepayment.cancel, role: .cancel) {}
-            }
-        } message: {
-            Text(L10n.planning.duepayment.skipConfirmationMessage)
-        }
-        .alert(
-            L10n.planning.duepayment.undoSkip,
-            isPresented: Binding(
-                get: { undoSkipTargetItem != nil },
-                set: { if !$0 { undoSkipTargetItem = nil } }
-            )
-        ) {
-            if let item = undoSkipTargetItem {
-                Button(L10n.planning.duepayment.undo, role: .destructive) {
-                    performUndoSkip(item)
-                }
-                Button(L10n.planning.duepayment.cancel, role: .cancel) {}
-            }
-        } message: {
-            Text(L10n.planning.duepayment.undoSkipMessage)
-        }
-        .alert(
-            L10n.planning.duepayment.undoPayment,
-            isPresented: Binding(
-                get: { undoPaymentTargetItem != nil },
-                set: { if !$0 { undoPaymentTargetItem = nil } }
-            )
-        ) {
-            if let item = undoPaymentTargetItem {
-                Button(L10n.planning.duepayment.undoPayment, role: .destructive) {
-                    performUndoPayment(item)
-                }
-                Button(L10n.planning.duepayment.cancel, role: .cancel) {}
-            }
-        } message: {
-            Text(L10n.planning.duepayment.undoPaymentMessage)
-        }
+        .planningDueAlerts(
+            skipTargetItem: $skipTargetItem,
+            undoSkipTargetItem: $undoSkipTargetItem,
+            undoPaymentTargetItem: $undoPaymentTargetItem,
+            onSkip: performSkip,
+            onUndoSkip: performUndoSkip,
+            onUndoPayment: performUndoPayment
+        )
         .sheet(isPresented: $isMonthPickerPresented) {
             MistiaMonthPickerSheet(
                 selection: $selectedMonth,
@@ -2819,71 +2779,58 @@ private struct PlanningDueRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                PlanningIconTile(icon: item.iconSymbolName, color: tone.color)
+                HStack(spacing: 12) {
+                    PlanningIconTile(icon: item.iconSymbolName, color: tone.color)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    Text(amountText)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.name)
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                        Text(amountText)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTap()
                 }
 
                 Spacer(minLength: 10)
 
                 if item.status == .pending {
                     HStack(spacing: 8) {
-                        Button {
-                            onPay()
-                        } label: {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(MistiaAccent.purple.color)
-                                .frame(width: 36, height: 36)
-                                .background(MistiaAccent.purple.color.opacity(0.12), in: Circle())
-                        }
-                        .buttonStyle(.plain)
+                        PlanningDueIconButton(
+                            iconSymbol: "checkmark",
+                            accent: MistiaAccent.purple.color,
+                            action: onPay
+                        )
 
-                        Button {
-                            onSkip()
-                        } label: {
-                            Image(systemName: "arrow.forward.to.line.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 36, height: 36)
-                                .background(Color(UIColor.tertiarySystemFill), in: Circle())
-                        }
-                        .buttonStyle(.plain)
+                        PlanningDueIconButton(
+                            iconSymbol: "arrow.forward.to.line",
+                            accent: .secondary,
+                            action: onSkip
+                        )
                     }
                 } else if item.status == .skipped {
                     HStack(spacing: 8) {
                         PlanningStatusBadge(title: L10n.planning.duepayment.billSkipped, color: .secondary)
 
-                        Button {
-                            onUndoSkip()
-                        } label: {
-                            Image(systemName: "arrow.uturn.backward.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 36, height: 36)
-                                .background(Color(UIColor.tertiarySystemFill), in: Circle())
-                        }
-                        .buttonStyle(.plain)
+                        PlanningDueIconButton(
+                            iconSymbol: "arrow.uturn.backward",
+                            accent: .secondary,
+                            action: onUndoSkip
+                        )
                     }
                 } else if item.status == .paid {
                     HStack(spacing: 8) {
                         PlanningStatusBadge(title: L10n.planning.planning.paid, color: .mint)
 
-                        Button {
-                            onUndoPayment()
-                        } label: {
-                            Image(systemName: "arrow.uturn.backward.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(.mint)
-                                .frame(width: 36, height: 36)
-                                .background(Color.mint.opacity(0.12), in: Circle())
-                        }
-                        .buttonStyle(.plain)
+                        PlanningDueIconButton(
+                            iconSymbol: "arrow.uturn.backward",
+                            accent: .mint,
+                            action: onUndoPayment
+                        )
                     }
                 }
             }
@@ -2900,11 +2847,11 @@ private struct PlanningDueRow: View {
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(tone.color)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTap()
+                }
             }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
         }
     }
 
@@ -2975,6 +2922,27 @@ private struct PlanningDueRow: View {
             return item.paymentStartDate
         }
         return item.dueDate
+    }
+}
+
+private struct PlanningDueIconButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let iconSymbol: String
+    var accent: Color = MistiaAccent.purple.color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: iconSymbol)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(accent)
+                .frame(width: 32, height: 32)
+                .background {
+                    Circle()
+                        .fill(accent.opacity(colorScheme == .dark ? 0.22 : 0.12))
+                }
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: accent))
     }
 }
 
@@ -3548,5 +3516,66 @@ private extension Date {
 private extension Double {
     var percentText: String {
         "\(Int((self * 100).rounded()))%"
+    }
+}
+
+private extension View {
+    func planningDueAlerts(
+        skipTargetItem: Binding<PlanningRecurringDueSnapshot?>,
+        undoSkipTargetItem: Binding<PlanningRecurringDueSnapshot?>,
+        undoPaymentTargetItem: Binding<PlanningRecurringDueSnapshot?>,
+        onSkip: @escaping (PlanningRecurringDueSnapshot) -> Void,
+        onUndoSkip: @escaping (PlanningRecurringDueSnapshot) -> Void,
+        onUndoPayment: @escaping (PlanningRecurringDueSnapshot) -> Void
+    ) -> some View {
+        self
+            .alert(
+                L10n.planning.duepayment.skipThisMonth,
+                isPresented: Binding(
+                    get: { skipTargetItem.wrappedValue != nil },
+                    set: { if !$0 { skipTargetItem.wrappedValue = nil } }
+                )
+            ) {
+                if let item = skipTargetItem.wrappedValue {
+                    Button(L10n.planning.duepayment.skipThisMonth, role: .destructive) {
+                        onSkip(item)
+                    }
+                    Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+                }
+            } message: {
+                Text(L10n.planning.duepayment.skipConfirmationMessage)
+            }
+            .alert(
+                L10n.planning.duepayment.undoSkip,
+                isPresented: Binding(
+                    get: { undoSkipTargetItem.wrappedValue != nil },
+                    set: { if !$0 { undoSkipTargetItem.wrappedValue = nil } }
+                )
+            ) {
+                if let item = undoSkipTargetItem.wrappedValue {
+                    Button(L10n.planning.duepayment.undo, role: .destructive) {
+                        onUndoSkip(item)
+                    }
+                    Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+                }
+            } message: {
+                Text(L10n.planning.duepayment.undoSkipMessage)
+            }
+            .alert(
+                L10n.planning.duepayment.undoPayment,
+                isPresented: Binding(
+                    get: { undoPaymentTargetItem.wrappedValue != nil },
+                    set: { if !$0 { undoPaymentTargetItem.wrappedValue = nil } }
+                )
+            ) {
+                if let item = undoPaymentTargetItem.wrappedValue {
+                    Button(L10n.planning.duepayment.undoPayment, role: .destructive) {
+                        onUndoPayment(item)
+                    }
+                    Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+                }
+            } message: {
+                Text(L10n.planning.duepayment.undoPaymentMessage)
+            }
     }
 }

@@ -1865,6 +1865,8 @@ nonisolated enum L10n {
             static func paymentFailed(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.paymentFailed", vi: "Không thể thanh toán", en: "Payment failed", ja: "支払いに失敗しました", language: language) }
             static var paymentWallet: String { L10n.tr("planning.duepayment.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット") }
             static func paymentWallet(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット", language: language) }
+            static var skipConfirmationMessage: String { L10n.tr("planning.duepayment.skipConfirmationMessage", vi: "Bạn có chắc chắn muốn bỏ qua hóa đơn này cho kỳ tháng này không?", en: "Are you sure you want to skip this bill for this month?", ja: "今月のこの請求をスキップしてもよろしいですか？") }
+            static func skipConfirmationMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.skipConfirmationMessage", vi: "Bạn có chắc chắn muốn bỏ qua hóa đơn này cho kỳ tháng này không?", en: "Are you sure you want to skip this bill for this month?", ja: "今月のこの請求をスキップしてもよろしいですか？", language: language) }
             static var skipThisMonth: String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua", en: "Skip", ja: "スキップ") }
             static func skipThisMonth(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.skipThisMonth", vi: "Bỏ qua", en: "Skip", ja: "スキップ", language: language) }
             static var thisBillHasNoDefaultAmount: String { L10n.tr("planning.duepayment.thisBillHasNoDefaultAmount", vi: "Hóa đơn này chưa có số tiền mặc định.", en: "This bill has no default amount.", ja: "この請求にはデフォルトの金額がありません。") }
