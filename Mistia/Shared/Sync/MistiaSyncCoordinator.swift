@@ -1969,7 +1969,7 @@ actor SyncCoordinator {
     }
 }
 
-private enum RecordAuthority {
+private nonisolated enum RecordAuthority: Equatable, Sendable {
     case local
     case remote
     case unresolved

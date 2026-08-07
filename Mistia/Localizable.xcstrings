@@ -1,6 +1,30 @@
 {
   "sourceLanguage": "vi",
   "strings": {
+    "": {},
+    "%lld bản ghi": {},
+    "%lld/%lld": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "%lld/5": {},
+    "+": {},
+    "-": {},
+    "Bạn cảm thấy Mistia thế nào?": {},
+    "Chi tiêu": {},
+    "Chưa có bản sao lưu nào trên thiết bị": {},
+    "Date": {},
+    "Giá trị": {},
+    "Không hỏi lại": {},
+    "Ngày": {},
+    "Rating %lld out of 5": {},
+    "Value": {},
     "app.mistia.loadingYourData": {
       "extractionState": "stale",
       "localizations": {
@@ -852,6 +876,29 @@
         }
       }
     },
+    "common.error": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラー"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lỗi"
+          }
+        }
+      }
+    },
     "common.off": {
       "extractionState": "stale",
       "localizations": {
@@ -898,52 +945,6 @@
         }
       }
     },
-    "common.error": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Error"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "エラー"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lỗi"
-          }
-        }
-      }
-    },
-    "common.unknownError": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unknown error"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不明なエラー"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lỗi không xác định"
-          }
-        }
-      }
-    },
     "common.on": {
       "extractionState": "stale",
       "localizations": {
@@ -986,6 +987,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lưu"
+          }
+        }
+      }
+    },
+    "common.unknownError": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown error"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明なエラー"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lỗi không xác định"
           }
         }
       }
@@ -6304,6 +6328,7 @@
       }
     },
     "management.balanceEditor.categoryPickerTitleExpense": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -6326,6 +6351,7 @@
       }
     },
     "management.balanceEditor.categoryPickerTitleIncome": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -6348,6 +6374,7 @@
       }
     },
     "management.balanceEditor.categorySectionTitle": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -10418,6 +10445,7 @@
       }
     },
     "management.managementauth.applyNewestToAll": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -10900,6 +10928,7 @@
       }
     },
     "management.managementauth.cloudChangedRefreshAction": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -10922,6 +10951,7 @@
       }
     },
     "management.managementauth.cloudChangedRefreshMessage": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -10944,6 +10974,7 @@
       }
     },
     "management.managementauth.cloudChangedRefreshTitle": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -10966,6 +10997,7 @@
       }
     },
     "management.managementauth.cloudChangedRefreshing": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -12736,6 +12768,7 @@
       }
     },
     "management.managementauth.newer": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -13678,6 +13711,7 @@
       }
     },
     "management.managementauth.syncConflictCloud": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -13700,6 +13734,7 @@
       }
     },
     "management.managementauth.syncConflictKeepCloud": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -13722,6 +13757,7 @@
       }
     },
     "management.managementauth.syncConflictKeepThisDevice": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -13744,6 +13780,7 @@
       }
     },
     "management.managementauth.syncConflictReviewSubtitle": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -13766,6 +13803,7 @@
       }
     },
     "management.managementauth.syncConflictReviewTitle": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -13788,6 +13826,7 @@
       }
     },
     "management.managementauth.syncConflictThisDevice": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -17466,6 +17505,52 @@
         }
       }
     },
+    "planning.duepayment.billSkipped": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スキップ済み"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã bỏ qua"
+          }
+        }
+      }
+    },
+    "planning.duepayment.cancel": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセル"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hủy"
+          }
+        }
+      }
+    },
     "planning.duepayment.chooseWallet": {
       "extractionState": "stale",
       "localizations": {
@@ -17673,52 +17758,6 @@
         }
       }
     },
-    "planning.duepayment.thisBillHasNoDefaultAmount": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This bill has no default amount."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この請求にはデフォルトの金額がありません。"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hóa đơn này chưa có số tiền mặc định."
-          }
-        }
-      }
-    },
-    "planning.duepayment.billSkipped": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Skipped"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スキップ済み"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Đã bỏ qua"
-          }
-        }
-      }
-    },
     "planning.duepayment.skipThisMonth": {
       "extractionState": "stale",
       "localizations": {
@@ -17742,48 +17781,25 @@
         }
       }
     },
-    "planning.duepayment.undoSkip": {
+    "planning.duepayment.thisBillHasNoDefaultAmount": {
       "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Undo skip"
+            "value": "This bill has no default amount."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "スキップを取り消す"
+            "value": "この請求にはデフォルトの金額がありません。"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hoàn tác bỏ qua"
-          }
-        }
-      }
-    },
-    "planning.duepayment.cancel": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キャンセル"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hủy"
+            "value": "Hóa đơn này chưa có số tiền mặc định."
           }
         }
       }
@@ -17807,29 +17823,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hoàn tác"
-          }
-        }
-      }
-    },
-    "planning.duepayment.undoSkipMessage": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Are you sure you want to undo skipping this bill? It will return to pending status."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この請求のスキップを取り消しますか？未払い状態に戻ります。"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán."
           }
         }
       }
@@ -17880,25 +17873,48 @@
         }
       }
     },
-    "transactions.transactioneditor.thisTransactionIsLinkedToABillPayment": {
+    "planning.duepayment.undoSkip": {
       "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This transaction was automatically created from a bill payment. To undo, please perform undo in the Bills section."
+            "value": "Undo skip"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この取引は請求の支払いから自動作成されました。取り消すには、請求セクションで取り消しを行ってください。"
+            "value": "スキップを取り消す"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch này được tạo tự động từ thanh toán hóa đơn. Để hoàn tác hoặc xóa, vui lòng thực hiện hoàn tác tại mục Hóa đơn."
+            "value": "Hoàn tác bỏ qua"
+          }
+        }
+      }
+    },
+    "planning.duepayment.undoSkipMessage": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Are you sure you want to undo skipping this bill? It will return to pending status."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この請求のスキップを取り消しますか？未払い状態に戻ります。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán."
           }
         }
       }
@@ -24159,29 +24175,6 @@
         }
       }
     },
-    "settings.feedback.title": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send feedback"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フィードバック"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gửi feedback"
-          }
-        }
-      }
-    },
     "settings.feedback.addMore": {
       "extractionState": "stale",
       "localizations": {
@@ -24224,29 +24217,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Thêm ảnh đính kèm (tối đa 5)"
-          }
-        }
-      }
-    },
-    "settings.feedback.photoSectionTitle": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attached Photos"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添付画像"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hình ảnh đính kèm"
           }
         }
       }
@@ -24435,6 +24405,29 @@
         }
       }
     },
+    "settings.feedback.photoSectionTitle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attached Photos"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添付画像"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hình ảnh đính kèm"
+          }
+        }
+      }
+    },
     "settings.feedback.submit": {
       "extractionState": "stale",
       "localizations": {
@@ -24500,6 +24493,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cảm ơn bạn!"
+          }
+        }
+      }
+    },
+    "settings.feedback.title": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send feedback"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィードバック"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gửi feedback"
           }
         }
       }
@@ -30646,6 +30662,7 @@
       }
     },
     "shared.family.permissionRequest.sendingMessage": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -30668,6 +30685,7 @@
       }
     },
     "shared.family.permissionRequest.sendingTitle": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -42097,6 +42115,29 @@
         }
       }
     },
+    "transactions.transactioneditor.thisTransactionIsLinkedToABillPayment": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This transaction was automatically created from a bill payment. To undo, please perform undo in the Bills section."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この取引は請求の支払いから自動作成されました。取り消すには、請求セクションで取り消しを行ってください。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giao dịch này được tạo tự động từ thanh toán hóa đơn. Để hoàn tác hoặc xóa, vui lòng thực hiện hoàn tác tại mục Hóa đơn."
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.thisTransactionIsPartOfAPaid": {
       "extractionState": "stale",
       "localizations": {
@@ -43798,7 +43839,20 @@
           }
         }
       }
-    }
+    },
+    "v%@ (%@)": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "new",
+            "value": "v%1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "Ý kiến của bạn giúp chúng tôi hoàn thiện ứng dụng hơn mỗi ngày.": {},
+    "Để sau": {},
+    "💬": {}
   },
   "version": "1.0"
 }

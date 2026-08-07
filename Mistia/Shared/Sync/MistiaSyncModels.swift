@@ -1967,7 +1967,7 @@ extension MistiaSyncConflictKind {
 }
 
 extension JSONDecoder {
-    fileprivate static func threadCached(key: String, configure: () -> JSONDecoder) -> JSONDecoder {
+    fileprivate nonisolated static func threadCached(key: String, configure: () -> JSONDecoder) -> JSONDecoder {
         let threadDict = Thread.current.threadDictionary
         if let cached = threadDict[key] as? JSONDecoder { return cached }
         let decoder = configure()
@@ -1994,7 +1994,7 @@ extension JSONDecoder {
         }
     }
 
-    static var mistiaBackupDecoder: JSONDecoder {
+    nonisolated static var mistiaBackupDecoder: JSONDecoder {
         threadCached(key: "MistiaSyncJSONDecoder.mistiaBackupDecoder") {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .custom { decoder in
@@ -2018,7 +2018,7 @@ extension JSONDecoder {
 }
 
 extension JSONEncoder {
-    fileprivate static func threadCached(key: String, configure: () -> JSONEncoder) -> JSONEncoder {
+    fileprivate nonisolated static func threadCached(key: String, configure: () -> JSONEncoder) -> JSONEncoder {
         let threadDict = Thread.current.threadDictionary
         if let cached = threadDict[key] as? JSONEncoder { return cached }
         let encoder = configure()

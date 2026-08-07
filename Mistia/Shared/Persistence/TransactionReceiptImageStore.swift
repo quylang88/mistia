@@ -1,11 +1,11 @@
 import Foundation
 import SwiftData
 
-struct TransactionReceiptImageStore {
+nonisolated struct TransactionReceiptImageStore {
     let fileManager: FileManager
     let baseDirectory: URL
 
-    init(
+    nonisolated init(
         fileManager: FileManager = .default,
         baseDirectory: URL? = nil
     ) {
@@ -83,7 +83,7 @@ struct TransactionReceiptImageStore {
         }
     }
 
-    func deleteReceipt(
+    nonisolated func deleteReceipt(
         for transactionID: UUID,
         context: ModelContext,
         saveContext: Bool = true

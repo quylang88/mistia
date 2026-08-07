@@ -497,7 +497,7 @@ struct DuePaymentSheet: View {
     }
 
     private func undoSkip(dueItem: PlanningRecurringDueSnapshot?) {
-        guard let dueItem else { return }
+        guard dueItem != nil else { return }
 
         do {
             if let deletedID = try PlanningPersistenceSupport.undoDueSkip(
@@ -520,7 +520,7 @@ struct DuePaymentSheet: View {
     }
 
     private func undoPayment(dueItem: PlanningRecurringDueSnapshot?) {
-        guard let dueItem else { return }
+        guard dueItem != nil else { return }
 
         do {
             let undone = try PlanningPersistenceSupport.undoDuePayment(
