@@ -2604,6 +2604,8 @@ nonisolated enum L10n {
         }
 
         nonisolated enum feedback {
+            static var addMore: String { L10n.tr("settings.feedback.addMore", vi: "Thêm", en: "Add", ja: "追加") }
+            static func addMore(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.addMore", vi: "Thêm", en: "Add", ja: "追加", language: language) }
             static var addPhoto: String { L10n.tr("settings.feedback.addPhoto", vi: "Thêm ảnh đính kèm (tối đa 5)", en: "Add photos (max 5)", ja: "写真を添付（最大5枚）") }
             static func addPhoto(language: MistiaAppLanguage) -> String { L10n.tr("settings.feedback.addPhoto", vi: "Thêm ảnh đính kèm (tối đa 5)", en: "Add photos (max 5)", ja: "写真を添付（最大5枚）", language: language) }
             static var categoryBug: String { L10n.tr("settings.feedback.categoryBug", vi: "Báo lỗi", en: "Report Bug", ja: "バグ報告") }

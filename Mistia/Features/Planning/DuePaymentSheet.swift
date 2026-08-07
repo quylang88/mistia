@@ -508,7 +508,7 @@ struct DuePaymentSheet: View {
                 modelContext: modelContext,
                 calendar: calendar
             ) {
-                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedID)
+                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedID, modifiedAt: .now)
             }
             onPaid?()
             dismiss()
@@ -532,10 +532,10 @@ struct DuePaymentSheet: View {
                 calendar: calendar
             )
             if let deletedTxID = undone.deletedTransactionID {
-                sessionStore.recordDelete(entity: .transaction, recordID: deletedTxID)
+                sessionStore.recordDelete(entity: .transaction, recordID: deletedTxID, modifiedAt: .now)
             }
             if let deletedOccID = undone.deletedOccurrenceID {
-                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedOccID)
+                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedOccID, modifiedAt: .now)
             }
             onPaid?()
             dismiss()

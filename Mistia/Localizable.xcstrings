@@ -24182,6 +24182,29 @@
         }
       }
     },
+    "settings.feedback.addMore": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thêm"
+          }
+        }
+      }
+    },
     "settings.feedback.addPhoto": {
       "extractionState": "stale",
       "localizations": {
