@@ -275,6 +275,9 @@ struct PlanningView: View {
     @State private var installmentEditorTarget: PlanningInstallmentEditorTarget?
     @State private var creditCardEditorTarget: PlanningCreditCardEditorTarget?
     @State private var duePaymentTarget: DuePaymentSheetTarget?
+    @State private var skipTargetItem: PlanningRecurringDueSnapshot?
+    @State private var undoSkipTargetItem: PlanningRecurringDueSnapshot?
+    @State private var undoPaymentTargetItem: PlanningRecurringDueSnapshot?
     @State private var destination: PlanningNavigationDestination?
     @State private var permissionPrompt: PlanningPermissionPrompt?
     @State private var walletPermissionPrompt: PlanningWalletPermissionPrompt?
@@ -955,6 +958,54 @@ struct PlanningView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
+        .alert(
+            L10n.planning.duepayment.skipThisMonth,
+            isPresented: Binding(
+                get: { skipTargetItem != nil },
+                set: { if !$0 { skipTargetItem = nil } }
+            )
+        ) {
+            if let item = skipTargetItem {
+                Button(L10n.planning.duepayment.skipThisMonth, role: .destructive) {
+                    performSkip(item)
+                }
+                Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+            }
+        } message: {
+            Text(L10n.planning.duepayment.skipConfirmationMessage)
+        }
+        .alert(
+            L10n.planning.duepayment.undoSkip,
+            isPresented: Binding(
+                get: { undoSkipTargetItem != nil },
+                set: { if !$0 { undoSkipTargetItem = nil } }
+            )
+        ) {
+            if let item = undoSkipTargetItem {
+                Button(L10n.planning.duepayment.undo, role: .destructive) {
+                    performUndoSkip(item)
+                }
+                Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+            }
+        } message: {
+            Text(L10n.planning.duepayment.undoSkipMessage)
+        }
+        .alert(
+            L10n.planning.duepayment.undoPayment,
+            isPresented: Binding(
+                get: { undoPaymentTargetItem != nil },
+                set: { if !$0 { undoPaymentTargetItem = nil } }
+            )
+        ) {
+            if let item = undoPaymentTargetItem {
+                Button(L10n.planning.duepayment.undoPayment, role: .destructive) {
+                    performUndoPayment(item)
+                }
+                Button(L10n.planning.duepayment.cancel, role: .cancel) {}
+            }
+        } message: {
+            Text(L10n.planning.duepayment.undoPaymentMessage)
+        }
         .sheet(isPresented: $isMonthPickerPresented) {
             MistiaMonthPickerSheet(
                 selection: $selectedMonth,
@@ -1305,6 +1356,69 @@ struct PlanningView: View {
             name: item.name,
             ownerUserID: ownerUserID
         )
+    }
+
+    private func performSkip(_ item: PlanningRecurringDueSnapshot) {
+        do {
+            let selectedMonthDate = item.paymentStartDate
+            let occurrence = try PlanningPersistenceSupport.saveDueSkip(
+                sourceKind: item.sourceKind,
+                sourceID: item.sourceID,
+                selectedMonth: selectedMonthDate,
+                scheduledDate: item.dueDate,
+                occurrences: storedOccurrences,
+                modelContext: modelContext,
+                actorUserID: sessionStore.activeLocalProfileUserID,
+                calendar: calendar
+            )
+            sessionStore.recordUpsert(
+                entity: .dueOccurrenceRecord,
+                recordID: occurrence.id,
+                modifiedAt: occurrence.updatedAt
+            )
+            let monthKey = PlanningLogic.monthKey(for: selectedMonthDate, calendar: calendar)
+            MistiaRecurringBillMaintenance.resolveNotifications(
+                for: item.sourceID,
+                monthKey: monthKey,
+                modelContext: modelContext
+            )
+        } catch {}
+    }
+
+    private func performUndoSkip(_ item: PlanningRecurringDueSnapshot) {
+        do {
+            let selectedMonthDate = item.paymentStartDate
+            if let deletedID = try PlanningPersistenceSupport.undoDueSkip(
+                sourceKind: item.sourceKind,
+                sourceID: item.sourceID,
+                selectedMonth: selectedMonthDate,
+                occurrences: storedOccurrences,
+                modelContext: modelContext,
+                calendar: calendar
+            ) {
+                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedID, modifiedAt: .now)
+            }
+        } catch {}
+    }
+
+    private func performUndoPayment(_ item: PlanningRecurringDueSnapshot) {
+        do {
+            let selectedMonthDate = item.paymentStartDate
+            let undone = try PlanningPersistenceSupport.undoDuePayment(
+                sourceKind: item.sourceKind,
+                sourceID: item.sourceID,
+                selectedMonth: selectedMonthDate,
+                occurrences: storedOccurrences,
+                modelContext: modelContext,
+                calendar: calendar
+            )
+            if let deletedTxID = undone.deletedTransactionID {
+                sessionStore.recordDelete(entity: .transaction, recordID: deletedTxID, modifiedAt: .now)
+            }
+            if let deletedOccID = undone.deletedOccurrenceID {
+                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedOccID, modifiedAt: .now)
+            }
+        } catch {}
     }
 
     private func dueOwnerUserID(for item: PlanningRecurringDueSnapshot) -> UUID? {
@@ -2072,6 +2186,9 @@ private struct DueRowsSection: View {
     let onAdd: () -> Void
     let onEdit: (PlanningRecurringDueSnapshot) -> Void
     var onPay: ((PlanningRecurringDueSnapshot) -> Void)? = nil
+    var onSkip: ((PlanningRecurringDueSnapshot) -> Void)? = nil
+    var onUndoSkip: ((PlanningRecurringDueSnapshot) -> Void)? = nil
+    var onUndoPayment: ((PlanningRecurringDueSnapshot) -> Void)? = nil
 
     var body: some View {
         if items.isEmpty {
@@ -2091,9 +2208,10 @@ private struct DueRowsSection: View {
                         item: item,
                         referenceDate: referenceDate,
                         onTap: { onEdit(item) },
-                        onPay: {
-                            onPay?(item)
-                        }
+                        onPay: { onPay?(item) },
+                        onSkip: { onSkip?(item) },
+                        onUndoSkip: { onUndoSkip?(item) },
+                        onUndoPayment: { onUndoPayment?(item) }
                     )
                     .padding(.horizontal, 15)
                     .padding(.vertical, 12)
@@ -2694,6 +2812,9 @@ private struct PlanningDueRow: View {
     let referenceDate: Date
     let onTap: () -> Void
     let onPay: () -> Void
+    let onSkip: () -> Void
+    let onUndoSkip: () -> Void
+    let onUndoPayment: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2710,12 +2831,60 @@ private struct PlanningDueRow: View {
 
                 Spacer(minLength: 10)
 
-                if showsPayButton {
-                    PlanningDueActionButton(title: L10n.planning.planning.pay) {
-                        onPay()
+                if item.status == .pending {
+                    HStack(spacing: 8) {
+                        Button {
+                            onPay()
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(MistiaAccent.purple.color)
+                                .frame(width: 36, height: 36)
+                                .background(MistiaAccent.purple.color.opacity(0.12), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            onSkip()
+                        } label: {
+                            Image(systemName: "arrow.forward.to.line.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 36, height: 36)
+                                .background(Color(UIColor.tertiarySystemFill), in: Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                } else {
-                    PlanningStatusBadge(title: statusText, color: tone.color)
+                } else if item.status == .skipped {
+                    HStack(spacing: 8) {
+                        PlanningStatusBadge(title: L10n.planning.duepayment.billSkipped, color: .secondary)
+
+                        Button {
+                            onUndoSkip()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 36, height: 36)
+                                .background(Color(UIColor.tertiarySystemFill), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else if item.status == .paid {
+                    HStack(spacing: 8) {
+                        PlanningStatusBadge(title: L10n.planning.planning.paid, color: .mint)
+
+                        Button {
+                            onUndoPayment()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(.mint)
+                                .frame(width: 36, height: 36)
+                                .background(Color.mint.opacity(0.12), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
 
@@ -2766,10 +2935,6 @@ private struct PlanningDueRow: View {
                 L10n.planning.planning.due2
             }
         }
-    }
-
-    private var showsPayButton: Bool {
-        item.sourceKind == .recurringBill && item.status == .pending
     }
 
     private var dueDetailText: String {

@@ -258,28 +258,6 @@ struct DuePaymentSheet: View {
         } message: {
             if let alertMessage { Text(alertMessage) }
         }
-        .alert(
-            L10n.planning.duepayment.undoSkip,
-            isPresented: $showingUndoSkipAlert
-        ) {
-            Button(L10n.planning.duepayment.undo, role: .destructive) {
-                undoSkip(dueItem: dueItem)
-            }
-            Button(L10n.planning.duepayment.cancel, role: .cancel) {}
-        } message: {
-            Text(L10n.planning.duepayment.undoSkipMessage)
-        }
-        .alert(
-            L10n.planning.duepayment.undoPayment,
-            isPresented: $showingUndoPaymentAlert
-        ) {
-            Button(L10n.planning.duepayment.undoPayment, role: .destructive) {
-                undoPayment(dueItem: dueItem)
-            }
-            Button(L10n.planning.duepayment.cancel, role: .cancel) {}
-        } message: {
-            Text(L10n.planning.duepayment.undoPaymentMessage)
-        }
     }
 
     @ViewBuilder
@@ -300,39 +278,11 @@ struct DuePaymentSheet: View {
     private func paymentActionSection(dueItem: PlanningRecurringDueSnapshot?) -> some View {
         Section {
             VStack(spacing: 12) {
-                if dueItem?.status == .skipped {
-                    DuePaymentStatusCard(
-                        title: L10n.planning.duepayment.billSkipped,
-                        subtitle: L10n.planning.duepayment.undoSkip,
-                        iconSymbol: "arrow.uturn.backward.circle.fill",
-                        color: .secondary
-                    ) {
-                        showingUndoSkipAlert = true
-                    }
-                } else if dueItem?.status == .paid {
-                    DuePaymentStatusCard(
-                        title: L10n.planning.planning.paid,
-                        subtitle: L10n.planning.duepayment.undoPayment,
-                        iconSymbol: "checkmark.circle.fill",
-                        color: .mint
-                    ) {
-                        showingUndoPaymentAlert = true
-                    }
-                } else {
-                    DuePaymentPrimaryActionButton(
-                        title: L10n.planning.duepayment.payNow,
-                        isDisabled: payButtonDisabled(for: dueItem)
-                    ) {
-                        pay(dueItem: dueItem)
-                    }
-
-                    if dueItem?.status == .pending {
-                        DuePaymentSecondaryActionButton(
-                            title: L10n.planning.duepayment.skipThisMonth
-                        ) {
-                            skip(dueItem: dueItem)
-                        }
-                    }
+                DuePaymentPrimaryActionButton(
+                    title: L10n.planning.duepayment.payNow,
+                    isDisabled: payButtonDisabled(for: dueItem)
+                ) {
+                    pay(dueItem: dueItem)
                 }
             }
             .padding(.horizontal, 16)
