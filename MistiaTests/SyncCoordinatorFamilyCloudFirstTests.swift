@@ -144,7 +144,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
             modifiedAt: updatedAt.addingTimeInterval(900),
             baseVersion: 1
         )
-        coordinator.queue(mutation)
+        coordinator.outbox.enqueue(mutation)
 
         do {
             _ = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
@@ -232,7 +232,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
             modifiedAt: updatedAt.addingTimeInterval(960),
             baseVersion: 0
         )
-        coordinator.queue([conflictMutation, freshMutation])
+        coordinator.outbox.enqueue([conflictMutation, freshMutation])
 
         let summary = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirstCollectingConflicts(
             [conflictMutation, freshMutation],
@@ -325,7 +325,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
             modifiedAt: updatedAt,
             baseVersion: 0
         )
-        coordinator.queue(mutation)
+        coordinator.outbox.enqueue(mutation)
 
         let pushed = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
             [mutation],
@@ -428,7 +428,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
             modifiedAt: updatedAt,
             baseVersion: 0
         )
-        coordinator.queue(mutation)
+        coordinator.outbox.enqueue(mutation)
 
         let pushed = try await coordinator.pushQueuedMutationsOnly(
             [mutation],
@@ -490,7 +490,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
             modifiedAt: updatedAt,
             baseVersion: 0
         )
-        coordinator.queue(mutation)
+        coordinator.outbox.enqueue(mutation)
 
         let pushed = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
             [mutation],
@@ -584,7 +584,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
             outbox: outbox,
             deviceID: UUID()
         )
-        coordinator.queue(mutation)
+        coordinator.outbox.enqueue(mutation)
 
         let pushed = try await coordinator.pushQueuedMutationsOnly(
             [mutation],

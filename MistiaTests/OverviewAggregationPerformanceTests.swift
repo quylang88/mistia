@@ -252,7 +252,11 @@ final class OverviewAggregationPerformanceTests: XCTestCase {
             occurrenceSignature: .empty,
             settlementGroupSignature: settlementGroupSignature,
             settlementParticipantSignature: settlementParticipantSignature,
-            ownershipSignature: .empty
+            ownershipSignature: .empty,
+            investmentChannelSignature: .empty,
+            investmentAssetSignature: .empty,
+            investmentTradeSignature: .empty,
+            investmentValuationSignature: .empty
         )
     }
 

@@ -12,10 +12,10 @@ final class MistiaArchiveCleanupMaintenanceTests: XCTestCase {
 
         let recentDate = Date()
         let activeTx = LedgerTransaction(
-            displayTitle: "Test Tx",
+            primaryKind: .expense,
+            title: "Test Tx",
             amountMinor: 1000,
-            direction: .expense,
-            transactionDate: recentDate,
+            occurredAt: recentDate,
             updatedAt: recentDate
         )
         context.insert(activeTx)
@@ -44,13 +44,13 @@ final class MistiaArchiveCleanupMaintenanceTests: XCTestCase {
 
         let expiredDate = Date(timeIntervalSinceNow: -Double(MistiaArchiveRetention.retentionDays + 5) * 86400)
         let expiredTx = LedgerTransaction(
-            displayTitle: "Expired Archived Tx",
+            primaryKind: .expense,
+            title: "Expired Archived Tx",
             amountMinor: 5000,
-            direction: .expense,
-            transactionDate: expiredDate,
+            occurredAt: expiredDate,
+            updatedAt: expiredDate,
             isArchived: true,
-            archivedAt: expiredDate,
-            updatedAt: expiredDate
+            archivedAt: expiredDate
         )
         context.insert(expiredTx)
         try context.save()

@@ -10,7 +10,7 @@ final class AIBillImageProcessorTests: XCTestCase {
 
         XCTAssertLessThanOrEqual(draft.imageData.count, 3_800_000)
         XCTAssertEqual(draft.contentType, "image/jpeg")
-        XCTAssertGreaterThan(draft.image.size.width, 0)
+        XCTAssertGreaterThan(draft.image?.size.width ?? 0, 0)
         XCTAssertGreaterThan(draft.thumbnail.size.width, 0)
     }
 
