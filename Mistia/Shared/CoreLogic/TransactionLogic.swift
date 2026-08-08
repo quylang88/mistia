@@ -37,6 +37,7 @@ nonisolated struct TransactionCreditCardBalance: Equatable {
 
 nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
     let id: UUID
+    let financialDomain: TransactionFinancialDomain
     let primaryKind: TransactionPrimaryKind
     let transferSubtype: TransactionTransferSubtype?
     let debtIntent: TransactionDebtIntent?
@@ -74,6 +75,7 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
 
     init(
         id: UUID,
+        financialDomain: TransactionFinancialDomain = .ordinary,
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype?,
         debtIntent: TransactionDebtIntent?,
@@ -110,6 +112,7 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
         normalizedCounterpartyKey: String?
     ) {
         self.id = id
+        self.financialDomain = financialDomain
         self.primaryKind = primaryKind
         self.transferSubtype = transferSubtype
         self.debtIntent = debtIntent
@@ -2479,6 +2482,7 @@ extension LedgerTransaction {
     var snapshot: TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: id,
+            financialDomain: financialDomain,
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,

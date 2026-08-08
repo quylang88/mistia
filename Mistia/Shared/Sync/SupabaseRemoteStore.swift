@@ -70,6 +70,11 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         let recurringBillPlans: [RemoteRecurringBillPlan] = try await fetchRows(entity: .recurringBillPlan, subjectUserID: subjectUserID, session: session)
         let installmentPlans: [RemoteInstallmentPlan] = try await fetchRows(entity: .installmentPlan, subjectUserID: subjectUserID, session: session)
         let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchRows(entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session)
+        let investmentChannels: [RemoteInvestmentChannel] = try await fetchRows(entity: .investmentChannel, subjectUserID: subjectUserID, session: session)
+        let investmentAssets: [RemoteInvestmentAsset] = try await fetchRows(entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
+        let investmentTrades: [RemoteInvestmentTrade] = try await fetchRows(entity: .investmentTrade, subjectUserID: subjectUserID, session: session)
+        let investmentValuations: [RemoteInvestmentValuation] = try await fetchRows(entity: .investmentValuation, subjectUserID: subjectUserID, session: session)
+        let investmentPostings: [RemoteInvestmentWalletPosting] = try await fetchRows(entity: .investmentPosting, subjectUserID: subjectUserID, session: session)
 
         return MistiaRemoteSnapshot(
             wallets: wallets,
@@ -82,7 +87,12 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             savingsGoals: savingsGoals,
             recurringBillPlans: recurringBillPlans,
             installmentPlans: installmentPlans,
-            dueOccurrences: dueOccurrences
+            dueOccurrences: dueOccurrences,
+            investmentChannels: investmentChannels,
+            investmentAssets: investmentAssets,
+            investmentTrades: investmentTrades,
+            investmentValuations: investmentValuations,
+            investmentPostings: investmentPostings
         )
     }
 
@@ -115,6 +125,16 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.installmentPlan)
         case .dueOccurrenceRecord:
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
+        case .investmentChannel:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentChannel)
+        case .investmentAsset:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentAsset)
+        case .investmentTrade:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentTrade)
+        case .investmentValuation:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentValuation)
+        case .investmentPosting:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentPosting)
         }
     }
 
@@ -151,6 +171,19 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return .installmentPlan(try await createRow(row, entity: .installmentPlan, subjectUserID: subjectUserID, session: session))
         case .dueOccurrence(let row):
             return .dueOccurrence(try await createRow(row, entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session))
+        case .investmentChannel(let row):
+            return .investmentChannel(try await createRow(row, entity: .investmentChannel, subjectUserID: subjectUserID, session: session))
+        case .investmentAsset(let row):
+            return .investmentAsset(try await createRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session))
+        case .investmentTrade(let row):
+            guard let trade = try await mutateInvestmentTrade(row, expectedVersion: nil, force: false, session: session) else {
+                throw SupabaseServiceError.invalidResponse
+            }
+            return .investmentTrade(trade)
+        case .investmentValuation(let row):
+            return .investmentValuation(try await createRow(row, entity: .investmentValuation, subjectUserID: subjectUserID, session: session))
+        case .investmentPosting:
+            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
     }
 
@@ -190,6 +223,17 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return try await updateRow(row, entity: .installmentPlan, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.installmentPlan)
         case .dueOccurrence(let row):
             return try await updateRow(row, entity: .dueOccurrenceRecord, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
+        case .investmentChannel(let row):
+            return try await updateRow(row, entity: .investmentChannel, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentChannel)
+        case .investmentAsset(let row):
+            return try await updateRow(row, entity: .investmentAsset, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentAsset)
+        case .investmentTrade(let row):
+            return try await mutateInvestmentTrade(row, expectedVersion: expectedVersion, force: false, session: session)
+                .map(MistiaSyncUploadRecord.investmentTrade)
+        case .investmentValuation(let row):
+            return try await updateRow(row, entity: .investmentValuation, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentValuation)
+        case .investmentPosting:
+            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
     }
 
@@ -278,6 +322,26 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .dueOccurrenceRecord:
             let rows: [RemoteDueOccurrenceRecord] = try await performRequest(request: request)
             return rows.first.map(MistiaSyncUploadRecord.dueOccurrence)
+        case .investmentChannel:
+            let rows: [RemoteInvestmentChannel] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.investmentChannel)
+        case .investmentAsset:
+            let rows: [RemoteInvestmentAsset] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.investmentAsset)
+        case .investmentTrade:
+            return try await deleteInvestmentTrade(
+                tradeID: recordID,
+                ownerUserID: subjectUserID,
+                expectedVersion: expectedVersion,
+                modifiedAt: modifiedAt,
+                deviceID: deviceID,
+                session: session
+            ).map(MistiaSyncUploadRecord.investmentTrade)
+        case .investmentValuation:
+            let rows: [RemoteInvestmentValuation] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.investmentValuation)
+        case .investmentPosting:
+            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
     }
 
@@ -309,7 +373,60 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return .installmentPlan(try await upsertRow(row, entity: .installmentPlan, subjectUserID: subjectUserID, session: session))
         case .dueOccurrence(let row):
             return .dueOccurrence(try await upsertRow(row, entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session))
+        case .investmentChannel(let row):
+            return .investmentChannel(try await upsertRow(row, entity: .investmentChannel, subjectUserID: subjectUserID, session: session))
+        case .investmentAsset(let row):
+            return .investmentAsset(try await upsertRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session))
+        case .investmentTrade(let row):
+            guard let trade = try await mutateInvestmentTrade(row, expectedVersion: nil, force: true, session: session) else {
+                throw SupabaseServiceError.invalidResponse
+            }
+            return .investmentTrade(trade)
+        case .investmentValuation(let row):
+            return .investmentValuation(try await upsertRow(row, entity: .investmentValuation, subjectUserID: subjectUserID, session: session))
+        case .investmentPosting:
+            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
+    }
+
+    private func mutateInvestmentTrade(
+        _ row: RemoteInvestmentTrade,
+        expectedVersion: Int64?,
+        force: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteInvestmentTrade? {
+        let rows: [RemoteInvestmentTrade] = try await callRPC(
+            functionName: "mutate_investment_trade",
+            body: InvestmentTradeMutationRPCBody(
+                trade: row,
+                expectedVersion: expectedVersion,
+                force: force
+            ),
+            session: session
+        )
+        return rows.first { $0.id == row.id }
+    }
+
+    private func deleteInvestmentTrade(
+        tradeID: UUID,
+        ownerUserID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteInvestmentTrade? {
+        let rows: [RemoteInvestmentTrade] = try await callRPC(
+            functionName: "delete_investment_trade",
+            body: InvestmentTradeDeleteRPCBody(
+                tradeID: tradeID,
+                ownerUserID: ownerUserID,
+                expectedVersion: expectedVersion,
+                modifiedAt: modifiedAt,
+                deviceID: deviceID
+            ),
+            session: session
+        )
+        return rows.first
     }
 
     func createFamilyActivityNotification(
@@ -585,6 +702,34 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
     private func codingPathDescription(_ codingPath: [CodingKey]) -> String {
         let path = codingPath.map(\.stringValue).joined(separator: ".")
         return path.isEmpty ? "root" : path
+    }
+}
+
+private struct InvestmentTradeMutationRPCBody: Encodable {
+    let trade: RemoteInvestmentTrade
+    let expectedVersion: Int64?
+    let force: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case trade = "p_trade"
+        case expectedVersion = "p_expected_version"
+        case force = "p_force"
+    }
+}
+
+private struct InvestmentTradeDeleteRPCBody: Encodable {
+    let tradeID: UUID
+    let ownerUserID: UUID
+    let expectedVersion: Int64
+    let modifiedAt: Date
+    let deviceID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case tradeID = "p_trade_id"
+        case ownerUserID = "p_owner_user_id"
+        case expectedVersion = "p_expected_version"
+        case modifiedAt = "p_modified_at"
+        case deviceID = "p_device_id"
     }
 }
 

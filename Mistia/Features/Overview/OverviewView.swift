@@ -4,6 +4,7 @@ import SwiftUI
 
 private enum OverviewNavigationDestination: String, Identifiable {
     case profile
+    case investment
 
     var id: String { rawValue }
 }
@@ -108,6 +109,24 @@ private struct OverviewRenderSnapshotCache {
     let snapshot: OverviewRenderSnapshot
 }
 
+private struct InvestmentOverviewSnapshot {
+    let investedCapitalMinor: Int64
+    let realizedProfitLossMinor: Int64
+    let walletBalanceMinor: Int64
+    let marketValueInPrimaryCurrencyMinor: Int64
+    let currencyCode: String
+
+    static func empty(currencyCode: String) -> InvestmentOverviewSnapshot {
+        InvestmentOverviewSnapshot(
+            investedCapitalMinor: 0,
+            realizedProfitLossMinor: 0,
+            walletBalanceMinor: 0,
+            marketValueInPrimaryCurrencyMinor: 0,
+            currencyCode: currencyCode
+        )
+    }
+}
+
 struct OverviewRenderSnapshotCacheKey: Hashable {
     let activeScope: FamilyContext.Scope
     let selectedSubjectUserID: UUID?
@@ -134,6 +153,10 @@ struct OverviewRenderSnapshotCacheKey: Hashable {
     let settlementGroupSignature: MistiaCollectionChangeSignature
     let settlementParticipantSignature: MistiaCollectionChangeSignature
     let ownershipSignature: MistiaCollectionChangeSignature
+    let investmentChannelSignature: MistiaCollectionChangeSignature
+    let investmentAssetSignature: MistiaCollectionChangeSignature
+    let investmentTradeSignature: MistiaCollectionChangeSignature
+    let investmentValuationSignature: MistiaCollectionChangeSignature
 }
 
 struct OverviewView: View {
@@ -165,6 +188,10 @@ struct OverviewView: View {
     private var storedSettlementGroups: [SettlementGroup]
     @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)
     private var storedSettlementParticipants: [SettlementParticipant]
+    @Query private var storedInvestmentChannels: [InvestmentChannel]
+    @Query private var storedInvestmentAssets: [InvestmentAsset]
+    @Query private var storedInvestmentTrades: [InvestmentTrade]
+    @Query private var storedInvestmentValuations: [InvestmentValuation]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     private struct StatementTarget: Identifiable, Hashable {
@@ -240,11 +267,24 @@ struct OverviewView: View {
             isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
             familyContextStore: familyContextStore
         )
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let visibleWallets = FamilyScopedData.visible(
             storedWallets,
             entity: .wallet,
             scopeSnapshot: scopeSnapshot
-        )
+        ).filter { wallet in
+            let ownerUserID = walletOwnerMap[wallet.id]
+                ?? familyContextStore.selectedSubjectUserID
+                ?? sessionStore.activeLocalProfileUserID
+            guard let ownerUserID,
+                  InvestmentSystemWalletIdentity.isInvestmentWallet(
+                      walletID: wallet.id,
+                      ownerUserID: ownerUserID
+                  ) else {
+                return true
+            }
+            return canViewInvestment(ownerUserID: ownerUserID)
+        }
         let visibleBudgets = FamilyScopedData.visible(
             storedBudgets,
             entity: .budgetPlan,
@@ -286,6 +326,7 @@ struct OverviewView: View {
             },
             records: transactionRecords
         )
+        let investmentSnapshot = investmentOverviewSnapshot(balanceIndex: balanceIndex)
         let creditCardAccounts = visibleWallets.compactMap {
             $0.planningCreditCardSnapshot(balanceIndex: balanceIndex)
         }
@@ -334,6 +375,7 @@ struct OverviewView: View {
             currencyCode: currencyCode,
             balanceIndex: balanceIndex,
             exchangeRates: appExchangeRates,
+            additionalAssetValueMinor: investmentSnapshot.marketValueInPrimaryCurrencyMinor,
             familyTransactions: usesAggregateFamilyBudgetSpending ? familyTransactions : [],
             familySpendingAvailable: usesAggregateFamilyBudgetSpending,
             referenceDate: .now,
@@ -471,6 +513,32 @@ struct OverviewView: View {
                 ownershipScopes,
                 updatedAt: \.updatedAt,
                 deletedAt: { _ in nil }
+            ),
+            investmentChannelSignature: MistiaCollectionChangeSignature.make(
+                storedInvestmentChannels,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            investmentAssetSignature: MistiaCollectionChangeSignature.make(
+                storedInvestmentAssets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            investmentTradeSignature: MistiaCollectionChangeSignature.make(
+                storedInvestmentTrades,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            investmentValuationSignature: MistiaCollectionChangeSignature.make(
+                storedInvestmentValuations,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
             )
         )
     }
@@ -507,6 +575,111 @@ struct OverviewView: View {
     private var currentFamilyMemberUserIDs: Set<UUID> {
         guard isFamilyBudgetSpendingAvailable else { return [] }
         return Set(familyContextStore.members.map(\.userID))
+    }
+
+    private var ownerUserIDForInvestment: UUID? {
+        familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
+            ?? sessionStore.signedInUserID
+    }
+
+    private func canViewInvestment(ownerUserID: UUID) -> Bool {
+        ownerUserID == sessionStore.activeLocalProfileUserID
+            || ownerUserID == sessionStore.signedInUserID
+            || familyContextStore.canViewInvestment(ownerUserID: ownerUserID)
+    }
+
+    private func investmentOverviewSnapshot(
+        balanceIndex: TransactionWalletBalanceIndex? = nil
+    ) -> InvestmentOverviewSnapshot {
+        guard let ownerUserID = ownerUserIDForInvestment,
+              canViewInvestment(ownerUserID: ownerUserID) else {
+            return .empty(currencyCode: currencyCode)
+        }
+
+        let activeChannelIDs = Set(storedInvestmentChannels.lazy.filter {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived
+        }.map(\.id))
+        let ownerAssets = storedInvestmentAssets.filter {
+            $0.ownerUserID == ownerUserID
+                && $0.deletedAt == nil
+                && !$0.isArchived
+                && activeChannelIDs.contains($0.channelID)
+        }
+        let ownerTrades = storedInvestmentTrades.filter {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        }
+        let positions = ownerAssets.map { asset -> InvestmentAssetPositionSnapshot in
+            let assetTrades = ownerTrades
+                .filter { $0.assetID == asset.id }
+                .sorted(by: oldestOverviewInvestmentTradeFirst)
+            let quantity = assetTrades.last?.positionQuantityAfter ?? asset.openingQuantity
+            let costBasis = assetTrades.last?.positionCostBasisAfterMinor ?? asset.openingCostMinor
+            let latestValuation = storedInvestmentValuations
+                .filter { $0.assetID == asset.id && $0.deletedAt == nil }
+                .max { lhs, rhs in
+                    if lhs.valuedAt != rhs.valuedAt { return lhs.valuedAt < rhs.valuedAt }
+                    return lhs.createdAt < rhs.createdAt
+                }
+            return InvestmentAssetPositionSnapshot(
+                id: asset.id,
+                channelID: asset.channelID,
+                quantity: quantity,
+                remainingCostBasisMinor: costBasis,
+                marketValueMinor: latestValuation?.accountingMarketValueMinor
+            )
+        }
+
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        let systemWallet = storedWallets.first { $0.id == systemWalletID && $0.deletedAt == nil }
+        let accountingCurrency = systemWallet?.currencyCode ?? MistiaCurrencyLogic.normalizedCode(currencyCode)
+        let walletBalance: Int64
+        if let systemWallet {
+            let walletSnapshot = TransactionWalletSnapshot(
+                id: systemWallet.id,
+                kind: systemWallet.kind,
+                openingBalanceMinor: systemWallet.openingBalanceMinor
+            )
+            let resolvedIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
+                wallets: [walletSnapshot],
+                records: storedTransactions.map(\.snapshot)
+            )
+            walletBalance = resolvedIndex.balance(for: walletSnapshot)
+        } else {
+            walletBalance = 0
+        }
+
+        let monthStart = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+        let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? .now
+        let summary = InvestmentSummaryLogic.summary(
+            positions: positions,
+            trades: ownerTrades.map {
+                InvestmentTradeCalculation(
+                    id: $0.id,
+                    releasedCostBasisMinor: $0.releasedCostBasisMinor,
+                    realizedProfitLossMinor: $0.realizedProfitLossMinor,
+                    positionQuantityAfter: $0.positionQuantityAfter,
+                    positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor
+                )
+            },
+            tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
+            period: DateInterval(start: monthStart, end: monthEnd),
+            investmentWalletBalanceMinor: walletBalance
+        )
+        let marketValueInPrimaryCurrency = MistiaCurrencyLogic.convertedMinorAmount(
+            summary.marketValueMinor,
+            from: accountingCurrency,
+            to: currencyCode,
+            rates: appExchangeRates
+        ) ?? (accountingCurrency == MistiaCurrencyLogic.normalizedCode(currencyCode) ? summary.marketValueMinor : 0)
+
+        return InvestmentOverviewSnapshot(
+            investedCapitalMinor: summary.investedCapitalMinor,
+            realizedProfitLossMinor: summary.realizedProfitLossMinor,
+            walletBalanceMinor: summary.investmentWalletBalanceMinor,
+            marketValueInPrimaryCurrencyMinor: marketValueInPrimaryCurrency,
+            currencyCode: accountingCurrency
+        )
     }
 
     private var activeAlert: OverviewAlertPresentation? {
@@ -580,6 +753,12 @@ struct OverviewView: View {
                         openExpenseDay(date, transactionsByDay: renderSnapshot.postedExpenseTransactionsByDay)
                     }
                 )
+                InvestmentOverviewCard(
+                    snapshot: investmentOverviewSnapshot(),
+                    canView: ownerUserIDForInvestment.map(canViewInvestment(ownerUserID:)) ?? false
+                ) {
+                    destination = .investment
+                }
                 if !preparingEvents.isEmpty {
                     OverviewPreparingSettlementSection(
                         events: preparingEvents,
@@ -605,6 +784,8 @@ struct OverviewView: View {
                 switch route {
                 case .profile:
                     ManagementAccountView()
+                case .investment:
+                    InvestmentHubView(ownerUserIDOverride: ownerUserIDForInvestment)
                 }
             }
             .navigationDestination(item: $statementTarget) { target in
@@ -1188,6 +1369,88 @@ private enum MistiaOverviewDebugFixtures {
         calendar.date(byAdding: .day, value: dayOffset, to: monthStart) ?? monthStart
     }
     #endif
+}
+
+private func oldestOverviewInvestmentTradeFirst(_ lhs: InvestmentTrade, _ rhs: InvestmentTrade) -> Bool {
+    if lhs.occurredAt != rhs.occurredAt { return lhs.occurredAt < rhs.occurredAt }
+    if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+    return MistiaStableUUIDOrdering.precedes(lhs.id, rhs.id)
+}
+
+private struct InvestmentOverviewCard: View {
+    let snapshot: InvestmentOverviewSnapshot
+    let canView: Bool
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            MistiaGlassCard(cornerRadius: 22, tint: MistiaAccent.purple.color.opacity(0.06)) {
+                if canView {
+                    VStack(alignment: .leading, spacing: 13) {
+                        HStack {
+                            Label(L10n.investment.overview.cardTitle, systemImage: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(.tertiary)
+                        }
+                        HStack(spacing: 12) {
+                            metric(
+                                L10n.investment.hub.investedCapital,
+                                value: snapshot.investedCapitalMinor,
+                                tint: .blue
+                            )
+                            metric(
+                                L10n.investment.hub.realizedProfitLoss,
+                                value: snapshot.realizedProfitLossMinor,
+                                tint: snapshot.realizedProfitLossMinor >= 0 ? .green : .red
+                            )
+                            metric(
+                                L10n.investment.hub.walletBalance,
+                                value: snapshot.walletBalanceMinor,
+                                tint: snapshot.walletBalanceMinor >= 0 ? MistiaAccent.purple.color : .red
+                            )
+                        }
+                    }
+                } else {
+                    HStack(spacing: 13) {
+                        Image(systemName: "lock.shield.fill")
+                            .foregroundStyle(MistiaAccent.purple.color)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.investment.overview.privateTitle)
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                            Text(L10n.investment.overview.privateMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func metric(_ title: String, value: Int64, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value.formattedCurrency(code: snapshot.currencyCode))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 private struct OverviewHeroCard: View {

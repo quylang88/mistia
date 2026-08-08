@@ -5,6 +5,7 @@ enum MistiaShortcutKind: String, CaseIterable, Codable, Identifiable {
     case archivedItems
     case familyOverview
     case familyMember
+    case investment
     case receiptScan
     case syncNow
 
@@ -36,6 +37,7 @@ struct MistiaShortcutSelection: Equatable, Codable {
     static let backupRestore = MistiaShortcutSelection(kind: .backupRestore)
     static let archivedItems = MistiaShortcutSelection(kind: .archivedItems)
     static let familyOverview = MistiaShortcutSelection(kind: .familyOverview)
+    static let investment = MistiaShortcutSelection(kind: .investment)
     static let receiptScan = MistiaShortcutSelection(kind: .receiptScan)
     static let syncNow = MistiaShortcutSelection(kind: .syncNow)
 
@@ -77,6 +79,7 @@ enum MistiaShortcutResolvedAction: Equatable {
     case archivedItems
     case familyOverview(familyID: UUID)
     case memberOverview(userID: UUID)
+    case investment
     case receiptScan
     case syncNow
 
@@ -84,7 +87,7 @@ enum MistiaShortcutResolvedAction: Equatable {
         switch self {
         case .familyOverview, .memberOverview, .receiptScan, .syncNow:
             return true
-        case .backupRestore, .archivedItems:
+        case .backupRestore, .archivedItems, .investment:
             return false
         }
     }
@@ -185,6 +188,17 @@ enum MistiaShortcutLogic {
                     accessibilityLabel: L10n.settings.shortcut.member.quickViewAccessibility(member.displayName),
                     icon: .memberAvatar(initials: member.initials, avatarURL: member.avatarURL),
                     action: .memberOverview(userID: member.userID)
+                )
+            )
+
+        case .investment:
+            return MistiaShortcutResolution(
+                selection: .investment,
+                presentation: MistiaShortcutPresentation(
+                    title: L10n.settings.shortcut.option.investment.title,
+                    accessibilityLabel: L10n.settings.shortcut.option.investment.accessibility,
+                    icon: .systemImage("chart.line.uptrend.xyaxis"),
+                    action: .investment
                 )
             )
 

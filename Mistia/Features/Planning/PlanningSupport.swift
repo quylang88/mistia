@@ -783,6 +783,7 @@ extension LedgerTransaction {
     var planningRecordSnapshot: TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: id,
+            financialDomain: financialDomain,
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,

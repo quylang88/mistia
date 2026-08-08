@@ -94,6 +94,7 @@ nonisolated struct RemoteLedgerWallet: MistiaRemoteRow {
     var deletedAt: Date?
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
+    var systemPurposeRawValue: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -114,6 +115,32 @@ nonisolated struct RemoteLedgerWallet: MistiaRemoteRow {
         case deletedAt = "deleted_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
+        case systemPurposeRawValue = "system_purpose_raw_value"
+    }
+}
+
+nonisolated extension RemoteLedgerWallet {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
+        iconSymbolName = try container.decode(String.self, forKey: .iconSymbolName)
+        iconColorHex = try container.decode(String.self, forKey: .iconColorHex)
+        currencyCode = try container.decode(String.self, forKey: .currencyCode)
+        openingBalanceMinor = try container.decode(Int64.self, forKey: .openingBalanceMinor)
+        institutionDisplayName = try container.decodeIfPresent(String.self, forKey: .institutionDisplayName)
+        institutionPresetKey = try container.decodeIfPresent(String.self, forKey: .institutionPresetKey)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+        systemPurposeRawValue = try container.decodeIfPresent(String.self, forKey: .systemPurposeRawValue)
     }
 }
 
@@ -1007,6 +1034,30 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
     let recurringBillPlans: [RemoteRecurringBillPlan]
     let installmentPlans: [RemoteInstallmentPlan]
     let dueOccurrences: [RemoteDueOccurrenceRecord]
+    let investmentChannels: [RemoteInvestmentChannel]
+    let investmentAssets: [RemoteInvestmentAsset]
+    let investmentTrades: [RemoteInvestmentTrade]
+    let investmentValuations: [RemoteInvestmentValuation]
+    let investmentPostings: [RemoteInvestmentWalletPosting]
+
+    private enum CodingKeys: String, CodingKey {
+        case wallets
+        case creditCardProfiles
+        case categories
+        case settlementGroups
+        case settlementParticipants
+        case transactions
+        case budgetPlans
+        case savingsGoals
+        case recurringBillPlans
+        case installmentPlans
+        case dueOccurrences
+        case investmentChannels
+        case investmentAssets
+        case investmentTrades
+        case investmentValuations
+        case investmentPostings
+    }
 
     init(
         wallets: [RemoteLedgerWallet],
@@ -1019,7 +1070,12 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         savingsGoals: [RemoteSavingsGoal],
         recurringBillPlans: [RemoteRecurringBillPlan],
         installmentPlans: [RemoteInstallmentPlan],
-        dueOccurrences: [RemoteDueOccurrenceRecord]
+        dueOccurrences: [RemoteDueOccurrenceRecord],
+        investmentChannels: [RemoteInvestmentChannel] = [],
+        investmentAssets: [RemoteInvestmentAsset] = [],
+        investmentTrades: [RemoteInvestmentTrade] = [],
+        investmentValuations: [RemoteInvestmentValuation] = [],
+        investmentPostings: [RemoteInvestmentWalletPosting] = []
     ) {
         self.wallets = wallets
         self.creditCardProfiles = creditCardProfiles
@@ -1032,6 +1088,31 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         self.recurringBillPlans = recurringBillPlans
         self.installmentPlans = installmentPlans
         self.dueOccurrences = dueOccurrences
+        self.investmentChannels = investmentChannels
+        self.investmentAssets = investmentAssets
+        self.investmentTrades = investmentTrades
+        self.investmentValuations = investmentValuations
+        self.investmentPostings = investmentPostings
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        wallets = try container.decode([RemoteLedgerWallet].self, forKey: .wallets)
+        creditCardProfiles = try container.decode([RemoteCreditCardProfile].self, forKey: .creditCardProfiles)
+        categories = try container.decode([RemoteTransactionCategory].self, forKey: .categories)
+        settlementGroups = try container.decode([RemoteSettlementGroup].self, forKey: .settlementGroups)
+        settlementParticipants = try container.decodeIfPresent([RemoteSettlementParticipant].self, forKey: .settlementParticipants) ?? []
+        transactions = try container.decode([RemoteLedgerTransaction].self, forKey: .transactions)
+        budgetPlans = try container.decode([RemoteBudgetPlan].self, forKey: .budgetPlans)
+        savingsGoals = try container.decode([RemoteSavingsGoal].self, forKey: .savingsGoals)
+        recurringBillPlans = try container.decode([RemoteRecurringBillPlan].self, forKey: .recurringBillPlans)
+        installmentPlans = try container.decode([RemoteInstallmentPlan].self, forKey: .installmentPlans)
+        dueOccurrences = try container.decode([RemoteDueOccurrenceRecord].self, forKey: .dueOccurrences)
+        investmentChannels = try container.decodeIfPresent([RemoteInvestmentChannel].self, forKey: .investmentChannels) ?? []
+        investmentAssets = try container.decodeIfPresent([RemoteInvestmentAsset].self, forKey: .investmentAssets) ?? []
+        investmentTrades = try container.decodeIfPresent([RemoteInvestmentTrade].self, forKey: .investmentTrades) ?? []
+        investmentValuations = try container.decodeIfPresent([RemoteInvestmentValuation].self, forKey: .investmentValuations) ?? []
+        investmentPostings = try container.decodeIfPresent([RemoteInvestmentWalletPosting].self, forKey: .investmentPostings) ?? []
     }
 
     static let empty = MistiaRemoteSnapshot(
@@ -1045,7 +1126,12 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         savingsGoals: [],
         recurringBillPlans: [],
         installmentPlans: [],
-        dueOccurrences: []
+        dueOccurrences: [],
+        investmentChannels: [],
+        investmentAssets: [],
+        investmentTrades: [],
+        investmentValuations: [],
+        investmentPostings: []
     )
 
     var totalRowCount: Int {
@@ -1060,6 +1146,11 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
             + recurringBillPlans.count
             + installmentPlans.count
             + dueOccurrences.count
+            + investmentChannels.count
+            + investmentAssets.count
+            + investmentTrades.count
+            + investmentValuations.count
+            + investmentPostings.count
     }
 
     var activeRowCount: Int {
@@ -1074,6 +1165,11 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
             + recurringBillPlans.activeRemoteRowCount
             + installmentPlans.activeRemoteRowCount
             + dueOccurrences.activeRemoteRowCount
+            + investmentChannels.activeRemoteRowCount
+            + investmentAssets.activeRemoteRowCount
+            + investmentTrades.activeRemoteRowCount
+            + investmentValuations.activeRemoteRowCount
+            + investmentPostings.activeRemoteRowCount
     }
 
     var hasRemoteData: Bool {
@@ -1124,6 +1220,12 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         dueOccurrences.filter { $0.deletedAt == nil }
     }
 
+    var activeInvestmentChannels: [RemoteInvestmentChannel] { investmentChannels.filter { $0.deletedAt == nil } }
+    var activeInvestmentAssets: [RemoteInvestmentAsset] { investmentAssets.filter { $0.deletedAt == nil } }
+    var activeInvestmentTrades: [RemoteInvestmentTrade] { investmentTrades.filter { $0.deletedAt == nil } }
+    var activeInvestmentValuations: [RemoteInvestmentValuation] { investmentValuations.filter { $0.deletedAt == nil } }
+    var activeInvestmentPostings: [RemoteInvestmentWalletPosting] { investmentPostings.filter { $0.deletedAt == nil } }
+
     var fingerprint: String {
         let normalized = MistiaRemoteSnapshot(
             wallets: wallets.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
@@ -1136,7 +1238,12 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
             savingsGoals: savingsGoals.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
             recurringBillPlans: recurringBillPlans.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
             installmentPlans: installmentPlans.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
-            dueOccurrences: dueOccurrences.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) }
+            dueOccurrences: dueOccurrences.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            investmentChannels: investmentChannels.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            investmentAssets: investmentAssets.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            investmentTrades: investmentTrades.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            investmentValuations: investmentValuations.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
+            investmentPostings: investmentPostings.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) }
         )
 
         let encoder = JSONEncoder()
@@ -1190,6 +1297,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
     case recurringBillPlan(RemoteRecurringBillPlan)
     case installmentPlan(RemoteInstallmentPlan)
     case dueOccurrence(RemoteDueOccurrenceRecord)
+    case investmentChannel(RemoteInvestmentChannel)
+    case investmentAsset(RemoteInvestmentAsset)
+    case investmentTrade(RemoteInvestmentTrade)
+    case investmentValuation(RemoteInvestmentValuation)
+    case investmentPosting(RemoteInvestmentWalletPosting)
 
     var entity: MistiaSyncEntity {
         switch self {
@@ -1215,6 +1327,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             .installmentPlan
         case .dueOccurrence:
             .dueOccurrenceRecord
+        case .investmentChannel: .investmentChannel
+        case .investmentAsset: .investmentAsset
+        case .investmentTrade: .investmentTrade
+        case .investmentValuation: .investmentValuation
+        case .investmentPosting: .investmentPosting
         }
     }
 
@@ -1242,6 +1359,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.id
         case .dueOccurrence(let row):
             row.id
+        case .investmentChannel(let row): row.id
+        case .investmentAsset(let row): row.id
+        case .investmentTrade(let row): row.id
+        case .investmentValuation(let row): row.id
+        case .investmentPosting(let row): row.id
         }
     }
 
@@ -1269,6 +1391,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.updatedAt
         case .dueOccurrence(let row):
             row.updatedAt
+        case .investmentChannel(let row): row.updatedAt
+        case .investmentAsset(let row): row.updatedAt
+        case .investmentTrade(let row): row.updatedAt
+        case .investmentValuation(let row): row.updatedAt
+        case .investmentPosting(let row): row.updatedAt
         }
     }
 
@@ -1296,6 +1423,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.userID
         case .dueOccurrence(let row):
             row.userID
+        case .investmentChannel(let row): row.userID
+        case .investmentAsset(let row): row.userID
+        case .investmentTrade(let row): row.userID
+        case .investmentValuation(let row): row.userID
+        case .investmentPosting(let row): row.userID
         }
     }
 
@@ -1323,6 +1455,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.deletedAt
         case .dueOccurrence(let row):
             row.deletedAt
+        case .investmentChannel(let row): row.deletedAt
+        case .investmentAsset(let row): row.deletedAt
+        case .investmentTrade(let row): row.deletedAt
+        case .investmentValuation(let row): row.deletedAt
+        case .investmentPosting(let row): row.deletedAt
         }
     }
 
@@ -1350,6 +1487,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.syncVersion
         case .dueOccurrence(let row):
             row.syncVersion
+        case .investmentChannel(let row): row.syncVersion
+        case .investmentAsset(let row): row.syncVersion
+        case .investmentTrade(let row): row.syncVersion
+        case .investmentValuation(let row): row.syncVersion
+        case .investmentPosting(let row): row.syncVersion
         }
     }
 
@@ -1377,6 +1519,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.lastModifiedByDeviceID
         case .dueOccurrence(let row):
             row.lastModifiedByDeviceID
+        case .investmentChannel(let row): row.lastModifiedByDeviceID
+        case .investmentAsset(let row): row.lastModifiedByDeviceID
+        case .investmentTrade(let row): row.lastModifiedByDeviceID
+        case .investmentValuation(let row): row.lastModifiedByDeviceID
+        case .investmentPosting(let row): row.lastModifiedByDeviceID
         }
     }
 
@@ -1587,6 +1734,16 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
                 row.linkedTransactionID?.uuidString.lowercased() ?? "",
                 Self.dateString(row.deletedAt)
             ].joined(separator: "|")
+        case .investmentChannel(let row):
+            return [entity.rawValue, row.name, row.iconSymbolName, row.iconColorHex, String(row.sortOrder), row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
+        case .investmentAsset(let row):
+            return [entity.rawValue, row.channelID.uuidString, row.name, row.symbol ?? "", row.currencyCode, row.openingQuantityDecimalString, String(row.openingCostMinor), row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
+        case .investmentTrade(let row):
+            return [entity.rawValue, row.channelID.uuidString, row.assetID.uuidString, row.kindRawValue, row.quantityDecimalString, String(row.grossAmountMinor), String(row.feeMinor), String(row.releasedCostBasisMinor), String(row.realizedProfitLossMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
+        case .investmentValuation(let row):
+            return [entity.rawValue, row.assetID.uuidString, String(row.marketValueMinor), String(row.accountingMarketValueMinor), Self.dateString(row.valuedAt), Self.dateString(row.deletedAt)].joined(separator: "|")
+        case .investmentPosting(let row):
+            return [entity.rawValue, row.eventID.uuidString, row.walletID.uuidString, row.roleRawValue, String(row.amountMinor), String(row.accountingAmountMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
         }
     }
 
@@ -1617,6 +1774,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             return row.name
         case .dueOccurrence:
             return L10n.shared.sync.mistiasync.dueOccurrence
+        case .investmentChannel(let row): return row.name
+        case .investmentAsset(let row): return row.name
+        case .investmentTrade(let row): return row.kindRawValue == InvestmentTradeKind.buy.rawValue ? L10n.investment.hub.buy : L10n.investment.hub.sell
+        case .investmentValuation: return L10n.investment.valuation.title
+        case .investmentPosting: return L10n.investment.wallet.detailTitle
         }
     }
 
@@ -1628,7 +1790,8 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         guard !mappings.isEmpty else { return self }
 
         switch self {
-        case .wallet, .creditCardProfile, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrence:
+        case .wallet, .creditCardProfile, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrence,
+             .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation, .investmentPosting:
             return self
         case .category(var row):
             if let replacementID = mappings[row.id] {
@@ -1709,6 +1872,16 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.syncVersion = nextVersion
             row.lastModifiedByDeviceID = deviceID
             return .dueOccurrence(row)
+        case .investmentChannel(var row):
+            row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentChannel(row)
+        case .investmentAsset(var row):
+            row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentAsset(row)
+        case .investmentTrade(var row):
+            row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentTrade(row)
+        case .investmentValuation(var row):
+            row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentValuation(row)
+        case .investmentPosting(var row):
+            row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentPosting(row)
         }
     }
 
@@ -1738,6 +1911,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             data = try encoder.encode(row)
         case .dueOccurrence(let row):
             data = try encoder.encode(row)
+        case .investmentChannel(let row): data = try encoder.encode(row)
+        case .investmentAsset(let row): data = try encoder.encode(row)
+        case .investmentTrade(let row): data = try encoder.encode(row)
+        case .investmentValuation(let row): data = try encoder.encode(row)
+        case .investmentPosting(let row): data = try encoder.encode(row)
         }
 
         guard let json = String(data: data, encoding: .utf8) else {
@@ -1775,6 +1953,11 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             return .installmentPlan(try decoder.decode(RemoteInstallmentPlan.self, from: data))
         case .dueOccurrenceRecord:
             return .dueOccurrence(try decoder.decode(RemoteDueOccurrenceRecord.self, from: data))
+        case .investmentChannel: return .investmentChannel(try decoder.decode(RemoteInvestmentChannel.self, from: data))
+        case .investmentAsset: return .investmentAsset(try decoder.decode(RemoteInvestmentAsset.self, from: data))
+        case .investmentTrade: return .investmentTrade(try decoder.decode(RemoteInvestmentTrade.self, from: data))
+        case .investmentValuation: return .investmentValuation(try decoder.decode(RemoteInvestmentValuation.self, from: data))
+        case .investmentPosting: return .investmentPosting(try decoder.decode(RemoteInvestmentWalletPosting.self, from: data))
         }
     }
 
@@ -1824,12 +2007,16 @@ nonisolated extension MistiaRemoteSnapshot {
         for row in categories where predicate(.category(row)) { return true }
         for row in settlementGroups where predicate(.settlementGroup(row)) { return true }
         for row in settlementParticipants where predicate(.settlementParticipant(row)) { return true }
-        for row in transactions where predicate(.transaction(row)) { return true }
+        for row in transactions where !InvestmentLedgerLegRole.isServerDerivedRawValue(row.settlementRoleRawValue) && predicate(.transaction(row)) { return true }
         for row in budgetPlans where predicate(.budgetPlan(row)) { return true }
         for row in savingsGoals where predicate(.savingsGoal(row)) { return true }
         for row in recurringBillPlans where predicate(.recurringBillPlan(row)) { return true }
         for row in installmentPlans where predicate(.installmentPlan(row)) { return true }
         for row in dueOccurrences where predicate(.dueOccurrence(row)) { return true }
+        for row in investmentChannels where predicate(.investmentChannel(row)) { return true }
+        for row in investmentAssets where predicate(.investmentAsset(row)) { return true }
+        for row in investmentTrades where predicate(.investmentTrade(row)) { return true }
+        for row in investmentValuations where predicate(.investmentValuation(row)) { return true }
         return false
     }
 
@@ -1839,12 +2026,18 @@ nonisolated extension MistiaRemoteSnapshot {
         for row in categories { body(.category(row)) }
         for row in settlementGroups { body(.settlementGroup(row)) }
         for row in settlementParticipants { body(.settlementParticipant(row)) }
-        for row in transactions { body(.transaction(row)) }
+        for row in transactions where !InvestmentLedgerLegRole.isServerDerivedRawValue(row.settlementRoleRawValue) {
+            body(.transaction(row))
+        }
         for row in budgetPlans { body(.budgetPlan(row)) }
         for row in savingsGoals { body(.savingsGoal(row)) }
         for row in recurringBillPlans { body(.recurringBillPlan(row)) }
         for row in installmentPlans { body(.installmentPlan(row)) }
         for row in dueOccurrences { body(.dueOccurrence(row)) }
+        for row in investmentChannels { body(.investmentChannel(row)) }
+        for row in investmentAssets { body(.investmentAsset(row)) }
+        for row in investmentTrades { body(.investmentTrade(row)) }
+        for row in investmentValuations { body(.investmentValuation(row)) }
     }
 
     private func appendUploadRecords(
@@ -1872,6 +2065,7 @@ nonisolated extension MistiaRemoteSnapshot {
             if shouldInclude(record) { records.append(record) }
         }
         for row in transactions {
+            guard !InvestmentLedgerLegRole.isServerDerivedRawValue(row.settlementRoleRawValue) else { continue }
             let record = MistiaSyncUploadRecord.transaction(row)
             if shouldInclude(record) { records.append(record) }
         }
@@ -1895,6 +2089,10 @@ nonisolated extension MistiaRemoteSnapshot {
             let record = MistiaSyncUploadRecord.dueOccurrence(row)
             if shouldInclude(record) { records.append(record) }
         }
+        for row in investmentChannels { let record = MistiaSyncUploadRecord.investmentChannel(row); if shouldInclude(record) { records.append(record) } }
+        for row in investmentAssets { let record = MistiaSyncUploadRecord.investmentAsset(row); if shouldInclude(record) { records.append(record) } }
+        for row in investmentTrades { let record = MistiaSyncUploadRecord.investmentTrade(row); if shouldInclude(record) { records.append(record) } }
+        for row in investmentValuations { let record = MistiaSyncUploadRecord.investmentValuation(row); if shouldInclude(record) { records.append(record) } }
     }
 }
 
@@ -1929,6 +2127,8 @@ nonisolated extension MistiaSyncEntity {
             return L10n.shared.sync.mistiasync.installment
         case .dueOccurrenceRecord:
             return L10n.shared.sync.mistiasync.dueOccurrence
+        case .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation, .investmentPosting:
+            return L10n.investment.title
         }
     }
 }

@@ -10,6 +10,16 @@
 		A10000000000000000000010 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000011 /* GoogleSignIn */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A1000000000000000000001B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000007 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000006;
+			remoteInfo = Mistia;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		A10000000000000000000001 /* Mistia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mistia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000013 /* MistiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MistiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -160,16 +170,6 @@
 		};
 /* End PBXProject section */
 
-/* Begin PBXContainerItemProxy section */
-		A1000000000000000000001B /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = A10000000000000000000007 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = A10000000000000000000006;
-			remoteInfo = Mistia;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXResourcesBuildPhase section */
 		A10000000000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
@@ -190,7 +190,6 @@
 /* Begin PBXShellScriptBuildPhase section */
 		A10000000000000000000020 /* Generate L10n */ = {
 			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 0;
 			buildActionMask = 2147483647;
 			files = (
 			);

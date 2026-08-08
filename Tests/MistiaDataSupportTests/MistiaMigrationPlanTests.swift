@@ -35,19 +35,21 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(reopenedBills.first?.autoPayDay, 10)
     }
 
-    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV6() {
+    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV7() {
         let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
         let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
         let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
         let v6ModelNames = MistiaSchemaV6.models.map { String(reflecting: $0) }
+        let v7ModelNames = MistiaSchemaV7.models.map { String(reflecting: $0) }
 
         XCTAssertEqual(schemaNames.count, Set(schemaNames).count)
         XCTAssertEqual(schemaNames, [
             "MistiaCoreLogic.MistiaSchemaV4",
             "MistiaCoreLogic.MistiaSchemaV5",
-            "MistiaCoreLogic.MistiaSchemaV6"
+            "MistiaCoreLogic.MistiaSchemaV6",
+            "MistiaCoreLogic.MistiaSchemaV7"
         ])
-        XCTAssertEqual(MistiaMigrationPlan.stages.count, 1)
+        XCTAssertEqual(MistiaMigrationPlan.stages.count, 2)
         XCTAssertTrue(v4ModelNames.contains("MistiaCoreLogic.MistiaSchemaV4Models.RecurringBillPlan"))
         XCTAssertFalse(v4ModelNames.contains("MistiaCoreLogic.RecurringBillPlan"))
         XCTAssertTrue(v5ModelNames.contains("MistiaCoreLogic.RecurringBillPlan"))
@@ -56,6 +58,11 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementGroup"))
         XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementParticipant"))
         XCTAssertFalse(v6ModelNames.contains("MistiaCoreLogic.SettlementObligation"))
+        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentChannel"))
+        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentAsset"))
+        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentTrade"))
+        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
+        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentWalletPosting"))
     }
 
     func testPendingSettlementsMigrationIncludesPreparingParticipantsAndStatus() throws {

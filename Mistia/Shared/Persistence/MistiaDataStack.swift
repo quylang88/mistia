@@ -33,7 +33,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) throws {
-            self.schema = Schema(versionedSchema: MistiaSchemaV6.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV7.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
 
@@ -54,7 +54,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) {
-            self.schema = Schema(versionedSchema: MistiaSchemaV6.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV7.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
             self.modelContainer = fallbackContainer
@@ -594,7 +594,7 @@ enum MistiaDataStack {
         do {
             return try LaunchState()
         } catch {
-            let schema = Schema(versionedSchema: MistiaSchemaV6.self)
+            let schema = Schema(versionedSchema: MistiaSchemaV7.self)
             let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let fallbackContainer = try! ModelContainer(
                 for: schema,

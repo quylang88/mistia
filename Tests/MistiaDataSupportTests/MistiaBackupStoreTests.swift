@@ -273,16 +273,108 @@ final class MistiaBackupStoreTests: XCTestCase {
         XCTAssertEqual(try fetchAll(SyncConflict.self, in: currentContainer).count, 0)
     }
 
-    func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
-        let container = try makeContainer()
-        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
+    func testInvestmentDomainRoundTripsThroughBackup() throws {
+        let ownerUserID = UUID()
+        let sourceContainer = try makeV7Container()
+        let sourceContext = ModelContext(sourceContainer)
+        let channel = InvestmentChannel(ownerUserID: ownerUserID, name: "Pokémon")
+        let asset = InvestmentAsset(
+            ownerUserID: ownerUserID,
+            channelID: channel.id,
+            name: "Rare card",
+            currencyCode: "JPY",
+            openingQuantity: 2,
+            openingCostMinor: 100
+        )
+        let trade = InvestmentTrade(
+            ownerUserID: ownerUserID,
+            channelID: channel.id,
+            assetID: asset.id,
+            kind: .sell,
+            quantity: 1,
+            grossAmountMinor: 80,
+            currencyCode: "JPY",
+            accountingGrossAmountMinor: 80,
+            accountingCurrencyCode: "JPY",
+            capitalReturnWalletID: UUID(),
+            releasedCostBasisMinor: 50,
+            realizedProfitLossMinor: 30,
+            positionQuantityAfter: 1,
+            positionCostBasisAfterMinor: 50
+        )
+        let valuation = InvestmentValuation(
+            ownerUserID: ownerUserID,
+            channelID: channel.id,
+            assetID: asset.id,
+            marketValueMinor: 90,
+            accountingMarketValueMinor: 90,
+            currencyCode: "JPY",
+            accountingCurrencyCode: "JPY"
+        )
+        let posting = InvestmentWalletPosting(
+            ownerUserID: ownerUserID,
+            eventID: trade.id,
+            tradeID: trade.id,
+            assetID: asset.id,
+            walletID: InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID),
+            ledgerTransactionID: UUID(),
+            role: .realizedProfit,
+            amountMinor: 30,
+            currencyCode: "JPY",
+            accountingAmountMinor: 30,
+            accountingCurrencyCode: "JPY"
+        )
+        sourceContext.insert(channel)
+        sourceContext.insert(asset)
+        sourceContext.insert(trade)
+        sourceContext.insert(valuation)
+        sourceContext.insert(posting)
+        try sourceContext.save()
 
-        XCTAssertEqual(schema.entities.count, 17)
+        let exported = try MistiaBackupStore.exportBackup(
+            from: sourceContainer,
+            fallbackOwnerUserID: ownerUserID,
+            appVersion: "1.0.0",
+            appBuild: "100"
+        )
+        let validation = try MistiaBackupStore.validateBackup(exported.data)
+        XCTAssertEqual(validation.investmentChannelCount, 1)
+        XCTAssertEqual(validation.investmentAssetCount, 1)
+        XCTAssertEqual(validation.investmentTradeCount, 1)
+        XCTAssertEqual(validation.investmentValuationCount, 1)
+        XCTAssertEqual(validation.investmentPostingCount, 1)
+
+        let targetContainer = try makeV7Container()
+        _ = try MistiaBackupStore.restoreBackup(
+            exported.data,
+            mode: .replaceLocal,
+            in: targetContainer,
+            fallbackOwnerUserID: ownerUserID
+        )
+
+        XCTAssertEqual(try fetchAll(InvestmentChannel.self, in: targetContainer).first?.name, "Pokémon")
+        XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.openingQuantity, 2)
+        XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.realizedProfitLossMinor, 30)
+        XCTAssertEqual(try fetchAll(InvestmentValuation.self, in: targetContainer).first?.accountingMarketValueMinor, 90)
+        XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first?.amountMinor, 30)
+    }
+
+    func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
+        let container = try makeV7Container()
+        let schema = Schema(versionedSchema: MistiaSchemaV7.self)
+
+        XCTAssertEqual(schema.entities.count, 22)
         XCTAssertEqual(try MistiaSyncLocalStore.totalObjectCount(in: container), 0)
     }
 
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV6.self)
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func makeV7Container() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: MistiaSchemaV7.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

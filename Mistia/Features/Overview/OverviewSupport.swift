@@ -113,6 +113,7 @@ extension LedgerTransaction {
     var overviewSnapshot: OverviewTransactionSnapshot {
         OverviewTransactionSnapshot(
             id: id,
+            financialDomain: financialDomain,
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,

@@ -1135,7 +1135,11 @@ final class FamilyContextStore {
         resourceType: MistiaFamilyNotificationResourceType,
         resourceID: UUID? = nil
     ) -> Bool {
-        hasPermission(
+        if resourceType == .investment,
+           !canViewInvestment(ownerUserID: ownerUserID) {
+            return false
+        }
+        return hasPermission(
             ownerUserID: ownerUserID,
             resourceType: resourceType,
             resourceID: resourceID,
@@ -1147,11 +1151,24 @@ final class FamilyContextStore {
         ownerUserID: UUID?,
         resourceType: MistiaFamilyNotificationResourceType
     ) -> Bool {
-        hasPermission(
+        if resourceType == .investment,
+           !canViewInvestment(ownerUserID: ownerUserID) {
+            return false
+        }
+        return hasPermission(
             ownerUserID: ownerUserID,
             resourceType: resourceType,
             resourceID: nil,
             scope: .create
+        )
+    }
+
+    func canViewInvestment(ownerUserID: UUID?) -> Bool {
+        hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: .investment,
+            resourceID: nil,
+            scope: .view
         )
     }
 
@@ -1296,6 +1313,10 @@ final class FamilyContextStore {
         snapshot: FamilyStateSnapshot,
         cachedAvatarURLs: [UUID: URL]
     ) {
+        let previouslyViewableInvestmentOwnerIDs = viewableInvestmentOwnerIDs(
+            grants: permissionGrants,
+            currentUserID: currentUserID
+        )
         family = snapshot.family
         currentMembership = snapshot.currentMembership
         members = snapshot.members.map { member in
@@ -1306,6 +1327,40 @@ final class FamilyContextStore {
         pendingPermissionRequests = snapshot.pendingPermissionRequests
         pendingPermissionRequestKeys = Set(snapshot.pendingPermissionRequests.compactMap(pendingPermissionRequestKey))
         removeGrantedPendingPermissionRequests()
+
+        let currentlyViewableInvestmentOwnerIDs = viewableInvestmentOwnerIDs(
+            grants: permissionGrants,
+            currentUserID: currentUserID
+        )
+        let revokedOwnerIDs = previouslyViewableInvestmentOwnerIDs
+            .subtracting(currentlyViewableInvestmentOwnerIDs)
+            .subtracting(Set(currentUserID.map { [$0] } ?? []))
+        for ownerUserID in revokedOwnerIDs {
+            try? InvestmentPrivacyCacheService.purge(
+                ownerUserID: ownerUserID,
+                context: modelContainer.mainContext
+            )
+        }
+    }
+
+    private func viewableInvestmentOwnerIDs(
+        grants: [FamilyPermissionGrantRecord],
+        currentUserID: UUID?
+    ) -> Set<UUID> {
+        var ownerIDs = Set(currentUserID.map { [$0] } ?? [])
+        guard let currentUserID else { return ownerIDs }
+        ownerIDs.formUnion(
+            grants.lazy
+                .filter {
+                    $0.revokedAt == nil
+                        && $0.granteeUserID == currentUserID
+                        && $0.resourceType == .investment
+                        && $0.resourceID == nil
+                        && $0.permissionScope == .view
+                }
+                .map(\.ownerUserID)
+        )
+        return ownerIDs
     }
 
     private func restoreSignedOutLocalState(sessionStore: SessionStore) async {

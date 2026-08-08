@@ -140,6 +140,12 @@ struct MistiaWalletPickerAccess {
         guard let ownerUserID = walletOwnerUserID(for: wallet) else {
             return nil
         }
+        guard !InvestmentSystemWalletIdentity.isInvestmentWallet(
+            walletID: wallet.id,
+            ownerUserID: ownerUserID
+        ) else {
+            return nil
+        }
         return MistiaWalletPickerWalletSnapshot(
             id: wallet.id,
             name: wallet.name,

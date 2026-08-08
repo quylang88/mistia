@@ -2212,6 +2212,16 @@ private extension MistiaSyncEntity {
             return "calendar.badge.exclamationmark"
         case .dueOccurrenceRecord:
             return "checklist"
+        case .investmentChannel:
+            return "square.stack.3d.up.fill"
+        case .investmentAsset:
+            return "chart.line.uptrend.xyaxis"
+        case .investmentTrade:
+            return "arrow.left.arrow.right.circle.fill"
+        case .investmentValuation:
+            return "chart.xyaxis.line"
+        case .investmentPosting:
+            return "list.bullet.rectangle.fill"
         }
     }
 }

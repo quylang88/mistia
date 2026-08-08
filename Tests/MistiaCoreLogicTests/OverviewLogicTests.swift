@@ -107,6 +107,36 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(total, 200)
     }
 
+    func testTotalAssetBalanceAddsInvestmentPositionsWithoutDuplicatingInvestmentWallet() {
+        let ordinaryWallet = OverviewWalletSnapshot(
+            id: UUID(),
+            name: "Cash",
+            kind: .cash,
+            openingBalanceMinor: 1_000,
+            currencyCode: "JPY",
+            sortOrder: 0,
+            createdAt: makeDate(year: 2026, month: 4, day: 1)
+        )
+        let investmentWallet = OverviewWalletSnapshot(
+            id: UUID(),
+            name: "Investment Wallet",
+            kind: .investment,
+            openingBalanceMinor: -30,
+            currencyCode: "JPY",
+            sortOrder: 1,
+            createdAt: makeDate(year: 2026, month: 4, day: 1)
+        )
+
+        XCTAssertEqual(
+            OverviewLogic.totalAssetBalance(
+                wallets: [ordinaryWallet, investmentWallet],
+                transactionRecords: [],
+                additionalAssetValueMinor: 100
+            ),
+            1_070
+        )
+    }
+
     func testRecentSevenDaySpendingChartPointsFillsSevenDaysAndMapsIntensityFromLowToHigh() {
         let referenceDate = makeDate(year: 2026, month: 4, day: 7, hour: 12)
         let records = [

@@ -136,13 +136,18 @@ enum FamilyScopedData {
         archivedEventIDs: Set<UUID> = []
     ) -> [LedgerTransaction] {
         guard let subjectUserID = scopeSnapshot.subjectUserID else {
-            return archivedEventFilteredTransactions(transactions, archivedEventIDs: archivedEventIDs)
+            return archivedEventFilteredTransactions(
+                transactions.filter { $0.financialDomain == .ordinary },
+                archivedEventIDs: archivedEventIDs
+            )
         }
 
         let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
         let scopedTransactions = transactions.filter { transaction in
-            guard transaction.deletedAt == nil, !transaction.isArchived else {
+            guard transaction.deletedAt == nil,
+                  !transaction.isArchived,
+                  transaction.financialDomain == .ordinary else {
                 return false
             }
             return transactionOwnerUserID(
@@ -239,6 +244,7 @@ enum FamilyScopedData {
             signedInUserID: signedInUserID,
             archivedEventIDs: archivedEventIDs
         )
+        .filter { $0.financialDomain == .ordinary }
         .map { transaction in
             let record = transaction.planningRecordSnapshot
             return FamilyAggregateTransactionSnapshot(

@@ -51,6 +51,26 @@ nonisolated enum MistiaSyncLocalStore {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
+    nonisolated private static func latestInvestmentChannel(_ lhs: InvestmentChannel, _ rhs: InvestmentChannel) -> InvestmentChannel {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
+    }
+
+    nonisolated private static func latestInvestmentAsset(_ lhs: InvestmentAsset, _ rhs: InvestmentAsset) -> InvestmentAsset {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
+    }
+
+    nonisolated private static func latestInvestmentTrade(_ lhs: InvestmentTrade, _ rhs: InvestmentTrade) -> InvestmentTrade {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
+    }
+
+    nonisolated private static func latestInvestmentValuation(_ lhs: InvestmentValuation, _ rhs: InvestmentValuation) -> InvestmentValuation {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
+    }
+
+    nonisolated private static func latestInvestmentPosting(_ lhs: InvestmentWalletPosting, _ rhs: InvestmentWalletPosting) -> InvestmentWalletPosting {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
+    }
+
     nonisolated private static func latestProfile(_ lhs: UserAccountProfile, _ rhs: UserAccountProfile) -> UserAccountProfile {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
@@ -77,6 +97,11 @@ nonisolated enum MistiaSyncLocalStore {
             + fetchRecurringBillPlans(context).count
             + fetchInstallmentPlans(context).count
             + fetchDueOccurrences(context).count
+            + fetchInvestmentChannels(context).count
+            + fetchInvestmentAssets(context).count
+            + fetchInvestmentTrades(context).count
+            + fetchInvestmentValuations(context).count
+            + fetchInvestmentPostings(context).count
     }
 
     static func hasMeaningfulUserData(in container: ModelContainer) throws -> Bool {
@@ -115,6 +140,21 @@ nonisolated enum MistiaSyncLocalStore {
         if try fetchActiveUserCategory(context) != nil {
             return true
         }
+        if try fetchActiveInvestmentChannel(context) != nil {
+            return true
+        }
+        if try fetchActiveInvestmentAsset(context) != nil {
+            return true
+        }
+        if try fetchActiveInvestmentTrade(context) != nil {
+            return true
+        }
+        if try fetchActiveInvestmentValuation(context) != nil {
+            return true
+        }
+        if try fetchActiveInvestmentPosting(context) != nil {
+            return true
+        }
 
         return false
     }
@@ -126,8 +166,63 @@ nonisolated enum MistiaSyncLocalStore {
     ) throws {
         let context = ModelContext(container)
 
+        let previousInvestmentWalletID = InvestmentSystemWalletIdentity.walletID(
+            ownerUserID: previousOwnerUserID
+        )
+        let newInvestmentWalletID = InvestmentSystemWalletIdentity.walletID(
+            ownerUserID: newOwnerUserID
+        )
+
+        for channel in try fetchInvestmentChannels(context) where channel.ownerUserID == previousOwnerUserID {
+            channel.ownerUserID = newOwnerUserID
+            channel.updatedAt = .now
+        }
+        for asset in try fetchInvestmentAssets(context) where asset.ownerUserID == previousOwnerUserID {
+            asset.ownerUserID = newOwnerUserID
+            asset.updatedAt = .now
+        }
+        for trade in try fetchInvestmentTrades(context) where trade.ownerUserID == previousOwnerUserID {
+            trade.ownerUserID = newOwnerUserID
+            if trade.fundingWalletID == previousInvestmentWalletID {
+                trade.fundingWalletID = newInvestmentWalletID
+            }
+            trade.updatedAt = .now
+        }
+        for valuation in try fetchInvestmentValuations(context) where valuation.ownerUserID == previousOwnerUserID {
+            valuation.ownerUserID = newOwnerUserID
+            valuation.updatedAt = .now
+        }
+        for posting in try fetchInvestmentPostings(context) where posting.ownerUserID == previousOwnerUserID {
+            posting.ownerUserID = newOwnerUserID
+            if posting.walletID == previousInvestmentWalletID {
+                posting.walletID = newInvestmentWalletID
+            }
+            posting.updatedAt = .now
+        }
+
+        let wallets = try fetchWallets(context)
+        if let previousInvestmentWallet = wallets.first(where: { $0.id == previousInvestmentWalletID }) {
+            if let existingInvestmentWallet = wallets.first(where: { $0.id == newInvestmentWalletID }) {
+                for transaction in try fetchTransactions(context) {
+                    if transaction.sourceWallet?.id == previousInvestmentWalletID {
+                        transaction.sourceWallet = existingInvestmentWallet
+                    }
+                    if transaction.destinationWallet?.id == previousInvestmentWalletID {
+                        transaction.destinationWallet = existingInvestmentWallet
+                    }
+                }
+                context.delete(previousInvestmentWallet)
+            } else {
+                previousInvestmentWallet.id = newInvestmentWalletID
+                previousInvestmentWallet.updatedAt = .now
+            }
+        }
+
         for scope in try context.fetch(FetchDescriptor<OwnedRecordScope>()) where scope.ownerUserID == previousOwnerUserID {
             scope.ownerUserID = newOwnerUserID
+            if scope.entity == .wallet && scope.recordID == previousInvestmentWalletID {
+                scope.recordID = newInvestmentWalletID
+            }
             scope.updatedAt = .now
         }
 
@@ -200,6 +295,11 @@ nonisolated enum MistiaSyncLocalStore {
             .filter { occurrenceOwnerMap[$0.id] == nil || occurrenceOwnerMap[$0.id] == userID }
         let categories = try fetchCategories(context)
             .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
+        let investmentChannels = try fetchInvestmentChannels(context).filter { $0.ownerUserID == userID }
+        let investmentAssets = try fetchInvestmentAssets(context).filter { $0.ownerUserID == userID }
+        let investmentTrades = try fetchInvestmentTrades(context).filter { $0.ownerUserID == userID }
+        let investmentValuations = try fetchInvestmentValuations(context).filter { $0.ownerUserID == userID }
+        let investmentPostings = try fetchInvestmentPostings(context).filter { $0.ownerUserID == userID }
 
         return MistiaRemoteSnapshot(
             wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
@@ -224,7 +324,12 @@ nonisolated enum MistiaSyncLocalStore {
                 )
             },
             installmentPlans: installmentPlans.map { RemoteInstallmentPlan(local: $0, userID: userID) },
-            dueOccurrences: dueOccurrences.map { RemoteDueOccurrenceRecord(local: $0, userID: userID) }
+            dueOccurrences: dueOccurrences.map { RemoteDueOccurrenceRecord(local: $0, userID: userID) },
+            investmentChannels: investmentChannels.map(RemoteInvestmentChannel.init(local:)),
+            investmentAssets: investmentAssets.map(RemoteInvestmentAsset.init(local:)),
+            investmentTrades: investmentTrades.map(RemoteInvestmentTrade.init(local:)),
+            investmentValuations: investmentValuations.map(RemoteInvestmentValuation.init(local:)),
+            investmentPostings: investmentPostings.map(RemoteInvestmentWalletPosting.init(local:))
         )
     }
 
@@ -260,6 +365,9 @@ nonisolated enum MistiaSyncLocalStore {
             return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
         case .transaction:
             guard let transaction = try fetchTransaction(id: mutation.recordID, context) else {
+                return nil
+            }
+            guard !InvestmentLedgerLegRole.isServerDerivedRawValue(transaction.settlementRoleRawValue) else {
                 return nil
             }
             guard let ownerUserID = try canonicalTransactionOwnerUserID(
@@ -322,6 +430,24 @@ nonisolated enum MistiaSyncLocalStore {
                 return nil
             }
             return .dueOccurrence(RemoteDueOccurrenceRecord(local: record, userID: subjectUserID))
+        case .investmentChannel:
+            return try fetchInvestmentChannel(id: mutation.recordID, context).map {
+                .investmentChannel(RemoteInvestmentChannel(local: $0))
+            }
+        case .investmentAsset:
+            return try fetchInvestmentAsset(id: mutation.recordID, context).map {
+                .investmentAsset(RemoteInvestmentAsset(local: $0))
+            }
+        case .investmentTrade:
+            return try fetchInvestmentTrade(id: mutation.recordID, context).map {
+                .investmentTrade(RemoteInvestmentTrade(local: $0))
+            }
+        case .investmentValuation:
+            return try fetchInvestmentValuation(id: mutation.recordID, context).map {
+                .investmentValuation(RemoteInvestmentValuation(local: $0))
+            }
+        case .investmentPosting:
+            return nil
         }
     }
 
@@ -441,6 +567,16 @@ nonisolated enum MistiaSyncLocalStore {
             return try fetchInstallmentPlan(id: recordID, context)?.remoteVersion ?? 0
         case .dueOccurrenceRecord:
             return try fetchDueOccurrence(id: recordID, context)?.remoteVersion ?? 0
+        case .investmentChannel:
+            return try fetchInvestmentChannel(id: recordID, context)?.remoteVersion ?? 0
+        case .investmentAsset:
+            return try fetchInvestmentAsset(id: recordID, context)?.remoteVersion ?? 0
+        case .investmentTrade:
+            return try fetchInvestmentTrade(id: recordID, context)?.remoteVersion ?? 0
+        case .investmentValuation:
+            return try fetchInvestmentValuation(id: recordID, context)?.remoteVersion ?? 0
+        case .investmentPosting:
+            return try fetchInvestmentPosting(id: recordID, context)?.remoteVersion ?? 0
         }
     }
 
@@ -458,6 +594,11 @@ nonisolated enum MistiaSyncLocalStore {
         try fetchRecurringBillPlans(context).forEach { $0.remoteVersion = 0 }
         try fetchInstallmentPlans(context).forEach { $0.remoteVersion = 0 }
         try fetchDueOccurrences(context).forEach { $0.remoteVersion = 0 }
+        try fetchInvestmentChannels(context).forEach { $0.remoteVersion = 0 }
+        try fetchInvestmentAssets(context).forEach { $0.remoteVersion = 0 }
+        try fetchInvestmentTrades(context).forEach { $0.remoteVersion = 0 }
+        try fetchInvestmentValuations(context).forEach { $0.remoteVersion = 0 }
+        try fetchInvestmentPostings(context).forEach { $0.remoteVersion = 0 }
 
         try fetchConflicts(context).forEach { context.delete($0) }
         try context.save()
@@ -526,6 +667,11 @@ nonisolated enum MistiaSyncLocalStore {
         let recurringBillPlans = try fetchRecurringBillPlans(context)
         let installmentPlans = try fetchInstallmentPlans(context)
         let dueOccurrences = try fetchDueOccurrences(context)
+        let investmentChannels = try fetchInvestmentChannels(context)
+        let investmentAssets = try fetchInvestmentAssets(context)
+        let investmentTrades = try fetchInvestmentTrades(context)
+        let investmentValuations = try fetchInvestmentValuations(context)
+        let investmentPostings = try fetchInvestmentPostings(context)
         var walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
         var categoryByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: latestCategory)
         var profileByID = Dictionary(creditProfiles.map { ($0.id, $0) }, uniquingKeysWith: latestCreditProfile)
@@ -537,6 +683,11 @@ nonisolated enum MistiaSyncLocalStore {
         var recurringByID = Dictionary(recurringBillPlans.map { ($0.id, $0) }, uniquingKeysWith: latestRecurringBill)
         var installmentByID = Dictionary(installmentPlans.map { ($0.id, $0) }, uniquingKeysWith: latestInstallment)
         var occurrenceByID = Dictionary(dueOccurrences.map { ($0.id, $0) }, uniquingKeysWith: latestOccurrence)
+        var investmentChannelByID = Dictionary(investmentChannels.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentChannel)
+        var investmentAssetByID = Dictionary(investmentAssets.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentAsset)
+        var investmentTradeByID = Dictionary(investmentTrades.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentTrade)
+        var investmentValuationByID = Dictionary(investmentValuations.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentValuation)
+        var investmentPostingByID = Dictionary(investmentPostings.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentPosting)
 
         for row in snapshot.wallets {
             guard shouldApplyRemoteRow(
@@ -694,6 +845,61 @@ nonisolated enum MistiaSyncLocalStore {
             try upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
         }
 
+        for row in snapshot.investmentChannels {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .investmentChannel,
+                existing: investmentChannelByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
+            upsertInvestmentChannel(row, context: context, channelByID: &investmentChannelByID)
+        }
+
+        for row in snapshot.investmentAssets {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .investmentAsset,
+                existing: investmentAssetByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
+            upsertInvestmentAsset(row, context: context, assetByID: &investmentAssetByID)
+        }
+
+        for row in snapshot.investmentTrades {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .investmentTrade,
+                existing: investmentTradeByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
+            upsertInvestmentTrade(row, context: context, tradeByID: &investmentTradeByID)
+        }
+
+        for row in snapshot.investmentValuations {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .investmentValuation,
+                existing: investmentValuationByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
+            upsertInvestmentValuation(row, context: context, valuationByID: &investmentValuationByID)
+        }
+
+        for row in snapshot.investmentPostings {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .investmentPosting,
+                existing: investmentPostingByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
+            upsertInvestmentPosting(row, context: context, postingByID: &investmentPostingByID)
+        }
+
         if shouldPruneMissing {
             pruneRecordsMissingFromRemote(
                 existing: wallets,
@@ -758,6 +964,36 @@ nonisolated enum MistiaSyncLocalStore {
             pruneRecordsMissingFromRemote(
                 existing: dueOccurrences,
                 remoteIDs: Set(snapshot.dueOccurrences.map(\.id)),
+                protectedRecordIDs: protectedRecordIDs,
+                context: context
+            )
+            pruneRecordsMissingFromRemote(
+                existing: investmentChannels,
+                remoteIDs: Set(snapshot.investmentChannels.map(\.id)),
+                protectedRecordIDs: protectedRecordIDs,
+                context: context
+            )
+            pruneRecordsMissingFromRemote(
+                existing: investmentAssets,
+                remoteIDs: Set(snapshot.investmentAssets.map(\.id)),
+                protectedRecordIDs: protectedRecordIDs,
+                context: context
+            )
+            pruneRecordsMissingFromRemote(
+                existing: investmentTrades,
+                remoteIDs: Set(snapshot.investmentTrades.map(\.id)),
+                protectedRecordIDs: protectedRecordIDs,
+                context: context
+            )
+            pruneRecordsMissingFromRemote(
+                existing: investmentValuations,
+                remoteIDs: Set(snapshot.investmentValuations.map(\.id)),
+                protectedRecordIDs: protectedRecordIDs,
+                context: context
+            )
+            pruneRecordsMissingFromRemote(
+                existing: investmentPostings,
+                remoteIDs: Set(snapshot.investmentPostings.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
                 context: context
             )
@@ -877,6 +1113,36 @@ nonisolated enum MistiaSyncLocalStore {
                 uniquingKeysWith: latestOccurrence
             )
             try upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
+        case .investmentChannel(let row):
+            var recordsByID = Dictionary(
+                try fetchInvestmentChannels(context).map { ($0.id, $0) },
+                uniquingKeysWith: latestInvestmentChannel
+            )
+            upsertInvestmentChannel(row, context: context, channelByID: &recordsByID)
+        case .investmentAsset(let row):
+            var recordsByID = Dictionary(
+                try fetchInvestmentAssets(context).map { ($0.id, $0) },
+                uniquingKeysWith: latestInvestmentAsset
+            )
+            upsertInvestmentAsset(row, context: context, assetByID: &recordsByID)
+        case .investmentTrade(let row):
+            var recordsByID = Dictionary(
+                try fetchInvestmentTrades(context).map { ($0.id, $0) },
+                uniquingKeysWith: latestInvestmentTrade
+            )
+            upsertInvestmentTrade(row, context: context, tradeByID: &recordsByID)
+        case .investmentValuation(let row):
+            var recordsByID = Dictionary(
+                try fetchInvestmentValuations(context).map { ($0.id, $0) },
+                uniquingKeysWith: latestInvestmentValuation
+            )
+            upsertInvestmentValuation(row, context: context, valuationByID: &recordsByID)
+        case .investmentPosting(let row):
+            var recordsByID = Dictionary(
+                try fetchInvestmentPostings(context).map { ($0.id, $0) },
+                uniquingKeysWith: latestInvestmentPosting
+            )
+            upsertInvestmentPosting(row, context: context, postingByID: &recordsByID)
         }
 
         try context.save()
@@ -920,7 +1186,12 @@ nonisolated enum MistiaSyncLocalStore {
             savingsGoals: snapshot.savingsGoals,
             recurringBillPlans: snapshot.recurringBillPlans,
             installmentPlans: snapshot.installmentPlans,
-            dueOccurrences: snapshot.dueOccurrences
+            dueOccurrences: snapshot.dueOccurrences,
+            investmentChannels: snapshot.investmentChannels,
+            investmentAssets: snapshot.investmentAssets,
+            investmentTrades: snapshot.investmentTrades,
+            investmentValuations: snapshot.investmentValuations,
+            investmentPostings: snapshot.investmentPostings
         )
 
         try applySnapshotIncrementally(
@@ -1230,6 +1501,11 @@ nonisolated enum MistiaSyncLocalStore {
         let recurringBillPlans = try fetchRecurringBillPlans(context).filter { $0.deletedAt == nil }
         let installmentPlans = try fetchInstallmentPlans(context).filter { $0.deletedAt == nil }
         let dueOccurrences = try fetchDueOccurrences(context).filter { $0.deletedAt == nil }
+        let investmentChannels = try fetchInvestmentChannels(context).filter { $0.deletedAt == nil }
+        let investmentAssets = try fetchInvestmentAssets(context).filter { $0.deletedAt == nil }
+        let investmentTrades = try fetchInvestmentTrades(context).filter { $0.deletedAt == nil }
+        let investmentValuations = try fetchInvestmentValuations(context).filter { $0.deletedAt == nil }
+        let investmentPostings = try fetchInvestmentPostings(context).filter { $0.deletedAt == nil }
         let userProfiles = try context.fetch(FetchDescriptor<UserAccountProfile>())
 
         let snapshot = MistiaRemoteSnapshot(
@@ -1326,7 +1602,12 @@ nonisolated enum MistiaSyncLocalStore {
                 )
                 row.syncVersion = occurrence.remoteVersion
                 return row
-            }
+            },
+            investmentChannels: investmentChannels.map(RemoteInvestmentChannel.init(local:)),
+            investmentAssets: investmentAssets.map(RemoteInvestmentAsset.init(local:)),
+            investmentTrades: investmentTrades.map(RemoteInvestmentTrade.init(local:)),
+            investmentValuations: investmentValuations.map(RemoteInvestmentValuation.init(local:)),
+            investmentPostings: investmentPostings.map(RemoteInvestmentWalletPosting.init(local:))
         )
 
         let activeIDsByEntity: [MistiaSyncEntity: Set<UUID>] = [
@@ -1340,7 +1621,12 @@ nonisolated enum MistiaSyncLocalStore {
             .savingsGoal: Set(snapshot.savingsGoals.map(\.id)),
             .recurringBillPlan: Set(snapshot.recurringBillPlans.map(\.id)),
             .installmentPlan: Set(snapshot.installmentPlans.map(\.id)),
-            .dueOccurrenceRecord: Set(snapshot.dueOccurrences.map(\.id))
+            .dueOccurrenceRecord: Set(snapshot.dueOccurrences.map(\.id)),
+            .investmentChannel: Set(snapshot.investmentChannels.map(\.id)),
+            .investmentAsset: Set(snapshot.investmentAssets.map(\.id)),
+            .investmentTrade: Set(snapshot.investmentTrades.map(\.id)),
+            .investmentValuation: Set(snapshot.investmentValuations.map(\.id)),
+            .investmentPosting: Set(snapshot.investmentPostings.map(\.id))
         ]
 
         let filteredOwnershipScopes = ownershipScopes.filter { scope in
@@ -1428,6 +1714,26 @@ nonisolated enum MistiaSyncLocalStore {
         }
 
         for record in try fetchDueOccurrences(context) {
+            context.delete(record)
+        }
+
+        for record in try fetchInvestmentPostings(context) {
+            context.delete(record)
+        }
+
+        for record in try fetchInvestmentValuations(context) {
+            context.delete(record)
+        }
+
+        for record in try fetchInvestmentTrades(context) {
+            context.delete(record)
+        }
+
+        for record in try fetchInvestmentAssets(context) {
+            context.delete(record)
+        }
+
+        for record in try fetchInvestmentChannels(context) {
             context.delete(record)
         }
 
@@ -1623,14 +1929,16 @@ nonisolated enum MistiaSyncLocalStore {
         context: ModelContext,
         walletByID: inout [UUID: LedgerWallet]
     ) throws {
+        let isInvestmentSystemWallet = row.systemPurposeRawValue == LedgerWalletSystemPurpose.investmentProfit.rawValue
+            && row.id == InvestmentSystemWalletIdentity.walletID(ownerUserID: row.userID)
         let wallet = walletByID[row.id] ?? LedgerWallet(
             id: row.id,
-            name: row.name,
-            kind: LedgerWalletKind(rawValue: row.kindRawValue) ?? .cash,
-            iconSymbolName: row.iconSymbolName,
-            iconColorHex: row.iconColorHex,
+            name: isInvestmentSystemWallet ? L10n.investment.wallet.name : row.name,
+            kind: isInvestmentSystemWallet ? .investment : (LedgerWalletKind(rawValue: row.kindRawValue) ?? .cash),
+            iconSymbolName: isInvestmentSystemWallet ? LedgerWalletKind.investment.defaultIconSymbolName : row.iconSymbolName,
+            iconColorHex: isInvestmentSystemWallet ? LedgerWalletKind.investment.defaultColorHex : row.iconColorHex,
             currencyCode: row.currencyCode,
-            openingBalanceMinor: row.openingBalanceMinor,
+            openingBalanceMinor: isInvestmentSystemWallet ? 0 : row.openingBalanceMinor,
             institutionDisplayName: row.institutionDisplayName,
             institutionPresetKey: row.institutionPresetKey,
             sortOrder: row.sortOrder,
@@ -1647,20 +1955,20 @@ nonisolated enum MistiaSyncLocalStore {
             walletByID[row.id] = wallet
         }
 
-        wallet.name = row.name
-        wallet.kind = LedgerWalletKind(rawValue: row.kindRawValue) ?? .cash
-        wallet.iconSymbolName = row.iconSymbolName
-        wallet.iconColorHex = row.iconColorHex
+        wallet.name = isInvestmentSystemWallet ? L10n.investment.wallet.name : row.name
+        wallet.kind = isInvestmentSystemWallet ? .investment : (LedgerWalletKind(rawValue: row.kindRawValue) ?? .cash)
+        wallet.iconSymbolName = isInvestmentSystemWallet ? LedgerWalletKind.investment.defaultIconSymbolName : row.iconSymbolName
+        wallet.iconColorHex = isInvestmentSystemWallet ? LedgerWalletKind.investment.defaultColorHex : row.iconColorHex
         wallet.currencyCode = row.currencyCode
-        wallet.openingBalanceMinor = row.openingBalanceMinor
+        wallet.openingBalanceMinor = isInvestmentSystemWallet ? 0 : row.openingBalanceMinor
         wallet.institutionDisplayName = row.institutionDisplayName
         wallet.institutionPresetKey = row.institutionPresetKey
         wallet.sortOrder = row.sortOrder
-        wallet.isArchived = row.isArchived
-        wallet.archivedAt = row.archivedAt
+        wallet.isArchived = isInvestmentSystemWallet ? false : row.isArchived
+        wallet.archivedAt = isInvestmentSystemWallet ? nil : row.archivedAt
         wallet.createdAt = row.createdAt
         wallet.updatedAt = row.updatedAt
-        wallet.deletedAt = row.deletedAt
+        wallet.deletedAt = isInvestmentSystemWallet ? nil : row.deletedAt
         wallet.remoteVersion = row.syncVersion
         try MistiaRecordOwnershipStore.upsert(
             entity: .wallet,
@@ -2646,6 +2954,200 @@ nonisolated enum MistiaSyncLocalStore {
         )
     }
 
+    private static func upsertInvestmentChannel(
+        _ row: RemoteInvestmentChannel,
+        context: ModelContext,
+        channelByID: inout [UUID: InvestmentChannel]
+    ) {
+        let channel = channelByID[row.id] ?? InvestmentChannel(
+            id: row.id,
+            ownerUserID: row.userID,
+            name: row.name
+        )
+        if channelByID[row.id] == nil {
+            context.insert(channel)
+            channelByID[row.id] = channel
+        }
+        channel.ownerUserID = row.userID
+        channel.name = row.name
+        channel.iconSymbolName = row.iconSymbolName
+        channel.iconColorHex = row.iconColorHex
+        channel.sortOrder = row.sortOrder
+        channel.isArchived = row.isArchived
+        channel.archivedAt = row.archivedAt
+        channel.createdAt = row.createdAt
+        channel.updatedAt = row.updatedAt
+        channel.deletedAt = row.deletedAt
+        channel.remoteVersion = row.syncVersion
+    }
+
+    private static func upsertInvestmentAsset(
+        _ row: RemoteInvestmentAsset,
+        context: ModelContext,
+        assetByID: inout [UUID: InvestmentAsset]
+    ) {
+        let asset = assetByID[row.id] ?? InvestmentAsset(
+            id: row.id,
+            ownerUserID: row.userID,
+            channelID: row.channelID,
+            name: row.name,
+            currencyCode: row.currencyCode
+        )
+        if assetByID[row.id] == nil {
+            context.insert(asset)
+            assetByID[row.id] = asset
+        }
+        asset.ownerUserID = row.userID
+        asset.channelID = row.channelID
+        asset.name = row.name
+        asset.symbol = row.symbol
+        asset.currencyCode = row.currencyCode
+        asset.openingQuantityDecimalString = row.openingQuantityDecimalString
+        asset.openingCostMinor = row.openingCostMinor
+        asset.sortOrder = row.sortOrder
+        asset.isArchived = row.isArchived
+        asset.archivedAt = row.archivedAt
+        asset.createdAt = row.createdAt
+        asset.updatedAt = row.updatedAt
+        asset.deletedAt = row.deletedAt
+        asset.remoteVersion = row.syncVersion
+    }
+
+    private static func upsertInvestmentTrade(
+        _ row: RemoteInvestmentTrade,
+        context: ModelContext,
+        tradeByID: inout [UUID: InvestmentTrade]
+    ) {
+        let trade = tradeByID[row.id] ?? InvestmentTrade(
+            id: row.id,
+            ownerUserID: row.userID,
+            channelID: row.channelID,
+            assetID: row.assetID,
+            kind: InvestmentTradeKind(rawValue: row.kindRawValue) ?? .buy,
+            quantity: InvestmentDecimalCoding.decimal(from: row.quantityDecimalString) ?? 0,
+            grossAmountMinor: row.grossAmountMinor,
+            feeMinor: row.feeMinor,
+            currencyCode: row.currencyCode,
+            accountingGrossAmountMinor: row.accountingGrossAmountMinor,
+            accountingFeeMinor: row.accountingFeeMinor,
+            accountingCurrencyCode: row.accountingCurrencyCode
+        )
+        if tradeByID[row.id] == nil {
+            context.insert(trade)
+            tradeByID[row.id] = trade
+        }
+        trade.ownerUserID = row.userID
+        trade.channelID = row.channelID
+        trade.assetID = row.assetID
+        trade.kindRawValue = row.kindRawValue
+        trade.quantityDecimalString = row.quantityDecimalString
+        trade.grossAmountMinor = row.grossAmountMinor
+        trade.feeMinor = row.feeMinor
+        trade.currencyCode = row.currencyCode
+        trade.accountingGrossAmountMinor = row.accountingGrossAmountMinor
+        trade.accountingFeeMinor = row.accountingFeeMinor
+        trade.accountingCurrencyCode = row.accountingCurrencyCode
+        trade.exchangeRateDecimalString = row.exchangeRateDecimalString
+        trade.exchangeRateProvider = row.exchangeRateProvider
+        trade.exchangeRateDate = row.exchangeRateDate
+        trade.fundingWalletID = row.fundingWalletID
+        trade.capitalReturnWalletID = row.capitalReturnWalletID
+        trade.fundingWalletCurrencyCode = row.fundingWalletCurrencyCode
+        trade.capitalReturnWalletCurrencyCode = row.capitalReturnWalletCurrencyCode
+        trade.fundingWalletAmountMinor = row.fundingWalletAmountMinor
+        trade.capitalReturnWalletAmountMinor = row.capitalReturnWalletAmountMinor
+        trade.fundingToAccountingRateDecimalString = row.fundingToAccountingRateDecimalString
+        trade.accountingToCapitalReturnRateDecimalString = row.accountingToCapitalReturnRateDecimalString
+        trade.fundingLedgerTransactionID = row.fundingLedgerTransactionID
+        trade.capitalReturnLedgerTransactionID = row.capitalReturnLedgerTransactionID
+        trade.profitLossLedgerTransactionID = row.profitLossLedgerTransactionID
+        trade.releasedCostBasisMinor = row.releasedCostBasisMinor
+        trade.realizedProfitLossMinor = row.realizedProfitLossMinor
+        trade.positionQuantityAfterDecimalString = row.positionQuantityAfterDecimalString
+        trade.positionCostBasisAfterMinor = row.positionCostBasisAfterMinor
+        trade.note = row.note
+        trade.occurredAt = row.occurredAt
+        trade.createdAt = row.createdAt
+        trade.updatedAt = row.updatedAt
+        trade.deletedAt = row.deletedAt
+        trade.remoteVersion = row.syncVersion
+    }
+
+    private static func upsertInvestmentValuation(
+        _ row: RemoteInvestmentValuation,
+        context: ModelContext,
+        valuationByID: inout [UUID: InvestmentValuation]
+    ) {
+        let valuation = valuationByID[row.id] ?? InvestmentValuation(
+            id: row.id,
+            ownerUserID: row.userID,
+            channelID: row.channelID,
+            assetID: row.assetID,
+            marketValueMinor: row.marketValueMinor,
+            accountingMarketValueMinor: row.accountingMarketValueMinor,
+            currencyCode: row.currencyCode,
+            accountingCurrencyCode: row.accountingCurrencyCode
+        )
+        if valuationByID[row.id] == nil {
+            context.insert(valuation)
+            valuationByID[row.id] = valuation
+        }
+        valuation.ownerUserID = row.userID
+        valuation.channelID = row.channelID
+        valuation.assetID = row.assetID
+        valuation.marketValueMinor = row.marketValueMinor
+        valuation.accountingMarketValueMinor = row.accountingMarketValueMinor
+        valuation.currencyCode = row.currencyCode
+        valuation.accountingCurrencyCode = row.accountingCurrencyCode
+        valuation.exchangeRateDecimalString = row.exchangeRateDecimalString
+        valuation.valuedAt = row.valuedAt
+        valuation.createdAt = row.createdAt
+        valuation.updatedAt = row.updatedAt
+        valuation.deletedAt = row.deletedAt
+        valuation.remoteVersion = row.syncVersion
+    }
+
+    private static func upsertInvestmentPosting(
+        _ row: RemoteInvestmentWalletPosting,
+        context: ModelContext,
+        postingByID: inout [UUID: InvestmentWalletPosting]
+    ) {
+        let posting = postingByID[row.id] ?? InvestmentWalletPosting(
+            id: row.id,
+            ownerUserID: row.userID,
+            eventID: row.eventID,
+            tradeID: row.tradeID,
+            assetID: row.assetID,
+            walletID: row.walletID,
+            ledgerTransactionID: row.ledgerTransactionID,
+            role: InvestmentPostingRole(rawValue: row.roleRawValue) ?? .funding,
+            amountMinor: row.amountMinor,
+            currencyCode: row.currencyCode,
+            accountingAmountMinor: row.accountingAmountMinor,
+            accountingCurrencyCode: row.accountingCurrencyCode
+        )
+        if postingByID[row.id] == nil {
+            context.insert(posting)
+            postingByID[row.id] = posting
+        }
+        posting.ownerUserID = row.userID
+        posting.eventID = row.eventID
+        posting.tradeID = row.tradeID
+        posting.assetID = row.assetID
+        posting.walletID = row.walletID
+        posting.ledgerTransactionID = row.ledgerTransactionID
+        posting.roleRawValue = row.roleRawValue
+        posting.amountMinor = row.amountMinor
+        posting.currencyCode = row.currencyCode
+        posting.accountingAmountMinor = row.accountingAmountMinor
+        posting.accountingCurrencyCode = row.accountingCurrencyCode
+        posting.occurredAt = row.occurredAt
+        posting.createdAt = row.createdAt
+        posting.updatedAt = row.updatedAt
+        posting.deletedAt = row.deletedAt
+        posting.remoteVersion = row.syncVersion
+    }
+
     private static func fetchFirst<Model: PersistentModel>(
         _ descriptor: FetchDescriptor<Model>,
         context: ModelContext
@@ -2967,6 +3469,96 @@ nonisolated enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<DueOccurrenceRecord>())
     }
 
+    private static func fetchInvestmentChannel(id: UUID, _ context: ModelContext) throws -> InvestmentChannel? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentChannel>(predicate: #Predicate { $0.id == id }),
+            context: context
+        )
+    }
+
+    private static func fetchActiveInvestmentChannel(_ context: ModelContext) throws -> InvestmentChannel? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentChannel>(predicate: #Predicate { $0.deletedAt == nil }),
+            context: context
+        )
+    }
+
+    private static func fetchInvestmentChannels(_ context: ModelContext) throws -> [InvestmentChannel] {
+        try context.fetch(FetchDescriptor<InvestmentChannel>())
+    }
+
+    private static func fetchInvestmentAsset(id: UUID, _ context: ModelContext) throws -> InvestmentAsset? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentAsset>(predicate: #Predicate { $0.id == id }),
+            context: context
+        )
+    }
+
+    private static func fetchActiveInvestmentAsset(_ context: ModelContext) throws -> InvestmentAsset? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentAsset>(predicate: #Predicate { $0.deletedAt == nil }),
+            context: context
+        )
+    }
+
+    private static func fetchInvestmentAssets(_ context: ModelContext) throws -> [InvestmentAsset] {
+        try context.fetch(FetchDescriptor<InvestmentAsset>())
+    }
+
+    private static func fetchInvestmentTrade(id: UUID, _ context: ModelContext) throws -> InvestmentTrade? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentTrade>(predicate: #Predicate { $0.id == id }),
+            context: context
+        )
+    }
+
+    private static func fetchActiveInvestmentTrade(_ context: ModelContext) throws -> InvestmentTrade? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentTrade>(predicate: #Predicate { $0.deletedAt == nil }),
+            context: context
+        )
+    }
+
+    private static func fetchInvestmentTrades(_ context: ModelContext) throws -> [InvestmentTrade] {
+        try context.fetch(FetchDescriptor<InvestmentTrade>())
+    }
+
+    private static func fetchInvestmentValuation(id: UUID, _ context: ModelContext) throws -> InvestmentValuation? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentValuation>(predicate: #Predicate { $0.id == id }),
+            context: context
+        )
+    }
+
+    private static func fetchActiveInvestmentValuation(_ context: ModelContext) throws -> InvestmentValuation? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentValuation>(predicate: #Predicate { $0.deletedAt == nil }),
+            context: context
+        )
+    }
+
+    private static func fetchInvestmentValuations(_ context: ModelContext) throws -> [InvestmentValuation] {
+        try context.fetch(FetchDescriptor<InvestmentValuation>())
+    }
+
+    private static func fetchInvestmentPosting(id: UUID, _ context: ModelContext) throws -> InvestmentWalletPosting? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentWalletPosting>(predicate: #Predicate { $0.id == id }),
+            context: context
+        )
+    }
+
+    private static func fetchActiveInvestmentPosting(_ context: ModelContext) throws -> InvestmentWalletPosting? {
+        try fetchFirst(
+            FetchDescriptor<InvestmentWalletPosting>(predicate: #Predicate { $0.deletedAt == nil }),
+            context: context
+        )
+    }
+
+    private static func fetchInvestmentPostings(_ context: ModelContext) throws -> [InvestmentWalletPosting] {
+        try context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+    }
+
     private static func fetchConflicts(_ context: ModelContext) throws -> [SyncConflict] {
         try context.fetch(FetchDescriptor<SyncConflict>())
     }
@@ -3046,7 +3638,10 @@ private extension RemoteLedgerWallet {
             updatedAt: wallet.updatedAt,
             deletedAt: wallet.deletedAt,
             syncVersion: max(wallet.remoteVersion, 1),
-            lastModifiedByDeviceID: nil
+            lastModifiedByDeviceID: nil,
+            systemPurposeRawValue: wallet.id == InvestmentSystemWalletIdentity.walletID(ownerUserID: userID)
+                ? LedgerWalletSystemPurpose.investmentProfit.rawValue
+                : nil
         )
     }
 }
@@ -3446,6 +4041,11 @@ struct MistiaBackupValidationSummary {
     let recurringBillPlanCount: Int
     let installmentPlanCount: Int
     let dueOccurrenceCount: Int
+    let investmentChannelCount: Int
+    let investmentAssetCount: Int
+    let investmentTradeCount: Int
+    let investmentValuationCount: Int
+    let investmentPostingCount: Int
     let userProfileCount: Int
     let ownershipScopeCount: Int
     let transactionAuditCount: Int
@@ -3463,6 +4063,11 @@ struct MistiaBackupValidationSummary {
             + recurringBillPlanCount
             + installmentPlanCount
             + dueOccurrenceCount
+            + investmentChannelCount
+            + investmentAssetCount
+            + investmentTradeCount
+            + investmentValuationCount
+            + investmentPostingCount
     }
 }
 
@@ -3707,6 +4312,11 @@ private extension MistiaBackupValidationSummary {
             recurringBillPlanCount: envelope.snapshot.recurringBillPlans.count,
             installmentPlanCount: envelope.snapshot.installmentPlans.count,
             dueOccurrenceCount: envelope.snapshot.dueOccurrences.count,
+            investmentChannelCount: envelope.snapshot.investmentChannels.count,
+            investmentAssetCount: envelope.snapshot.investmentAssets.count,
+            investmentTradeCount: envelope.snapshot.investmentTrades.count,
+            investmentValuationCount: envelope.snapshot.investmentValuations.count,
+            investmentPostingCount: envelope.snapshot.investmentPostings.count,
             userProfileCount: envelope.userProfiles.count,
             ownershipScopeCount: envelope.ownershipScopes.count,
             transactionAuditCount: envelope.transactionAudits.count,

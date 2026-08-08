@@ -1255,7 +1255,8 @@ actor SyncCoordinator {
             row.categoryID
         case .recurringBillPlan(let row):
             row.categoryID
-        case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrence:
+        case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrence,
+             .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation, .investmentPosting:
             nil
         }
     }
@@ -1686,6 +1687,8 @@ actor SyncCoordinator {
             return .bill
         case .installmentPlan:
             return .installment
+        case .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation:
+            return .investment
         default:
             return nil
         }
@@ -1965,6 +1968,31 @@ actor SyncCoordinator {
             row.syncVersion = max(remoteVersion, row.syncVersion)
             row.lastModifiedByDeviceID = nil
             return .dueOccurrence(row)
+        case .investmentChannel(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .investmentChannel(row)
+        case .investmentAsset(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .investmentAsset(row)
+        case .investmentTrade(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .investmentTrade(row)
+        case .investmentValuation(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .investmentValuation(row)
+        case .investmentPosting(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .investmentPosting(row)
         }
     }
 }

@@ -176,12 +176,46 @@ enum MistiaSchemaV6: VersionedSchema {
     }
 }
 
+enum MistiaSchemaV7: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(7, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            SettlementGroup.self,
+            SettlementParticipant.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self,
+            InvestmentChannel.self,
+            InvestmentAsset.self,
+            InvestmentTrade.self,
+            InvestmentValuation.self,
+            InvestmentWalletPosting.self
+        ]
+    }
+}
+
 enum MistiaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [
             MistiaSchemaV4.self,
             MistiaSchemaV5.self,
-            MistiaSchemaV6.self
+            MistiaSchemaV6.self,
+            MistiaSchemaV7.self
         ]
     }
 
@@ -210,6 +244,10 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
                         try context.save()
                     }
                 }
+            ),
+            MigrationStage.lightweight(
+                fromVersion: MistiaSchemaV6.self,
+                toVersion: MistiaSchemaV7.self
             )
         ]
     }

@@ -12,6 +12,11 @@ nonisolated enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable, Send
     case recurringBillPlan = "recurring_bill_plans"
     case installmentPlan = "installment_plans"
     case dueOccurrenceRecord = "due_occurrence_records"
+    case investmentChannel = "investment_channels"
+    case investmentAsset = "investment_assets"
+    case investmentTrade = "investment_trades"
+    case investmentValuation = "investment_valuations"
+    case investmentPosting = "investment_wallet_postings"
 
     var tableName: String { rawValue }
 
@@ -28,6 +33,11 @@ nonisolated enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable, Send
         case .recurringBillPlan: 70
         case .installmentPlan: 80
         case .dueOccurrenceRecord: 90
+        case .investmentChannel: 100
+        case .investmentAsset: 110
+        case .investmentTrade: 120
+        case .investmentValuation: 130
+        case .investmentPosting: 140
         }
     }
 }

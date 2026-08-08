@@ -1134,7 +1134,19 @@ nonisolated enum MistiaBootstrap {
                     modifiedAt: record.updatedAt
                 )
             }
-        case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrenceRecord:
+        case .wallet,
+             .creditCardProfile,
+             .category,
+             .settlementGroup,
+             .settlementParticipant,
+             .savingsGoal,
+             .installmentPlan,
+             .dueOccurrenceRecord,
+             .investmentChannel,
+             .investmentAsset,
+             .investmentTrade,
+             .investmentValuation,
+             .investmentPosting:
             return []
         }
     }

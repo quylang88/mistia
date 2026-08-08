@@ -347,6 +347,10 @@ struct RootTabView: View {
       RootManagementShortcutModal(destination: destination)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+    case .investment:
+      InvestmentHubView()
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
     }
   }
 
@@ -519,6 +523,9 @@ struct RootTabView: View {
         )
       }
 
+    case .investment:
+      activeSheet = .investment
+
     case .receiptScan:
       activeSheet = .quickCreate(.receipt, .cameraPreferred)
 
@@ -624,6 +631,7 @@ private enum RootSheet: Identifiable {
   case quickCreate(MistiaQuickCreateDestination, TransactionReceiptInitialSource?)
   case settlement(SettlementEditorTarget)
   case managementShortcut(MistiaManagementNavigationDestination)
+  case investment
 
   var id: String {
     switch self {
@@ -633,6 +641,8 @@ private enum RootSheet: Identifiable {
       "settlement-\(target.id)"
     case .managementShortcut(let destination):
       "management-shortcut-\(destination.id)"
+    case .investment:
+      "investment"
     }
   }
 }

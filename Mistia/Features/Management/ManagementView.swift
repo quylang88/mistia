@@ -121,6 +121,12 @@ private struct ManagementRenderSnapshotCacheKey: Hashable {
     let settlementGroupSignature: MistiaCollectionChangeSignature
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
+    let investmentChannelSignature: MistiaCollectionChangeSignature
+}
+
+private struct ManagementInvestmentWalletTarget: Identifiable {
+    let ownerUserID: UUID
+    var id: UUID { ownerUserID }
 }
 
 private struct ManagementProfileRowPresentation {
@@ -156,9 +162,11 @@ struct ManagementView: View {
     private var storedSettlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
+    @Query private var investmentChannels: [InvestmentChannel]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
+    @State private var investmentWalletTarget: ManagementInvestmentWalletTarget?
     @State private var categoryEditorTarget: ManagementCategoryEditorTarget?
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
     @State private var expandedCategoryParentIDs: Set<UUID> = []
@@ -217,13 +225,12 @@ struct ManagementView: View {
         let archivedEventIDs = SettlementLogic.archivedSharedExpenseEventIDs(
             from: visibleSettlementGroups.map(\.recordSnapshot)
         )
-        let visiblePostedTransactions = FamilyScopedData.visibleTransactionsForHistory(
+        let visiblePostedTransactions = FamilyScopedData.visibleTransactionsForFinancial(
             postedTransactions,
-            audits: transactionAuditRecords,
             scopeSnapshot: scopeSnapshot,
             archivedEventIDs: archivedEventIDs
         )
-        let activeWallets = visibleWallets
+        let candidateWallets = visibleWallets
             .filter { !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -232,7 +239,7 @@ struct ManagementView: View {
                 return $0.createdAt < $1.createdAt
             }
         let transactionSnapshots = visiblePostedTransactions.map(\.planningRecordSnapshot)
-        let activeWalletSnapshots = activeWallets.map {
+        let candidateWalletSnapshots = candidateWallets.map {
             TransactionWalletSnapshot(
                 id: $0.id,
                 kind: $0.kind,
@@ -240,12 +247,12 @@ struct ManagementView: View {
             )
         }
         let balanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: activeWalletSnapshots,
+            wallets: candidateWalletSnapshots,
             records: transactionSnapshots
         )
 
         var balancesByID: [UUID: Int64] = [:]
-        for (wallet, walletSnapshot) in zip(activeWallets, activeWalletSnapshots) {
+        for (wallet, walletSnapshot) in zip(candidateWallets, candidateWalletSnapshots) {
             if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
                 balancesByID[wallet.id] = TransactionLogic.creditCardBalance(
                     creditLimitMinor: profile.creditLimitMinor,
@@ -255,6 +262,26 @@ struct ManagementView: View {
             } else {
                 balancesByID[wallet.id] = balanceIndex.balance(for: walletSnapshot)
             }
+        }
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
+        let activeWallets = candidateWallets.filter { wallet in
+            let ownerUserID = walletOwnerMap[wallet.id]
+                ?? familyContextStore.selectedSubjectUserID
+                ?? sessionStore.activeLocalProfileUserID
+            guard let ownerUserID,
+                  InvestmentSystemWalletIdentity.isInvestmentWallet(
+                      walletID: wallet.id,
+                      ownerUserID: ownerUserID
+                  ) else {
+                return true
+            }
+            let isOwner = ownerUserID == sessionStore.activeLocalProfileUserID
+                || ownerUserID == sessionStore.signedInUserID
+            let canView = isOwner || familyContextStore.canViewInvestment(ownerUserID: ownerUserID)
+            let hasActiveChannel = investmentChannels.contains {
+                $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived
+            }
+            return canView && (hasActiveChannel || balancesByID[wallet.id, default: 0] != 0)
         }
 
         return ManagementRenderSnapshot(
@@ -334,6 +361,13 @@ struct ManagementView: View {
                 transactionAuditRecords,
                 updatedAt: \.updatedAt,
                 deletedAt: { _ in nil }
+            ),
+            investmentChannelSignature: MistiaCollectionChangeSignature.make(
+                investmentChannels,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             )
         )
     }
@@ -469,6 +503,10 @@ struct ManagementView: View {
         )
         .sheet(item: $walletEditorTarget) { target in
             ManagementWalletEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $investmentWalletTarget) { target in
+            InvestmentWalletDetailView(ownerUserID: target.ownerUserID)
                 .presentationDragIndicator(.hidden)
         }
         .sheet(item: $categoryEditorTarget) { target in
@@ -723,6 +761,10 @@ struct ManagementView: View {
                                 primaryCurrencyCode: primaryCurrencyCode,
                                 exchangeRateIndex: exchangeRateIndex
                             ) {
+                                if let ownerUserID = investmentWalletOwnerUserID(for: wallet) {
+                                    investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)
+                                    return
+                                }
                                 if presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: wallet.id) {
                                     return
                                 }
@@ -772,6 +814,21 @@ struct ManagementView: View {
         guard let ownerUserID = selectedSubjectUserID else { return false }
         return ownerUserID == sessionStore.activeLocalProfileUserID
             || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: .wallet)
+    }
+
+    private func investmentWalletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let ownerUserID = walletOwnerMap[wallet.id]
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
+        guard let ownerUserID,
+              InvestmentSystemWalletIdentity.isInvestmentWallet(
+                  walletID: wallet.id,
+                  ownerUserID: ownerUserID
+              ) else {
+            return nil
+        }
+        return ownerUserID
     }
 
     private var activeAlert: ManagementAlertPresentation? {

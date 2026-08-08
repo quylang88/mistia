@@ -571,7 +571,7 @@ enum NotificationCenterGrouping {
         switch resourceType {
         case .transaction, .familyTransfer, .debt:
             .familyCashflow
-        case .wallet, .category, .budget, .goal, .card, .bill, .due, .installment, .permission, .event, nil:
+        case .wallet, .category, .budget, .goal, .card, .bill, .due, .installment, .permission, .event, .investment, nil:
             .familyData
         }
     }
@@ -1400,7 +1400,7 @@ struct NotificationCenterView: View {
             return .settings
         case .budget, .goal, .card, .debt, .bill, .due, .installment, .familyTransfer:
             return .planning
-        case .permission, nil:
+        case .investment, .permission, nil:
             return .settings
         }
     }

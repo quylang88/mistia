@@ -3808,6 +3808,14 @@ private struct FamilySharingPermissionKey: Hashable {
 private struct FamilySharingPermissionCommit {
     let key: FamilySharingPermissionKey
     let isGranted: Bool
+
+    var dependencyOrder: Int {
+        guard key.resourceType == .investment else { return 1 }
+        if key.scope == .view {
+            return isGranted ? 0 : 3
+        }
+        return isGranted ? 1 : 2
+    }
 }
 
 private struct FamilySharingManagerCommit {
@@ -3848,8 +3856,13 @@ private struct FamilySharingSheet: View {
 
     private var ownWallets: [LedgerWallet] {
         guard let ownerUserID else { return [] }
+        let investmentWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
         return storedWallets
-            .filter { !$0.isArchived && (walletOwnerMap[$0.id] ?? ownerUserID) == ownerUserID }
+            .filter {
+                !$0.isArchived
+                    && $0.id != investmentWalletID
+                    && (walletOwnerMap[$0.id] ?? ownerUserID) == ownerUserID
+            }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -3888,6 +3901,33 @@ private struct FamilySharingSheet: View {
                             resourceType: .goal
                         )
                     }
+                }
+
+                Section {
+                    sharingToggle(
+                        title: MistiaFamilyPermissionScope.view.localizedActionName,
+                        resourceType: .investment,
+                        resourceID: nil,
+                        scope: .view
+                    )
+                    sharingToggle(
+                        title: MistiaFamilyPermissionScope.create.localizedActionName,
+                        resourceType: .investment,
+                        resourceID: nil,
+                        scope: .create,
+                        isEnabled: stagedInvestmentViewValue
+                    )
+                    sharingToggle(
+                        title: MistiaFamilyPermissionScope.edit.localizedActionName,
+                        resourceType: .investment,
+                        resourceID: nil,
+                        scope: .edit,
+                        isEnabled: stagedInvestmentViewValue
+                    )
+                } header: {
+                    Text(L10n.investment.title)
+                } footer: {
+                    Text(L10n.investment.permission.viewMessage)
                 }
 
                 Section(L10n.family.family.editAccess) {
@@ -4101,7 +4141,8 @@ private struct FamilySharingSheet: View {
         title: String,
         resourceType: MistiaFamilyNotificationResourceType,
         resourceID: UUID?,
-        scope: MistiaFamilyPermissionScope
+        scope: MistiaFamilyPermissionScope,
+        isEnabled: Bool = true
     ) -> some View {
         if let ownerUserID {
             let key = FamilySharingPermissionKey(
@@ -4117,13 +4158,38 @@ private struct FamilySharingSheet: View {
                     },
                     set: { isGranted in
                         stagedPermissionValues[key] = isGranted
+                        if resourceType == .investment, scope == .view, !isGranted {
+                            stagedPermissionValues[FamilySharingPermissionKey(
+                                resourceType: .investment,
+                                resourceID: nil,
+                                scope: .create
+                            )] = false
+                            stagedPermissionValues[FamilySharingPermissionKey(
+                                resourceType: .investment,
+                                resourceID: nil,
+                                scope: .edit
+                            )] = false
+                        }
                         sharingErrorMessage = nil
                     }
                 )
             )
             .tint(MistiaAccent.purple.color)
             .toggleStyle(.switch)
+            .disabled(!isEnabled)
         }
+    }
+
+    private var stagedInvestmentViewValue: Bool {
+        guard let ownerUserID else { return false }
+        return stagedPermissionValue(
+            for: FamilySharingPermissionKey(
+                resourceType: .investment,
+                resourceID: nil,
+                scope: .view
+            ),
+            ownerUserID: ownerUserID
+        )
     }
 
     private func resolvedPlanningManagerUserID(
@@ -4210,7 +4276,12 @@ private struct FamilySharingSheet: View {
             .map { key, isGranted in
                 FamilySharingPermissionCommit(key: key, isGranted: isGranted)
             }
-            .sorted { $0.key.sortKey < $1.key.sortKey }
+            .sorted {
+                if $0.dependencyOrder != $1.dependencyOrder {
+                    return $0.dependencyOrder < $1.dependencyOrder
+                }
+                return $0.key.sortKey < $1.key.sortKey
+            }
 
         let managerCommits: [FamilySharingManagerCommit]
         if let family = familyContextStore.family {

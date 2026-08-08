@@ -817,6 +817,7 @@ private struct MistiaShortcutSettingsView: View {
 
         let utilitySelections: [MistiaShortcutSelection] = {
             var selections: [MistiaShortcutSelection] = []
+            selections.append(.investment)
             selections.append(.receiptScan)
             selections.append(contentsOf: [
                 .backupRestore,
@@ -919,6 +920,9 @@ private struct MistiaShortcutSettingsView: View {
 
         case .memberOverview:
             return L10n.settings.shortcut.option.memberOverview.subtitle
+
+        case .investment:
+            return L10n.settings.shortcut.option.investment.subtitle
 
         case .receiptScan:
             return L10n.settings.shortcut.option.receiptScan.subtitle
@@ -1632,6 +1636,8 @@ private extension MistiaShortcutPresentation {
             .indigo
         case .memberOverview:
             .rose
+        case .investment:
+            .purple
         case .receiptScan:
             .amber
         case .syncNow:

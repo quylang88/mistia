@@ -69,6 +69,19 @@ final class MistiaShortcutLogicTests: XCTestCase {
         XCTAssertEqual(resolution.presentation.action, .syncNow)
     }
 
+    func testResolveKeepsInvestmentSelectionAsLocalAction() {
+        let resolution = MistiaShortcutLogic.resolve(
+            selection: .investment,
+            input: makeInput()
+        )
+
+        XCTAssertEqual(resolution.selection, .investment)
+        XCTAssertEqual(resolution.presentation.title, "Đầu tư")
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("chart.line.uptrend.xyaxis"))
+        XCTAssertEqual(resolution.presentation.action, .investment)
+        XCTAssertFalse(resolution.presentation.action.requiresRemoteAction)
+    }
+
     func testRemoteCapablePinnedActionsRequireRemoteAvailability() {
         let familyID = UUID()
         let memberID = UUID()

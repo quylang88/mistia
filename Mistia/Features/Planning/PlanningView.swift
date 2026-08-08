@@ -1464,7 +1464,7 @@ struct PlanningView: View {
             return .dueOccurrenceRecord
         case .event:
             return .settlementGroup
-        case .permission:
+        case .investment, .permission:
             return nil
         }
     }

@@ -43,6 +43,7 @@ nonisolated struct OverviewCreditCardStatementAccountSnapshot: Equatable, Identi
 
 nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let id: UUID
+    let financialDomain: TransactionFinancialDomain
     let primaryKind: TransactionPrimaryKind
     let transferSubtype: TransactionTransferSubtype?
     let debtIntent: TransactionDebtIntent?
@@ -74,6 +75,7 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
 
     init(
         id: UUID,
+        financialDomain: TransactionFinancialDomain = .ordinary,
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype?,
         debtIntent: TransactionDebtIntent?,
@@ -104,6 +106,7 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
         isArchived: Bool
     ) {
         self.id = id
+        self.financialDomain = financialDomain
         self.primaryKind = primaryKind
         self.transferSubtype = transferSubtype
         self.debtIntent = debtIntent
@@ -307,6 +310,7 @@ nonisolated enum OverviewLogic {
         currencyCode: String,
         balanceIndex: TransactionWalletBalanceIndex? = nil,
         exchangeRates: [MistiaExchangeRate] = [],
+        additionalAssetValueMinor: Int64 = 0,
         familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
         familySpendingAvailable: Bool = true,
         referenceDate: Date = .now,
@@ -320,6 +324,7 @@ nonisolated enum OverviewLogic {
                 currencyCode: currencyCode,
                 balanceIndex: balanceIndex,
                 exchangeRates: exchangeRates,
+                additionalAssetValueMinor: additionalAssetValueMinor,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
@@ -354,6 +359,7 @@ nonisolated enum OverviewLogic {
         currencyCode: String,
         balanceIndex: TransactionWalletBalanceIndex? = nil,
         exchangeRates: [MistiaExchangeRate] = [],
+        additionalAssetValueMinor: Int64 = 0,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewHeroSnapshot {
@@ -373,7 +379,8 @@ nonisolated enum OverviewLogic {
                 transactionRecords: transactionRecords,
                 balanceIndex: balanceIndex,
                 currencyCode: currencyCode,
-                exchangeRates: exchangeRates
+                exchangeRates: exchangeRates,
+                additionalAssetValueMinor: additionalAssetValueMinor
             ),
             incomeThisMonthMinor: currentMonthCashflow?.incomeMinor ?? 0,
             expenseThisMonthMinor: currentMonthCashflow?.expenseMinor ?? 0,
@@ -402,7 +409,8 @@ nonisolated enum OverviewLogic {
         transactionRecords: [TransactionRecordSnapshot],
         balanceIndex: TransactionWalletBalanceIndex? = nil,
         currencyCode: String? = nil,
-        exchangeRates: [MistiaExchangeRate] = []
+        exchangeRates: [MistiaExchangeRate] = [],
+        additionalAssetValueMinor: Int64 = 0
     ) -> Int64 {
         let resolvedBalanceIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
             wallets: wallets.map {
@@ -415,7 +423,7 @@ nonisolated enum OverviewLogic {
             records: transactionRecords
         )
 
-        return wallets
+        let walletTotal = wallets
             .filter { $0.kind != .creditCard }
             .reduce(into: Int64.zero) { partialResult, wallet in
                 let balance = resolvedBalanceIndex.balance(
@@ -437,6 +445,11 @@ nonisolated enum OverviewLogic {
                     exchangeRates: exchangeRates
                 )
             }
+        let (total, overflow) = walletTotal.addingReportingOverflow(additionalAssetValueMinor)
+        if overflow {
+            return additionalAssetValueMinor >= 0 ? .max : .min
+        }
+        return total
     }
 
     static func weeklySpendingPages(
@@ -1235,7 +1248,11 @@ nonisolated enum OverviewLogic {
         calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewRecentTransactionSnapshot] {
         transactions
-            .filter { $0.entryStatus == .posted && !$0.isArchived }
+            .filter {
+                $0.entryStatus == .posted
+                    && !$0.isArchived
+                    && $0.financialDomain == .ordinary
+            }
             .sorted(by: transactionSort)
             .prefix(5)
             .map { transaction in

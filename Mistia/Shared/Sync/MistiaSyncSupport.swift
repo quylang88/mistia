@@ -152,6 +152,26 @@ nonisolated extension DueOccurrenceRecord: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .dueOccurrenceRecord
 }
 
+nonisolated extension InvestmentChannel: MistiaSyncLocalRecord {
+    static let syncEntity: MistiaSyncEntity = .investmentChannel
+}
+
+nonisolated extension InvestmentAsset: MistiaSyncLocalRecord {
+    static let syncEntity: MistiaSyncEntity = .investmentAsset
+}
+
+nonisolated extension InvestmentTrade: MistiaSyncLocalRecord {
+    static let syncEntity: MistiaSyncEntity = .investmentTrade
+}
+
+nonisolated extension InvestmentValuation: MistiaSyncLocalRecord {
+    static let syncEntity: MistiaSyncEntity = .investmentValuation
+}
+
+nonisolated extension InvestmentWalletPosting: MistiaSyncLocalRecord {
+    static let syncEntity: MistiaSyncEntity = .investmentPosting
+}
+
 nonisolated extension SyncConflict {
     var entity: MistiaSyncEntity {
         MistiaSyncEntity(rawValue: entityRawValue) ?? .transaction
@@ -380,6 +400,60 @@ nonisolated private extension MistiaSyncUploadRecord {
                     deleted(row.deletedAt),
                     version(row.syncVersion),
                     date(row.updatedAt)
+                )
+            )
+        case .investmentChannel(let row):
+            return MistiaSyncConflictRecordSummary(
+                title: row.name,
+                detail: compactJoined(
+                    recordState(isArchived: row.isArchived, deletedAt: row.deletedAt),
+                    version(row.syncVersion),
+                    date(row.updatedAt)
+                )
+            )
+        case .investmentAsset(let row):
+            return MistiaSyncConflictRecordSummary(
+                title: compactJoined(row.name, row.symbol),
+                detail: compactJoined(
+                    row.currencyCode,
+                    row.openingQuantityDecimalString,
+                    recordState(isArchived: row.isArchived, deletedAt: row.deletedAt),
+                    version(row.syncVersion),
+                    date(row.updatedAt)
+                )
+            )
+        case .investmentTrade(let row):
+            return MistiaSyncConflictRecordSummary(
+                title: row.kindRawValue == InvestmentTradeKind.buy.rawValue
+                    ? L10n.investment.hub.buy
+                    : L10n.investment.hub.sell,
+                detail: compactJoined(
+                    row.quantityDecimalString,
+                    currency(row.grossAmountMinor, code: row.currencyCode),
+                    date(row.occurredAt),
+                    deleted(row.deletedAt),
+                    version(row.syncVersion)
+                )
+            )
+        case .investmentValuation(let row):
+            return MistiaSyncConflictRecordSummary(
+                title: L10n.investment.valuation.title,
+                detail: compactJoined(
+                    currency(row.marketValueMinor, code: row.currencyCode),
+                    date(row.valuedAt),
+                    deleted(row.deletedAt),
+                    version(row.syncVersion)
+                )
+            )
+        case .investmentPosting(let row):
+            return MistiaSyncConflictRecordSummary(
+                title: L10n.investment.wallet.detailTitle,
+                detail: compactJoined(
+                    row.roleRawValue,
+                    currency(row.amountMinor, code: row.currencyCode),
+                    date(row.occurredAt),
+                    deleted(row.deletedAt),
+                    version(row.syncVersion)
                 )
             )
         }
