@@ -764,9 +764,9 @@ struct OverviewView: View {
                 pinnedHeader: { EmptyView() },
                 trailingAccessory: {
                     HStack(spacing: 10) {
-                        MistiaHeaderCircleButton {
+                        MistiaHeaderCircleButton(action: {
                             isManagingWidgets = true
-                        } label: {
+                        }) {
                             Image(systemName: "slider.horizontal.3")
                                 .font(.system(size: 16, weight: .semibold))
                                 .symbolRenderingMode(.monochrome)
