@@ -161,6 +161,7 @@ struct OverviewRenderSnapshotCacheKey: Hashable {
 
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
@@ -763,17 +764,15 @@ struct OverviewView: View {
                 pinnedHeader: { EmptyView() },
                 trailingAccessory: {
                     HStack(spacing: 10) {
-                        Button {
+                        MistiaHeaderCircleButton {
                             isManagingWidgets = true
                         } label: {
                             Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.primary)
-                                .frame(width: 32, height: 32)
-                                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
+                                .font(.system(size: 16, weight: .semibold))
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.72))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Tùy chỉnh giao diện")
+                        .accessibilityLabel(L10n.overview.overview.customizeOverview)
 
                         MistiaNotificationBellLink()
                     }
@@ -892,6 +891,8 @@ struct OverviewView: View {
                     }
                 }
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .alert(
             activeAlert?.title ?? "",

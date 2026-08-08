@@ -1941,6 +1941,8 @@ nonisolated enum L10n {
             static func couldnTSend(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.couldnTSend", vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした", language: language) }
             static var couldnTSendTheRequestRightNow: String { L10n.tr("overview.overview.couldnTSendTheRequestRightNow", vi: "Không thể gửi yêu cầu lúc này.", en: "Couldn't send the request right now.", ja: "現在リクエストは送信できません。") }
             static func couldnTSendTheRequestRightNow(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.couldnTSendTheRequestRightNow", vi: "Không thể gửi yêu cầu lúc này.", en: "Couldn't send the request right now.", ja: "現在リクエストは送信できません。", language: language) }
+            static var customizeOverview: String { L10n.tr("overview.overview.customizeOverview", vi: "Tùy chỉnh Tổng quan", en: "Customize Overview", ja: "ホームのカスタマイズ") }
+            static func customizeOverview(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.customizeOverview", vi: "Tùy chỉnh Tổng quan", en: "Customize Overview", ja: "ホームのカスタマイズ", language: language) }
             static var dailyExpenses: String { L10n.tr("overview.overview.dailyExpenses", vi: "Chi tiêu trong ngày", en: "Daily expenses", ja: "その日の支出") }
             static func dailyExpenses(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.dailyExpenses", vi: "Chi tiêu trong ngày", en: "Daily expenses", ja: "その日の支出", language: language) }
             static var dailySpending: String { L10n.tr("overview.overview.dailySpending", vi: "Chi tiêu theo ngày", en: "Daily spending", ja: "日別支出") }
@@ -1949,6 +1951,8 @@ nonisolated enum L10n {
             static func day(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.day", vi: "Ngày", en: "Day", ja: "日", language: language) }
             static var dayDetails: String { L10n.tr("overview.overview.dayDetails", vi: "Chi tiết ngày", en: "Day details", ja: "日別詳細") }
             static func dayDetails(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.dayDetails", vi: "Chi tiết ngày", en: "Day details", ja: "日別詳細", language: language) }
+            static var done: String { L10n.tr("overview.overview.done", vi: "Hoàn tất", en: "Done", ja: "完了") }
+            static func done(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.done", vi: "Hoàn tất", en: "Done", ja: "完了", language: language) }
             static var dueToday: String { L10n.tr("overview.overview.dueToday", vi: "Cần trả hôm nay", en: "To pay today", ja: "本日支払いが必要") }
             static func dueToday(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.dueToday", vi: "Cần trả hôm nay", en: "To pay today", ja: "本日支払いが必要", language: language) }
             static var editRequestSent: String { L10n.tr("overview.overview.editRequestSent", vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み") }
@@ -1991,6 +1995,8 @@ nonisolated enum L10n {
             static func requestEditAccess(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.requestEditAccess", vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト", language: language) }
             static var requestSent: String { L10n.tr("overview.overview.requestSent", vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました") }
             static func requestSent(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.requestSent", vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました", language: language) }
+            static var resetToDefault: String { L10n.tr("overview.overview.resetToDefault", vi: "Khôi phục mặc định", en: "Reset to default", ja: "デフォルトに戻す") }
+            static func resetToDefault(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.resetToDefault", vi: "Khôi phục mặc định", en: "Reset to default", ja: "デフォルトに戻す", language: language) }
             static var spendingByCategory: String { L10n.tr("overview.overview.spendingByCategory", vi: "Chi tiêu theo danh mục", en: "Spending by category", ja: "カテゴリ別支出") }
             static func spendingByCategory(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.spendingByCategory", vi: "Chi tiêu theo danh mục", en: "Spending by category", ja: "カテゴリ別支出", language: language) }
             static var thePermissionRequestWasSentToThe: String { L10n.tr("overview.overview.thePermissionRequestWasSentToThe", vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.", en: "The permission request was sent to the data owner.", ja: "権限リクエストをデータ所有者へ送信しました。") }
