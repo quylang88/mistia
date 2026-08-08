@@ -785,7 +785,7 @@ struct OverviewView: View {
                 case .profile:
                     ManagementAccountView()
                 case .investment:
-                    InvestmentHubView(ownerUserIDOverride: ownerUserIDForInvestment)
+                    InvestmentHubView(ownerUserIDOverride: ownerUserIDForInvestment, isModalPresentation: false)
                 }
             }
             .navigationDestination(item: $statementTarget) { target in

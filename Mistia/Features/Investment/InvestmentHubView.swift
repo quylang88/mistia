@@ -42,6 +42,7 @@ struct InvestmentHubView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaUIState.self) private var uiState: MistiaUIState?
     @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
 
     @Query private var channels: [InvestmentChannel]
@@ -54,15 +55,18 @@ struct InvestmentHubView: View {
     private var ledgerTransactions: [LedgerTransaction]
 
     let ownerUserIDOverride: UUID?
+    let isModalPresentation: Bool
 
+    @State private var viewID = UUID()
     @State private var selectedChannelID: UUID?
     @State private var period: InvestmentHubPeriod = .month
     @State private var activeSheet: InvestmentHubSheet?
     @State private var errorMessage: String?
     @State private var isRequestingPermission = false
 
-    init(ownerUserIDOverride: UUID? = nil) {
+    init(ownerUserIDOverride: UUID? = nil, isModalPresentation: Bool = false) {
         self.ownerUserIDOverride = ownerUserIDOverride
+        self.isModalPresentation = isModalPresentation
     }
 
     private var ownerUserID: UUID? {
@@ -215,8 +219,17 @@ struct InvestmentHubView: View {
             .navigationTitle(L10n.investment.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.common.close) { dismiss() }
+                if isModalPresentation {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel(L10n.common.close)
+                    }
                 }
                 if canView, canCreate {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -241,6 +254,12 @@ struct InvestmentHubView: View {
                 self.selectedChannelID = nil
             }
         }
+        .onAppear {
+            uiState?.requestQuickCreateHidden(true, id: viewID)
+        }
+        .onDisappear {
+            uiState?.requestQuickCreateHidden(false, id: viewID)
+        }
     }
 
     @ViewBuilder
@@ -252,10 +271,17 @@ struct InvestmentHubView: View {
                 Text(L10n.investment.hub.emptyMessage)
             } actions: {
                 if canCreate {
-                    Button(L10n.investment.hub.addChannel) {
+                    Button {
                         activeSheet = .channel(nil)
+                    } label: {
+                        Label(L10n.investment.hub.addChannel, systemImage: "plus")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(MistiaAccent.purple.color)
+                    .clipShape(Capsule())
                 } else {
                     permissionButton(scope: .create)
                 }
@@ -650,6 +676,8 @@ struct InvestmentHubView: View {
         }
         .disabled(pending || isRequestingPermission || ownerUserID == nil)
         .buttonStyle(.borderedProminent)
+        .tint(MistiaAccent.purple.color)
+        .clipShape(Capsule())
     }
 
     private func permissionTitle(_ scope: MistiaFamilyPermissionScope) -> String {

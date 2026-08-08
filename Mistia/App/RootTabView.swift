@@ -348,7 +348,7 @@ struct RootTabView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
     case .investment:
-      InvestmentHubView()
+      InvestmentHubView(isModalPresentation: true)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
     }
