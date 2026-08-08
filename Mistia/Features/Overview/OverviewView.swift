@@ -169,6 +169,7 @@ struct OverviewView: View {
     @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
     @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
     @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
+    @AppStorage(MistiaAppStorageKey.overviewSectionConfig) private var sectionConfigData = Data()
 
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
@@ -211,6 +212,24 @@ struct OverviewView: View {
     @State private var infoAlert: OverviewInfoAlert?
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var renderSnapshotCache: OverviewRenderSnapshotCache?
+    @State private var isManagingWidgets = false
+
+    private var activeSectionConfigs: [OverviewSectionItemConfig] {
+        OverviewSectionConfigStorage.decode(from: sectionConfigData)
+    }
+
+    private var sectionConfigsBinding: Binding<[OverviewSectionItemConfig]> {
+        Binding(
+            get: {
+                OverviewSectionConfigStorage.decode(from: sectionConfigData)
+            },
+            set: { newItems in
+                if let encoded = try? OverviewSectionConfigStorage.encode(newItems) {
+                    sectionConfigData = encoded
+                }
+            }
+        )
+    }
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -743,7 +762,21 @@ struct OverviewView: View {
                 titleDisplayMode: .large,
                 pinnedHeader: { EmptyView() },
                 trailingAccessory: {
-                    MistiaNotificationBellLink()
+                    HStack(spacing: 10) {
+                        Button {
+                            isManagingWidgets = true
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .frame(width: 32, height: 32)
+                                .background(Color(uiColor: .tertiarySystemFill), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Tùy chỉnh giao diện")
+
+                        MistiaNotificationBellLink()
+                    }
                 }
             ) {
                 OverviewHeroCard(
@@ -753,31 +786,41 @@ struct OverviewView: View {
                         openExpenseDay(date, transactionsByDay: renderSnapshot.postedExpenseTransactionsByDay)
                     }
                 )
-                InvestmentOverviewCard(
-                    snapshot: investmentOverviewSnapshot(),
-                    canView: ownerUserIDForInvestment.map(canViewInvestment(ownerUserID:)) ?? false
-                ) {
-                    destination = .investment
-                }
-                if !preparingEvents.isEmpty {
-                    OverviewPreparingSettlementSection(
-                        events: preparingEvents,
-                        onSelect: { event in
-                            preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+
+                ForEach(activeSectionConfigs.filter(\.isVisible)) { config in
+                    switch config.kind {
+                    case .investment:
+                        InvestmentOverviewCard(
+                            snapshot: investmentOverviewSnapshot(),
+                            canView: ownerUserIDForInvestment.map(canViewInvestment(ownerUserID:)) ?? false
+                        ) {
+                            destination = .investment
                         }
-                    )
-                }
-                if !renderSnapshot.dashboard.budgetAlerts.isEmpty {
-                    BudgetFocusSection(rows: renderSnapshot.dashboard.budgetAlerts)
-                }
-                if !renderSnapshot.dashboard.dueAlerts.isEmpty {
-                    UpcomingBillsSection(rows: renderSnapshot.dashboard.dueAlerts) { row in
-                        routeDueAlertTap(row)
+                    case .preparingSettlements:
+                        if !preparingEvents.isEmpty {
+                            OverviewPreparingSettlementSection(
+                                events: preparingEvents,
+                                onSelect: { event in
+                                    preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                                }
+                            )
+                        }
+                    case .budgetFocus:
+                        if !renderSnapshot.dashboard.budgetAlerts.isEmpty {
+                            BudgetFocusSection(rows: renderSnapshot.dashboard.budgetAlerts)
+                        }
+                    case .upcomingBills:
+                        if !renderSnapshot.dashboard.dueAlerts.isEmpty {
+                            UpcomingBillsSection(rows: renderSnapshot.dashboard.dueAlerts) { row in
+                                routeDueAlertTap(row)
+                            }
+                        }
+                    case .recentTransactions:
+                        RecentTransactionsSection(rows: renderSnapshot.dashboard.recentTransactions) { row in
+                            guard let transaction = renderSnapshot.transactionsByID[row.id] else { return }
+                            presentEditor(for: transaction, actionContext: actionContext)
+                        }
                     }
-                }
-                RecentTransactionsSection(rows: renderSnapshot.dashboard.recentTransactions) { row in
-                    guard let transaction = renderSnapshot.transactionsByID[row.id] else { return }
-                    presentEditor(for: transaction, actionContext: actionContext)
                 }
             }
             .navigationDestination(item: $destination) { route in
@@ -839,6 +882,16 @@ struct OverviewView: View {
         .sheet(item: $duePaymentTarget) { target in
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $isManagingWidgets) {
+            OverviewWidgetManagementSheet(
+                items: sectionConfigsBinding,
+                onResetToDefault: {
+                    if let encoded = try? OverviewSectionConfigStorage.encode(OverviewSectionItemConfig.defaultConfig) {
+                        sectionConfigData = encoded
+                    }
+                }
+            )
         }
         .alert(
             activeAlert?.title ?? "",
