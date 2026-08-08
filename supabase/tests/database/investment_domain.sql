@@ -217,7 +217,7 @@ select is(
         where user_id = '30000000-0000-4000-8000-000000000001'
           and settlement_role_raw_value like 'investment%'
           and deleted_at is null
-    ),
+    )::bigint,
     0::bigint,
     'investment ledger legs never enter ordinary income or expense reporting'
 );
@@ -297,13 +297,14 @@ select lives_ok(
 );
 
 insert into public.family_permission_grants(
-    family_id, grantee_user_id, owner_user_id, resource_type, resource_id, permission_scope
+    family_id, grantee_user_id, owner_user_id, resource_type, resource_id, permission_scope, granted_by_user_id
 )
 values (
     '30000000-0000-4000-8000-000000000010',
     '30000000-0000-4000-8000-000000000002',
     '30000000-0000-4000-8000-000000000001',
-    'investment', null, 'create'
+    'investment', null, 'create',
+    '30000000-0000-4000-8000-000000000001'
 );
 
 select pg_temp.set_actor('30000000-0000-4000-8000-000000000002');

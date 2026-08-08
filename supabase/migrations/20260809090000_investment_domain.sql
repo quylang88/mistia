@@ -2,7 +2,7 @@
 -- owner-scoped family permissions. Investment source rows are separated from
 -- ordinary cash-flow reporting; derived ledger rows are written by RPC only.
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 alter table public.ledger_wallets
     add column if not exists system_purpose_raw_value text;
@@ -640,7 +640,7 @@ immutable
 strict
 as $$
 declare
-    bytes bytea := substring(digest(p_seed, 'sha256') for 16);
+    bytes bytea := substring(extensions.digest(p_seed, 'sha256') for 16);
     hex text;
 begin
     bytes := set_byte(bytes, 6, (get_byte(bytes, 6) & 15) | 80);
