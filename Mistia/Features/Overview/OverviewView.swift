@@ -1383,73 +1383,96 @@ private struct InvestmentOverviewCard: View {
     let onOpen: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            MistiaGlassCard(cornerRadius: 22, tint: MistiaAccent.purple.color.opacity(0.06)) {
-                if canView {
-                    VStack(alignment: .leading, spacing: 13) {
-                        HStack {
-                            Label(L10n.investment.overview.cardTitle, systemImage: "chart.line.uptrend.xyaxis")
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundStyle(.tertiary)
-                        }
-                        HStack(spacing: 12) {
-                            metric(
-                                L10n.investment.hub.investedCapital,
-                                value: snapshot.investedCapitalMinor,
-                                tint: .blue
-                            )
-                            metric(
-                                L10n.investment.hub.realizedProfitLoss,
-                                value: snapshot.realizedProfitLossMinor,
-                                tint: snapshot.realizedProfitLossMinor >= 0 ? .green : .red
-                            )
-                            metric(
-                                L10n.investment.hub.walletBalance,
-                                value: snapshot.walletBalanceMinor,
-                                tint: snapshot.walletBalanceMinor >= 0 ? MistiaAccent.purple.color : .red
-                            )
-                        }
+        OverviewSection(title: L10n.investment.title) {
+            if canView {
+                Button(action: onOpen) {
+                    VStack(spacing: 0) {
+                        rowItem(
+                            title: L10n.investment.hub.investedCapital,
+                            value: snapshot.investedCapitalMinor.formattedCurrency(code: snapshot.currencyCode),
+                            valueColor: .primary,
+                            iconToken: "mistia.wallet.investment",
+                            tint: MistiaAccent.purple.color
+                        )
+                        Divider()
+                            .padding(.leading, 56)
+                        rowItem(
+                            title: L10n.investment.hub.marketValue,
+                            value: snapshot.marketValueInPrimaryCurrencyMinor.formattedCurrency(code: snapshot.currencyCode),
+                            valueColor: .primary,
+                            iconToken: "mistia.category.parent.income.investment_finance",
+                            tint: .indigo
+                        )
+                        Divider()
+                            .padding(.leading, 56)
+                        rowItem(
+                            title: L10n.investment.hub.realizedProfitLoss,
+                            value: (snapshot.realizedProfitLossMinor >= 0 ? "+" : "") + snapshot.realizedProfitLossMinor.formattedCurrency(code: snapshot.currencyCode),
+                            valueColor: snapshot.realizedProfitLossMinor >= 0 ? Color(red: 0.18, green: 0.67, blue: 0.62) : Color(red: 0.96, green: 0.36, blue: 0.49),
+                            iconToken: snapshot.realizedProfitLossMinor >= 0 ? "mistia.category.income.investment_finance.investment_gain" : "mistia.flow.expense",
+                            tint: snapshot.realizedProfitLossMinor >= 0 ? Color(red: 0.18, green: 0.67, blue: 0.62) : Color(red: 0.96, green: 0.36, blue: 0.49)
+                        )
                     }
-                } else {
-                    HStack(spacing: 13) {
-                        Image(systemName: "lock.shield.fill")
-                            .foregroundStyle(MistiaAccent.purple.color)
-                        VStack(alignment: .leading, spacing: 4) {
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22))
+            } else {
+                Button(action: onOpen) {
+                    HStack(spacing: 12) {
+                        OverviewIcon(icon: "mistia.wallet.investment", tint: MistiaAccent.purple.color)
+
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(L10n.investment.overview.privateTitle)
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
                             Text(L10n.investment.overview.privateMessage)
-                                .font(.caption)
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.leading)
                         }
+
                         Spacer(minLength: 4)
+
                         Image(systemName: "chevron.right")
-                            .font(.caption.bold())
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.tertiary)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
                 }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22))
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private func metric(_ title: String, value: Int64, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func rowItem(
+        title: String,
+        value: String,
+        valueColor: Color,
+        iconToken: String,
+        tint: Color
+    ) -> some View {
+        HStack(spacing: 12) {
+            OverviewIcon(icon: iconToken, tint: tint)
+
             Text(title)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(valueColor)
                 .lineLimit(1)
-            Text(value.formattedCurrency(code: snapshot.currencyCode))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
+                .minimumScaleFactor(0.8)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
 

@@ -1455,18 +1455,20 @@ private struct SettingsVersionFooter: View {
 }
 
 private struct SettingsIconTile: View {
+    @Environment(\.colorScheme) private var colorScheme
     let iconContent: SettingsRowIconContent
 
     var body: some View {
         switch iconContent {
         case .system(let icon, let accent):
+            let tileTint = resolvedTint(accent)
             ZStack {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(accent.color.opacity(0.15))
+                    .fill(tileTint.opacity(0.18))
 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(accent.color)
+                    .foregroundStyle(tileTint)
             }
             .frame(width: 32, height: 32)
 
@@ -1478,6 +1480,16 @@ private struct SettingsIconTile: View {
                 size: 32,
                 showsStatus: false
             )
+        }
+    }
+
+    private func resolvedTint(_ accent: MistiaAccent) -> Color {
+        guard colorScheme == .dark else { return accent.color }
+        switch accent {
+        case .purple:
+            return MistiaAccent.tabActive.color
+        default:
+            return accent.color
         }
     }
 }

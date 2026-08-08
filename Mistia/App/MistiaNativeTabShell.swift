@@ -477,7 +477,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
         : UIColor(red: 0.86, green: 0.20, blue: 0.46, alpha: 1.0) // #dc3375
     case .investment:
       return usesDarkTint
-        ? UIColor(red: 0.72, green: 0.55, blue: 1.00, alpha: 1.0)
+        ? UIColor(red: 0.90, green: 0.74, blue: 1.00, alpha: 1.0)
         : UIColor(red: 0.43, green: 0.23, blue: 0.76, alpha: 1.0)
     case .receiptScan:
       return usesDarkTint
