@@ -48,11 +48,11 @@ public struct OverviewSectionItemConfig: Codable, Identifiable, Equatable, Senda
 
     public static var defaultConfig: [OverviewSectionItemConfig] {
         [
+            OverviewSectionItemConfig(kind: .investment, isVisible: true),
             OverviewSectionItemConfig(kind: .preparingSettlements, isVisible: true),
             OverviewSectionItemConfig(kind: .budgetFocus, isVisible: true),
             OverviewSectionItemConfig(kind: .upcomingBills, isVisible: true),
-            OverviewSectionItemConfig(kind: .recentTransactions, isVisible: true),
-            OverviewSectionItemConfig(kind: .investment, isVisible: false)
+            OverviewSectionItemConfig(kind: .recentTransactions, isVisible: true)
         ]
     }
 }

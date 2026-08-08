@@ -891,8 +891,8 @@ struct OverviewView: View {
                     }
                 }
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
         }
         .alert(
             activeAlert?.title ?? "",

@@ -6,9 +6,8 @@ final class OverviewSectionConfigTests: XCTestCase {
         let defaults = OverviewSectionItemConfig.defaultConfig
         XCTAssertEqual(defaults.count, 5)
 
-        let investment = defaults.first { $0.kind == .investment }
-        XCTAssertNotNil(investment)
-        XCTAssertFalse(investment?.isVisible ?? true, "Investment should be hidden by default")
+        XCTAssertEqual(defaults.first?.kind, .investment, "Investment should be top 1 by default")
+        XCTAssertTrue(defaults.first?.isVisible ?? false, "Investment should be visible by default")
 
         let budget = defaults.first { $0.kind == .budgetFocus }
         XCTAssertNotNil(budget)
@@ -17,13 +16,13 @@ final class OverviewSectionConfigTests: XCTestCase {
 
     func testEncodingAndDecoding() throws {
         var items = OverviewSectionItemConfig.defaultConfig
-        items[4].isVisible = true
+        items[0].isVisible = false
 
         let data = try OverviewSectionConfigStorage.encode(items)
         let decoded = OverviewSectionConfigStorage.decode(from: data)
 
         XCTAssertEqual(decoded.count, 5)
-        XCTAssertTrue(decoded.first { $0.kind == .investment }?.isVisible ?? false)
+        XCTAssertFalse(decoded.first { $0.kind == .investment }?.isVisible ?? true)
     }
 
     func testSanitizeRestoresMissingSections() {
