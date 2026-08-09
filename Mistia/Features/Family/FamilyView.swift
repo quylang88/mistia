@@ -1638,8 +1638,7 @@ private struct FamilyOverviewHeader: View {
                                     avatarURL: member.avatarURL,
                                     size: 56,
                                     isActive: selected,
-                                    targetScale: 1.58,
-                                    ringLineWidth: 3.0
+                                    targetScale: 1.58
                                 )
 
                                 Text(member.displayName)

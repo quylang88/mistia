@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum MistiaBackgroundTone {
     case standard
@@ -349,6 +350,7 @@ struct MistiaHeaderCircleButton<Content: View>: View {
                 .buttonStyle(.plain)
             }
         }
+        .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
         .hoverEffect(.highlight)
         .accessibilityAddTraits(.isButton)
     }
@@ -397,6 +399,7 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
                 .buttonStyle(.plain)
             }
         }
+        .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
         .hoverEffect(.highlight)
         .accessibilityAddTraits(.isButton)
     }
@@ -408,61 +411,180 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
     }
 }
 
+@MainActor
+final class MistiaAttentionPulseRingUIView: UIView {
+    static let lineWidth: CGFloat = 2.2
+
+    private static let animationKey = "mistia.attentionPulse"
+    private static let expansionDuration: CFTimeInterval = 1.6
+    private static let cycleDuration: CFTimeInterval = 2.5
+    private static let initialOpacity: Float = 0.82
+
+    private let ringLayer = CAShapeLayer()
+    private var ringDiameter: CGFloat = 0
+    private var targetScale: CGFloat = 1
+    private var isActive = false
+    private var reducesMotion = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        clipsToBounds = false
+        layer.masksToBounds = false
+
+        ringLayer.fillColor = UIColor.clear.cgColor
+        ringLayer.lineWidth = Self.lineWidth
+        ringLayer.opacity = 0
+        layer.addSublayer(ringLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        color: UIColor,
+        diameter: CGFloat,
+        targetScale: CGFloat,
+        isActive: Bool,
+        reducesMotion: Bool
+    ) {
+        let geometryChanged = ringDiameter != diameter || self.targetScale != targetScale
+        let activityChanged = self.isActive != isActive || self.reducesMotion != reducesMotion
+
+        ringDiameter = diameter
+        self.targetScale = targetScale
+        self.isActive = isActive
+        self.reducesMotion = reducesMotion
+        ringLayer.strokeColor = color.cgColor
+
+        if geometryChanged {
+            setNeedsLayout()
+            layoutIfNeeded()
+        }
+        if geometryChanged || activityChanged {
+            refreshAnimation()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard ringDiameter > 0 else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ringLayer.bounds = CGRect(x: 0, y: 0, width: ringDiameter, height: ringDiameter)
+        ringLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        ringLayer.path = UIBezierPath(
+            ovalIn: ringLayer.bounds.insetBy(
+                dx: Self.lineWidth / 2,
+                dy: Self.lineWidth / 2
+            )
+        ).cgPath
+        CATransaction.commit()
+    }
+
+    private func refreshAnimation() {
+        ringLayer.removeAnimation(forKey: Self.animationKey)
+        ringLayer.opacity = 0
+        guard isActive, !reducesMotion else { return }
+
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = Self.initialOpacity
+        opacity.toValue = 0
+        opacity.duration = Self.expansionDuration
+
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1
+        scale.toValue = targetScale
+        scale.duration = Self.expansionDuration
+
+        let group = CAAnimationGroup()
+        group.animations = [opacity, scale]
+        group.duration = Self.cycleDuration
+        group.repeatCount = .infinity
+        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        group.isRemovedOnCompletion = false
+        ringLayer.add(group, forKey: Self.animationKey)
+    }
+}
+
+private struct MistiaAttentionPulseRingRepresentable: UIViewRepresentable {
+    let color: Color
+    let diameter: CGFloat
+    let targetScale: CGFloat
+    let isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+
+    func makeUIView(context: Context) -> MistiaAttentionPulseRingUIView {
+        MistiaAttentionPulseRingUIView()
+    }
+
+    func updateUIView(_ uiView: MistiaAttentionPulseRingUIView, context: Context) {
+        uiView.configure(
+            color: UIColor(color),
+            diameter: diameter,
+            targetScale: targetScale,
+            isActive: isActive,
+            reducesMotion: accessibilityReduceMotion
+        )
+    }
+}
+
+struct MistiaAttentionPulseRing: View {
+    let color: Color
+    let diameter: CGFloat
+    let targetScale: CGFloat
+    let isActive: Bool
+
+    var body: some View {
+        MistiaAttentionPulseRingRepresentable(
+            color: color,
+            diameter: diameter,
+            targetScale: targetScale,
+            isActive: isActive
+        )
+        .frame(width: canvasSize, height: canvasSize)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var canvasSize: CGFloat {
+        diameter * targetScale + MistiaAttentionPulseRingUIView.lineWidth * 2
+    }
+}
+
 struct MistiaAttentionPulseAvatar: View {
     let initials: String
     let avatarURL: URL?
     let size: CGFloat
     let isActive: Bool
+    var color: Color? = nil
     var targetScale: CGFloat = 2.2
-    var ringLineWidth: CGFloat = 2.0
 
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.colorScheme) private var colorScheme
-    @State private var pulseScale: CGFloat = 1
-    @State private var pulseOpacity: Double = 0
 
     var body: some View {
-        MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
-            .overlay {
-                Circle()
-                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: ringLineWidth)
-                    .scaleEffect(pulseScale)
-                    .allowsHitTesting(false)
-            }
-            .task(id: "\(isActive)-\(accessibilityReduceMotion)") {
-                await runPulseLoop()
-            }
+        ZStack {
+            MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
+
+            MistiaAttentionPulseRing(
+                color: color ?? defaultPulseColor,
+                diameter: size,
+                targetScale: targetScale,
+                isActive: isActive
+            )
+        }
+        .frame(width: size, height: size)
     }
 
-    private var pulseColor: Color {
+    private var defaultPulseColor: Color {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
-    @MainActor
-    private func resetPulse() {
-        pulseScale = 1
-        pulseOpacity = 0
-    }
-
-    private func runPulseLoop() async {
-        resetPulse()
-        guard isActive, !accessibilityReduceMotion else { return }
-
-        while !Task.isCancelled {
-            await MainActor.run {
-                pulseScale = 1
-                pulseOpacity = 0.85
-                withAnimation(.easeOut(duration: 1.6)) {
-                    pulseScale = targetScale
-                    pulseOpacity = 0
-                }
-            }
-
-            try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled else { return }
-            resetPulse()
-        }
-    }
 }
 
 struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAccessory: View>: View {
@@ -470,6 +592,8 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         case fixedInset
         case scrollsThenPins
     }
+
+    @Environment(\.colorScheme) private var colorScheme
 
     let tone: MistiaBackgroundTone
     let title: String
@@ -662,10 +786,17 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
     @ViewBuilder
     private var leadingAvatarButton: some View {
         let button = MistiaHeaderCircleButton(action: onLeadingTap) {
-            MistiaAttentionPulseAvatar(
+            MistiaAvatarBadge(
                 initials: leadingInitials,
                 avatarURL: leadingAvatarURL,
-                size: 28,
+                size: 28
+            )
+        }
+        .overlay {
+            MistiaAttentionPulseRing(
+                color: colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color,
+                diameter: 28,
+                targetScale: 2.2,
                 isActive: leadingAvatarAttentionPulse
             )
         }
