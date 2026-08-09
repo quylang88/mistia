@@ -16222,6 +16222,29 @@
         }
       }
     },
+    "overview.overview.customizeOverviewDescription" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Customize the display and order of information cards on the Overview screen."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホーム画面に表示する情報カードの表示・非表示および並び順を設定します。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tùy chỉnh danh sách và thứ tự hiển thị các thẻ thông tin trên màn hình Tổng quan."
+          }
+        }
+      }
+    },
     "overview.overview.done" : {
       "extractionState" : "stale",
       "localizations" : {

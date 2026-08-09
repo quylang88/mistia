@@ -895,10 +895,7 @@ struct OverviewView: View {
         }
         .sheet(isPresented: $isManagingWidgets) {
             OverviewWidgetManagementSheet(
-                items: sectionConfigsBinding,
-                onResetToDefault: {
-                    sectionConfigsBinding.wrappedValue = OverviewSectionItemConfig.defaultConfig
-                }
+                items: sectionConfigsBinding
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)

@@ -5,7 +5,19 @@ struct OverviewWidgetManagementSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var items: [OverviewSectionItemConfig]
 
-    var onResetToDefault: () -> Void
+    @State private var draftItems: [OverviewSectionItemConfig] = []
+    @State private var initialItems: [OverviewSectionItemConfig] = []
+
+    private var hasUnsavedChanges: Bool {
+        draftItems != initialItems
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: hasUnsavedChanges
+        )
+    }
 
     private var groupedBackground: Color {
         colorScheme == .dark
@@ -17,7 +29,7 @@ struct OverviewWidgetManagementSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach($items) { $item in
+                    ForEach($draftItems) { $item in
                         HStack(spacing: 12) {
                             Image(systemName: item.kind.iconSymbolName)
                                 .font(.system(size: 16, weight: .medium))
@@ -38,11 +50,26 @@ struct OverviewWidgetManagementSheet: View {
                         .padding(.vertical, 4)
                     }
                     .onMove { from, to in
-                        items.move(fromOffsets: from, toOffset: to)
+                        draftItems.move(fromOffsets: from, toOffset: to)
                     }
                 } header: {
-                    Text("Bật/tắt và sắp xếp thứ tự hiển thị các section bên dưới màn hình Tổng quan.")
+                    Text(L10n.overview.overview.customizeOverviewDescription)
                         .textCase(nil)
+                }
+
+                Section {
+                    Button {
+                        draftItems = OverviewSectionItemConfig.defaultConfig
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 15, weight: .medium))
+                            Text(L10n.overview.overview.resetToDefault)
+                                .font(.subheadline)
+                        }
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    }
                 }
             }
             .listStyle(.insetGrouped)
@@ -51,37 +78,45 @@ struct OverviewWidgetManagementSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        onResetToDefault()
-                    } label: {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel(L10n.overview.overview.resetToDefault)
+                    MistiaGuardedDismissButton(
+                        configuration: dismissGuardConfiguration
+                    )
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        dismiss()
+                        save()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color(red: 0.15, green: 0.08, blue: 0.30))
+                            .frame(width: 30, height: 30)
                     }
-                    .accessibilityLabel(L10n.overview.overview.done)
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(MistiaAccent.purple.color)
+                    .accessibilityLabel(L10n.common.save)
                 }
             }
             .toolbarBackground(groupedBackground, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .presentationBackground(groupedBackground)
+        .onAppear {
+            draftItems = items
+            initialItems = items
+        }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
+    }
+
+    private func save() {
+        items = draftItems
+        dismiss()
     }
 }
 
 #Preview {
     OverviewWidgetManagementSheet(
-        items: .constant(OverviewSectionItemConfig.defaultConfig),
-        onResetToDefault: {}
+        items: .constant(OverviewSectionItemConfig.defaultConfig)
     )
 }
