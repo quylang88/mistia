@@ -1,9 +1,7 @@
-import Charts
 import SwiftData
 import SwiftUI
 
 private enum InvestmentHubPeriod: String, CaseIterable, Identifiable {
-    case day
     case month
     case allTime
 
@@ -11,7 +9,6 @@ private enum InvestmentHubPeriod: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .day: L10n.investment.hub.day
         case .month: L10n.investment.hub.month
         case .allTime: L10n.investment.hub.allTime
         }
@@ -60,6 +57,7 @@ struct InvestmentHubView: View {
     @State private var viewID = UUID()
     @State private var selectedChannelID: UUID?
     @State private var period: InvestmentHubPeriod = .month
+    @State private var selectedMonth = Date()
     @State private var activeSheet: InvestmentHubSheet?
     @State private var errorMessage: String?
     @State private var isRequestingPermission = false
@@ -194,17 +192,28 @@ struct InvestmentHubView: View {
     }
 
     private var selectedDateInterval: DateInterval? {
-        let now = Date()
         switch period {
-        case .day:
-            let start = calendar.startOfDay(for: now)
-            return DateInterval(start: start, end: calendar.date(byAdding: .day, value: 1, to: start) ?? now)
         case .month:
-            let start = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
-            return DateInterval(start: start, end: calendar.date(byAdding: .month, value: 1, to: start) ?? now)
+            InvestmentPeriodLogic.monthInterval(
+                containing: selectedMonth,
+                calendar: calendar
+            )
         case .allTime:
-            return nil
+            nil
         }
+    }
+
+    private var visibleTrades: [InvestmentTrade] {
+        ownerTrades.filter { selectedDateInterval?.contains($0.occurredAt) ?? true }
+    }
+
+    private var monthSelectionBounds: MistiaMonthSelectionBounds {
+        let relevantDates = ownerTrades.map(\.occurredAt) + [Date()]
+        return MistiaMonthSelectionBounds(
+            minimumMonth: relevantDates.min() ?? selectedMonth,
+            maximumMonth: relevantDates.max() ?? selectedMonth,
+            calendar: calendar
+        )
     }
 
     var body: some View {
@@ -231,9 +240,21 @@ struct InvestmentHubView: View {
                         .accessibilityLabel(L10n.common.close)
                     }
                 }
-                if canView, canCreate {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        createMenu
+                if canView {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        if canCreate {
+                            Button {
+                                activeSheet = ownerChannels.isEmpty ? .channel(nil) : .asset(nil)
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .accessibilityLabel(
+                                ownerChannels.isEmpty
+                                    ? L10n.investment.hub.addChannel
+                                    : L10n.investment.hub.addAsset
+                            )
+                        }
+                        managementMenu
                     }
                 }
             }
@@ -289,13 +310,11 @@ struct InvestmentHubView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    channelPicker
-                    periodPicker
-                    summaryGrid
-                    realizedChart
+                    periodControl
+                    summaryCard
+                    primaryActions
                     positionsSection
                     activitySection
-                    archivedSection
                 }
                 .padding(16)
             }
@@ -313,170 +332,121 @@ struct InvestmentHubView: View {
         }
     }
 
-    private var channelPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                channelChip(
-                    title: L10n.investment.hub.allChannels,
-                    systemImage: "square.grid.2x2",
-                    channelID: nil
-                )
-                ForEach(ownerChannels) { channel in
-                    channelChip(
-                        title: channel.name,
-                        systemImage: channel.iconSymbolName,
-                        channelID: channel.id
-                    )
-                    .contextMenu {
-                        if canEdit {
-                            Button(L10n.management.management.edit) {
-                                activeSheet = .channel(channel.id)
-                            }
-                            Button(L10n.common.archive, role: .destructive) {
-                                archive(channel)
-                            }
+    private var periodControl: some View {
+        InvestmentPeriodControl(
+            period: $period,
+            selectedMonth: $selectedMonth,
+            calendar: calendar,
+            monthSelectionBounds: monthSelectionBounds
+        )
+    }
+
+    private var summaryCard: some View {
+        InvestmentPortfolioSummaryCard(
+            summary: portfolioSummary,
+            currencyCode: accountingCurrencyCode
+        )
+    }
+
+    private var primaryActions: some View {
+        InvestmentPrimaryActions(
+            canBuy: canCreate && !ownerAssets.isEmpty,
+            canSell: canCreate && ownerAssets.contains { position(for: $0).quantity > 0 },
+            onBuy: { activeSheet = .trade(kind: .buy, id: nil) },
+            onSell: { activeSheet = .trade(kind: .sell, id: nil) }
+        )
+    }
+
+    private var managementMenu: some View {
+        Menu {
+            if ownerChannels.count > 1 {
+                Menu(L10n.investment.hub.channels, systemImage: "line.3.horizontal.decrease.circle") {
+                    Button {
+                        selectedChannelID = nil
+                    } label: {
+                        if selectedChannelID == nil {
+                            Label(L10n.investment.hub.allChannels, systemImage: "checkmark")
                         } else {
-                            Button(L10n.investment.permission.requestEdit) {
-                                requestPermission(.edit)
+                            Text(L10n.investment.hub.allChannels)
+                        }
+                    }
+                    ForEach(ownerChannels) { channel in
+                        Button {
+                            selectedChannelID = channel.id
+                        } label: {
+                            if selectedChannelID == channel.id {
+                                Label(channel.name, systemImage: "checkmark")
+                            } else {
+                                Text(channel.name)
                             }
                         }
                     }
                 }
             }
-        }
-    }
 
-    private func channelChip(title: String, systemImage: String, channelID: UUID?) -> some View {
-        let isSelected = selectedChannelID == channelID
-        return Button {
-            withAnimation(.snappy) { selectedChannelID = channelID }
-        } label: {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .background(isSelected ? MistiaAccent.purple.color : Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var periodPicker: some View {
-        Picker(L10n.investment.hub.realizedProfitLoss, selection: $period) {
-            ForEach(InvestmentHubPeriod.allCases) { period in
-                Text(period.title).tag(period)
+            if canCreate {
+                Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
+                    activeSheet = .channel(nil)
+                }
             }
-        }
-        .pickerStyle(.segmented)
-    }
 
-    private var summaryGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            InvestmentMetricCard(
-                title: L10n.investment.hub.investedCapital,
-                value: portfolioSummary.investedCapitalMinor.formattedCurrency(code: accountingCurrencyCode),
-                tint: .blue
-            )
-            InvestmentMetricCard(
-                title: L10n.investment.hub.marketValue,
-                value: portfolioSummary.marketValueMinor.formattedCurrency(code: accountingCurrencyCode),
-                tint: .indigo
-            )
-            InvestmentMetricCard(
-                title: L10n.investment.hub.realizedProfitLoss,
-                value: portfolioSummary.realizedProfitLossMinor.formattedCurrency(code: accountingCurrencyCode),
-                tint: portfolioSummary.realizedProfitLossMinor >= 0 ? .green : .red
-            )
-            InvestmentMetricCard(
-                title: L10n.investment.hub.unrealizedProfitLoss,
-                value: portfolioSummary.unrealizedProfitLossMinor.formattedCurrency(code: accountingCurrencyCode),
-                tint: portfolioSummary.unrealizedProfitLossMinor >= 0 ? .green : .red
-            )
-            Button {
+            if canEdit, !ownerChannels.isEmpty {
+                Menu(L10n.management.management.manage, systemImage: "slider.horizontal.3") {
+                    ForEach(ownerChannels) { channel in
+                        Button(channel.name) { activeSheet = .channel(channel.id) }
+                    }
+                }
+            }
+
+            Button(L10n.investment.hub.walletBalance, systemImage: "wallet.bifold") {
                 activeSheet = .wallet
-            } label: {
-                InvestmentMetricCard(
-                    title: L10n.investment.hub.walletBalance,
-                    value: systemWalletBalanceMinor.formattedCurrency(code: accountingCurrencyCode),
-                    tint: systemWalletBalanceMinor >= 0 ? .purple : .red
-                )
             }
-            .buttonStyle(.plain)
-            .gridCellColumns(2)
-        }
-    }
 
-    @ViewBuilder
-    private var realizedChart: some View {
-        let points = chartPoints
-        if !points.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.investment.hub.realizedProfitLoss)
-                    .font(.headline)
-                Chart(points) { point in
-                    BarMark(
-                        x: .value(L10n.investment.trade.date, point.date, unit: chartUnit),
-                        y: .value(L10n.investment.hub.realizedProfitLoss, point.amountMinor)
-                    )
-                    .foregroundStyle(point.amountMinor >= 0 ? Color.green.gradient : Color.red.gradient)
+            if canEdit, (!archivedOwnerChannels.isEmpty || !archivedOwnerAssets.isEmpty) {
+                Menu(
+                    L10n.management.managementarchiveditems.archivedItems,
+                    systemImage: "archivebox"
+                ) {
+                    ForEach(archivedOwnerChannels) { channel in
+                        Button(channel.name) { restore(channel) }
+                    }
+                    ForEach(archivedOwnerAssets) { asset in
+                        Button(asset.name) { restore(asset) }
+                            .disabled(!ownerChannels.contains { $0.id == asset.channelID })
+                    }
                 }
-                .chartYAxis {
-                    AxisMarks(position: .leading)
-                }
-                .frame(height: 170)
             }
-            .padding(16)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        } label: {
+            Image(systemName: "ellipsis.circle")
         }
+        .accessibilityLabel(L10n.management.management.manage)
     }
 
     private var positionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(L10n.investment.hub.positions)
-                    .font(.headline)
-                Spacer()
-                if canCreate {
-                    Button(L10n.investment.hub.addAsset) { activeSheet = .asset(nil) }
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
+            Text(L10n.investment.hub.positions)
+                .font(.headline)
 
             ForEach(ownerAssets) { asset in
                 let position = position(for: asset)
-                let marketValue = latestValuation(for: asset)?.accountingMarketValueMinor
-                    ?? position.costBasisMinor
+                let snapshot = InvestmentAssetPositionSnapshot(
+                    id: asset.id,
+                    channelID: asset.channelID,
+                    quantity: position.quantity,
+                    remainingCostBasisMinor: position.costBasisMinor,
+                    marketValueMinor: latestValuation(for: asset)?.accountingMarketValueMinor
+                )
+                let detail = positionDetail(for: snapshot)
                 Button {
                     if canCreate { activeSheet = .valuation(assetID: asset.id, id: nil) }
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "shippingbox.fill")
-                            .foregroundStyle(MistiaAccent.purple.color)
-                            .frame(width: 34, height: 34)
-                            .background(MistiaAccent.purple.color.opacity(0.12), in: Circle())
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(asset.name)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text(InvestmentDecimalCoding.string(from: position.quantity))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(marketValue.formattedCurrency(code: accountingCurrencyCode))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text(position.costBasisMinor.formattedCurrency(code: accountingCurrencyCode))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(14)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    InvestmentPositionRow(
+                        assetName: asset.name,
+                        detail: detail,
+                        remainingCapitalMinor: snapshot.remainingCostBasisMinor,
+                        marketValueMinor: snapshot.marketValueMinor,
+                        currencyCode: accountingCurrencyCode
+                    )
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
@@ -499,11 +469,31 @@ struct InvestmentHubView: View {
         }
     }
 
+    private func positionDetail(for snapshot: InvestmentAssetPositionSnapshot) -> String {
+        let quantity = InvestmentDecimalCoding.string(from: snapshot.quantity)
+        guard let average = snapshot.averageUnitCostMinor else {
+            return L10n.investment.hub.quantityOnly(quantity)
+        }
+        return L10n.investment.hub.positionDetails(
+            quantity,
+            average.formattedCurrency(code: accountingCurrencyCode)
+        )
+    }
+
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.hub.activity)
                 .font(.headline)
-            ForEach(ownerTrades.sorted(by: newestTradeFirst)) { trade in
+            if visibleTrades.isEmpty {
+                Text(L10n.investment.hub.noActivityForPeriod)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            ForEach(visibleTrades.sorted(by: newestTradeFirst)) { trade in
                 Button {
                     if canEdit { activeSheet = .trade(kind: trade.kind, id: trade.id) }
                 } label: {
@@ -514,7 +504,12 @@ struct InvestmentHubView: View {
                             Text(assetName(for: trade.assetID))
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
-                            Text(trade.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                            Text(
+                                L10n.investment.hub.activityDetails(
+                                    InvestmentDecimalCoding.string(from: trade.quantity),
+                                    trade.occurredAt.formatted(date: .abbreviated, time: .omitted)
+                                )
+                            )
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -544,70 +539,6 @@ struct InvestmentHubView: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var archivedSection: some View {
-        if canEdit, !archivedOwnerChannels.isEmpty || !archivedOwnerAssets.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.management.managementarchiveditems.archivedItems)
-                    .font(.headline)
-                ForEach(archivedOwnerChannels) { channel in
-                    archivedRow(name: channel.name, systemImage: channel.iconSymbolName) {
-                        restore(channel)
-                    }
-                }
-                ForEach(archivedOwnerAssets) { asset in
-                    let channelIsActive = ownerChannels.contains { $0.id == asset.channelID }
-                    archivedRow(name: asset.name, systemImage: "shippingbox.fill") {
-                        restore(asset)
-                    }
-                    .disabled(!channelIsActive)
-                }
-            }
-        }
-    }
-
-    private func archivedRow(
-        name: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack {
-                Label(name, systemImage: systemImage)
-                Spacer()
-                Text(L10n.management.managementarchiveditems.restore)
-                    .font(.subheadline.weight(.semibold))
-            }
-            .padding(14)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var createMenu: some View {
-        Menu {
-            Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
-                activeSheet = .channel(nil)
-            }
-            Button(L10n.investment.hub.addAsset, systemImage: "shippingbox") {
-                activeSheet = .asset(nil)
-            }
-            .disabled(ownerChannels.isEmpty)
-            Button(L10n.investment.hub.buy, systemImage: "arrow.down.circle") {
-                activeSheet = .trade(kind: .buy, id: nil)
-            }
-            .disabled(ownerAssets.isEmpty)
-            Button(L10n.investment.hub.sell, systemImage: "arrow.up.circle") {
-                activeSheet = .trade(kind: .sell, id: nil)
-            }
-            .disabled(ownerAssets.allSatisfy { position(for: $0).quantity <= 0 })
-        } label: {
-            Image(systemName: "plus")
-        }
-        .accessibilityLabel(L10n.investment.hub.addChannel)
     }
 
     @ViewBuilder
@@ -713,7 +644,7 @@ struct InvestmentHubView: View {
             .filter { $0.assetID == asset.id && $0.deletedAt == nil }
             .sorted(by: oldestTradeFirst)
         guard let last = assetTrades.last else {
-            return (asset.openingQuantity, asset.openingCostMinor)
+            return (0, 0)
         }
         return (last.positionQuantityAfter, last.positionCostBasisAfterMinor)
     }
@@ -854,59 +785,181 @@ struct InvestmentHubView: View {
         }
     }
 
-    private var chartUnit: Calendar.Component {
-        switch period {
-        case .day: .hour
-        case .month: .day
-        case .allTime: .month
-        }
-    }
-
-    private var chartPoints: [InvestmentRealizedChartPoint] {
-        var amounts: [Date: Int64] = [:]
-        for trade in ownerTrades where trade.kind == .sell && (selectedDateInterval?.contains(trade.occurredAt) ?? true) {
-            let bucket: Date
-            switch period {
-            case .day:
-                bucket = calendar.dateInterval(of: .hour, for: trade.occurredAt)?.start ?? trade.occurredAt
-            case .month:
-                bucket = calendar.startOfDay(for: trade.occurredAt)
-            case .allTime:
-                bucket = calendar.date(from: calendar.dateComponents([.year, .month], from: trade.occurredAt)) ?? trade.occurredAt
-            }
-            amounts[bucket, default: 0] += trade.realizedProfitLossMinor
-        }
-        return amounts.map { InvestmentRealizedChartPoint(date: $0.key, amountMinor: $0.value) }
-            .sorted { $0.date < $1.date }
-    }
 }
 
-private struct InvestmentRealizedChartPoint: Identifiable {
-    let date: Date
-    let amountMinor: Int64
-    var id: Date { date }
-}
-
-private struct InvestmentMetricCard: View {
-    let title: String
-    let value: String
-    let tint: Color
+private struct InvestmentPeriodControl: View {
+    @Binding var period: InvestmentHubPeriod
+    @Binding var selectedMonth: Date
+    let calendar: Calendar
+    let monthSelectionBounds: MistiaMonthSelectionBounds
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 10) {
+            Picker(String(), selection: $period) {
+                ForEach(InvestmentHubPeriod.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if period == .month {
+                MistiaMonthNavigationControl(
+                    selection: $selectedMonth,
+                    calendar: calendar,
+                    accentColor: MistiaAccent.purple.color,
+                    bounds: monthSelectionBounds
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.snappy, value: period)
+    }
+}
+
+private struct InvestmentPortfolioSummaryCard: View {
+    let summary: InvestmentPortfolioSummary
+    let currencyCode: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(L10n.investment.hub.investedCapital)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(summary.investedCapitalMinor.formattedCurrency(code: currencyCode))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+
+            HStack(alignment: .top, spacing: 20) {
+                metric(
+                    title: L10n.investment.hub.marketValue,
+                    amount: summary.marketValueMinor,
+                    tint: .primary
+                )
+                metric(
+                    title: L10n.investment.hub.unrealizedProfitLoss,
+                    amount: summary.unrealizedProfitLossMinor,
+                    tint: profitColor(summary.unrealizedProfitLossMinor)
+                )
+            }
+
+            if summary.realizedProfitLossMinor != 0 {
+                Divider()
+                HStack {
+                    Text(L10n.investment.hub.realizedProfitLoss)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(summary.realizedProfitLossMinor.formattedCurrency(code: currencyCode))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(profitColor(summary.realizedProfitLossMinor))
+                }
+            }
+        }
+        .padding(18)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func metric(title: String, amount: Int64, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+            Text(amount.formattedCurrency(code: currencyCode))
+                .font(.subheadline.weight(.bold))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func profitColor(_ amount: Int64) -> Color {
+        if amount > 0 { return .green }
+        if amount < 0 { return .red }
+        return .primary
+    }
+}
+
+private struct InvestmentPrimaryActions: View {
+    let canBuy: Bool
+    let canSell: Bool
+    let onBuy: () -> Void
+    let onSell: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            action(
+                title: L10n.investment.hub.buy,
+                systemImage: "arrow.down.circle.fill",
+                tint: .blue,
+                isEnabled: canBuy,
+                action: onBuy
+            )
+            action(
+                title: L10n.investment.hub.sell,
+                systemImage: "arrow.up.circle.fill",
+                tint: .green,
+                isEnabled: canSell,
+                action: onSell
+            )
+        }
+    }
+
+    private func action(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+        }
+        .buttonStyle(.bordered)
+        .tint(tint)
+        .disabled(!isEnabled)
+    }
+}
+
+private struct InvestmentPositionRow: View {
+    let assetName: String
+    let detail: String
+    let remainingCapitalMinor: Int64
+    let marketValueMinor: Int64?
+    let currencyCode: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(assetName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(remainingCapitalMinor.formattedCurrency(code: currencyCode))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+                if let marketValueMinor {
+                    Text(marketValueMinor.formattedCurrency(code: currencyCode))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
         .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -1071,7 +1124,6 @@ private struct InvestmentAssetEditorSheet: View {
                     ownerUserID: ownerUserID,
                     channelID: channelID,
                     name: name,
-                    symbol: nil,
                     currencyCode: currencyCode,
                     context: modelContext
                 )
@@ -1139,23 +1191,18 @@ private struct InvestmentTradeEditorSheet: View {
     private var availableQuantity: Decimal {
         guard let selectedAsset else { return 0 }
         let assetTrades = try? InvestmentAccountingEngine.recalculate(
-            openingPosition: InvestmentOpeningPosition(
-                quantity: selectedAsset.openingQuantity,
-                costBasisMinor: selectedAsset.openingCostMinor
-            ),
             trades: assetsTrades(selectedAsset).filter { $0.id != trade?.id }.map {
                 InvestmentTradeInput(
                     id: $0.id,
                     kind: $0.kind,
                     quantity: $0.quantity,
                     accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
-                    accountingFeeMinor: $0.accountingFeeMinor,
                     occurredAt: $0.occurredAt,
                     createdAt: $0.createdAt
                 )
             }
         )
-        return assetTrades?.last?.positionQuantityAfter ?? selectedAsset.openingQuantity
+        return assetTrades?.last?.positionQuantityAfter ?? 0
     }
 
     var body: some View {
@@ -1241,8 +1288,6 @@ private struct InvestmentTradeEditorSheet: View {
         guard let asset = selectedAsset, let walletID else { return }
         let currency = asset.currencyCode
         let grossMinor = grossAmount.currencyInputToMinorUnits(currencyCode: currency)
-        let feeMinor = trade?.feeMinor ?? 0
-        let accountingFee = trade?.accountingFeeMinor ?? 0
         let rates = MistiaCurrencySettings.rates()
         let sourceCode = MistiaCurrencyLogic.normalizedCode(currency)
         let accountingCode = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
@@ -1276,10 +1321,8 @@ private struct InvestmentTradeEditorSheet: View {
                     kind: kind,
                     quantity: parsedDecimal(quantity),
                     grossAmountMinor: grossMinor,
-                    feeMinor: feeMinor,
                     currencyCode: currency,
                     accountingGrossAmountMinor: accountingGross,
-                    accountingFeeMinor: accountingFee,
                     accountingCurrencyCode: accountingCurrencyCode,
                     exchangeRateDecimalString: exchangeRateDecimalString,
                     exchangeRateProvider: trade?.exchangeRateProvider

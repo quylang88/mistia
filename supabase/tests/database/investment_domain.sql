@@ -102,15 +102,20 @@ values (
 );
 
 insert into public.investment_assets(
-    id, user_id, channel_id, name, currency_code,
-    opening_quantity_decimal_string, opening_cost_minor
+    id, user_id, channel_id, name, currency_code
 )
 values (
     '30000000-0000-4000-8000-000000000301',
     '30000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000201',
-    'Card A', 'JPY', '0', 0
+    'Card A', 'JPY'
 );
+
+select hasnt_column('public', 'investment_assets', 'symbol', 'asset symbol is removed');
+select hasnt_column('public', 'investment_assets', 'opening_quantity_decimal_string', 'asset opening quantity is removed');
+select hasnt_column('public', 'investment_assets', 'opening_cost_minor', 'asset opening capital is removed');
+select hasnt_column('public', 'investment_trades', 'fee_minor', 'trade fee is removed');
+select hasnt_column('public', 'investment_trades', 'accounting_fee_minor', 'accounting fee is removed');
 
 select is(
     (select name from public.ledger_wallets where system_purpose_raw_value = 'investmentProfit'),
@@ -133,12 +138,10 @@ select lives_ok(
             'channel_id', '30000000-0000-4000-8000-000000000201',
             'asset_id', '30000000-0000-4000-8000-000000000301',
             'kind_raw_value', 'buy',
-            'quantity_decimal_string', '1',
-            'gross_amount_minor', 100,
-            'fee_minor', 0,
+            'quantity_decimal_string', '3',
+            'gross_amount_minor', 120,
             'currency_code', 'JPY',
-            'accounting_gross_amount_minor', 100,
-            'accounting_fee_minor', 0,
+            'accounting_gross_amount_minor', 120,
             'accounting_currency_code', 'JPY',
             'funding_wallet_id', '30000000-0000-4000-8000-000000000101',
             'occurred_at', '2026-08-09T00:00:00Z',
@@ -161,12 +164,10 @@ select lives_ok(
             'channel_id', '30000000-0000-4000-8000-000000000201',
             'asset_id', '30000000-0000-4000-8000-000000000301',
             'kind_raw_value', 'sell',
-            'quantity_decimal_string', '1',
+            'quantity_decimal_string', '3',
             'gross_amount_minor', 150,
-            'fee_minor', 0,
             'currency_code', 'JPY',
             'accounting_gross_amount_minor', 150,
-            'accounting_fee_minor', 0,
             'accounting_currency_code', 'JPY',
             'capital_return_wallet_id', '30000000-0000-4000-8000-000000000102',
             'occurred_at', '2026-08-09T00:00:01Z',
@@ -182,13 +183,13 @@ select lives_ok(
 
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000101'),
-    900::bigint,
-    'buy removes exactly 100 from the funding wallet'
+    880::bigint,
+    'buy removes the total order amount once, without multiplying by quantity'
 );
 
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000102'),
-    100::bigint,
+    120::bigint,
     'sale returns exactly the released cost basis to the ordinary wallet'
 );
 
@@ -197,7 +198,7 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    50::bigint,
+    30::bigint,
     'sale profit is isolated in the Investment Wallet'
 );
 
@@ -206,7 +207,7 @@ select is(
         select realized_profit_loss_minor from public.investment_trades
         where id = '30000000-0000-4000-8000-000000000402'
     ),
-    50::bigint,
+    30::bigint,
     'weighted-average accounting realizes the expected profit'
 );
 
@@ -233,10 +234,8 @@ select throws_ok(
             'kind_raw_value', 'sell',
             'quantity_decimal_string', '1',
             'gross_amount_minor', 200,
-            'fee_minor', 0,
             'currency_code', 'JPY',
             'accounting_gross_amount_minor', 200,
-            'accounting_fee_minor', 0,
             'accounting_currency_code', 'JPY',
             'capital_return_wallet_id', '30000000-0000-4000-8000-000000000102',
             'occurred_at', '2026-08-09T00:00:02Z',

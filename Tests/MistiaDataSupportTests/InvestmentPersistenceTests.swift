@@ -183,61 +183,33 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 880)
     }
 
-    func testCreateAssetDefaultsOpeningPositionToZero() throws {
+    func testRemoteInvestmentPayloadsOmitRemovedFields() throws {
         let fixture = try makeFixture()
-        let asset = try InvestmentPersistenceService.createAsset(
-            ownerUserID: fixture.ownerID,
-            channelID: fixture.channel.id,
-            name: "Item B",
-            symbol: nil,
-            currencyCode: "JPY",
-            context: fixture.context
-        )
-
-        XCTAssertEqual(asset.openingQuantity, 0)
-        XCTAssertEqual(asset.openingCostMinor, 0)
-    }
-
-    func testEditingLegacyTradeCanPreserveStoredFee() throws {
-        let fixture = try makeFixture()
-        let tradeID = UUID()
-        let initial = InvestmentTradeDraft(
-            id: tradeID,
-            channelID: fixture.channel.id,
-            assetID: fixture.asset.id,
+        let draft = try saveTrade(
+            fixture: fixture,
             kind: .buy,
             quantity: 3,
-            grossAmountMinor: 120,
-            feeMinor: 10,
-            currencyCode: "JPY",
-            accountingGrossAmountMinor: 120,
-            accountingFeeMinor: 10,
-            accountingCurrencyCode: "JPY",
+            gross: 120,
             fundingWalletID: fixture.fundingWallet.id,
-            occurredAt: fixture.start,
-            createdAt: fixture.start
+            occurredAt: fixture.start
         )
-        _ = try InvestmentPersistenceService.saveTrade(
-            ownerUserID: fixture.ownerID,
-            draft: initial,
-            rates: [],
-            context: fixture.context
+        let trade = try XCTUnwrap(fetchTrade(id: draft.id, fixture))
+        let assetPayload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(RemoteInvestmentAsset(local: fixture.asset))
+            ) as? [String: Any]
         )
-        var edited = initial
-        edited.grossAmountMinor = 150
-        edited.accountingGrossAmountMinor = 150
-        _ = try InvestmentPersistenceService.saveTrade(
-            ownerUserID: fixture.ownerID,
-            draft: edited,
-            rates: [],
-            context: fixture.context
+        let tradePayload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(RemoteInvestmentTrade(local: trade))
+            ) as? [String: Any]
         )
-        let stored = try XCTUnwrap(fetchTrade(id: tradeID, fixture))
 
-        XCTAssertEqual(stored.feeMinor, 10)
-        XCTAssertEqual(stored.accountingFeeMinor, 10)
-        XCTAssertEqual(stored.positionCostBasisAfterMinor, 160)
-        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 840)
+        XCTAssertNil(assetPayload["symbol"])
+        XCTAssertNil(assetPayload["opening_quantity_decimal_string"])
+        XCTAssertNil(assetPayload["opening_cost_minor"])
+        XCTAssertNil(tradePayload["fee_minor"])
+        XCTAssertNil(tradePayload["accounting_fee_minor"])
     }
 
     func testTradeRejectsSourceCurrencyThatDoesNotMatchAsset() throws {
@@ -344,7 +316,7 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(storedSale.realizedProfitLossMinor, 51)
         XCTAssertEqual(
             storedSale.releasedCostBasisMinor + storedSale.realizedProfitLossMinor,
-            storedSale.accountingGrossAmountMinor - storedSale.accountingFeeMinor
+            storedSale.accountingGrossAmountMinor
         )
         XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 800)
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 200)
@@ -546,7 +518,7 @@ final class InvestmentPersistenceTests: XCTestCase {
     }
 
     private func makeFixture() throws -> Fixture {
-        let schema = Schema(versionedSchema: MistiaSchemaV7.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV8.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
@@ -582,10 +554,7 @@ final class InvestmentPersistenceTests: XCTestCase {
             ownerUserID: ownerID,
             channelID: created.channel.id,
             name: "Item A",
-            symbol: nil,
             currencyCode: "JPY",
-            openingQuantity: 0,
-            openingCostMinor: 0,
             context: context
         )
         return Fixture(

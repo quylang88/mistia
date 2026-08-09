@@ -124,10 +124,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
     var ownerUserID: UUID
     var channelID: UUID
     var name: String
-    var symbol: String?
     var currencyCode: String
-    var openingQuantityDecimalString: String
-    var openingCostMinor: Int64
     var sortOrder: Int
     var isArchived: Bool
     var archivedAt: Date?
@@ -141,10 +138,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
         ownerUserID: UUID,
         channelID: UUID,
         name: String,
-        symbol: String? = nil,
         currencyCode: String,
-        openingQuantity: Decimal = 0,
-        openingCostMinor: Int64 = 0,
         sortOrder: Int = 0,
         isArchived: Bool = false,
         archivedAt: Date? = nil,
@@ -157,10 +151,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
         self.ownerUserID = ownerUserID
         self.channelID = channelID
         self.name = name
-        self.symbol = symbol
         self.currencyCode = currencyCode
-        self.openingQuantityDecimalString = InvestmentDecimalCoding.string(from: openingQuantity)
-        self.openingCostMinor = max(openingCostMinor, 0)
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.archivedAt = archivedAt
@@ -170,10 +161,6 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
         self.remoteVersion = remoteVersion
     }
 
-    var openingQuantity: Decimal {
-        get { InvestmentDecimalCoding.decimal(from: openingQuantityDecimalString) ?? 0 }
-        set { openingQuantityDecimalString = InvestmentDecimalCoding.string(from: newValue) }
-    }
 }
 
 @Model
@@ -193,10 +180,8 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
     var kindRawValue: String
     var quantityDecimalString: String
     var grossAmountMinor: Int64
-    var feeMinor: Int64
     var currencyCode: String
     var accountingGrossAmountMinor: Int64
-    var accountingFeeMinor: Int64
     var accountingCurrencyCode: String
     var exchangeRateDecimalString: String?
     var exchangeRateProvider: String?
@@ -231,10 +216,8 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
         kind: InvestmentTradeKind,
         quantity: Decimal,
         grossAmountMinor: Int64,
-        feeMinor: Int64 = 0,
         currencyCode: String,
         accountingGrossAmountMinor: Int64,
-        accountingFeeMinor: Int64 = 0,
         accountingCurrencyCode: String,
         exchangeRateDecimalString: String? = nil,
         exchangeRateProvider: String? = nil,
@@ -268,10 +251,8 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
         self.kindRawValue = kind.rawValue
         self.quantityDecimalString = InvestmentDecimalCoding.string(from: quantity)
         self.grossAmountMinor = max(grossAmountMinor, 0)
-        self.feeMinor = max(feeMinor, 0)
         self.currencyCode = currencyCode
         self.accountingGrossAmountMinor = max(accountingGrossAmountMinor, 0)
-        self.accountingFeeMinor = max(accountingFeeMinor, 0)
         self.accountingCurrencyCode = accountingCurrencyCode
         self.exchangeRateDecimalString = exchangeRateDecimalString
         self.exchangeRateProvider = exchangeRateProvider

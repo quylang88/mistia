@@ -1737,9 +1737,9 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row):
             return [entity.rawValue, row.name, row.iconSymbolName, row.iconColorHex, String(row.sortOrder), row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentAsset(let row):
-            return [entity.rawValue, row.channelID.uuidString, row.name, row.symbol ?? "", row.currencyCode, row.openingQuantityDecimalString, String(row.openingCostMinor), row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [entity.rawValue, row.channelID.uuidString, row.name, row.currencyCode, row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentTrade(let row):
-            return [entity.rawValue, row.channelID.uuidString, row.assetID.uuidString, row.kindRawValue, row.quantityDecimalString, String(row.grossAmountMinor), String(row.feeMinor), String(row.releasedCostBasisMinor), String(row.realizedProfitLossMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [entity.rawValue, row.channelID.uuidString, row.assetID.uuidString, row.kindRawValue, row.quantityDecimalString, String(row.grossAmountMinor), String(row.releasedCostBasisMinor), String(row.realizedProfitLossMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentValuation(let row):
             return [entity.rawValue, row.assetID.uuidString, String(row.marketValueMinor), String(row.accountingMarketValueMinor), Self.dateString(row.valuedAt), Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentPosting(let row):

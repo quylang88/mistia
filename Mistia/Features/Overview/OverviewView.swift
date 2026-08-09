@@ -640,8 +640,8 @@ struct OverviewView: View {
             let assetTrades = ownerTrades
                 .filter { $0.assetID == asset.id }
                 .sorted(by: oldestOverviewInvestmentTradeFirst)
-            let quantity = assetTrades.last?.positionQuantityAfter ?? asset.openingQuantity
-            let costBasis = assetTrades.last?.positionCostBasisAfterMinor ?? asset.openingCostMinor
+            let quantity = assetTrades.last?.positionQuantityAfter ?? 0
+            let costBasis = assetTrades.last?.positionCostBasisAfterMinor ?? 0
             let latestValuation = storedInvestmentValuations
                 .filter { $0.assetID == asset.id && $0.deletedAt == nil }
                 .max { lhs, rhs in

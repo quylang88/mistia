@@ -8,10 +8,8 @@ nonisolated struct InvestmentTradeDraft: Equatable {
     var kind: InvestmentTradeKind
     var quantity: Decimal
     var grossAmountMinor: Int64
-    var feeMinor: Int64
     var currencyCode: String
     var accountingGrossAmountMinor: Int64
-    var accountingFeeMinor: Int64
     var accountingCurrencyCode: String
     var exchangeRateDecimalString: String?
     var exchangeRateProvider: String?
@@ -29,10 +27,8 @@ nonisolated struct InvestmentTradeDraft: Equatable {
         kind: InvestmentTradeKind,
         quantity: Decimal,
         grossAmountMinor: Int64,
-        feeMinor: Int64 = 0,
         currencyCode: String,
         accountingGrossAmountMinor: Int64,
-        accountingFeeMinor: Int64 = 0,
         accountingCurrencyCode: String,
         exchangeRateDecimalString: String? = nil,
         exchangeRateProvider: String? = nil,
@@ -49,10 +45,8 @@ nonisolated struct InvestmentTradeDraft: Equatable {
         self.kind = kind
         self.quantity = quantity
         self.grossAmountMinor = grossAmountMinor
-        self.feeMinor = feeMinor
         self.currencyCode = currencyCode
         self.accountingGrossAmountMinor = accountingGrossAmountMinor
-        self.accountingFeeMinor = accountingFeeMinor
         self.accountingCurrencyCode = accountingCurrencyCode
         self.exchangeRateDecimalString = exchangeRateDecimalString
         self.exchangeRateProvider = exchangeRateProvider
@@ -81,7 +75,6 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     case invalidWallet
     case insufficientFunds
     case missingExchangeRate
-    case invalidOpeningPosition
     case invalidTradeInput
     case investmentWalletCannotReceiveTransfer
     case transferExceedsPositiveBalance
@@ -98,8 +91,6 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
             return L10n.investment.error.insufficientFunds
         case .missingExchangeRate:
             return L10n.investment.error.missingExchangeRate
-        case .invalidOpeningPosition:
-            return L10n.investment.error.invalidOpeningPosition
         case .invalidTradeInput:
             return L10n.investment.error.invalidTradeInput
         case .investmentWalletCannotReceiveTransfer:
@@ -110,8 +101,124 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     }
 }
 
-@MainActor
 enum InvestmentPersistenceService {
+    static func rebuildDerivedAccountingAfterLegacyFieldRemoval(
+        now: Date = .now,
+        context: ModelContext
+    ) throws {
+        try scrubLegacyInvestmentFieldsFromSyncConflicts(context: context)
+
+        let assets = try context.fetch(FetchDescriptor<InvestmentAsset>())
+            .filter { $0.deletedAt == nil }
+        let activeTrades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+            .filter { $0.deletedAt == nil }
+        let tradesByAssetID = Dictionary(grouping: activeTrades, by: \InvestmentTrade.assetID)
+        let wallets = try context.fetch(FetchDescriptor<LedgerWallet>())
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+
+        for asset in assets {
+            let trades = tradesByAssetID[asset.id] ?? []
+            guard !trades.isEmpty else { continue }
+            guard let systemWallet = walletsByID[
+                InvestmentSystemWalletIdentity.walletID(ownerUserID: asset.ownerUserID)
+            ] else {
+                throw InvestmentPersistenceError.missingWallet
+            }
+            let calculations = try InvestmentAccountingEngine.calculationMap(
+                trades: trades.map(InvestmentTradeInput.init)
+            )
+            var result = InvestmentPersistenceResult(walletIDs: [systemWallet.id])
+
+            for trade in trades {
+                guard let calculation = calculations[trade.id] else { continue }
+                trade.releasedCostBasisMinor = calculation.releasedCostBasisMinor
+                trade.realizedProfitLossMinor = calculation.realizedProfitLossMinor
+                trade.positionQuantityAfter = calculation.positionQuantityAfter
+                trade.positionCostBasisAfterMinor = calculation.positionCostBasisAfterMinor
+
+                if trade.kind == .buy {
+                    guard let walletID = trade.fundingWalletID,
+                          let fundingWallet = walletsByID[walletID] else {
+                        throw InvestmentPersistenceError.missingWallet
+                    }
+                    trade.fundingWalletAmountMinor = try accountingAmountToFundingWallet(
+                        trade.accountingGrossAmountMinor,
+                        accountingCurrencyCode: trade.accountingCurrencyCode,
+                        fundingWalletCurrencyCode: fundingWallet.currencyCode,
+                        fundingToAccountingRateDecimalString: trade.fundingToAccountingRateDecimalString
+                    )
+                }
+
+                try reconcileLedgerLegs(
+                    ownerUserID: asset.ownerUserID,
+                    trade: trade,
+                    assetName: asset.name,
+                    systemWallet: systemWallet,
+                    walletsByID: walletsByID,
+                    now: now,
+                    context: context,
+                    result: &result
+                )
+            }
+        }
+
+        try context.save()
+    }
+
+    private static func scrubLegacyInvestmentFieldsFromSyncConflicts(
+        context: ModelContext
+    ) throws {
+        let conflicts = try context.fetch(FetchDescriptor<SyncConflict>())
+        for conflict in conflicts {
+            let removedKeys: Set<String>
+            switch conflict.entityRawValue {
+            case MistiaSyncEntity.investmentAsset.rawValue:
+                removedKeys = [
+                    "symbol",
+                    "opening_quantity_decimal_string",
+                    "opening_cost_minor"
+                ]
+            case MistiaSyncEntity.investmentTrade.rawValue:
+                removedKeys = ["fee_minor", "accounting_fee_minor"]
+            default:
+                continue
+            }
+
+            conflict.localPayloadJSON = scrubbedJSONPayload(
+                conflict.localPayloadJSON,
+                removing: removedKeys
+            )
+            conflict.remotePayloadJSON = scrubbedJSONPayload(
+                conflict.remotePayloadJSON,
+                removing: removedKeys
+            )
+        }
+    }
+
+    private static func scrubbedJSONPayload(
+        _ payload: String,
+        removing keys: Set<String>
+    ) -> String {
+        guard let data = payload.data(using: .utf8),
+              var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return keys.contains(where: payload.contains) ? "{}" : payload
+        }
+
+        var didRemoveValue = false
+        for key in keys {
+            didRemoveValue = object.removeValue(forKey: key) != nil || didRemoveValue
+        }
+        guard didRemoveValue,
+              let scrubbedData = try? JSONSerialization.data(
+                  withJSONObject: object,
+                  options: [.sortedKeys]
+              ),
+              let scrubbedPayload = String(data: scrubbedData, encoding: .utf8) else {
+            return payload
+        }
+        return scrubbedPayload
+    }
+
     static func ensureSystemWallet(
         ownerUserID: UUID,
         currencyCode: String,
@@ -216,18 +323,10 @@ enum InvestmentPersistenceService {
         ownerUserID: UUID,
         channelID: UUID,
         name: String,
-        symbol: String?,
         currencyCode: String,
-        openingQuantity: Decimal = 0,
-        openingCostMinor: Int64 = 0,
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentAsset {
-        guard openingQuantity >= 0,
-              openingCostMinor >= 0,
-              openingQuantity > 0 || openingCostMinor == 0 else {
-            throw InvestmentPersistenceError.invalidOpeningPosition
-        }
         let channelExists = try context.fetch(
             FetchDescriptor<InvestmentChannel>(
                 predicate: #Predicate<InvestmentChannel> { channel in
@@ -252,10 +351,7 @@ enum InvestmentPersistenceService {
             ownerUserID: ownerUserID,
             channelID: channelID,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            symbol: normalizedOptionalText(symbol),
             currencyCode: MistiaCurrencyLogic.normalizedCode(currencyCode),
-            openingQuantity: openingQuantity,
-            openingCostMinor: openingCostMinor,
             sortOrder: assets.count,
             createdAt: now,
             updatedAt: now
@@ -333,7 +429,7 @@ enum InvestmentPersistenceService {
         let capitalWallet = draft.capitalReturnWalletID.flatMap { walletsByID[$0] }
         let fundingAmountMinor = try fundingWallet.map {
             try convertedAmount(
-                amountMinor: draft.accountingGrossAmountMinor + draft.accountingFeeMinor,
+                amountMinor: draft.accountingGrossAmountMinor,
                 from: draft.accountingCurrencyCode,
                 to: $0.currencyCode,
                 rates: rates
@@ -353,13 +449,7 @@ enum InvestmentPersistenceService {
             .filter { $0.id != draft.id }
             .map(InvestmentTradeInput.init)
         recalculationInputs.append(draft.accountingInput)
-        let calculations = try InvestmentAccountingEngine.calculationMap(
-            openingPosition: InvestmentOpeningPosition(
-                quantity: asset.openingQuantity,
-                costBasisMinor: asset.openingCostMinor
-            ),
-            trades: recalculationInputs
-        )
+        let calculations = try InvestmentAccountingEngine.calculationMap(trades: recalculationInputs)
 
         let trade = existingTrade ?? InvestmentTrade(
             id: draft.id,
@@ -369,10 +459,8 @@ enum InvestmentPersistenceService {
             kind: draft.kind,
             quantity: draft.quantity,
             grossAmountMinor: draft.grossAmountMinor,
-            feeMinor: draft.feeMinor,
             currencyCode: draft.currencyCode,
             accountingGrossAmountMinor: draft.accountingGrossAmountMinor,
-            accountingFeeMinor: draft.accountingFeeMinor,
             accountingCurrencyCode: draft.accountingCurrencyCode,
             occurredAt: draft.occurredAt,
             createdAt: draft.createdAt,
@@ -448,10 +536,6 @@ enum InvestmentPersistenceService {
             context: context
         ).filter { $0.id != tradeID }
         let calculations = try InvestmentAccountingEngine.calculationMap(
-            openingPosition: InvestmentOpeningPosition(
-                quantity: asset.openingQuantity,
-                costBasisMinor: asset.openingCostMinor
-            ),
             trades: remainingTrades.map(InvestmentTradeInput.init)
         )
 
@@ -667,16 +751,13 @@ enum InvestmentPersistenceService {
         let accountingCurrency = MistiaCurrencyLogic.normalizedCode(draft.accountingCurrencyCode)
         guard draft.quantity > 0,
               draft.grossAmountMinor > 0,
-              draft.feeMinor >= 0,
               draft.accountingGrossAmountMinor > 0,
-              draft.accountingFeeMinor >= 0,
               sourceCurrency == MistiaCurrencyLogic.normalizedCode(asset.currencyCode) else {
             throw InvestmentPersistenceError.invalidTradeInput
         }
 
         if sourceCurrency == accountingCurrency {
-            guard draft.grossAmountMinor == draft.accountingGrossAmountMinor,
-                  draft.feeMinor == draft.accountingFeeMinor else {
+            guard draft.grossAmountMinor == draft.accountingGrossAmountMinor else {
                 throw InvestmentPersistenceError.invalidTradeInput
             }
             return
@@ -689,12 +770,7 @@ enum InvestmentPersistenceService {
                   draft.grossAmountMinor,
                   rate: rate
               ),
-              let convertedFee = try? InvestmentCurrencyConversion.convertedMinor(
-                  draft.feeMinor,
-                  rate: rate
-              ),
-              convertedGross == draft.accountingGrossAmountMinor,
-              convertedFee == draft.accountingFeeMinor else {
+              convertedGross == draft.accountingGrossAmountMinor else {
             throw InvestmentPersistenceError.invalidTradeInput
         }
     }
@@ -774,10 +850,8 @@ enum InvestmentPersistenceService {
         trade.kind = draft.kind
         trade.quantity = draft.quantity
         trade.grossAmountMinor = draft.grossAmountMinor
-        trade.feeMinor = draft.feeMinor
         trade.currencyCode = MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
         trade.accountingGrossAmountMinor = draft.accountingGrossAmountMinor
-        trade.accountingFeeMinor = draft.accountingFeeMinor
         trade.accountingCurrencyCode = MistiaCurrencyLogic.normalizedCode(draft.accountingCurrencyCode)
         trade.exchangeRateDecimalString = draft.exchangeRateDecimalString
         trade.exchangeRateProvider = draft.exchangeRateProvider
@@ -818,7 +892,7 @@ enum InvestmentPersistenceService {
                 sourceWallet: wallet,
                 destinationWallet: nil,
                 destinationAmountMinor: nil,
-                reportingAmountMinor: trade.accountingGrossAmountMinor + trade.accountingFeeMinor,
+                reportingAmountMinor: trade.accountingGrossAmountMinor,
                 reportingCurrencyCode: trade.accountingCurrencyCode,
                 occurredAt: trade.occurredAt,
                 now: now,
@@ -837,7 +911,7 @@ enum InvestmentPersistenceService {
                 role: .funding,
                 amountMinor: -walletAmount,
                 currencyCode: wallet.currencyCode,
-                accountingAmountMinor: -(trade.accountingGrossAmountMinor + trade.accountingFeeMinor),
+                accountingAmountMinor: -trade.accountingGrossAmountMinor,
                 now: now,
                 context: context
             )
@@ -1240,6 +1314,32 @@ enum InvestmentPersistenceService {
         return try InvestmentCurrencyConversion.convertedMinor(amountMinor, rate: rate)
     }
 
+    private static func accountingAmountToFundingWallet(
+        _ amountMinor: Int64,
+        accountingCurrencyCode: String,
+        fundingWalletCurrencyCode: String,
+        fundingToAccountingRateDecimalString: String?
+    ) throws -> Int64 {
+        let accounting = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
+        let funding = MistiaCurrencyLogic.normalizedCode(fundingWalletCurrencyCode)
+        if accounting == funding { return amountMinor }
+        guard let rateString = fundingToAccountingRateDecimalString,
+              let rate = InvestmentDecimalCoding.decimal(from: rateString),
+              rate > 0 else {
+            throw InvestmentPersistenceError.missingExchangeRate
+        }
+        var value = Decimal(amountMinor) / rate
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 0, .plain)
+        let number = NSDecimalNumber(decimal: rounded)
+        guard number != .notANumber,
+              number.compare(NSDecimalNumber(value: Int64.max)) != .orderedDescending,
+              number.compare(NSDecimalNumber(value: Int64.min)) != .orderedAscending else {
+            throw InvestmentPersistenceError.invalidTradeInput
+        }
+        return number.int64Value
+    }
+
     private static func absWithoutOverflow(_ value: Int64) -> Int64 {
         value == .min ? .max : abs(value)
     }
@@ -1257,7 +1357,6 @@ private nonisolated extension InvestmentTradeInput {
             kind: trade.kind,
             quantity: trade.quantity,
             accountingGrossAmountMinor: trade.accountingGrossAmountMinor,
-            accountingFeeMinor: trade.accountingFeeMinor,
             occurredAt: trade.occurredAt,
             createdAt: trade.createdAt
         )
@@ -1271,7 +1370,6 @@ private nonisolated extension InvestmentTradeDraft {
             kind: kind,
             quantity: quantity,
             accountingGrossAmountMinor: accountingGrossAmountMinor,
-            accountingFeeMinor: accountingFeeMinor,
             occurredAt: occurredAt,
             createdAt: createdAt
         )

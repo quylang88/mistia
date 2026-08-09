@@ -80,6 +80,7 @@ let package = Package(
                 "Persistence/MistiaDataStack.swift",
                 "Persistence/MistiaLocalProfiles.swift",
                 "Persistence/MistiaMigration.swift",
+                "Persistence/MistiaSchemaV7InvestmentModels.swift",
                 "Persistence/MistiaSchemaV4Models.swift",
                 "Persistence/MistiaSchemaV5Models.swift",
                 "Persistence/NotificationModels.swift",

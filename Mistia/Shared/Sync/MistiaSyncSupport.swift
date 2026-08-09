@@ -413,10 +413,9 @@ nonisolated private extension MistiaSyncUploadRecord {
             )
         case .investmentAsset(let row):
             return MistiaSyncConflictRecordSummary(
-                title: compactJoined(row.name, row.symbol),
+                title: row.name,
                 detail: compactJoined(
                     row.currencyCode,
-                    row.openingQuantityDecimalString,
                     recordState(isArchived: row.isArchived, deletedAt: row.deletedAt),
                     version(row.syncVersion),
                     date(row.updatedAt)

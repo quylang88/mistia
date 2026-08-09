@@ -37,10 +37,7 @@ nonisolated struct RemoteInvestmentAsset: MistiaRemoteRow {
     var id: UUID
     var channelID: UUID
     var name: String
-    var symbol: String?
     var currencyCode: String
-    var openingQuantityDecimalString: String
-    var openingCostMinor: Int64
     var sortOrder: Int
     var isArchived: Bool
     var archivedAt: Date?
@@ -53,10 +50,8 @@ nonisolated struct RemoteInvestmentAsset: MistiaRemoteRow {
     enum CodingKeys: String, CodingKey {
         case userID = "user_id", id
         case channelID = "channel_id"
-        case name, symbol
+        case name
         case currencyCode = "currency_code"
-        case openingQuantityDecimalString = "opening_quantity_decimal_string"
-        case openingCostMinor = "opening_cost_minor"
         case sortOrder = "sort_order"
         case isArchived = "is_archived"
         case archivedAt = "archived_at"
@@ -77,10 +72,8 @@ nonisolated struct RemoteInvestmentTrade: MistiaRemoteRow {
     var kindRawValue: String
     var quantityDecimalString: String
     var grossAmountMinor: Int64
-    var feeMinor: Int64
     var currencyCode: String
     var accountingGrossAmountMinor: Int64
-    var accountingFeeMinor: Int64
     var accountingCurrencyCode: String
     var exchangeRateDecimalString: String?
     var exchangeRateProvider: String?
@@ -113,10 +106,9 @@ nonisolated struct RemoteInvestmentTrade: MistiaRemoteRow {
         case channelID = "channel_id", assetID = "asset_id"
         case kindRawValue = "kind_raw_value"
         case quantityDecimalString = "quantity_decimal_string"
-        case grossAmountMinor = "gross_amount_minor", feeMinor = "fee_minor"
+        case grossAmountMinor = "gross_amount_minor"
         case currencyCode = "currency_code"
         case accountingGrossAmountMinor = "accounting_gross_amount_minor"
-        case accountingFeeMinor = "accounting_fee_minor"
         case accountingCurrencyCode = "accounting_currency_code"
         case exchangeRateDecimalString = "exchange_rate_decimal_string"
         case exchangeRateProvider = "exchange_rate_provider", exchangeRateDate = "exchange_rate_date"
@@ -216,9 +208,7 @@ nonisolated extension RemoteInvestmentAsset {
     init(local: InvestmentAsset) {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID,
-            name: local.name, symbol: local.symbol, currencyCode: local.currencyCode,
-            openingQuantityDecimalString: local.openingQuantityDecimalString,
-            openingCostMinor: local.openingCostMinor, sortOrder: local.sortOrder,
+            name: local.name, currencyCode: local.currencyCode, sortOrder: local.sortOrder,
             isArchived: local.isArchived, archivedAt: local.archivedAt,
             createdAt: local.createdAt, updatedAt: local.updatedAt, deletedAt: local.deletedAt,
             syncVersion: local.remoteVersion, lastModifiedByDeviceID: nil
@@ -231,9 +221,9 @@ nonisolated extension RemoteInvestmentTrade {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID, assetID: local.assetID,
             kindRawValue: local.kindRawValue, quantityDecimalString: local.quantityDecimalString,
-            grossAmountMinor: local.grossAmountMinor, feeMinor: local.feeMinor, currencyCode: local.currencyCode,
+            grossAmountMinor: local.grossAmountMinor, currencyCode: local.currencyCode,
             accountingGrossAmountMinor: local.accountingGrossAmountMinor,
-            accountingFeeMinor: local.accountingFeeMinor, accountingCurrencyCode: local.accountingCurrencyCode,
+            accountingCurrencyCode: local.accountingCurrencyCode,
             exchangeRateDecimalString: local.exchangeRateDecimalString,
             exchangeRateProvider: local.exchangeRateProvider, exchangeRateDate: local.exchangeRateDate,
             fundingWalletID: local.fundingWalletID, capitalReturnWalletID: local.capitalReturnWalletID,

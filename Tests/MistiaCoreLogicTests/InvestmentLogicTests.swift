@@ -34,21 +34,21 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, -30)
     }
 
-    func testWeightedAveragePartialSaleIncludesFees() throws {
+    func testWeightedAveragePartialSaleUsesGrossOrderAmounts() throws {
         let sellID = UUID()
         let start = Date(timeIntervalSince1970: 3_000)
         let calculations = try InvestmentAccountingEngine.calculationMap(
             trades: [
-                trade(kind: .buy, quantity: 2, gross: 200, fee: 10, occurredAt: start),
+                trade(kind: .buy, quantity: 2, gross: 200, occurredAt: start),
                 trade(kind: .buy, quantity: 1, gross: 150, occurredAt: start.addingTimeInterval(1)),
-                trade(id: sellID, kind: .sell, quantity: 1, gross: 160, fee: 5, occurredAt: start.addingTimeInterval(2))
+                trade(id: sellID, kind: .sell, quantity: 1, gross: 160, occurredAt: start.addingTimeInterval(2))
             ]
         )
 
-        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 120)
-        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 35)
+        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 117)
+        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 43)
         XCTAssertEqual(calculations[sellID]?.positionQuantityAfter, 2)
-        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 240)
+        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 233)
     }
 
     func testBackdatedTradeRecalculatesLaterSale() throws {
@@ -79,18 +79,6 @@ final class InvestmentLogicTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? InvestmentAccountingError, .insufficientPosition)
         }
-    }
-
-    func testOpeningPositionDoesNotCreateProfitUntilSale() throws {
-        let sellID = UUID()
-        let calculations = try InvestmentAccountingEngine.calculationMap(
-            openingPosition: InvestmentOpeningPosition(quantity: 2, costBasisMinor: 100),
-            trades: [trade(id: sellID, kind: .sell, quantity: 1, gross: 80)]
-        )
-
-        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 50)
-        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 30)
-        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 50)
     }
 
     func testPositionAverageUnitCostUsesRemainingCostBasisAndQuantity() {
@@ -255,7 +243,6 @@ final class InvestmentLogicTests: XCTestCase {
         kind: InvestmentTradeKind,
         quantity: Decimal,
         gross: Int64,
-        fee: Int64 = 0,
         occurredAt: Date = Date(timeIntervalSince1970: 10_000),
         createdAt: Date = Date(timeIntervalSince1970: 10_000)
     ) -> InvestmentTradeInput {
@@ -264,7 +251,6 @@ final class InvestmentLogicTests: XCTestCase {
             kind: kind,
             quantity: quantity,
             accountingGrossAmountMinor: gross,
-            accountingFeeMinor: fee,
             occurredAt: occurredAt,
             createdAt: createdAt
         )

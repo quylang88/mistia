@@ -38,22 +38,11 @@ nonisolated enum InvestmentLedgerIdentity {
     }
 }
 
-nonisolated struct InvestmentOpeningPosition: Equatable {
-    let quantity: Decimal
-    let costBasisMinor: Int64
-
-    init(quantity: Decimal = 0, costBasisMinor: Int64 = 0) {
-        self.quantity = quantity
-        self.costBasisMinor = costBasisMinor
-    }
-}
-
 nonisolated struct InvestmentTradeInput: Equatable, Identifiable {
     let id: UUID
     let kind: InvestmentTradeKind
     let quantity: Decimal
     let accountingGrossAmountMinor: Int64
-    let accountingFeeMinor: Int64
     let occurredAt: Date
     let createdAt: Date
 
@@ -62,7 +51,6 @@ nonisolated struct InvestmentTradeInput: Equatable, Identifiable {
         kind: InvestmentTradeKind,
         quantity: Decimal,
         accountingGrossAmountMinor: Int64,
-        accountingFeeMinor: Int64 = 0,
         occurredAt: Date,
         createdAt: Date
     ) {
@@ -70,7 +58,6 @@ nonisolated struct InvestmentTradeInput: Equatable, Identifiable {
         self.kind = kind
         self.quantity = quantity
         self.accountingGrossAmountMinor = accountingGrossAmountMinor
-        self.accountingFeeMinor = accountingFeeMinor
         self.occurredAt = occurredAt
         self.createdAt = createdAt
     }
@@ -85,7 +72,6 @@ nonisolated struct InvestmentTradeCalculation: Equatable, Identifiable {
 }
 
 nonisolated enum InvestmentAccountingError: Error, Equatable {
-    case invalidOpeningPosition
     case invalidQuantity
     case invalidAmount
     case insufficientPosition
@@ -94,18 +80,10 @@ nonisolated enum InvestmentAccountingError: Error, Equatable {
 
 nonisolated enum InvestmentAccountingEngine {
     static func recalculate(
-        openingPosition: InvestmentOpeningPosition = InvestmentOpeningPosition(),
         trades: [InvestmentTradeInput]
     ) throws -> [InvestmentTradeCalculation] {
-        guard openingPosition.quantity >= 0, openingPosition.costBasisMinor >= 0 else {
-            throw InvestmentAccountingError.invalidOpeningPosition
-        }
-        guard openingPosition.quantity > 0 || openingPosition.costBasisMinor == 0 else {
-            throw InvestmentAccountingError.invalidOpeningPosition
-        }
-
-        var positionQuantity = openingPosition.quantity
-        var positionCostBasisMinor = openingPosition.costBasisMinor
+        var positionQuantity: Decimal = 0
+        var positionCostBasisMinor: Int64 = 0
         var output: [InvestmentTradeCalculation] = []
         output.reserveCapacity(trades.count)
 
@@ -113,17 +91,15 @@ nonisolated enum InvestmentAccountingEngine {
             guard trade.quantity > 0 else {
                 throw InvestmentAccountingError.invalidQuantity
             }
-            guard trade.accountingGrossAmountMinor > 0, trade.accountingFeeMinor >= 0 else {
+            guard trade.accountingGrossAmountMinor > 0 else {
                 throw InvestmentAccountingError.invalidAmount
             }
 
             switch trade.kind {
             case .buy:
-                let (addedCost, overflow) = trade.accountingGrossAmountMinor.addingReportingOverflow(
-                    trade.accountingFeeMinor
+                let (nextCost, costOverflow) = positionCostBasisMinor.addingReportingOverflow(
+                    trade.accountingGrossAmountMinor
                 )
-                guard !overflow else { throw InvestmentAccountingError.arithmeticOverflow }
-                let (nextCost, costOverflow) = positionCostBasisMinor.addingReportingOverflow(addedCost)
                 guard !costOverflow else { throw InvestmentAccountingError.arithmeticOverflow }
 
                 positionQuantity += trade.quantity
@@ -154,11 +130,7 @@ nonisolated enum InvestmentAccountingEngine {
                     )
                 }
 
-                let (netSaleMinor, netOverflow) = trade.accountingGrossAmountMinor.subtractingReportingOverflow(
-                    trade.accountingFeeMinor
-                )
-                guard !netOverflow else { throw InvestmentAccountingError.arithmeticOverflow }
-                let (realizedProfitLossMinor, profitOverflow) = netSaleMinor.subtractingReportingOverflow(
+                let (realizedProfitLossMinor, profitOverflow) = trade.accountingGrossAmountMinor.subtractingReportingOverflow(
                     releasedCostBasisMinor
                 )
                 guard !profitOverflow else { throw InvestmentAccountingError.arithmeticOverflow }
@@ -185,11 +157,10 @@ nonisolated enum InvestmentAccountingEngine {
     }
 
     static func calculationMap(
-        openingPosition: InvestmentOpeningPosition = InvestmentOpeningPosition(),
         trades: [InvestmentTradeInput]
     ) throws -> [UUID: InvestmentTradeCalculation] {
         Dictionary(
-            uniqueKeysWithValues: try recalculate(openingPosition: openingPosition, trades: trades)
+            uniqueKeysWithValues: try recalculate(trades: trades)
                 .map { ($0.id, $0) }
         )
     }

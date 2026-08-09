@@ -3000,10 +3000,7 @@ nonisolated enum MistiaSyncLocalStore {
         asset.ownerUserID = row.userID
         asset.channelID = row.channelID
         asset.name = row.name
-        asset.symbol = row.symbol
         asset.currencyCode = row.currencyCode
-        asset.openingQuantityDecimalString = row.openingQuantityDecimalString
-        asset.openingCostMinor = row.openingCostMinor
         asset.sortOrder = row.sortOrder
         asset.isArchived = row.isArchived
         asset.archivedAt = row.archivedAt
@@ -3026,10 +3023,8 @@ nonisolated enum MistiaSyncLocalStore {
             kind: InvestmentTradeKind(rawValue: row.kindRawValue) ?? .buy,
             quantity: InvestmentDecimalCoding.decimal(from: row.quantityDecimalString) ?? 0,
             grossAmountMinor: row.grossAmountMinor,
-            feeMinor: row.feeMinor,
             currencyCode: row.currencyCode,
             accountingGrossAmountMinor: row.accountingGrossAmountMinor,
-            accountingFeeMinor: row.accountingFeeMinor,
             accountingCurrencyCode: row.accountingCurrencyCode
         )
         if tradeByID[row.id] == nil {
@@ -3042,10 +3037,8 @@ nonisolated enum MistiaSyncLocalStore {
         trade.kindRawValue = row.kindRawValue
         trade.quantityDecimalString = row.quantityDecimalString
         trade.grossAmountMinor = row.grossAmountMinor
-        trade.feeMinor = row.feeMinor
         trade.currencyCode = row.currencyCode
         trade.accountingGrossAmountMinor = row.accountingGrossAmountMinor
-        trade.accountingFeeMinor = row.accountingFeeMinor
         trade.accountingCurrencyCode = row.accountingCurrencyCode
         trade.exchangeRateDecimalString = row.exchangeRateDecimalString
         trade.exchangeRateProvider = row.exchangeRateProvider

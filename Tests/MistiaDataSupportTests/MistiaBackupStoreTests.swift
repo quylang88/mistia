@@ -282,9 +282,7 @@ final class MistiaBackupStoreTests: XCTestCase {
             ownerUserID: ownerUserID,
             channelID: channel.id,
             name: "Rare card",
-            currencyCode: "JPY",
-            openingQuantity: 2,
-            openingCostMinor: 100
+            currencyCode: "JPY"
         )
         let trade = InvestmentTrade(
             ownerUserID: ownerUserID,
@@ -353,7 +351,7 @@ final class MistiaBackupStoreTests: XCTestCase {
         )
 
         XCTAssertEqual(try fetchAll(InvestmentChannel.self, in: targetContainer).first?.name, "Pokémon")
-        XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.openingQuantity, 2)
+        XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.name, "Rare card")
         XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.realizedProfitLossMinor, 30)
         XCTAssertEqual(try fetchAll(InvestmentValuation.self, in: targetContainer).first?.accountingMarketValueMinor, 90)
         XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first?.amountMinor, 30)
@@ -361,7 +359,7 @@ final class MistiaBackupStoreTests: XCTestCase {
 
     func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
         let container = try makeV7Container()
-        let schema = Schema(versionedSchema: MistiaSchemaV7.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV8.self)
 
         XCTAssertEqual(schema.entities.count, 22)
         XCTAssertEqual(try MistiaSyncLocalStore.totalObjectCount(in: container), 0)
@@ -374,7 +372,7 @@ final class MistiaBackupStoreTests: XCTestCase {
     }
 
     private func makeV7Container() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV7.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV8.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
