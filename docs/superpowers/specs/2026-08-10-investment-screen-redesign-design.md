@@ -19,14 +19,20 @@ Make the Investment feature asset-centric and easy to scan. A user creates an em
 
 - A partial sale releases cost using the existing weighted-average accounting engine, so the remaining position keeps the correct average unit cost.
 - A sell amount remains the total proceeds received for the sale.
-- Fees are removed from all new and edited trade UI. New trades use zero fees.
-- Stored historical fees remain in the data model and continue to affect historical balances and profit/loss. Editing an old trade preserves its stored fee rather than silently rewriting history.
+- Fees are removed from all new and edited trade UI and from stored investment data.
+- Existing fee values are discarded during migration. Historical positions, realized profit/loss, wallet postings, and derived ledger entries are rebuilt as if every investment trade had zero fee.
 
 ## Compatibility Strategy
 
-The existing `InvestmentAsset` opening fields and `InvestmentTrade` fee fields remain in the persistence and sync models. Removing them would require a destructive local and Supabase migration and could change existing accounting history.
+The removed concepts are deleted end to end rather than hidden in the UI:
 
-New assets explicitly persist `openingQuantity = 0` and `openingCostMinor = 0`. New trades explicitly persist zero fee values. Existing records retain their stored values. This design does not require a Supabase schema or RLS change.
+- Delete `InvestmentAsset.symbol`, `openingQuantityDecimalString`, and `openingCostMinor` from SwiftData, sync payloads, conflict summaries/fingerprints, backups, and Supabase `investment_assets`.
+- Delete `InvestmentTrade.feeMinor` and `accountingFeeMinor` from SwiftData, accounting inputs/drafts, sync payloads, conflict fingerprints, backups, and Supabase `investment_trades`.
+- Add a new SwiftData schema version and migration coverage so existing local stores lose the removed columns.
+- Add a forward-only Supabase migration that rebuilds investment calculations and derived ledger/posting rows without fees or opening positions, then drops the five cloud columns and replaces the affected database functions.
+- Keep table names, sync entity names, primary keys, timestamps, versions, RLS policies, and family permission behavior unchanged.
+
+Existing opening-position values and fees are intentionally discarded. After migration, every asset starts its accounting history from zero and derives the current position only from active buy and sell trades. The migration must fail atomically rather than leave partial data if legacy trade history cannot be rebuilt from zero.
 
 ## Screen Structure
 
@@ -137,7 +143,7 @@ Average unit cost is a derived presentation value and is not stored. It is calcu
 - Existing localized persistence errors remain the single source for invalid wallet, insufficient funds, missing exchange rate, and invalid trade input failures.
 - Invalid quantity or total amount keeps Save disabled.
 - A missing exchange rate surfaces the existing localized alert.
-- Historical fees are preserved on edit even though the fee input is no longer shown.
+- Migration failures leave the old local or cloud schema intact; no partially migrated accounting state is accepted.
 - Month navigation never changes or rewrites stored data.
 
 ## Verification
@@ -147,16 +153,17 @@ Add red-green regressions that prove:
 1. Buying quantity `3` for total `120` produces position capital `120`, average unit cost `40`, and a wallet debit of `120`.
 2. Multiple buys at different totals produce the correct weighted-average unit cost.
 3. A partial sale retains the correct average unit cost for the remaining position.
-4. New assets start with zero opening quantity and zero opening capital.
-5. New trades persist zero fees, while editing a legacy trade preserves its stored fee.
-6. Month mode defaults to the current month and constructs the interval for the selected month rather than the device's current month.
-7. Month filtering affects activity and realized profit/loss, while current position metrics remain current.
+4. New assets contain no symbol or opening-position persistence fields.
+5. New and edited trades contain no fee persistence fields and accounting uses gross order amounts directly.
+6. A V7 local store migrates to V8 with the removed fields absent and derived investment snapshots rebuilt from zero.
+7. The Supabase migration removes all five columns and replaces every function or test that referenced them.
+8. Month mode defaults to the current month and constructs the interval for the selected month rather than the device's current month.
+9. Month filtering affects activity and realized profit/loss, while current position metrics remain current.
 
 Run the focused core-logic and persistence tests first, then the full Swift Package test suite and a generic iOS app build. Perform a simulator-sized visual check of the redesigned screen if the local simulator environment is available.
 
 ## Out of Scope
 
 - Reconstructing historical month-end portfolio positions.
-- Removing legacy opening or fee columns from SwiftData or Supabase.
 - Changing investment family permissions, sync routing, RLS, or notification behavior.
 - Changing the weighted-average accounting method.

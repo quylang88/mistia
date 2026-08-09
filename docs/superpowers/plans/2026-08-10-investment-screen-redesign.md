@@ -4,7 +4,7 @@
 
 **Goal:** Make Investment asset-centric, calculate and show weighted-average unit cost from total order amounts, remove opening-position and fee inputs, and replace the dense dashboard with the approved compact month-based layout.
 
-**Architecture:** Keep `InvestmentPersistenceService` as the only write boundary and keep total order amounts unchanged throughout wallet validation, currency conversion, ledger posting, and accounting. Add pure derived position and calendar helpers in `MistiaCoreLogic`, then make `InvestmentHubView` consume those helpers through focused SwiftUI components. Preserve legacy opening and fee fields for SwiftData/Supabase compatibility while new records use zero values.
+**Architecture:** Keep `InvestmentPersistenceService` as the only write boundary and keep total order amounts unchanged throughout wallet validation, currency conversion, ledger posting, and accounting. Add pure derived position and calendar helpers in `MistiaCoreLogic`, then make `InvestmentHubView` consume those helpers through focused SwiftUI components. Introduce a SwiftData V8 migration and a forward-only Supabase migration that rebuild investment accounting without legacy opening positions or fees before deleting those fields from local and cloud schemas.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, XCTest, Apple String Catalog, MistiaCoreLogic Swift Package.
 
@@ -15,6 +15,12 @@
 - Modify `Mistia/Shared/CoreLogic/InvestmentLogic.swift`: derived average unit cost and selected-month interval helpers.
 - Modify `Tests/MistiaCoreLogicTests/InvestmentLogicTests.swift`: red-green calculation and month-selection regressions.
 - Modify `Mistia/Shared/Persistence/InvestmentPersistence.swift`: default new asset opening values to zero.
+- Modify `Mistia/Shared/Persistence/InvestmentModels.swift`: remove symbol, opening-position, and fee storage.
+- Modify `Mistia/Shared/Persistence/MistiaMigration.swift`: add V8 and the V7-to-V8 migration.
+- Add `Mistia/Shared/Persistence/MistiaSchemaV7InvestmentModels.swift`: freeze the shipped V7 investment model shape.
+- Modify investment sync files: remove deleted fields from cloud payloads, application, summaries, and fingerprints.
+- Add a generated Supabase migration: rebuild cloud accounting, replace affected functions, and drop the five columns.
+- Modify `supabase/tests/database/investment_domain.sql`: use the new payload/schema shape and assert removed columns stay absent.
 - Modify `Tests/MistiaDataSupportTests/InvestmentPersistenceTests.swift`: total-order, zero-opening, and legacy-fee persistence regressions.
 - Modify `Mistia/Features/Investment/InvestmentHubView.swift`: period state, compact dashboard, asset rows, activity filtering, asset editor, and fee-free trade editor.
 - Modify `Mistia/Localizable.xcstrings`: precise total-order and position-detail copy in Vietnamese, English, and Japanese; remove newly dead investment input keys.
@@ -210,7 +216,7 @@ git add Mistia/Shared/CoreLogic/InvestmentLogic.swift Tests/MistiaCoreLogicTests
 git commit -m "feat: add investment month selection logic"
 ```
 
-### Task 3: Lock Down Total-Order and Compatibility Persistence
+### Task 3: Lock Down Total-Order Persistence
 
 **Files:**
 - Modify: `Tests/MistiaDataSupportTests/InvestmentPersistenceTests.swift`
@@ -333,7 +339,26 @@ git add Mistia/Shared/Persistence/InvestmentPersistence.swift Tests/MistiaDataSu
 git commit -m "test: lock investment total order semantics"
 ```
 
-### Task 4: Simplify Asset and Trade Editors
+### Task 4: Remove Legacy Investment Fields End to End
+
+**Files:**
+- Modify: `Mistia/Shared/CoreLogic/InvestmentLogic.swift`
+- Modify: `Mistia/Shared/Persistence/InvestmentModels.swift`
+- Modify: `Mistia/Shared/Persistence/InvestmentPersistence.swift`
+- Modify: `Mistia/Shared/Persistence/MistiaMigration.swift`
+- Add: `Mistia/Shared/Persistence/MistiaSchemaV7InvestmentModels.swift`
+- Modify: investment sync and backup files/tests
+- Add: generated Supabase migration
+- Modify: Supabase database tests
+
+- [ ] **Step 1: Add failing regressions for fee-free accounting, field-free remote payloads, and V7-to-V8 migration**
+- [ ] **Step 2: Remove opening-position and fee members from core accounting and persistence APIs**
+- [ ] **Step 3: Freeze V7, add V8, and rebuild local derived trade/ledger/posting values from zero during migration**
+- [ ] **Step 4: Remove the five fields from remote DTOs, local sync apply, conflict previews, fingerprints, and backup fixtures**
+- [ ] **Step 5: Generate a Supabase migration with the CLI; rebuild cloud investment state without fees/opening positions, replace affected functions, then drop all five columns**
+- [ ] **Step 6: Run focused Swift and database tests and commit the migration change**
+
+### Task 5: Simplify Asset and Trade Editors
 
 **Files:**
 - Modify: `Mistia/Features/Investment/InvestmentHubView.swift`
@@ -465,7 +490,7 @@ git add Mistia/Features/Investment/InvestmentHubView.swift
 git commit -m "feat: simplify investment entry forms"
 ```
 
-### Task 5: Replace Day-Based Dashboard with Selected-Month Layout
+### Task 6: Replace Day-Based Dashboard with Selected-Month Layout
 
 **Files:**
 - Modify: `Mistia/Features/Investment/InvestmentHubView.swift`
@@ -846,7 +871,7 @@ swift test --filter InvestmentPersistenceTests
 
 Expected: all focused tests pass. The app target may not compile until Task 6 generates the new L10n APIs.
 
-### Task 6: Update the Mistia String Catalog and Generate L10n
+### Task 7: Update the Mistia String Catalog and Generate L10n
 
 **Files:**
 - Modify: `Mistia/Localizable.xcstrings`
@@ -939,7 +964,7 @@ git add Mistia/Features/Investment/InvestmentHubView.swift \
 git commit -m "feat: redesign investment dashboard"
 ```
 
-### Task 7: Full Verification and Visual QA
+### Task 8: Full Verification and Visual QA
 
 **Files:**
 - Verify all modified files.
