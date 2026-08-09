@@ -2790,6 +2790,25 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
         )
     }
 
+    func upsertOverviewSectionConfig(
+        _ items: [RemoteOverviewSectionItemConfig],
+        modifiedAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteUserProfile {
+        RemoteUserProfile(
+            userID: session.user.id,
+            displayName: fetchProfileResult?.displayName
+                ?? session.user.userMetadata?.displayName
+                ?? "Mistia",
+            avatarURL: fetchProfileResult?.avatarURL,
+            birthday: fetchProfileResult?.birthday,
+            overviewSectionConfig: items,
+            overviewSectionConfigUpdatedAt: modifiedAt,
+            createdAt: fetchProfileResult?.createdAt ?? .now,
+            updatedAt: .now
+        )
+    }
+
     func uploadAvatarImageData(
         _ data: Data,
         session: SupabaseAuthSession

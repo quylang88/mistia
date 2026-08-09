@@ -448,6 +448,22 @@ private final class PermissionResolutionProfileStoreStub: UserProfileRemoteStori
             updatedAt: .now
         )
     }
+    func upsertOverviewSectionConfig(
+        _ items: [RemoteOverviewSectionItemConfig],
+        modifiedAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteUserProfile {
+        RemoteUserProfile(
+            userID: session.user.id,
+            displayName: session.user.userMetadata?.displayName ?? "Mistia",
+            avatarURL: nil,
+            birthday: nil,
+            overviewSectionConfig: items,
+            overviewSectionConfigUpdatedAt: modifiedAt,
+            createdAt: .now,
+            updatedAt: .now
+        )
+    }
     func uploadAvatarImageData(_ data: Data, session: SupabaseAuthSession) async throws -> URL {
         URL(string: "https://example.com/avatar.jpg")!
     }

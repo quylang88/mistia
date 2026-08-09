@@ -178,6 +178,7 @@ final class SessionStore {
     var isAuthTransitioning = false
     var isBootstrapping = false
     var familyOwnerPushConflicts: [FamilyOwnerPushConflict] = []
+    var overviewSectionConfigRevision = 0
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
@@ -393,6 +394,40 @@ final class SessionStore {
 
     func storedBirthday(for userID: UUID) -> Date? {
         storedProfile(for: userID)?.birthday
+    }
+
+    func localOverviewSectionConfigData() -> Data {
+        guard let localStorageID = activeLocalProfileID ?? activeLocalProfileUserID,
+              let snapshot = OverviewSectionPreferenceLocalStorage.snapshot(
+                for: localStorageID,
+                userDefaults: userDefaults
+              ) else {
+            return Data()
+        }
+        return (try? JSONEncoder().encode(snapshot.items)) ?? Data()
+    }
+
+    func updateLocalOverviewSectionConfigData(_ data: Data) {
+        guard let localStorageID = activeLocalProfileID ?? activeLocalProfileUserID,
+              let items = try? JSONDecoder().decode(
+                [RemoteOverviewSectionItemConfig].self,
+                from: data
+              ) else {
+            return
+        }
+
+        do {
+            try OverviewSectionPreferenceLocalStorage.save(
+                items: items,
+                modifiedAt: .now,
+                for: localStorageID,
+                userDefaults: userDefaults
+            )
+            overviewSectionConfigRevision &+= 1
+            scheduleQueuedSyncIfAllowed()
+        } catch {
+            return
+        }
     }
 
     func updateProfile(
@@ -1788,6 +1823,10 @@ final class SessionStore {
             baseSummary: baseSummary,
             storedProfile: storedProfile
         )
+        try? await syncOverviewSectionConfigWithRemote(
+            session: session,
+            remoteProfile: remoteProfile
+        )
         await cacheRemoteAvatarIfNeeded(
             for: storedProfile,
             remoteAvatarURL: remoteProfile.avatarURL ?? baseSummary.avatarURL
@@ -2420,6 +2459,7 @@ final class SessionStore {
             )
             
             // Sync user profile during synchronization
+            var syncedRemoteProfile: RemoteUserProfile?
             if let userID = summary?.userID, let profile = storedProfile(for: userID) {
                 let baseSummary = SessionSummary(userID: userID, displayName: profile.displayName, email: profile.email, avatarURL: summary?.avatarURL)
                 if let remoteProfile = try? await syncProfileWithRemote(
@@ -2427,6 +2467,7 @@ final class SessionStore {
                     baseSummary: baseSummary,
                     storedProfile: profile
                 ) {
+                    syncedRemoteProfile = remoteProfile
                     await cacheRemoteAvatarIfNeeded(
                         for: profile,
                         remoteAvatarURL: remoteProfile.avatarURL ?? baseSummary.avatarURL
@@ -2438,6 +2479,10 @@ final class SessionStore {
                     )
                 }
             }
+            try await syncOverviewSectionConfigWithRemote(
+                session: validSession,
+                remoteProfile: syncedRemoteProfile
+            )
             if normalizesBeforeSync {
                 try await normalizeCategoryHierarchyIfNeeded()
             }
@@ -2520,6 +2565,7 @@ final class SessionStore {
             let pushedFamilyOwnerMutations = try await pushQueuedFamilyOwnerMutations(
                 session: validSession
             )
+            try await syncOverviewSectionConfigWithRemote(session: validSession)
             try await normalizeCategoryHierarchyIfNeeded()
             let result: MistiaSyncResult
 
@@ -3143,6 +3189,64 @@ private extension SessionStore {
         syncStoredProfile(storedProfile, with: remoteProfile, email: baseSummary.email)
         try modelContainer.mainContext.save()
         return remoteProfile
+    }
+
+    private func syncOverviewSectionConfigWithRemote(
+        session: SupabaseAuthSession,
+        remoteProfile suppliedRemoteProfile: RemoteUserProfile? = nil
+    ) async throws {
+        let userID = session.user.id
+        let localStorageID = activeLocalProfileID ?? userID
+        let remoteProfile: RemoteUserProfile?
+        if let suppliedRemoteProfile {
+            remoteProfile = suppliedRemoteProfile
+        } else {
+            remoteProfile = try await userProfileStore.fetchProfile(session: session)
+        }
+
+        let localSnapshot = OverviewSectionPreferenceLocalStorage.snapshot(
+            for: localStorageID,
+            userDefaults: userDefaults
+        )
+        let remoteSnapshot = remoteProfile?.overviewSectionConfig.map {
+            OverviewSectionPreferenceSnapshot(
+                items: $0,
+                modifiedAt: remoteProfile?.overviewSectionConfigUpdatedAt
+            )
+        }
+
+        switch OverviewSectionPreferenceSyncResolver.resolve(
+            local: localSnapshot,
+            remote: remoteSnapshot
+        ) {
+        case .none:
+            return
+        case .applyRemote(let remote):
+            let modifiedAt = remote.modifiedAt ?? .distantPast
+            try OverviewSectionPreferenceLocalStorage.save(
+                items: remote.items,
+                modifiedAt: modifiedAt,
+                for: localStorageID,
+                userDefaults: userDefaults
+            )
+            overviewSectionConfigRevision &+= 1
+        case .upload(let local):
+            let modifiedAt = local.modifiedAt ?? .now
+            let updatedProfile = try await userProfileStore.upsertOverviewSectionConfig(
+                local.items,
+                modifiedAt: modifiedAt,
+                session: session
+            )
+            let resolvedItems = updatedProfile.overviewSectionConfig ?? local.items
+            let resolvedModifiedAt = updatedProfile.overviewSectionConfigUpdatedAt ?? modifiedAt
+            try OverviewSectionPreferenceLocalStorage.save(
+                items: resolvedItems,
+                modifiedAt: resolvedModifiedAt,
+                for: localStorageID,
+                userDefaults: userDefaults
+            )
+            overviewSectionConfigRevision &+= 1
+        }
     }
 
     func syncStoredProfile(

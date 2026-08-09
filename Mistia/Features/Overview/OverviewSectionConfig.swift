@@ -57,6 +57,12 @@ public struct OverviewSectionItemConfig: Codable, Identifiable, Equatable, Senda
     }
 }
 
+enum OverviewSectionCustomizationAvailability {
+    static func isVisible(in scope: FamilyContext.Scope) -> Bool {
+        scope == .personalSelf
+    }
+}
+
 public enum OverviewSectionConfigStorage {
     public static func encode(_ configs: [OverviewSectionItemConfig]) throws -> Data {
         try JSONEncoder().encode(configs)
@@ -68,6 +74,26 @@ public enum OverviewSectionConfigStorage {
             return OverviewSectionItemConfig.defaultConfig
         }
 
+        return sanitized(items)
+    }
+
+    static func decode(
+        remoteItems: [RemoteOverviewSectionItemConfig]?
+    ) -> [OverviewSectionItemConfig] {
+        guard let remoteItems else {
+            return OverviewSectionItemConfig.defaultConfig
+        }
+
+        let items = remoteItems.compactMap { item -> OverviewSectionItemConfig? in
+            guard let kind = OverviewSectionKind(rawValue: item.kind) else { return nil }
+            return OverviewSectionItemConfig(kind: kind, isVisible: item.isVisible)
+        }
+        return sanitized(items)
+    }
+
+    private static func sanitized(
+        _ items: [OverviewSectionItemConfig]
+    ) -> [OverviewSectionItemConfig] {
         var result = items
         let existingKinds = Set(items.map(\.kind))
         for defaultItem in OverviewSectionItemConfig.defaultConfig {

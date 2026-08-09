@@ -170,7 +170,6 @@ struct OverviewView: View {
     @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
     @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
     @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
-    @AppStorage(MistiaAppStorageKey.overviewSectionConfig) private var sectionConfigData = Data()
 
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
@@ -214,19 +213,27 @@ struct OverviewView: View {
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var renderSnapshotCache: OverviewRenderSnapshotCache?
     @State private var isManagingWidgets = false
+    @State private var personalSectionConfigs = OverviewSectionItemConfig.defaultConfig
 
     private var activeSectionConfigs: [OverviewSectionItemConfig] {
-        OverviewSectionConfigStorage.decode(from: sectionConfigData)
+        guard let viewedMember = familyContextStore.viewedMember,
+              !viewedMember.isCurrentUser else {
+            return personalSectionConfigs
+        }
+        return OverviewSectionConfigStorage.decode(
+            remoteItems: viewedMember.overviewSectionConfig
+        )
     }
 
     private var sectionConfigsBinding: Binding<[OverviewSectionItemConfig]> {
         Binding(
             get: {
-                OverviewSectionConfigStorage.decode(from: sectionConfigData)
+                personalSectionConfigs
             },
             set: { newItems in
                 if let encoded = try? OverviewSectionConfigStorage.encode(newItems) {
-                    sectionConfigData = encoded
+                    personalSectionConfigs = OverviewSectionConfigStorage.decode(from: encoded)
+                    sessionStore.updateLocalOverviewSectionConfigData(encoded)
                 }
             }
         )
@@ -764,15 +771,19 @@ struct OverviewView: View {
                 pinnedHeader: { EmptyView() },
                 trailingAccessory: {
                     HStack(spacing: 10) {
-                        MistiaHeaderCircleButton(action: {
-                            isManagingWidgets = true
-                        }) {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 16, weight: .semibold))
-                                .symbolRenderingMode(.monochrome)
-                                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.72))
+                        if OverviewSectionCustomizationAvailability.isVisible(
+                            in: familyContextStore.activeContext.scope
+                        ) {
+                            MistiaHeaderCircleButton(action: {
+                                isManagingWidgets = true
+                            }) {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .symbolRenderingMode(.monochrome)
+                                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.72))
+                            }
+                            .accessibilityLabel(L10n.overview.overview.customizeOverview)
                         }
-                        .accessibilityLabel(L10n.overview.overview.customizeOverview)
 
                         MistiaNotificationBellLink()
                     }
@@ -886,9 +897,7 @@ struct OverviewView: View {
             OverviewWidgetManagementSheet(
                 items: sectionConfigsBinding,
                 onResetToDefault: {
-                    if let encoded = try? OverviewSectionConfigStorage.encode(OverviewSectionItemConfig.defaultConfig) {
-                        sectionConfigData = encoded
-                    }
+                    sectionConfigsBinding.wrappedValue = OverviewSectionItemConfig.defaultConfig
                 }
             )
             .presentationDetents([.large])
@@ -925,9 +934,26 @@ struct OverviewView: View {
                 sessionStore: sessionStore
             )
         }
+        .task(id: sessionStore.activeLocalProfileID) {
+            reloadPersonalSectionConfigs()
+        }
+        .onChange(of: sessionStore.overviewSectionConfigRevision) { _, _ in
+            reloadPersonalSectionConfigs()
+        }
+        .onChange(of: familyContextStore.activeContext) { _, context in
+            if context.scope != .personalSelf {
+                isManagingWidgets = false
+            }
+        }
         .task(id: snapshotKey) {
             refreshRenderSnapshotCache(for: snapshotKey, snapshot: renderSnapshot)
         }
+    }
+
+    private func reloadPersonalSectionConfigs() {
+        personalSectionConfigs = OverviewSectionConfigStorage.decode(
+            from: sessionStore.localOverviewSectionConfigData()
+        )
     }
 
     private func openExpenseDay(

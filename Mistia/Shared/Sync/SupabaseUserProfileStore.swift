@@ -8,10 +8,109 @@ protocol UserProfileRemoteStoring {
         birthday: Date?,
         session: SupabaseAuthSession
     ) async throws -> RemoteUserProfile
+    func upsertOverviewSectionConfig(
+        _ items: [RemoteOverviewSectionItemConfig],
+        modifiedAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteUserProfile
     func uploadAvatarImageData(
         _ data: Data,
         session: SupabaseAuthSession
     ) async throws -> URL
+}
+
+struct RemoteOverviewSectionItemConfig: Codable, Equatable, Sendable {
+    let kind: String
+    let isVisible: Bool
+}
+
+struct OverviewSectionPreferenceSnapshot: Equatable, Sendable {
+    let items: [RemoteOverviewSectionItemConfig]
+    let modifiedAt: Date?
+}
+
+enum OverviewSectionPreferenceSyncAction: Equatable {
+    case none
+    case upload(OverviewSectionPreferenceSnapshot)
+    case applyRemote(OverviewSectionPreferenceSnapshot)
+}
+
+enum OverviewSectionPreferenceSyncResolver {
+    static func resolve(
+        local: OverviewSectionPreferenceSnapshot?,
+        remote: OverviewSectionPreferenceSnapshot?
+    ) -> OverviewSectionPreferenceSyncAction {
+        switch (local, remote) {
+        case (nil, nil):
+            return .none
+        case (.some(let local), nil):
+            return .upload(local)
+        case (nil, .some(let remote)):
+            return .applyRemote(remote)
+        case (.some(let local), .some(let remote)):
+            guard let localModifiedAt = local.modifiedAt else {
+                return .applyRemote(remote)
+            }
+            guard let remoteModifiedAt = remote.modifiedAt else {
+                return .upload(local)
+            }
+            return localModifiedAt > remoteModifiedAt
+                ? .upload(local)
+                : .applyRemote(remote)
+        }
+    }
+}
+
+enum OverviewSectionPreferenceLocalStorage {
+    private static let legacyDataKey = "mistia.overview.section-config.v1"
+    private static let scopedDataKeyPrefix = "mistia.overview.section-config.v2"
+    private static let scopedModifiedAtKeyPrefix = "mistia.overview.section-config-modified-at.v2"
+
+    static func snapshot(
+        for userID: UUID,
+        userDefaults: UserDefaults
+    ) -> OverviewSectionPreferenceSnapshot? {
+        let dataKey = scopedKey(prefix: scopedDataKeyPrefix, userID: userID)
+        let modifiedAtKey = scopedKey(prefix: scopedModifiedAtKeyPrefix, userID: userID)
+
+        if let data = userDefaults.data(forKey: dataKey),
+           let items = try? JSONDecoder().decode([RemoteOverviewSectionItemConfig].self, from: data) {
+            return OverviewSectionPreferenceSnapshot(
+                items: items,
+                modifiedAt: userDefaults.object(forKey: modifiedAtKey) as? Date
+            )
+        }
+
+        guard let legacyData = userDefaults.data(forKey: legacyDataKey),
+              let legacyItems = try? JSONDecoder().decode([RemoteOverviewSectionItemConfig].self, from: legacyData) else {
+            return nil
+        }
+
+        // Legacy AppStorage did not record a modification time. Keep it unversioned so
+        // an existing cloud preference wins; it is uploaded only when cloud is empty.
+        userDefaults.set(legacyData, forKey: dataKey)
+        return OverviewSectionPreferenceSnapshot(items: legacyItems, modifiedAt: nil)
+    }
+
+    @discardableResult
+    static func save(
+        items: [RemoteOverviewSectionItemConfig],
+        modifiedAt: Date,
+        for userID: UUID,
+        userDefaults: UserDefaults
+    ) throws -> Data {
+        let data = try JSONEncoder().encode(items)
+        userDefaults.set(data, forKey: scopedKey(prefix: scopedDataKeyPrefix, userID: userID))
+        userDefaults.set(
+            modifiedAt,
+            forKey: scopedKey(prefix: scopedModifiedAtKeyPrefix, userID: userID)
+        )
+        return data
+    }
+
+    private static func scopedKey(prefix: String, userID: UUID) -> String {
+        "\(prefix).\(userID.uuidString.lowercased())"
+    }
 }
 
 struct RemoteUserProfile: Decodable {
@@ -19,6 +118,8 @@ struct RemoteUserProfile: Decodable {
     let displayName: String
     let avatarURL: URL?
     let birthday: Date?
+    let overviewSectionConfig: [RemoteOverviewSectionItemConfig]?
+    let overviewSectionConfigUpdatedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -27,6 +128,8 @@ struct RemoteUserProfile: Decodable {
         case displayName = "display_name"
         case avatarURL = "avatar_url"
         case birthday
+        case overviewSectionConfig = "overview_section_config"
+        case overviewSectionConfigUpdatedAt = "overview_section_config_updated_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -36,6 +139,8 @@ struct RemoteUserProfile: Decodable {
         displayName: String,
         avatarURL: URL?,
         birthday: Date?,
+        overviewSectionConfig: [RemoteOverviewSectionItemConfig]? = nil,
+        overviewSectionConfigUpdatedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date
     ) {
@@ -43,6 +148,8 @@ struct RemoteUserProfile: Decodable {
         self.displayName = displayName
         self.avatarURL = avatarURL
         self.birthday = birthday
+        self.overviewSectionConfig = overviewSectionConfig
+        self.overviewSectionConfigUpdatedAt = overviewSectionConfigUpdatedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -65,6 +172,15 @@ struct RemoteUserProfile: Decodable {
         } else {
             birthday = nil
         }
+
+        overviewSectionConfig = try? container.decode(
+            [RemoteOverviewSectionItemConfig].self,
+            forKey: .overviewSectionConfig
+        )
+        overviewSectionConfigUpdatedAt = try? container.decode(
+            Date.self,
+            forKey: .overviewSectionConfigUpdatedAt
+        )
 
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
@@ -143,6 +259,44 @@ struct SupabaseUserProfileStore: UserProfileRemoteStoring {
             birthday: birthday
         )
 
+        var request = authorizedJSONRequest(url: url, session: session)
+        request.httpMethod = "POST"
+        request.setValue("resolution=merge-duplicates,return=representation", forHTTPHeaderField: "Prefer")
+        request.httpBody = try encoder.encode([payload])
+
+        let rows: [RemoteUserProfile] = try await performRequest(request: request)
+        guard let profile = rows.first else {
+            throw SupabaseServiceError.invalidResponse
+        }
+        return profile
+    }
+
+    func upsertOverviewSectionConfig(
+        _ items: [RemoteOverviewSectionItemConfig],
+        modifiedAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteUserProfile {
+        let configuration = try configuration()
+        guard var components = URLComponents(
+            url: configuration.restBaseURL.appending(path: "user_profiles"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "on_conflict", value: "user_id")
+        ]
+
+        guard let url = components.url else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        let payload = UserOverviewSectionConfigUpsertPayload(
+            userID: session.user.id,
+            items: items,
+            modifiedAt: modifiedAt
+        )
         var request = authorizedJSONRequest(url: url, session: session)
         request.httpMethod = "POST"
         request.setValue("resolution=merge-duplicates,return=representation", forHTTPHeaderField: "Prefer")
@@ -320,4 +474,26 @@ private struct UserProfileUpsertPayload: Encodable {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+}
+
+private struct UserOverviewSectionConfigUpsertPayload: Encodable {
+    let userID: UUID
+    let items: [RemoteOverviewSectionItemConfig]
+    let modifiedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case items = "overview_section_config"
+        case modifiedAt = "overview_section_config_updated_at"
+    }
+
+    init(
+        userID: UUID,
+        items: [RemoteOverviewSectionItemConfig],
+        modifiedAt: Date
+    ) {
+        self.userID = userID
+        self.items = items
+        self.modifiedAt = MistiaISO8601DateCoding.stringWithFractionalSeconds(from: modifiedAt)
+    }
 }

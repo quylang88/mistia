@@ -324,11 +324,13 @@ struct FamilyUserProfileRecord: Codable, Identifiable, Equatable {
     let userID: UUID
     var displayName: String
     var avatarURL: String?
+    var overviewSectionConfig: [RemoteOverviewSectionItemConfig]?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case displayName = "display_name"
         case avatarURL = "avatar_url"
+        case overviewSectionConfig = "overview_section_config"
     }
 
     var id: UUID { userID }
@@ -417,6 +419,7 @@ nonisolated struct FamilyMember: Codable, Identifiable, Equatable {
     let userID: UUID
     var displayName: String
     var avatarURL: URL?
+    var overviewSectionConfig: [RemoteOverviewSectionItemConfig]? = nil
     var hasSyncedCloudData: Bool = false
     var role: FamilyRole
     var policy: FamilyPermissionPolicy
@@ -576,6 +579,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 userID: row.userID,
                 displayName: profile?.displayName ?? "Mistia",
                 avatarURL: profile?.avatarURL.flatMap(URL.init(string:)),
+                overviewSectionConfig: profile?.overviewSectionConfig,
                 hasSyncedCloudData: hasSyncedCloudDataByUserID[row.userID] ?? false,
                 role: row.role,
                 policy: row.policy,
@@ -1054,7 +1058,10 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         try await fetchRows(
             path: "user_profiles",
             filters: [
-                URLQueryItem(name: "select", value: "user_id,display_name,avatar_url"),
+                URLQueryItem(
+                    name: "select",
+                    value: "user_id,display_name,avatar_url,overview_section_config"
+                ),
                 URLQueryItem(name: "user_id", value: inFilter(for: userIDs))
             ],
             session: session
