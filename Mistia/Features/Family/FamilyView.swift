@@ -3905,20 +3905,20 @@ private struct FamilySharingSheet: View {
 
                 Section {
                     sharingToggle(
-                        title: MistiaFamilyPermissionScope.view.localizedActionName,
+                        title: L10n.investment.family.viewAccess,
                         resourceType: .investment,
                         resourceID: nil,
                         scope: .view
                     )
                     sharingToggle(
-                        title: MistiaFamilyPermissionScope.create.localizedActionName,
+                        title: L10n.investment.family.createAccess,
                         resourceType: .investment,
                         resourceID: nil,
                         scope: .create,
                         isEnabled: stagedInvestmentViewValue
                     )
                     sharingToggle(
-                        title: MistiaFamilyPermissionScope.edit.localizedActionName,
+                        title: L10n.investment.family.editAccess,
                         resourceType: .investment,
                         resourceID: nil,
                         scope: .edit,
@@ -3926,8 +3926,6 @@ private struct FamilySharingSheet: View {
                     )
                 } header: {
                     Text(L10n.investment.title)
-                } footer: {
-                    Text(L10n.investment.permission.viewMessage)
                 }
 
                 Section(L10n.family.family.editAccess) {

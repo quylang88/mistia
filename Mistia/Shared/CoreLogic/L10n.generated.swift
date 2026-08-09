@@ -719,12 +719,12 @@ nonisolated enum L10n {
         }
 
         nonisolated enum family {
-            static var createAccess: String { L10n.tr("investment.family.createAccess", vi: "Quyền tạo giao dịch đầu tư", en: "Create Investment Trades", ja: "投資取引の追加") }
-            static func createAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.createAccess", vi: "Quyền tạo giao dịch đầu tư", en: "Create Investment Trades", ja: "投資取引の追加", language: language) }
-            static var editAccess: String { L10n.tr("investment.family.editAccess", vi: "Quyền quản lý danh mục", en: "Manage Portfolio", ja: "ポートフォリオ管理") }
-            static func editAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.editAccess", vi: "Quyền quản lý danh mục", en: "Manage Portfolio", ja: "ポートフォリオ管理", language: language) }
-            static var viewAccess: String { L10n.tr("investment.family.viewAccess", vi: "Quyền xem danh mục đầu tư", en: "View Investment Portfolio", ja: "投資ポートフォリオ閲覧") }
-            static func viewAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.viewAccess", vi: "Quyền xem danh mục đầu tư", en: "View Investment Portfolio", ja: "投資ポートフォリオ閲覧", language: language) }
+            static var createAccess: String { L10n.tr("investment.family.createAccess", vi: "Tạo giao dịch & thêm tài sản", en: "Create trades & add assets", ja: "取引の追加と資産登録") }
+            static func createAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.createAccess", vi: "Tạo giao dịch & thêm tài sản", en: "Create trades & add assets", ja: "取引の追加と資産登録", language: language) }
+            static var editAccess: String { L10n.tr("investment.family.editAccess", vi: "Quản lý & chỉnh sửa danh mục", en: "Manage & edit portfolio", ja: "ポートフォリオの管理と編集") }
+            static func editAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.editAccess", vi: "Quản lý & chỉnh sửa danh mục", en: "Manage & edit portfolio", ja: "ポートフォリオの管理と編集", language: language) }
+            static var viewAccess: String { L10n.tr("investment.family.viewAccess", vi: "Xem danh mục đầu tư", en: "View investment portfolio", ja: "投資ポートフォリオの閲覧") }
+            static func viewAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.viewAccess", vi: "Xem danh mục đầu tư", en: "View investment portfolio", ja: "投資ポートフォリオの閲覧", language: language) }
         }
 
         nonisolated enum hub {
