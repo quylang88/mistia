@@ -218,8 +218,8 @@ enum InvestmentPersistenceService {
         name: String,
         symbol: String?,
         currencyCode: String,
-        openingQuantity: Decimal,
-        openingCostMinor: Int64,
+        openingQuantity: Decimal = 0,
+        openingCostMinor: Int64 = 0,
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentAsset {

@@ -166,6 +166,80 @@ final class InvestmentPersistenceTests: XCTestCase {
         }
     }
 
+    func testBuyUsesTotalOrderAmountWithoutMultiplyingByQuantity() throws {
+        let fixture = try makeFixture()
+        let draft = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 3,
+            gross: 120,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let trade = try XCTUnwrap(fetchTrade(id: draft.id, fixture))
+
+        XCTAssertEqual(trade.positionQuantityAfter, 3)
+        XCTAssertEqual(trade.positionCostBasisAfterMinor, 120)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 880)
+    }
+
+    func testCreateAssetDefaultsOpeningPositionToZero() throws {
+        let fixture = try makeFixture()
+        let asset = try InvestmentPersistenceService.createAsset(
+            ownerUserID: fixture.ownerID,
+            channelID: fixture.channel.id,
+            name: "Item B",
+            symbol: nil,
+            currencyCode: "JPY",
+            context: fixture.context
+        )
+
+        XCTAssertEqual(asset.openingQuantity, 0)
+        XCTAssertEqual(asset.openingCostMinor, 0)
+    }
+
+    func testEditingLegacyTradeCanPreserveStoredFee() throws {
+        let fixture = try makeFixture()
+        let tradeID = UUID()
+        let initial = InvestmentTradeDraft(
+            id: tradeID,
+            channelID: fixture.channel.id,
+            assetID: fixture.asset.id,
+            kind: .buy,
+            quantity: 3,
+            grossAmountMinor: 120,
+            feeMinor: 10,
+            currencyCode: "JPY",
+            accountingGrossAmountMinor: 120,
+            accountingFeeMinor: 10,
+            accountingCurrencyCode: "JPY",
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start,
+            createdAt: fixture.start
+        )
+        _ = try InvestmentPersistenceService.saveTrade(
+            ownerUserID: fixture.ownerID,
+            draft: initial,
+            rates: [],
+            context: fixture.context
+        )
+        var edited = initial
+        edited.grossAmountMinor = 150
+        edited.accountingGrossAmountMinor = 150
+        _ = try InvestmentPersistenceService.saveTrade(
+            ownerUserID: fixture.ownerID,
+            draft: edited,
+            rates: [],
+            context: fixture.context
+        )
+        let stored = try XCTUnwrap(fetchTrade(id: tradeID, fixture))
+
+        XCTAssertEqual(stored.feeMinor, 10)
+        XCTAssertEqual(stored.accountingFeeMinor, 10)
+        XCTAssertEqual(stored.positionCostBasisAfterMinor, 160)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 840)
+    }
+
     func testTradeRejectsSourceCurrencyThatDoesNotMatchAsset() throws {
         let fixture = try makeFixture()
         let draft = InvestmentTradeDraft(
