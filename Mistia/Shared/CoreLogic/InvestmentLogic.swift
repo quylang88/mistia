@@ -227,6 +227,19 @@ nonisolated struct InvestmentAssetPositionSnapshot: Equatable, Identifiable {
     let quantity: Decimal
     let remainingCostBasisMinor: Int64
     let marketValueMinor: Int64?
+
+    var averageUnitCostMinor: Int64? {
+        guard quantity > 0, remainingCostBasisMinor >= 0 else { return nil }
+        var value = Decimal(remainingCostBasisMinor) / quantity
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 0, .plain)
+        let number = NSDecimalNumber(decimal: rounded)
+        guard number != .notANumber,
+              number.compare(NSDecimalNumber(value: Int64.max)) != .orderedDescending else {
+            return nil
+        }
+        return number.int64Value
+    }
 }
 
 nonisolated struct InvestmentPortfolioSummary: Equatable {

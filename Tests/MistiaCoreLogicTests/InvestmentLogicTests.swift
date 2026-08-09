@@ -93,6 +93,54 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 50)
     }
 
+    func testPositionAverageUnitCostUsesRemainingCostBasisAndQuantity() {
+        let position = InvestmentAssetPositionSnapshot(
+            id: UUID(),
+            channelID: UUID(),
+            quantity: 3,
+            remainingCostBasisMinor: 120,
+            marketValueMinor: nil
+        )
+
+        XCTAssertEqual(position.averageUnitCostMinor, 40)
+    }
+
+    func testWeightedAverageUnitCostSurvivesPartialSale() throws {
+        let sellID = UUID()
+        let start = Date(timeIntervalSince1970: 4_500)
+        let calculations = try InvestmentAccountingEngine.calculationMap(
+            trades: [
+                trade(kind: .buy, quantity: 2, gross: 100, occurredAt: start),
+                trade(kind: .buy, quantity: 1, gross: 80, occurredAt: start.addingTimeInterval(1)),
+                trade(id: sellID, kind: .sell, quantity: 1, gross: 90, occurredAt: start.addingTimeInterval(2))
+            ]
+        )
+        let remaining = try XCTUnwrap(calculations[sellID])
+        let position = InvestmentAssetPositionSnapshot(
+            id: UUID(),
+            channelID: UUID(),
+            quantity: remaining.positionQuantityAfter,
+            remainingCostBasisMinor: remaining.positionCostBasisAfterMinor,
+            marketValueMinor: nil
+        )
+
+        XCTAssertEqual(remaining.positionQuantityAfter, 2)
+        XCTAssertEqual(remaining.positionCostBasisAfterMinor, 120)
+        XCTAssertEqual(position.averageUnitCostMinor, 60)
+    }
+
+    func testZeroQuantityHasNoAverageUnitCost() {
+        let position = InvestmentAssetPositionSnapshot(
+            id: UUID(),
+            channelID: UUID(),
+            quantity: 0,
+            remainingCostBasisMinor: 0,
+            marketValueMinor: nil
+        )
+
+        XCTAssertNil(position.averageUnitCostMinor)
+    }
+
     func testSummaryFallsBackToCostBasisWithoutValuation() {
         let tradeID = UUID()
         let date = Date(timeIntervalSince1970: 5_000)
