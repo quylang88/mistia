@@ -719,12 +719,12 @@ nonisolated enum L10n {
         }
 
         nonisolated enum family {
-            static var createAccess: String { L10n.tr("investment.family.createAccess", vi: "Thêm mới đầu tư", en: "Add investment data", ja: "投資データを追加") }
-            static func createAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.createAccess", vi: "Thêm mới đầu tư", en: "Add investment data", ja: "投資データを追加", language: language) }
-            static var editAccess: String { L10n.tr("investment.family.editAccess", vi: "Chỉnh sửa đầu tư", en: "Edit investments", ja: "投資を編集") }
-            static func editAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.editAccess", vi: "Chỉnh sửa đầu tư", en: "Edit investments", ja: "投資を編集", language: language) }
-            static var viewAccess: String { L10n.tr("investment.family.viewAccess", vi: "Xem đầu tư", en: "View investments", ja: "投資を閲覧") }
-            static func viewAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.viewAccess", vi: "Xem đầu tư", en: "View investments", ja: "投資を閲覧", language: language) }
+            static var createAccess: String { L10n.tr("investment.family.createAccess", vi: "Quyền tạo giao dịch đầu tư", en: "Create Investment Trades", ja: "投資取引の追加") }
+            static func createAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.createAccess", vi: "Quyền tạo giao dịch đầu tư", en: "Create Investment Trades", ja: "投資取引の追加", language: language) }
+            static var editAccess: String { L10n.tr("investment.family.editAccess", vi: "Quyền quản lý danh mục", en: "Manage Portfolio", ja: "ポートフォリオ管理") }
+            static func editAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.editAccess", vi: "Quyền quản lý danh mục", en: "Manage Portfolio", ja: "ポートフォリオ管理", language: language) }
+            static var viewAccess: String { L10n.tr("investment.family.viewAccess", vi: "Quyền xem danh mục đầu tư", en: "View Investment Portfolio", ja: "投資ポートフォリオ閲覧") }
+            static func viewAccess(language: MistiaAppLanguage) -> String { L10n.tr("investment.family.viewAccess", vi: "Quyền xem danh mục đầu tư", en: "View Investment Portfolio", ja: "投資ポートフォリオ閲覧", language: language) }
         }
 
         nonisolated enum hub {
@@ -771,27 +771,27 @@ nonisolated enum L10n {
         nonisolated enum overview {
             static var cardTitle: String { L10n.tr("investment.overview.cardTitle", vi: "Tổng quan đầu tư", en: "Investment overview", ja: "投資概要") }
             static func cardTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.cardTitle", vi: "Tổng quan đầu tư", en: "Investment overview", ja: "投資概要", language: language) }
-            static var `open`: String { L10n.tr("investment.overview.open", vi: "Mở đầu tư", en: "Open investments", ja: "投資を開く") }
-            static func `open`(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.open", vi: "Mở đầu tư", en: "Open investments", ja: "投資を開く", language: language) }
-            static var privateMessage: String { L10n.tr("investment.overview.privateMessage", vi: "Thông tin đầu tư được ẩn mặc định. Hãy xin quyền xem để mở.", en: "Investment information is private by default. Request view access to open it.", ja: "投資情報は初期設定で非公開です。表示するには閲覧権限をリクエストしてください。") }
-            static func privateMessage(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.privateMessage", vi: "Thông tin đầu tư được ẩn mặc định. Hãy xin quyền xem để mở.", en: "Investment information is private by default. Request view access to open it.", ja: "投資情報は初期設定で非公開です。表示するには閲覧権限をリクエストしてください。", language: language) }
-            static var privateTitle: String { L10n.tr("investment.overview.privateTitle", vi: "Đầu tư riêng tư", en: "Private investments", ja: "非公開の投資") }
-            static func privateTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.privateTitle", vi: "Đầu tư riêng tư", en: "Private investments", ja: "非公開の投資", language: language) }
+            static var `open`: String { L10n.tr("investment.overview.open", vi: "Xem danh mục đầu tư", en: "View Investment Portfolio", ja: "ポートフォリオを表示") }
+            static func `open`(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.open", vi: "Xem danh mục đầu tư", en: "View Investment Portfolio", ja: "ポートフォリオを表示", language: language) }
+            static var privateMessage: String { L10n.tr("investment.overview.privateMessage", vi: "Danh mục đầu tư cá nhân của thành viên được bảo mật mặc định. Vui lòng gửi yêu cầu để xem thông tin.", en: "Personal investment portfolios are protected by default. Request view access to examine details.", ja: "メンバーの個人投資ポートフォリオはデフォルトで保護されています。閲覧するにはアクセス権限をリクエストしてください。") }
+            static func privateMessage(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.privateMessage", vi: "Danh mục đầu tư cá nhân của thành viên được bảo mật mặc định. Vui lòng gửi yêu cầu để xem thông tin.", en: "Personal investment portfolios are protected by default. Request view access to examine details.", ja: "メンバーの個人投資ポートフォリオはデフォルトで保護されています。閲覧するにはアクセス権限をリクエストしてください。", language: language) }
+            static var privateTitle: String { L10n.tr("investment.overview.privateTitle", vi: "Danh mục đầu tư cá nhân", en: "Personal Investment Portfolio", ja: "個人投資ポートフォリオ") }
+            static func privateTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.privateTitle", vi: "Danh mục đầu tư cá nhân", en: "Personal Investment Portfolio", ja: "個人投資ポートフォリオ", language: language) }
         }
 
         nonisolated enum permission {
-            static var accessRequired: String { L10n.tr("investment.permission.accessRequired", vi: "Cần quyền truy cập đầu tư", en: "Investment access required", ja: "投資へのアクセス権が必要です") }
-            static func accessRequired(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.accessRequired", vi: "Cần quyền truy cập đầu tư", en: "Investment access required", ja: "投資へのアクセス権が必要です", language: language) }
+            static var accessRequired: String { L10n.tr("investment.permission.accessRequired", vi: "Yêu cầu quyền truy cập danh mục đầu tư", en: "Investment Portfolio Access Required", ja: "投資ポートフォリオのアクセス権が必要です") }
+            static func accessRequired(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.accessRequired", vi: "Yêu cầu quyền truy cập danh mục đầu tư", en: "Investment Portfolio Access Required", ja: "投資ポートフォリオのアクセス権が必要です", language: language) }
             static var pending: String { L10n.tr("investment.permission.pending", vi: "Đang chờ duyệt", en: "Request pending", ja: "リクエスト承認待ち") }
             static func pending(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.pending", vi: "Đang chờ duyệt", en: "Request pending", ja: "リクエスト承認待ち", language: language) }
-            static var requestCreate: String { L10n.tr("investment.permission.requestCreate", vi: "Xin quyền thêm mới", en: "Request create access", ja: "追加権限をリクエスト") }
-            static func requestCreate(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.requestCreate", vi: "Xin quyền thêm mới", en: "Request create access", ja: "追加権限をリクエスト", language: language) }
-            static var requestEdit: String { L10n.tr("investment.permission.requestEdit", vi: "Xin quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト") }
-            static func requestEdit(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.requestEdit", vi: "Xin quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト", language: language) }
-            static var requestView: String { L10n.tr("investment.permission.requestView", vi: "Xin quyền xem", en: "Request view access", ja: "閲覧権限をリクエスト") }
-            static func requestView(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.requestView", vi: "Xin quyền xem", en: "Request view access", ja: "閲覧権限をリクエスト", language: language) }
-            static var viewMessage: String { L10n.tr("investment.permission.viewMessage", vi: "Chỉ chủ sở hữu và thành viên được duyệt mới có thể xem khu vực đầu tư này.", en: "Only the owner and approved family members can view this investment area.", ja: "この投資エリアを表示できるのは、所有者と承認された家族だけです。") }
-            static func viewMessage(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.viewMessage", vi: "Chỉ chủ sở hữu và thành viên được duyệt mới có thể xem khu vực đầu tư này.", en: "Only the owner and approved family members can view this investment area.", ja: "この投資エリアを表示できるのは、所有者と承認された家族だけです。", language: language) }
+            static var requestCreate: String { L10n.tr("investment.permission.requestCreate", vi: "Yêu cầu quyền khởi tạo", en: "Request Creation Access", ja: "新規作成権限をリクエスト") }
+            static func requestCreate(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.requestCreate", vi: "Yêu cầu quyền khởi tạo", en: "Request Creation Access", ja: "新規作成権限をリクエスト", language: language) }
+            static var requestEdit: String { L10n.tr("investment.permission.requestEdit", vi: "Yêu cầu quyền quản lý", en: "Request Management Access", ja: "管理権限をリクエスト") }
+            static func requestEdit(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.requestEdit", vi: "Yêu cầu quyền quản lý", en: "Request Management Access", ja: "管理権限をリクエスト", language: language) }
+            static var requestView: String { L10n.tr("investment.permission.requestView", vi: "Yêu cầu quyền xem", en: "Request View Access", ja: "閲覧権限をリクエスト") }
+            static func requestView(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.requestView", vi: "Yêu cầu quyền xem", en: "Request View Access", ja: "閲覧権限をリクエスト", language: language) }
+            static var viewMessage: String { L10n.tr("investment.permission.viewMessage", vi: "Danh mục này thuộc quyền riêng tư của thành viên. Chỉ tài khoản chủ sở hữu và các thành viên được cấp quyền mới có thể truy cập thông tin.", en: "This portfolio belongs to the member. Only the owner and authorized family members can access investment details.", ja: "このポートフォリオはメンバーの個人データです。所有者および承認されたファミリーメンバーのみが投資情報にアクセスできます。") }
+            static func viewMessage(language: MistiaAppLanguage) -> String { L10n.tr("investment.permission.viewMessage", vi: "Danh mục này thuộc quyền riêng tư của thành viên. Chỉ tài khoản chủ sở hữu và các thành viên được cấp quyền mới có thể truy cập thông tin.", en: "This portfolio belongs to the member. Only the owner and authorized family members can access investment details.", ja: "このポートフォリオはメンバーの個人データです。所有者および承認されたファミリーメンバーのみが投資情報にアクセスできます。", language: language) }
         }
         static var title: String { L10n.tr("investment.title", vi: "Đầu tư", en: "Investments", ja: "投資") }
         static func title(language: MistiaAppLanguage) -> String { L10n.tr("investment.title", vi: "Đầu tư", en: "Investments", ja: "投資", language: language) }
