@@ -141,6 +141,47 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertNil(position.averageUnitCostMinor)
     }
 
+    func testInvestmentMonthIntervalUsesSelectedMonth() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let selected = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2025, month: 2, day: 18))
+        )
+
+        let interval = InvestmentPeriodLogic.monthInterval(
+            containing: selected,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: interval.start),
+            DateComponents(year: 2025, month: 2, day: 1)
+        )
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: interval.end),
+            DateComponents(year: 2025, month: 3, day: 1)
+        )
+    }
+
+    func testInvestmentMonthNavigationMovesFromNormalizedMonthStart() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let selected = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2025, month: 1, day: 31))
+        )
+
+        let next = InvestmentPeriodLogic.month(
+            byAdding: 1,
+            to: selected,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: next),
+            DateComponents(year: 2025, month: 2, day: 1)
+        )
+    }
+
     func testSummaryFallsBackToCostBasisWithoutValuation() {
         let tradeID = UUID()
         let date = Date(timeIntervalSince1970: 5_000)

@@ -295,6 +295,31 @@ nonisolated enum InvestmentSummaryLogic {
     }
 }
 
+nonisolated enum InvestmentPeriodLogic {
+    static func monthInterval(
+        containing date: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> DateInterval {
+        let components = calendar.dateComponents([.year, .month], from: date)
+        let start = calendar.date(from: components) ?? calendar.startOfDay(for: date)
+        let candidateEnd = calendar.date(byAdding: .month, value: 1, to: start)
+            ?? start.addingTimeInterval(86_400)
+        return DateInterval(
+            start: start,
+            end: max(candidateEnd, start.addingTimeInterval(1))
+        )
+    }
+
+    static func month(
+        byAdding value: Int,
+        to date: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> Date {
+        let start = monthInterval(containing: date, calendar: calendar).start
+        return calendar.date(byAdding: .month, value: value, to: start) ?? start
+    }
+}
+
 nonisolated enum InvestmentCurrencyConversion {
     static func convertedMinor(
         _ amountMinor: Int64,
