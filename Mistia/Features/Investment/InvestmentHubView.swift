@@ -1009,10 +1009,7 @@ private struct InvestmentAssetEditorSheet: View {
 
     @State private var channelID: UUID?
     @State private var name = ""
-    @State private var symbol = ""
     @State private var currencyCode = "JPY"
-    @State private var openingQuantity = ""
-    @State private var openingCost = ""
 
     var body: some View {
         NavigationStack {
@@ -1025,7 +1022,6 @@ private struct InvestmentAssetEditorSheet: View {
                 .disabled(asset != nil && hasHistory)
                 Section {
                     TextField(L10n.investment.asset.namePlaceholder, text: $name)
-                    TextField(L10n.investment.asset.symbol, text: $symbol)
                     Picker(L10n.investment.asset.currency, selection: $currencyCode) {
                         ForEach(MistiaCurrencySettings.enabledCurrencyCodes(), id: \.self) { code in
                             Text(code).tag(code)
@@ -1033,12 +1029,6 @@ private struct InvestmentAssetEditorSheet: View {
                     }
                     .disabled(asset != nil && hasHistory)
                 }
-                Section {
-                    TextField(L10n.investment.asset.openingQuantity, text: $openingQuantity)
-                        .keyboardType(.decimalPad)
-                    MistiaCurrencyInputField(L10n.investment.asset.openingCost, text: $openingCost)
-                }
-                .disabled(asset != nil)
             }
             .navigationTitle(L10n.investment.asset.newTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -1058,12 +1048,7 @@ private struct InvestmentAssetEditorSheet: View {
     private func hydrate() {
         channelID = asset?.channelID ?? selectedChannelID ?? channels.first?.id
         name = asset?.name ?? ""
-        symbol = asset?.symbol ?? ""
         currencyCode = asset?.currencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
-        if let asset {
-            openingQuantity = InvestmentDecimalCoding.string(from: asset.openingQuantity)
-            openingCost = MistiaCurrencyInputFormatting.groupedInput(String(asset.openingCostMinor))
-        }
     }
 
     private func save() {
@@ -1072,8 +1057,6 @@ private struct InvestmentAssetEditorSheet: View {
             if let asset {
                 asset.channelID = channelID
                 asset.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                let trimmedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
-                asset.symbol = trimmedSymbol.isEmpty ? nil : trimmedSymbol
                 asset.currencyCode = MistiaCurrencyLogic.normalizedCode(currencyCode)
                 asset.updatedAt = .now
                 try modelContext.save()
@@ -1084,29 +1067,12 @@ private struct InvestmentAssetEditorSheet: View {
                     subjectUserIDOverride: ownerUserID
                 )
             } else {
-                let openingQuantityValue = parsedDecimal(openingQuantity)
-                let openingCostValue = openingCost.currencyInputToMinorUnits(currencyCode: currencyCode)
-                let accountingCurrencyCode = investmentAccountingCurrency(
-                    ownerUserID: ownerUserID,
-                    context: modelContext
-                )
-                guard let accountingOpeningCost = MistiaCurrencyLogic.convertedMinorAmount(
-                    openingCostValue,
-                    from: currencyCode,
-                    to: accountingCurrencyCode,
-                    rates: MistiaCurrencySettings.rates()
-                ) else {
-                    onError(L10n.investment.error.missingExchangeRate)
-                    return
-                }
                 let asset = try InvestmentPersistenceService.createAsset(
                     ownerUserID: ownerUserID,
                     channelID: channelID,
                     name: name,
-                    symbol: symbol,
+                    symbol: nil,
                     currencyCode: currencyCode,
-                    openingQuantity: openingQuantityValue,
-                    openingCostMinor: accountingOpeningCost,
                     context: modelContext
                 )
                 sessionStore.recordUpsert(
@@ -1143,7 +1109,6 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var walletID: UUID?
     @State private var quantity = ""
     @State private var grossAmount = ""
-    @State private var fee = ""
     @State private var note = ""
     @State private var occurredAt = Date()
 
@@ -1215,7 +1180,6 @@ private struct InvestmentTradeEditorSheet: View {
                             .foregroundStyle(.secondary)
                     }
                     MistiaCurrencyInputField(L10n.investment.trade.grossAmount, text: $grossAmount)
-                    MistiaCurrencyInputField(L10n.investment.trade.fee, text: $fee)
                     DatePicker(L10n.investment.trade.date, selection: $occurredAt)
                     TextField(L10n.investment.trade.note, text: $note)
                 }
@@ -1261,7 +1225,6 @@ private struct InvestmentTradeEditorSheet: View {
         quantity = trade.map { InvestmentDecimalCoding.string(from: $0.quantity) } ?? ""
         if let trade {
             grossAmount = MistiaCurrencyInputFormatting.groupedInput(String(trade.grossAmountMinor))
-            fee = MistiaCurrencyInputFormatting.groupedInput(String(trade.feeMinor))
             note = trade.note ?? ""
             occurredAt = trade.occurredAt
         }
@@ -1278,21 +1241,28 @@ private struct InvestmentTradeEditorSheet: View {
         guard let asset = selectedAsset, let walletID else { return }
         let currency = asset.currencyCode
         let grossMinor = grossAmount.currencyInputToMinorUnits(currencyCode: currency)
-        let feeMinor = fee.currencyInputToMinorUnits(currencyCode: currency)
+        let feeMinor = trade?.feeMinor ?? 0
+        let accountingFee = trade?.accountingFeeMinor ?? 0
         let rates = MistiaCurrencySettings.rates()
-        guard let accountingGross = MistiaCurrencyLogic.convertedMinorAmount(
-            grossMinor,
-            from: currency,
-            to: accountingCurrencyCode,
-            rates: rates
-        ), let accountingFee = MistiaCurrencyLogic.convertedMinorAmount(
-            feeMinor,
-            from: currency,
-            to: accountingCurrencyCode,
-            rates: rates
-        ) else {
-            onError(L10n.investment.error.missingExchangeRate)
-            return
+        let sourceCode = MistiaCurrencyLogic.normalizedCode(currency)
+        let accountingCode = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
+        let exchangeRateDecimalString = trade?.exchangeRateDecimalString
+            ?? rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates)
+
+        let accountingGross: Int64
+        if sourceCode == accountingCode {
+            accountingGross = grossMinor
+        } else {
+            guard let exchangeRateDecimalString,
+                  let rate = InvestmentDecimalCoding.decimal(from: exchangeRateDecimalString),
+                  let converted = try? InvestmentCurrencyConversion.convertedMinor(
+                      grossMinor,
+                      rate: rate
+                  ) else {
+                onError(L10n.investment.error.missingExchangeRate)
+                return
+            }
+            accountingGross = converted
         }
 
         let savedTradeID = trade?.id ?? UUID()
@@ -1311,9 +1281,11 @@ private struct InvestmentTradeEditorSheet: View {
                     accountingGrossAmountMinor: accountingGross,
                     accountingFeeMinor: accountingFee,
                     accountingCurrencyCode: accountingCurrencyCode,
-                    exchangeRateDecimalString: rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates),
-                    exchangeRateProvider: rateProvider(from: currency, to: accountingCurrencyCode, rates: rates),
-                    exchangeRateDate: rateDate(from: currency, to: accountingCurrencyCode, rates: rates),
+                    exchangeRateDecimalString: exchangeRateDecimalString,
+                    exchangeRateProvider: trade?.exchangeRateProvider
+                        ?? rateProvider(from: currency, to: accountingCurrencyCode, rates: rates),
+                    exchangeRateDate: trade?.exchangeRateDate
+                        ?? rateDate(from: currency, to: accountingCurrencyCode, rates: rates),
                     fundingWalletID: kind == .buy ? walletID : nil,
                     capitalReturnWalletID: kind == .sell ? walletID : nil,
                     note: note,
