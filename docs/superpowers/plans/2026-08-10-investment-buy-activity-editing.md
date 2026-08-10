@@ -16,7 +16,7 @@
 - Modify `Mistia/Shared/Persistence/InvestmentPersistence.swift`: permit relation edits for the same trade, keep kind immutable, preflight both asset histories, and reconcile both histories in one save.
 - Modify `Mistia/Features/Investment/InvestmentHubView.swift`: enable the asset picker only for existing buys and refresh the exchange-rate snapshot when the selected asset changes currency.
 - Modify `supabase/tests/database/investment_domain.sql`: pgTAP coverage for cross-asset/cross-wallet edits, immutable kind, stale versions, derived posting relations, and rollback.
-- Create `supabase/migrations/20260810120000_allow_investment_buy_activity_edits.sql`: replace `mutate_investment_trade` without changing its signature or grants.
+- Create `supabase/migrations/20260810111705_allow_investment_buy_activity_edits.sql`: replace `mutate_investment_trade` without changing its signature or grants.
 
 No SwiftData model, String Catalog, sync payload, or Supabase table change is required.
 
@@ -729,7 +729,7 @@ Expected: the new move test fails with `Investment trade asset and channel are i
 ### Task 5: Replace the Cloud Mutation RPC
 
 **Files:**
-- Create: `supabase/migrations/20260810120000_allow_investment_buy_activity_edits.sql`
+- Create: `supabase/migrations/20260810111705_allow_investment_buy_activity_edits.sql`
 - Test: `supabase/tests/database/investment_domain.sql`
 
 - [ ] **Step 1: Create a forward-only replacement migration**
@@ -976,7 +976,7 @@ Expected: the focused investment file and the complete database suite pass. The 
 - [ ] **Step 3: Commit the tested cloud behavior**
 
 ```bash
-git add supabase/migrations/20260810120000_allow_investment_buy_activity_edits.sql \
+git add supabase/migrations/20260810111705_allow_investment_buy_activity_edits.sql \
   supabase/tests/database/investment_domain.sql
 git commit -m "feat: sync editable investment buys"
 ```
@@ -1020,7 +1020,7 @@ supabase db push --linked
 supabase migration list --linked
 ```
 
-Expected: the dry run lists only `20260810120000_allow_investment_buy_activity_edits.sql`; the push succeeds; the final list shows local and remote migration `20260810120000` aligned. Do not run destructive pgTAP fixtures against the linked production database.
+Expected: the dry run lists only `20260810111705_allow_investment_buy_activity_edits.sql`; the push succeeds; the final list shows local and remote migration `20260810111705` aligned. Do not run destructive pgTAP fixtures against the linked production database.
 
 - [ ] **Step 4: Verify the editor on an iPhone-sized simulator when available**
 
