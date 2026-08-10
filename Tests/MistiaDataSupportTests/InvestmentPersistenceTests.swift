@@ -506,6 +506,245 @@ final class InvestmentPersistenceTests: XCTestCase {
         )
     }
 
+    func testEditingBuyMovesItBetweenAssetsAndWalletsAndRebuildsBothHistories() throws {
+        let fixture = try makeFixture()
+        let secondWallet = LedgerWallet(
+            name: "Second funding",
+            kind: .bank,
+            iconSymbolName: "building.columns.fill",
+            iconColorHex: "#111111",
+            currencyCode: "JPY",
+            openingBalanceMinor: 1_000
+        )
+        fixture.context.insert(secondWallet)
+        let secondChannel = try InvestmentPersistenceService.createChannel(
+            ownerUserID: fixture.ownerID,
+            name: "Second shop",
+            iconSymbolName: "shippingbox.fill",
+            iconColorHex: "#9A67FF",
+            primaryCurrencyCode: "JPY",
+            context: fixture.context
+        ).channel
+        let secondAsset = try InvestmentPersistenceService.createAsset(
+            ownerUserID: fixture.ownerID,
+            channelID: secondChannel.id,
+            name: "Item B",
+            currencyCode: "JPY",
+            context: fixture.context
+        )
+        let movedBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 3,
+            gross: 120,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let remainingBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 50,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let correctedDate = fixture.start.addingTimeInterval(100)
+        let result = try InvestmentPersistenceService.saveTrade(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentTradeDraft(
+                id: movedBuy.id,
+                channelID: secondChannel.id,
+                assetID: secondAsset.id,
+                kind: .buy,
+                quantity: 4,
+                grossAmountMinor: 200,
+                currencyCode: "JPY",
+                accountingGrossAmountMinor: 200,
+                accountingCurrencyCode: "JPY",
+                fundingWalletID: secondWallet.id,
+                note: "Corrected buy",
+                occurredAt: correctedDate,
+                createdAt: movedBuy.createdAt
+            ),
+            rates: [],
+            now: correctedDate.addingTimeInterval(1),
+            context: fixture.context
+        )
+
+        let storedMovedBuy = try XCTUnwrap(fetchTrade(id: movedBuy.id, fixture))
+        XCTAssertEqual(storedMovedBuy.id, movedBuy.id)
+        XCTAssertEqual(storedMovedBuy.kind, .buy)
+        XCTAssertEqual(storedMovedBuy.channelID, secondChannel.id)
+        XCTAssertEqual(storedMovedBuy.assetID, secondAsset.id)
+        XCTAssertEqual(storedMovedBuy.quantity, 4)
+        XCTAssertEqual(storedMovedBuy.grossAmountMinor, 200)
+        XCTAssertEqual(storedMovedBuy.occurredAt, correctedDate)
+        XCTAssertEqual(storedMovedBuy.fundingWalletID, secondWallet.id)
+        XCTAssertEqual(storedMovedBuy.note, "Corrected buy")
+        XCTAssertEqual(storedMovedBuy.positionQuantityAfter, 4)
+        XCTAssertEqual(storedMovedBuy.positionCostBasisAfterMinor, 200)
+
+        let storedRemainingBuy = try XCTUnwrap(fetchTrade(id: remainingBuy.id, fixture))
+        XCTAssertEqual(storedRemainingBuy.assetID, fixture.asset.id)
+        XCTAssertEqual(storedRemainingBuy.positionQuantityAfter, 1)
+        XCTAssertEqual(storedRemainingBuy.positionCostBasisAfterMinor, 50)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 950)
+        XCTAssertEqual(try balance(secondWallet, fixture), 800)
+        XCTAssertTrue(result.walletIDs.contains(fixture.fundingWallet.id))
+        XCTAssertTrue(result.walletIDs.contains(secondWallet.id))
+
+        let posting = try XCTUnwrap(
+            fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+                .first { $0.tradeID == movedBuy.id && $0.deletedAt == nil }
+        )
+        XCTAssertEqual(posting.assetID, secondAsset.id)
+        XCTAssertEqual(posting.walletID, secondWallet.id)
+        XCTAssertEqual(posting.amountMinor, -200)
+    }
+
+    func testEditingExistingTradeCannotChangeBuyIntoSell() throws {
+        let fixture = try makeFixture()
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 200,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let editedBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 50,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveTrade(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentTradeDraft(
+                    id: editedBuy.id,
+                    channelID: fixture.channel.id,
+                    assetID: fixture.asset.id,
+                    kind: .sell,
+                    quantity: 1,
+                    grossAmountMinor: 70,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 70,
+                    accountingCurrencyCode: "JPY",
+                    capitalReturnWalletID: fixture.capitalWallet.id,
+                    occurredAt: fixture.start.addingTimeInterval(2),
+                    createdAt: editedBuy.createdAt
+                ),
+                rates: [],
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .invalidTradeInput)
+        }
+        XCTAssertEqual(try fetchTrade(id: editedBuy.id, fixture)?.kind, .buy)
+    }
+
+    func testEditingBuyWithInsufficientNewWalletLeavesOriginalStateUnchanged() throws {
+        let fixture = try makeFixture()
+        let lowBalanceWallet = LedgerWallet(
+            name: "Low balance",
+            kind: .cash,
+            iconSymbolName: "banknote.fill",
+            iconColorHex: "#222222",
+            currencyCode: "JPY",
+            openingBalanceMinor: 10
+        )
+        fixture.context.insert(lowBalanceWallet)
+        let original = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveTrade(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentTradeDraft(
+                    id: original.id,
+                    channelID: fixture.channel.id,
+                    assetID: fixture.asset.id,
+                    kind: .buy,
+                    quantity: 2,
+                    grossAmountMinor: 50,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 50,
+                    accountingCurrencyCode: "JPY",
+                    fundingWalletID: lowBalanceWallet.id,
+                    occurredAt: fixture.start.addingTimeInterval(1),
+                    createdAt: original.createdAt
+                ),
+                rates: [],
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .insufficientFunds)
+        }
+
+        let stored = try XCTUnwrap(fetchTrade(id: original.id, fixture))
+        XCTAssertEqual(stored.quantity, 1)
+        XCTAssertEqual(stored.grossAmountMinor, 100)
+        XCTAssertEqual(stored.fundingWalletID, fixture.fundingWallet.id)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 900)
+        XCTAssertEqual(try balance(lowBalanceWallet, fixture), 10)
+    }
+
+    func testEditingBuyWithinSameAssetReusesOneDerivedLedgerAndPosting() throws {
+        let fixture = try makeFixture()
+        let original = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 3,
+            gross: 120,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let correctedDate = fixture.start.addingTimeInterval(10)
+
+        _ = try InvestmentPersistenceService.saveTrade(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentTradeDraft(
+                id: original.id,
+                channelID: fixture.channel.id,
+                assetID: fixture.asset.id,
+                kind: .buy,
+                quantity: 2,
+                grossAmountMinor: 90,
+                currencyCode: "JPY",
+                accountingGrossAmountMinor: 90,
+                accountingCurrencyCode: "JPY",
+                fundingWalletID: fixture.fundingWallet.id,
+                note: "Same asset correction",
+                occurredAt: correctedDate,
+                createdAt: original.createdAt
+            ),
+            rates: [],
+            context: fixture.context
+        )
+
+        let fundingLedgerID = InvestmentLedgerIdentity.derivedID(eventID: original.id, component: "funding")
+        let fundingPostingID = InvestmentLedgerIdentity.derivedID(eventID: original.id, component: "funding-posting")
+        let activeLedgers = try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
+            .filter { $0.id == fundingLedgerID && $0.deletedAt == nil }
+        let activePostings = try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+            .filter { $0.id == fundingPostingID && $0.deletedAt == nil }
+        XCTAssertEqual(activeLedgers.count, 1)
+        XCTAssertEqual(activeLedgers.first?.amountMinor, 90)
+        XCTAssertEqual(activePostings.count, 1)
+        XCTAssertEqual(activePostings.first?.amountMinor, -90)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 910)
+    }
+
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext

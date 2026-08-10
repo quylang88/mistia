@@ -368,13 +368,6 @@ enum InvestmentPersistenceService {
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
-        let asset = try fetchAsset(id: draft.assetID, ownerUserID: ownerUserID, context: context)
-        guard let asset,
-              asset.deletedAt == nil,
-              !asset.isArchived,
-              asset.channelID == draft.channelID else {
-            throw InvestmentPersistenceError.missingAsset
-        }
         let draftID = draft.id
         let storedTrade = try context.fetch(
             FetchDescriptor<InvestmentTrade>(
@@ -383,11 +376,38 @@ enum InvestmentPersistenceService {
                 }
             )
         ).first
-        guard storedTrade == nil
-                || (storedTrade?.assetID == draft.assetID && storedTrade?.channelID == draft.channelID) else {
+        if let storedTrade, storedTrade.kind != draft.kind {
             throw InvestmentPersistenceError.invalidTradeInput
         }
-        try validateTradeSource(draft: draft, asset: asset)
+        let originalWalletIDs = Set([
+            storedTrade?.fundingWalletID,
+            storedTrade?.capitalReturnWalletID
+        ].compactMap { $0 })
+
+        let targetAsset = try fetchAsset(
+            id: draft.assetID,
+            ownerUserID: ownerUserID,
+            context: context
+        )
+        guard let targetAsset,
+              targetAsset.deletedAt == nil,
+              !targetAsset.isArchived,
+              targetAsset.channelID == draft.channelID else {
+            throw InvestmentPersistenceError.missingAsset
+        }
+
+        var originalAsset: InvestmentAsset?
+        if let storedTrade, storedTrade.assetID != targetAsset.id {
+            guard let fetchedOriginalAsset = try fetchAsset(
+                id: storedTrade.assetID,
+                ownerUserID: ownerUserID,
+                context: context
+            ) else {
+                throw InvestmentPersistenceError.missingAsset
+            }
+            originalAsset = fetchedOriginalAsset
+        }
+        try validateTradeSource(draft: draft, asset: targetAsset)
 
         let wallets = try context.fetch(
             FetchDescriptor<LedgerWallet>(
@@ -413,12 +433,11 @@ enum InvestmentPersistenceService {
             throw InvestmentPersistenceError.missingExchangeRate
         }
 
-        let existingTrades = try activeTrades(
-            assetID: asset.id,
+        let targetTrades = try activeTrades(
+            assetID: targetAsset.id,
             ownerUserID: ownerUserID,
             context: context
         )
-        let existingTrade = existingTrades.first { $0.id == draft.id }
         try validateWalletSelection(
             draft: draft,
             systemWallet: systemWallet,
@@ -440,18 +459,33 @@ enum InvestmentPersistenceService {
             draft: draft,
             fundingWallet: fundingWallet,
             fundingAmountMinor: fundingAmountMinor,
-            excludingTrade: existingTrade,
+            excludingTrade: storedTrade,
             allWallets: wallets,
             context: context
         )
 
-        var recalculationInputs = existingTrades
-            .filter { $0.id != draft.id }
-            .map(InvestmentTradeInput.init)
-        recalculationInputs.append(draft.accountingInput)
-        let calculations = try InvestmentAccountingEngine.calculationMap(trades: recalculationInputs)
+        let targetTradesWithoutEditedTrade = targetTrades.filter { $0.id != draft.id }
+        let targetCalculations = try InvestmentAccountingEngine.calculationMap(
+            trades: targetTradesWithoutEditedTrade.map(InvestmentTradeInput.init) + [draft.accountingInput]
+        )
 
-        let trade = existingTrade ?? InvestmentTrade(
+        let originalRemainingTrades: [InvestmentTrade]
+        let originalCalculations: [UUID: InvestmentTradeCalculation]
+        if let originalAsset {
+            originalRemainingTrades = try activeTrades(
+                assetID: originalAsset.id,
+                ownerUserID: ownerUserID,
+                context: context
+            ).filter { $0.id != draft.id }
+            originalCalculations = try InvestmentAccountingEngine.calculationMap(
+                trades: originalRemainingTrades.map(InvestmentTradeInput.init)
+            )
+        } else {
+            originalRemainingTrades = []
+            originalCalculations = [:]
+        }
+
+        let trade = storedTrade ?? InvestmentTrade(
             id: draft.id,
             ownerUserID: ownerUserID,
             channelID: draft.channelID,
@@ -466,7 +500,7 @@ enum InvestmentPersistenceService {
             createdAt: draft.createdAt,
             updatedAt: now
         )
-        if existingTrade == nil {
+        if storedTrade == nil {
             context.insert(trade)
         }
 
@@ -480,34 +514,50 @@ enum InvestmentPersistenceService {
         }
         trade.updatedAt = now
 
+        var touchedWalletIDs = originalWalletIDs
+        touchedWalletIDs.insert(systemWallet.id)
         var result = InvestmentPersistenceResult(
-            walletIDs: [systemWallet.id],
+            walletIDs: touchedWalletIDs,
             tradeIDs: [trade.id]
         )
-        let refreshedTrades = existingTrades.filter { $0.id != trade.id } + [trade]
-        let assetName = asset.name
+        var rebuilds: [(
+            asset: InvestmentAsset,
+            trades: [InvestmentTrade],
+            calculations: [UUID: InvestmentTradeCalculation]
+        )] = []
+        if let originalAsset {
+            rebuilds.append((originalAsset, originalRemainingTrades, originalCalculations))
+        }
+        rebuilds.append((
+            targetAsset,
+            targetTradesWithoutEditedTrade + [trade],
+            targetCalculations
+        ))
 
-        for storedTrade in refreshedTrades where storedTrade.deletedAt == nil {
-            guard let calculation = calculations[storedTrade.id] else { continue }
-            storedTrade.releasedCostBasisMinor = calculation.releasedCostBasisMinor
-            storedTrade.realizedProfitLossMinor = calculation.realizedProfitLossMinor
-            storedTrade.positionQuantityAfter = calculation.positionQuantityAfter
-            storedTrade.positionCostBasisAfterMinor = calculation.positionCostBasisAfterMinor
-            if storedTrade.id != trade.id {
-                storedTrade.updatedAt = now
+        let reconciledWallets = walletsByID.merging([systemWallet.id: systemWallet]) { current, _ in current }
+        for rebuild in rebuilds {
+            for rebuiltTrade in rebuild.trades where rebuiltTrade.deletedAt == nil {
+                guard let calculation = rebuild.calculations[rebuiltTrade.id] else { continue }
+                rebuiltTrade.releasedCostBasisMinor = calculation.releasedCostBasisMinor
+                rebuiltTrade.realizedProfitLossMinor = calculation.realizedProfitLossMinor
+                rebuiltTrade.positionQuantityAfter = calculation.positionQuantityAfter
+                rebuiltTrade.positionCostBasisAfterMinor = calculation.positionCostBasisAfterMinor
+                if rebuiltTrade.id != trade.id {
+                    rebuiltTrade.updatedAt = now
+                }
+
+                try reconcileLedgerLegs(
+                    ownerUserID: ownerUserID,
+                    trade: rebuiltTrade,
+                    assetName: rebuild.asset.name,
+                    systemWallet: systemWallet,
+                    walletsByID: reconciledWallets,
+                    now: now,
+                    context: context,
+                    result: &result
+                )
+                result.tradeIDs.insert(rebuiltTrade.id)
             }
-
-            try reconcileLedgerLegs(
-                ownerUserID: ownerUserID,
-                trade: storedTrade,
-                assetName: assetName,
-                systemWallet: systemWallet,
-                walletsByID: walletsByID.merging([systemWallet.id: systemWallet]) { current, _ in current },
-                now: now,
-                context: context,
-                result: &result
-            )
-            result.tradeIDs.insert(storedTrade.id)
         }
 
         try context.save()
