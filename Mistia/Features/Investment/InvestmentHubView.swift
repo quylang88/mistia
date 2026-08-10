@@ -1211,7 +1211,7 @@ private struct InvestmentTradeEditorSheet: View {
                 Picker(L10n.investment.trade.asset, selection: $assetID) {
                     ForEach(assets) { asset in Text(asset.name).tag(Optional(asset.id)) }
                 }
-                .disabled(trade != nil)
+                .disabled(trade?.kind == .sell)
                 Picker(L10n.investment.title, selection: $kind) {
                     Text(L10n.investment.hub.buy).tag(InvestmentTradeKind.buy)
                     Text(L10n.investment.hub.sell).tag(InvestmentTradeKind.sell)
@@ -1291,8 +1291,19 @@ private struct InvestmentTradeEditorSheet: View {
         let rates = MistiaCurrencySettings.rates()
         let sourceCode = MistiaCurrencyLogic.normalizedCode(currency)
         let accountingCode = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
-        let exchangeRateDecimalString = trade?.exchangeRateDecimalString
-            ?? rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates)
+        let preservesExistingCurrencyPair = trade.map {
+            MistiaCurrencyLogic.normalizedCode($0.currencyCode) == sourceCode
+                && MistiaCurrencyLogic.normalizedCode($0.accountingCurrencyCode) == accountingCode
+        } ?? false
+        let exchangeRateDecimalString = preservesExistingCurrencyPair
+            ? trade?.exchangeRateDecimalString
+            : rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates)
+        let exchangeRateProvider = preservesExistingCurrencyPair
+            ? trade?.exchangeRateProvider
+            : rateProvider(from: currency, to: accountingCurrencyCode, rates: rates)
+        let exchangeRateDate = preservesExistingCurrencyPair
+            ? trade?.exchangeRateDate
+            : rateDate(from: currency, to: accountingCurrencyCode, rates: rates)
 
         let accountingGross: Int64
         if sourceCode == accountingCode {
@@ -1325,10 +1336,8 @@ private struct InvestmentTradeEditorSheet: View {
                     accountingGrossAmountMinor: accountingGross,
                     accountingCurrencyCode: accountingCurrencyCode,
                     exchangeRateDecimalString: exchangeRateDecimalString,
-                    exchangeRateProvider: trade?.exchangeRateProvider
-                        ?? rateProvider(from: currency, to: accountingCurrencyCode, rates: rates),
-                    exchangeRateDate: trade?.exchangeRateDate
-                        ?? rateDate(from: currency, to: accountingCurrencyCode, rates: rates),
+                    exchangeRateProvider: exchangeRateProvider,
+                    exchangeRateDate: exchangeRateDate,
                     fundingWalletID: kind == .buy ? walletID : nil,
                     capitalReturnWalletID: kind == .sell ? walletID : nil,
                     note: note,
