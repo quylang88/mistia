@@ -282,7 +282,8 @@ final class MistiaBackupStoreTests: XCTestCase {
             ownerUserID: ownerUserID,
             channelID: channel.id,
             name: "Rare card",
-            currencyCode: "JPY"
+            currencyCode: "JPY",
+            imagePath: "\(ownerUserID.uuidString.lowercased())/asset/product.jpg"
         )
         let trade = InvestmentTrade(
             ownerUserID: ownerUserID,
@@ -300,15 +301,6 @@ final class MistiaBackupStoreTests: XCTestCase {
             positionQuantityAfter: 1,
             positionCostBasisAfterMinor: 50
         )
-        let valuation = InvestmentValuation(
-            ownerUserID: ownerUserID,
-            channelID: channel.id,
-            assetID: asset.id,
-            marketValueMinor: 90,
-            accountingMarketValueMinor: 90,
-            currencyCode: "JPY",
-            accountingCurrencyCode: "JPY"
-        )
         let posting = InvestmentWalletPosting(
             ownerUserID: ownerUserID,
             eventID: trade.id,
@@ -325,7 +317,6 @@ final class MistiaBackupStoreTests: XCTestCase {
         sourceContext.insert(channel)
         sourceContext.insert(asset)
         sourceContext.insert(trade)
-        sourceContext.insert(valuation)
         sourceContext.insert(posting)
         try sourceContext.save()
 
@@ -339,7 +330,6 @@ final class MistiaBackupStoreTests: XCTestCase {
         XCTAssertEqual(validation.investmentChannelCount, 1)
         XCTAssertEqual(validation.investmentAssetCount, 1)
         XCTAssertEqual(validation.investmentTradeCount, 1)
-        XCTAssertEqual(validation.investmentValuationCount, 1)
         XCTAssertEqual(validation.investmentPostingCount, 1)
 
         let targetContainer = try makeV7Container()
@@ -352,16 +342,19 @@ final class MistiaBackupStoreTests: XCTestCase {
 
         XCTAssertEqual(try fetchAll(InvestmentChannel.self, in: targetContainer).first?.name, "Pokémon")
         XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.name, "Rare card")
+        XCTAssertEqual(
+            try fetchAll(InvestmentAsset.self, in: targetContainer).first?.imagePath,
+            "\(ownerUserID.uuidString.lowercased())/asset/product.jpg"
+        )
         XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.realizedProfitLossMinor, 30)
-        XCTAssertEqual(try fetchAll(InvestmentValuation.self, in: targetContainer).first?.accountingMarketValueMinor, 90)
         XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first?.amountMinor, 30)
     }
 
     func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
         let container = try makeV7Container()
-        let schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
 
-        XCTAssertEqual(schema.entities.count, 22)
+        XCTAssertEqual(schema.entities.count, 21)
         XCTAssertEqual(try MistiaSyncLocalStore.totalObjectCount(in: container), 0)
     }
 
@@ -372,7 +365,7 @@ final class MistiaBackupStoreTests: XCTestCase {
     }
 
     private func makeV7Container() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

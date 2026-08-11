@@ -15,7 +15,6 @@ nonisolated enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable, Send
     case investmentChannel = "investment_channels"
     case investmentAsset = "investment_assets"
     case investmentTrade = "investment_trades"
-    case investmentValuation = "investment_valuations"
     case investmentPosting = "investment_wallet_postings"
 
     var tableName: String { rawValue }
@@ -36,7 +35,6 @@ nonisolated enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable, Send
         case .investmentChannel: 100
         case .investmentAsset: 110
         case .investmentTrade: 120
-        case .investmentValuation: 130
         case .investmentPosting: 140
         }
     }
@@ -232,10 +230,32 @@ nonisolated final class MistiaSyncOutbox {
             return cachedMutations
         }
 
-        let mutations = (try? decoder.decode([MistiaSyncMutation].self, from: data)) ?? []
-        cachedData = data
+        let prunedData = pruningRemovedInvestmentValuationMutations(from: data)
+        let mutations = (try? decoder.decode([MistiaSyncMutation].self, from: prunedData)) ?? []
+        if prunedData != data {
+            if mutations.isEmpty {
+                defaults.removeObject(forKey: key)
+            } else {
+                defaults.set(prunedData, forKey: key)
+            }
+        }
+        cachedData = prunedData
         cachedMutations = mutations
         return mutations
+    }
+
+    private func pruningRemovedInvestmentValuationMutations(from data: Data) -> Data {
+        guard let objects = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return data
+        }
+        let filtered = objects.filter { row in
+            (row["entity"] as? String) != "investment_valuations"
+        }
+        guard filtered.count != objects.count,
+              let result = try? JSONSerialization.data(withJSONObject: filtered) else {
+            return data
+        }
+        return result
     }
 
     private func save(_ mutations: [MistiaSyncMutation]) {

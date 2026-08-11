@@ -102,14 +102,67 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
 }
 
 enum InvestmentPersistenceService {
+    private struct RebuildAsset {
+        let id: UUID
+        let ownerUserID: UUID
+        let name: String
+    }
+
+    static func rebuildDerivedAccountingForV8(
+        now: Date = .now,
+        context: ModelContext
+    ) throws {
+        let assets = try context.fetch(FetchDescriptor<MistiaSchemaV8.InvestmentAsset>())
+            .filter { $0.deletedAt == nil }
+            .map { RebuildAsset(id: $0.id, ownerUserID: $0.ownerUserID, name: $0.name) }
+        try rebuildDerivedAccounting(
+            assets: assets,
+            now: now,
+            scrubLegacyConflicts: true,
+            context: context
+        )
+    }
+
+    static func rebuildDerivedAccountingForFIFO(
+        now: Date = .now,
+        context: ModelContext
+    ) throws {
+        try rebuildDerivedAccounting(now: now, scrubLegacyConflicts: true, context: context)
+    }
+
     static func rebuildDerivedAccountingAfterLegacyFieldRemoval(
         now: Date = .now,
         context: ModelContext
     ) throws {
-        try scrubLegacyInvestmentFieldsFromSyncConflicts(context: context)
+        try rebuildDerivedAccounting(now: now, scrubLegacyConflicts: true, context: context)
+    }
 
+    private static func rebuildDerivedAccounting(
+        now: Date,
+        scrubLegacyConflicts: Bool,
+        context: ModelContext
+    ) throws {
         let assets = try context.fetch(FetchDescriptor<InvestmentAsset>())
             .filter { $0.deletedAt == nil }
+            .map { RebuildAsset(id: $0.id, ownerUserID: $0.ownerUserID, name: $0.name) }
+        try rebuildDerivedAccounting(
+            assets: assets,
+            now: now,
+            scrubLegacyConflicts: scrubLegacyConflicts,
+            context: context
+        )
+    }
+
+    private static func rebuildDerivedAccounting(
+        assets: [RebuildAsset],
+        now: Date,
+        scrubLegacyConflicts: Bool,
+        context: ModelContext
+    ) throws {
+        if scrubLegacyConflicts {
+            try scrubLegacyInvestmentFieldsFromSyncConflicts(context: context)
+        }
+
         let activeTrades = try context.fetch(FetchDescriptor<InvestmentTrade>())
             .filter { $0.deletedAt == nil }
         let tradesByAssetID = Dictionary(grouping: activeTrades, by: \InvestmentTrade.assetID)
@@ -170,6 +223,10 @@ enum InvestmentPersistenceService {
     ) throws {
         let conflicts = try context.fetch(FetchDescriptor<SyncConflict>())
         for conflict in conflicts {
+            if conflict.entityRawValue == "investment_valuations" {
+                context.delete(conflict)
+                continue
+            }
             let removedKeys: Set<String>
             switch conflict.entityRawValue {
             case MistiaSyncEntity.investmentAsset.rawValue:
@@ -320,10 +377,12 @@ enum InvestmentPersistenceService {
     }
 
     static func createAsset(
+        id: UUID = UUID(),
         ownerUserID: UUID,
         channelID: UUID,
         name: String,
         currencyCode: String,
+        imagePath: String? = nil,
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentAsset {
@@ -348,10 +407,12 @@ enum InvestmentPersistenceService {
             )
         )
         let asset = InvestmentAsset(
+            id: id,
             ownerUserID: ownerUserID,
             channelID: channelID,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             currencyCode: MistiaCurrencyLogic.normalizedCode(currencyCode),
+            imagePath: imagePath,
             sortOrder: assets.count,
             createdAt: now,
             updatedAt: now
@@ -1451,9 +1512,6 @@ enum InvestmentPrivacyCacheService {
         )
         let investmentWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
 
-        try context.fetch(FetchDescriptor<InvestmentValuation>())
-            .filter { $0.ownerUserID == ownerUserID }
-            .forEach(context.delete)
         postings.forEach(context.delete)
         try context.fetch(FetchDescriptor<InvestmentTrade>())
             .filter { $0.ownerUserID == ownerUserID }

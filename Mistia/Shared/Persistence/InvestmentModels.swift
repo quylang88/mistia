@@ -110,6 +110,7 @@ nonisolated final class InvestmentChannel: Identifiable, Hashable {
     }
 }
 
+enum MistiaSchemaV9InvestmentModels {
 @Model
 nonisolated final class InvestmentAsset: Identifiable, Hashable {
     static func == (lhs: InvestmentAsset, rhs: InvestmentAsset) -> Bool {
@@ -125,6 +126,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
     var channelID: UUID
     var name: String
     var currencyCode: String
+    var imagePath: String?
     var sortOrder: Int
     var isArchived: Bool
     var archivedAt: Date?
@@ -139,6 +141,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
         channelID: UUID,
         name: String,
         currencyCode: String,
+        imagePath: String? = nil,
         sortOrder: Int = 0,
         isArchived: Bool = false,
         archivedAt: Date? = nil,
@@ -152,6 +155,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
         self.channelID = channelID
         self.name = name
         self.currencyCode = currencyCode
+        self.imagePath = imagePath
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.archivedAt = archivedAt
@@ -162,6 +166,10 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
     }
 
 }
+
+}
+
+typealias InvestmentAsset = MistiaSchemaV9InvestmentModels.InvestmentAsset
 
 @Model
 nonisolated final class InvestmentTrade: Identifiable, Hashable {
@@ -296,6 +304,7 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
     }
 }
 
+// Kept only so V7/V8 stores can migrate into V9. It is not part of the current schema.
 @Model
 nonisolated final class InvestmentValuation: Identifiable, Hashable {
     static func == (lhs: InvestmentValuation, rhs: InvestmentValuation) -> Bool {

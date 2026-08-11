@@ -33,7 +33,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) throws {
-            self.schema = Schema(versionedSchema: MistiaSchemaV8.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV9.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
 
@@ -54,7 +54,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) {
-            self.schema = Schema(versionedSchema: MistiaSchemaV8.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV9.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
             self.modelContainer = fallbackContainer
@@ -546,7 +546,9 @@ enum MistiaDataStack {
                 try migrateLegacyStoreToV5(at: storeURL)
             }
 
-            if storeVersionIdentifiers(at: storeURL)?.contains("7.0.0") == true {
+            let versionIdentifiers = storeVersionIdentifiers(at: storeURL)
+            if versionIdentifiers?.contains("7.0.0") == true
+                || versionIdentifiers?.contains("8.0.0") == true {
                 return try ModelContainer(
                     for: schema,
                     migrationPlan: MistiaMigrationPlan.self,
@@ -602,7 +604,7 @@ enum MistiaDataStack {
         do {
             return try LaunchState()
         } catch {
-            let schema = Schema(versionedSchema: MistiaSchemaV8.self)
+            let schema = Schema(versionedSchema: MistiaSchemaV9.self)
             let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let fallbackContainer = try! ModelContainer(
                 for: schema,

@@ -105,6 +105,16 @@ values
         '30000000-0000-4000-8000-000000000105',
         '30000000-0000-4000-8000-000000000001',
         'Second capital return', 'bank', 'building.columns.fill', '#555555', 'JPY', 0
+    ),
+    (
+        '30000000-0000-4000-8000-000000000106',
+        '30000000-0000-4000-8000-000000000001',
+        'FIFO funding', 'cash', 'banknote.fill', '#666666', 'JPY', 1000
+    ),
+    (
+        '30000000-0000-4000-8000-000000000107',
+        '30000000-0000-4000-8000-000000000001',
+        'FIFO capital return', 'bank', 'building.columns.fill', '#777777', 'JPY', 0
     );
 
 insert into public.investment_channels(
@@ -137,6 +147,12 @@ values
         '30000000-0000-4000-8000-000000000001',
         '30000000-0000-4000-8000-000000000202',
         'Card B', 'JPY'
+    ),
+    (
+        '30000000-0000-4000-8000-000000000303',
+        '30000000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000201',
+        'FIFO card', 'JPY'
     );
 
 select hasnt_column('public', 'investment_assets', 'symbol', 'asset symbol is removed');
@@ -144,6 +160,53 @@ select hasnt_column('public', 'investment_assets', 'opening_quantity_decimal_str
 select hasnt_column('public', 'investment_assets', 'opening_cost_minor', 'asset opening capital is removed');
 select hasnt_column('public', 'investment_trades', 'fee_minor', 'trade fee is removed');
 select hasnt_column('public', 'investment_trades', 'accounting_fee_minor', 'accounting fee is removed');
+select has_column('public', 'investment_assets', 'image_path', 'product image object path is stored on the asset');
+select hasnt_table('public', 'investment_valuations', 'manual investment valuations are removed');
+select is(
+    (
+        select count(*)::bigint
+        from information_schema.tables
+        where table_schema = 'public'
+          and table_name in (
+              'investment_channels',
+              'investment_assets',
+              'investment_trades',
+              'investment_wallet_postings'
+          )
+    ),
+    4::bigint,
+    'exactly four Investment domain tables remain'
+);
+select is(
+    (select public from storage.buckets where id = 'investment-product-images'),
+    false,
+    'product image bucket is private'
+);
+
+set local role authenticated;
+select lives_ok(
+    $$
+    insert into storage.objects(bucket_id, name, owner_id)
+    values (
+        'investment-product-images',
+        '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000801.jpg',
+        '30000000-0000-4000-8000-000000000001'
+    )
+    $$,
+    'Investment owner can upload a private product image'
+);
+select is(
+    (
+        select count(*)::bigint
+        from storage.objects
+        where bucket_id = 'investment-product-images'
+          and name = '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000801.jpg'
+    ),
+    1::bigint,
+    'Investment owner can read the private product image'
+);
+reset role;
+select pg_temp.set_actor('30000000-0000-4000-8000-000000000001');
 
 select is(
     (select name from public.ledger_wallets where system_purpose_raw_value = 'investmentProfit'),
@@ -236,7 +299,95 @@ select is(
         where id = '30000000-0000-4000-8000-000000000402'
     ),
     30::bigint,
-    'weighted-average accounting realizes the expected profit'
+    'FIFO accounting realizes the expected profit'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000410',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000303',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '2',
+            'gross_amount_minor', 200,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 200,
+            'accounting_currency_code', 'JPY',
+            'funding_wallet_id', '30000000-0000-4000-8000-000000000106',
+            'occurred_at', '2026-08-09T00:10:00Z',
+            'created_at', '2026-08-09T00:10:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ), null, false
+    )
+    $$,
+    'FIFO first purchase lot is accepted'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000411',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000303',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '1',
+            'gross_amount_minor', 150,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 150,
+            'accounting_currency_code', 'JPY',
+            'funding_wallet_id', '30000000-0000-4000-8000-000000000106',
+            'occurred_at', '2026-08-09T00:10:01Z',
+            'created_at', '2026-08-09T00:10:01Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ), null, false
+    )
+    $$,
+    'FIFO second purchase lot is accepted'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000412',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000303',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '1',
+            'gross_amount_minor', 160,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 160,
+            'accounting_currency_code', 'JPY',
+            'capital_return_wallet_id', '30000000-0000-4000-8000-000000000107',
+            'occurred_at', '2026-08-09T00:10:02Z',
+            'created_at', '2026-08-09T00:10:02Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ), null, false
+    )
+    $$,
+    'FIFO sale is accepted across differently priced lots'
+);
+
+select is(
+    (select released_cost_basis_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000412'),
+    100::bigint,
+    'FIFO sale releases the oldest purchase cost'
+);
+select is(
+    (select realized_profit_loss_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000412'),
+    60::bigint,
+    'FIFO sale realizes profit against the oldest purchase cost'
+);
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000412'),
+    250::bigint,
+    'FIFO preserves the remaining cost of the partially consumed and newer lots'
 );
 
 select is(
@@ -677,7 +828,7 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    140::bigint,
+    200::bigint,
     'Investment Wallet reflects profit after moving the sale'
 );
 select is(
@@ -809,7 +960,7 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    30::bigint,
+    90::bigint,
     'deleting the sale restores Investment Wallet profit'
 );
 select is(
@@ -871,6 +1022,20 @@ select ok(
     not public.has_investment_permission('30000000-0000-4000-8000-000000000001', 'view'),
     'family owner role alone cannot view another member investment data'
 );
+
+set local role authenticated;
+select is(
+    (
+        select count(*)::bigint
+        from storage.objects
+        where bucket_id = 'investment-product-images'
+          and name = '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000801.jpg'
+    ),
+    0::bigint,
+    'member without Investment View cannot read a private product image'
+);
+reset role;
+select pg_temp.set_actor('30000000-0000-4000-8000-000000000002');
 
 create temp table mistia_investment_view_request as
 select id
@@ -936,6 +1101,53 @@ select ok(
 select ok(
     not public.has_investment_permission('30000000-0000-4000-8000-000000000001', 'edit'),
     'Edit is not implied by View or Create'
+);
+
+set local role authenticated;
+select is(
+    (
+        select count(*)::bigint
+        from storage.objects
+        where bucket_id = 'investment-product-images'
+          and name = '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000801.jpg'
+    ),
+    1::bigint,
+    'member with Investment View can read a private product image'
+);
+select lives_ok(
+    $$
+    insert into storage.objects(bucket_id, name, owner_id)
+    values (
+        'investment-product-images',
+        '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000802.jpg',
+        '30000000-0000-4000-8000-000000000002'
+    )
+    $$,
+    'member with Investment Create can upload a product image for the owner'
+);
+update storage.objects
+set user_metadata = '{"attempted":"overwrite"}'::jsonb
+where bucket_id = 'investment-product-images'
+  and name = '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000801.jpg';
+select is(
+    (
+        select user_metadata
+        from storage.objects
+        where bucket_id = 'investment-product-images'
+          and name = '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000301/30000000-0000-4000-8000-000000000801.jpg'
+    ),
+    null::jsonb,
+    'member without Investment Edit cannot replace a product image'
+);
+select ok(
+    (
+        select qual like '%has_investment_permission%''edit''%'
+        from pg_policies
+        where schemaname = 'storage'
+          and tablename = 'objects'
+          and policyname = 'investment_product_images_delete'
+    ),
+    'private product image deletion policy requires Investment Edit'
 );
 
 reset role;

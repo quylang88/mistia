@@ -34,7 +34,7 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, -30)
     }
 
-    func testWeightedAveragePartialSaleUsesGrossOrderAmounts() throws {
+    func testFIFOPartialSaleConsumesOldestLotFirst() throws {
         let sellID = UUID()
         let start = Date(timeIntervalSince1970: 3_000)
         let calculations = try InvestmentAccountingEngine.calculationMap(
@@ -45,10 +45,10 @@ final class InvestmentLogicTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 117)
-        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 43)
+        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 100)
+        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 60)
         XCTAssertEqual(calculations[sellID]?.positionQuantityAfter, 2)
-        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 233)
+        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 250)
     }
 
     func testBackdatedTradeRecalculatesLaterSale() throws {
@@ -63,9 +63,9 @@ final class InvestmentLogicTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 150)
-        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 30)
-        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 150)
+        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 100)
+        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 80)
+        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 200)
     }
 
     func testOversellRejectsEntireRecalculation() {
@@ -81,52 +81,40 @@ final class InvestmentLogicTests: XCTestCase {
         }
     }
 
-    func testPositionAverageUnitCostUsesRemainingCostBasisAndQuantity() {
-        let position = InvestmentAssetPositionSnapshot(
-            id: UUID(),
-            channelID: UUID(),
-            quantity: 3,
-            remainingCostBasisMinor: 120,
-            marketValueMinor: nil
-        )
-
-        XCTAssertEqual(position.averageUnitCostMinor, 40)
-    }
-
-    func testWeightedAverageUnitCostSurvivesPartialSale() throws {
+    func testFIFOSaleAcrossLotsUsesOldestCosts() throws {
         let sellID = UUID()
         let start = Date(timeIntervalSince1970: 4_500)
         let calculations = try InvestmentAccountingEngine.calculationMap(
             trades: [
-                trade(kind: .buy, quantity: 2, gross: 100, occurredAt: start),
-                trade(kind: .buy, quantity: 1, gross: 80, occurredAt: start.addingTimeInterval(1)),
-                trade(id: sellID, kind: .sell, quantity: 1, gross: 90, occurredAt: start.addingTimeInterval(2))
+                trade(kind: .buy, quantity: 10, gross: 1_000, occurredAt: start),
+                trade(kind: .buy, quantity: 10, gross: 2_000, occurredAt: start.addingTimeInterval(1)),
+                trade(id: sellID, kind: .sell, quantity: 12, gross: 1_800, occurredAt: start.addingTimeInterval(2))
             ]
         )
         let remaining = try XCTUnwrap(calculations[sellID])
-        let position = InvestmentAssetPositionSnapshot(
-            id: UUID(),
-            channelID: UUID(),
-            quantity: remaining.positionQuantityAfter,
-            remainingCostBasisMinor: remaining.positionCostBasisAfterMinor,
-            marketValueMinor: nil
-        )
 
-        XCTAssertEqual(remaining.positionQuantityAfter, 2)
-        XCTAssertEqual(remaining.positionCostBasisAfterMinor, 120)
-        XCTAssertEqual(position.averageUnitCostMinor, 60)
+        XCTAssertEqual(remaining.releasedCostBasisMinor, 1_400)
+        XCTAssertEqual(remaining.realizedProfitLossMinor, 400)
+        XCTAssertEqual(remaining.positionQuantityAfter, 8)
+        XCTAssertEqual(remaining.positionCostBasisAfterMinor, 1_600)
     }
 
-    func testZeroQuantityHasNoAverageUnitCost() {
-        let position = InvestmentAssetPositionSnapshot(
-            id: UUID(),
-            channelID: UUID(),
-            quantity: 0,
-            remainingCostBasisMinor: 0,
-            marketValueMinor: nil
+    func testFIFOPartialLotRoundingPreservesTotalCost() throws {
+        let firstSellID = UUID()
+        let finalSellID = UUID()
+        let start = Date(timeIntervalSince1970: 4_600)
+        let calculations = try InvestmentAccountingEngine.calculationMap(
+            trades: [
+                trade(kind: .buy, quantity: 3, gross: 100, occurredAt: start),
+                trade(id: firstSellID, kind: .sell, quantity: 1, gross: 50, occurredAt: start.addingTimeInterval(1)),
+                trade(id: finalSellID, kind: .sell, quantity: 2, gross: 100, occurredAt: start.addingTimeInterval(2))
+            ]
         )
 
-        XCTAssertNil(position.averageUnitCostMinor)
+        XCTAssertEqual(calculations[firstSellID]?.releasedCostBasisMinor, 33)
+        XCTAssertEqual(calculations[firstSellID]?.positionCostBasisAfterMinor, 67)
+        XCTAssertEqual(calculations[finalSellID]?.releasedCostBasisMinor, 67)
+        XCTAssertEqual(calculations[finalSellID]?.positionCostBasisAfterMinor, 0)
     }
 
     func testInvestmentMonthIntervalUsesSelectedMonth() throws {
@@ -170,7 +158,31 @@ final class InvestmentLogicTests: XCTestCase {
         )
     }
 
-    func testSummaryFallsBackToCostBasisWithoutValuation() {
+    func testProductSearchMatchesNameOrChannelWithoutVietnameseDiacritics() {
+        XCTAssertTrue(
+            InvestmentAssetSearchLogic.matches(
+                productName: "Thẻ hiếm",
+                channelName: "Đồ sưu tầm",
+                query: "the hiem"
+            )
+        )
+        XCTAssertTrue(
+            InvestmentAssetSearchLogic.matches(
+                productName: "Card A",
+                channelName: "Đồ sưu tầm",
+                query: "do suu"
+            )
+        )
+        XCTAssertFalse(
+            InvestmentAssetSearchLogic.matches(
+                productName: "Card A",
+                channelName: "Pokémon",
+                query: "figure"
+            )
+        )
+    }
+
+    func testSummaryContainsOnlyRemainingInventoryCostAndRealizedProfit() {
         let tradeID = UUID()
         let date = Date(timeIntervalSince1970: 5_000)
         let summary = InvestmentSummaryLogic.summary(
@@ -180,7 +192,7 @@ final class InvestmentLogicTests: XCTestCase {
                     channelID: UUID(),
                     quantity: 1,
                     remainingCostBasisMinor: 100,
-                    marketValueMinor: nil
+                    openLotCount: 1
                 )
             ],
             trades: [
@@ -189,7 +201,8 @@ final class InvestmentLogicTests: XCTestCase {
                     releasedCostBasisMinor: 50,
                     realizedProfitLossMinor: 20,
                     positionQuantityAfter: 1,
-                    positionCostBasisAfterMinor: 100
+                    positionCostBasisAfterMinor: 100,
+                    openLotCountAfter: 1
                 )
             ],
             tradeDates: [tradeID: date],
@@ -197,9 +210,7 @@ final class InvestmentLogicTests: XCTestCase {
             investmentWalletBalanceMinor: -30
         )
 
-        XCTAssertEqual(summary.investedCapitalMinor, 100)
-        XCTAssertEqual(summary.marketValueMinor, 100)
-        XCTAssertEqual(summary.unrealizedProfitLossMinor, 0)
+        XCTAssertEqual(summary.remainingInventoryCostMinor, 100)
         XCTAssertEqual(summary.realizedProfitLossMinor, 20)
         XCTAssertEqual(summary.investmentWalletBalanceMinor, -30)
     }

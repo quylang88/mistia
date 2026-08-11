@@ -63,10 +63,6 @@ nonisolated enum MistiaSyncLocalStore {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
-    nonisolated private static func latestInvestmentValuation(_ lhs: InvestmentValuation, _ rhs: InvestmentValuation) -> InvestmentValuation {
-        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-    }
-
     nonisolated private static func latestInvestmentPosting(_ lhs: InvestmentWalletPosting, _ rhs: InvestmentWalletPosting) -> InvestmentWalletPosting {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
@@ -100,7 +96,6 @@ nonisolated enum MistiaSyncLocalStore {
             + fetchInvestmentChannels(context).count
             + fetchInvestmentAssets(context).count
             + fetchInvestmentTrades(context).count
-            + fetchInvestmentValuations(context).count
             + fetchInvestmentPostings(context).count
     }
 
@@ -149,9 +144,6 @@ nonisolated enum MistiaSyncLocalStore {
         if try fetchActiveInvestmentTrade(context) != nil {
             return true
         }
-        if try fetchActiveInvestmentValuation(context) != nil {
-            return true
-        }
         if try fetchActiveInvestmentPosting(context) != nil {
             return true
         }
@@ -187,10 +179,6 @@ nonisolated enum MistiaSyncLocalStore {
                 trade.fundingWalletID = newInvestmentWalletID
             }
             trade.updatedAt = .now
-        }
-        for valuation in try fetchInvestmentValuations(context) where valuation.ownerUserID == previousOwnerUserID {
-            valuation.ownerUserID = newOwnerUserID
-            valuation.updatedAt = .now
         }
         for posting in try fetchInvestmentPostings(context) where posting.ownerUserID == previousOwnerUserID {
             posting.ownerUserID = newOwnerUserID
@@ -298,7 +286,6 @@ nonisolated enum MistiaSyncLocalStore {
         let investmentChannels = try fetchInvestmentChannels(context).filter { $0.ownerUserID == userID }
         let investmentAssets = try fetchInvestmentAssets(context).filter { $0.ownerUserID == userID }
         let investmentTrades = try fetchInvestmentTrades(context).filter { $0.ownerUserID == userID }
-        let investmentValuations = try fetchInvestmentValuations(context).filter { $0.ownerUserID == userID }
         let investmentPostings = try fetchInvestmentPostings(context).filter { $0.ownerUserID == userID }
 
         return MistiaRemoteSnapshot(
@@ -328,7 +315,6 @@ nonisolated enum MistiaSyncLocalStore {
             investmentChannels: investmentChannels.map(RemoteInvestmentChannel.init(local:)),
             investmentAssets: investmentAssets.map(RemoteInvestmentAsset.init(local:)),
             investmentTrades: investmentTrades.map(RemoteInvestmentTrade.init(local:)),
-            investmentValuations: investmentValuations.map(RemoteInvestmentValuation.init(local:)),
             investmentPostings: investmentPostings.map(RemoteInvestmentWalletPosting.init(local:))
         )
     }
@@ -441,10 +427,6 @@ nonisolated enum MistiaSyncLocalStore {
         case .investmentTrade:
             return try fetchInvestmentTrade(id: mutation.recordID, context).map {
                 .investmentTrade(RemoteInvestmentTrade(local: $0))
-            }
-        case .investmentValuation:
-            return try fetchInvestmentValuation(id: mutation.recordID, context).map {
-                .investmentValuation(RemoteInvestmentValuation(local: $0))
             }
         case .investmentPosting:
             return nil
@@ -573,8 +555,6 @@ nonisolated enum MistiaSyncLocalStore {
             return try fetchInvestmentAsset(id: recordID, context)?.remoteVersion ?? 0
         case .investmentTrade:
             return try fetchInvestmentTrade(id: recordID, context)?.remoteVersion ?? 0
-        case .investmentValuation:
-            return try fetchInvestmentValuation(id: recordID, context)?.remoteVersion ?? 0
         case .investmentPosting:
             return try fetchInvestmentPosting(id: recordID, context)?.remoteVersion ?? 0
         }
@@ -597,7 +577,6 @@ nonisolated enum MistiaSyncLocalStore {
         try fetchInvestmentChannels(context).forEach { $0.remoteVersion = 0 }
         try fetchInvestmentAssets(context).forEach { $0.remoteVersion = 0 }
         try fetchInvestmentTrades(context).forEach { $0.remoteVersion = 0 }
-        try fetchInvestmentValuations(context).forEach { $0.remoteVersion = 0 }
         try fetchInvestmentPostings(context).forEach { $0.remoteVersion = 0 }
 
         try fetchConflicts(context).forEach { context.delete($0) }
@@ -670,7 +649,6 @@ nonisolated enum MistiaSyncLocalStore {
         let investmentChannels = try fetchInvestmentChannels(context)
         let investmentAssets = try fetchInvestmentAssets(context)
         let investmentTrades = try fetchInvestmentTrades(context)
-        let investmentValuations = try fetchInvestmentValuations(context)
         let investmentPostings = try fetchInvestmentPostings(context)
         var walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
         var categoryByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: latestCategory)
@@ -686,7 +664,6 @@ nonisolated enum MistiaSyncLocalStore {
         var investmentChannelByID = Dictionary(investmentChannels.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentChannel)
         var investmentAssetByID = Dictionary(investmentAssets.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentAsset)
         var investmentTradeByID = Dictionary(investmentTrades.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentTrade)
-        var investmentValuationByID = Dictionary(investmentValuations.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentValuation)
         var investmentPostingByID = Dictionary(investmentPostings.map { ($0.id, $0) }, uniquingKeysWith: latestInvestmentPosting)
 
         for row in snapshot.wallets {
@@ -878,17 +855,6 @@ nonisolated enum MistiaSyncLocalStore {
             upsertInvestmentTrade(row, context: context, tradeByID: &investmentTradeByID)
         }
 
-        for row in snapshot.investmentValuations {
-            guard shouldApplyRemoteRow(
-                row,
-                entity: .investmentValuation,
-                existing: investmentValuationByID[row.id],
-                protectedRecordIDs: protectedRecordIDs,
-                preserveLocalNewerRows: preserveLocalNewerRows
-            ) else { continue }
-            upsertInvestmentValuation(row, context: context, valuationByID: &investmentValuationByID)
-        }
-
         for row in snapshot.investmentPostings {
             guard shouldApplyRemoteRow(
                 row,
@@ -982,12 +948,6 @@ nonisolated enum MistiaSyncLocalStore {
             pruneRecordsMissingFromRemote(
                 existing: investmentTrades,
                 remoteIDs: Set(snapshot.investmentTrades.map(\.id)),
-                protectedRecordIDs: protectedRecordIDs,
-                context: context
-            )
-            pruneRecordsMissingFromRemote(
-                existing: investmentValuations,
-                remoteIDs: Set(snapshot.investmentValuations.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
                 context: context
             )
@@ -1131,12 +1091,6 @@ nonisolated enum MistiaSyncLocalStore {
                 uniquingKeysWith: latestInvestmentTrade
             )
             upsertInvestmentTrade(row, context: context, tradeByID: &recordsByID)
-        case .investmentValuation(let row):
-            var recordsByID = Dictionary(
-                try fetchInvestmentValuations(context).map { ($0.id, $0) },
-                uniquingKeysWith: latestInvestmentValuation
-            )
-            upsertInvestmentValuation(row, context: context, valuationByID: &recordsByID)
         case .investmentPosting(let row):
             var recordsByID = Dictionary(
                 try fetchInvestmentPostings(context).map { ($0.id, $0) },
@@ -1190,7 +1144,6 @@ nonisolated enum MistiaSyncLocalStore {
             investmentChannels: snapshot.investmentChannels,
             investmentAssets: snapshot.investmentAssets,
             investmentTrades: snapshot.investmentTrades,
-            investmentValuations: snapshot.investmentValuations,
             investmentPostings: snapshot.investmentPostings
         )
 
@@ -1504,7 +1457,6 @@ nonisolated enum MistiaSyncLocalStore {
         let investmentChannels = try fetchInvestmentChannels(context).filter { $0.deletedAt == nil }
         let investmentAssets = try fetchInvestmentAssets(context).filter { $0.deletedAt == nil }
         let investmentTrades = try fetchInvestmentTrades(context).filter { $0.deletedAt == nil }
-        let investmentValuations = try fetchInvestmentValuations(context).filter { $0.deletedAt == nil }
         let investmentPostings = try fetchInvestmentPostings(context).filter { $0.deletedAt == nil }
         let userProfiles = try context.fetch(FetchDescriptor<UserAccountProfile>())
 
@@ -1606,7 +1558,6 @@ nonisolated enum MistiaSyncLocalStore {
             investmentChannels: investmentChannels.map(RemoteInvestmentChannel.init(local:)),
             investmentAssets: investmentAssets.map(RemoteInvestmentAsset.init(local:)),
             investmentTrades: investmentTrades.map(RemoteInvestmentTrade.init(local:)),
-            investmentValuations: investmentValuations.map(RemoteInvestmentValuation.init(local:)),
             investmentPostings: investmentPostings.map(RemoteInvestmentWalletPosting.init(local:))
         )
 
@@ -1625,7 +1576,6 @@ nonisolated enum MistiaSyncLocalStore {
             .investmentChannel: Set(snapshot.investmentChannels.map(\.id)),
             .investmentAsset: Set(snapshot.investmentAssets.map(\.id)),
             .investmentTrade: Set(snapshot.investmentTrades.map(\.id)),
-            .investmentValuation: Set(snapshot.investmentValuations.map(\.id)),
             .investmentPosting: Set(snapshot.investmentPostings.map(\.id))
         ]
 
@@ -1718,10 +1668,6 @@ nonisolated enum MistiaSyncLocalStore {
         }
 
         for record in try fetchInvestmentPostings(context) {
-            context.delete(record)
-        }
-
-        for record in try fetchInvestmentValuations(context) {
             context.delete(record)
         }
 
@@ -3001,6 +2947,7 @@ nonisolated enum MistiaSyncLocalStore {
         asset.channelID = row.channelID
         asset.name = row.name
         asset.currencyCode = row.currencyCode
+        asset.imagePath = row.imagePath
         asset.sortOrder = row.sortOrder
         asset.isArchived = row.isArchived
         asset.archivedAt = row.archivedAt
@@ -3064,40 +3011,6 @@ nonisolated enum MistiaSyncLocalStore {
         trade.updatedAt = row.updatedAt
         trade.deletedAt = row.deletedAt
         trade.remoteVersion = row.syncVersion
-    }
-
-    private static func upsertInvestmentValuation(
-        _ row: RemoteInvestmentValuation,
-        context: ModelContext,
-        valuationByID: inout [UUID: InvestmentValuation]
-    ) {
-        let valuation = valuationByID[row.id] ?? InvestmentValuation(
-            id: row.id,
-            ownerUserID: row.userID,
-            channelID: row.channelID,
-            assetID: row.assetID,
-            marketValueMinor: row.marketValueMinor,
-            accountingMarketValueMinor: row.accountingMarketValueMinor,
-            currencyCode: row.currencyCode,
-            accountingCurrencyCode: row.accountingCurrencyCode
-        )
-        if valuationByID[row.id] == nil {
-            context.insert(valuation)
-            valuationByID[row.id] = valuation
-        }
-        valuation.ownerUserID = row.userID
-        valuation.channelID = row.channelID
-        valuation.assetID = row.assetID
-        valuation.marketValueMinor = row.marketValueMinor
-        valuation.accountingMarketValueMinor = row.accountingMarketValueMinor
-        valuation.currencyCode = row.currencyCode
-        valuation.accountingCurrencyCode = row.accountingCurrencyCode
-        valuation.exchangeRateDecimalString = row.exchangeRateDecimalString
-        valuation.valuedAt = row.valuedAt
-        valuation.createdAt = row.createdAt
-        valuation.updatedAt = row.updatedAt
-        valuation.deletedAt = row.deletedAt
-        valuation.remoteVersion = row.syncVersion
     }
 
     private static func upsertInvestmentPosting(
@@ -3514,24 +3427,6 @@ nonisolated enum MistiaSyncLocalStore {
 
     private static func fetchInvestmentTrades(_ context: ModelContext) throws -> [InvestmentTrade] {
         try context.fetch(FetchDescriptor<InvestmentTrade>())
-    }
-
-    private static func fetchInvestmentValuation(id: UUID, _ context: ModelContext) throws -> InvestmentValuation? {
-        try fetchFirst(
-            FetchDescriptor<InvestmentValuation>(predicate: #Predicate { $0.id == id }),
-            context: context
-        )
-    }
-
-    private static func fetchActiveInvestmentValuation(_ context: ModelContext) throws -> InvestmentValuation? {
-        try fetchFirst(
-            FetchDescriptor<InvestmentValuation>(predicate: #Predicate { $0.deletedAt == nil }),
-            context: context
-        )
-    }
-
-    private static func fetchInvestmentValuations(_ context: ModelContext) throws -> [InvestmentValuation] {
-        try context.fetch(FetchDescriptor<InvestmentValuation>())
     }
 
     private static func fetchInvestmentPosting(id: UUID, _ context: ModelContext) throws -> InvestmentWalletPosting? {
@@ -4037,7 +3932,6 @@ struct MistiaBackupValidationSummary {
     let investmentChannelCount: Int
     let investmentAssetCount: Int
     let investmentTradeCount: Int
-    let investmentValuationCount: Int
     let investmentPostingCount: Int
     let userProfileCount: Int
     let ownershipScopeCount: Int
@@ -4059,7 +3953,6 @@ struct MistiaBackupValidationSummary {
             + investmentChannelCount
             + investmentAssetCount
             + investmentTradeCount
-            + investmentValuationCount
             + investmentPostingCount
     }
 }
@@ -4308,7 +4201,6 @@ private extension MistiaBackupValidationSummary {
             investmentChannelCount: envelope.snapshot.investmentChannels.count,
             investmentAssetCount: envelope.snapshot.investmentAssets.count,
             investmentTradeCount: envelope.snapshot.investmentTrades.count,
-            investmentValuationCount: envelope.snapshot.investmentValuations.count,
             investmentPostingCount: envelope.snapshot.investmentPostings.count,
             userProfileCount: envelope.userProfiles.count,
             ownershipScopeCount: envelope.ownershipScopes.count,

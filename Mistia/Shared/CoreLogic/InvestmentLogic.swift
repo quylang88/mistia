@@ -69,6 +69,7 @@ nonisolated struct InvestmentTradeCalculation: Equatable, Identifiable {
     let realizedProfitLossMinor: Int64
     let positionQuantityAfter: Decimal
     let positionCostBasisAfterMinor: Int64
+    let openLotCountAfter: Int
 }
 
 nonisolated enum InvestmentAccountingError: Error, Equatable {
@@ -79,11 +80,18 @@ nonisolated enum InvestmentAccountingError: Error, Equatable {
 }
 
 nonisolated enum InvestmentAccountingEngine {
+    private struct OpenLot {
+        var quantity: Decimal
+        var costBasisMinor: Int64
+    }
+
     static func recalculate(
         trades: [InvestmentTradeInput]
     ) throws -> [InvestmentTradeCalculation] {
         var positionQuantity: Decimal = 0
         var positionCostBasisMinor: Int64 = 0
+        var openLots: [OpenLot] = []
+        var firstOpenLotIndex = 0
         var output: [InvestmentTradeCalculation] = []
         output.reserveCapacity(trades.count)
 
@@ -104,13 +112,20 @@ nonisolated enum InvestmentAccountingEngine {
 
                 positionQuantity += trade.quantity
                 positionCostBasisMinor = nextCost
+                openLots.append(
+                    OpenLot(
+                        quantity: trade.quantity,
+                        costBasisMinor: trade.accountingGrossAmountMinor
+                    )
+                )
                 output.append(
                     InvestmentTradeCalculation(
                         id: trade.id,
                         releasedCostBasisMinor: 0,
                         realizedProfitLossMinor: 0,
                         positionQuantityAfter: positionQuantity,
-                        positionCostBasisAfterMinor: positionCostBasisMinor
+                        positionCostBasisAfterMinor: positionCostBasisMinor,
+                        openLotCountAfter: openLots.count - firstOpenLotIndex
                     )
                 )
 
@@ -119,15 +134,43 @@ nonisolated enum InvestmentAccountingEngine {
                     throw InvestmentAccountingError.insufficientPosition
                 }
 
-                let releasedCostBasisMinor: Int64
-                if positionQuantity == trade.quantity {
-                    releasedCostBasisMinor = positionCostBasisMinor
-                } else {
-                    releasedCostBasisMinor = try proportionalMinor(
-                        totalMinor: positionCostBasisMinor,
-                        numerator: trade.quantity,
-                        denominator: positionQuantity
+                var quantityToRelease = trade.quantity
+                var releasedCostBasisMinor: Int64 = 0
+
+                while quantityToRelease > 0 {
+                    guard firstOpenLotIndex < openLots.count else {
+                        throw InvestmentAccountingError.insufficientPosition
+                    }
+
+                    var lot = openLots[firstOpenLotIndex]
+                    let releasedQuantity = min(quantityToRelease, lot.quantity)
+                    let releasedLotCost: Int64
+                    if releasedQuantity == lot.quantity {
+                        releasedLotCost = lot.costBasisMinor
+                    } else {
+                        releasedLotCost = try proportionalMinor(
+                            totalMinor: lot.costBasisMinor,
+                            numerator: releasedQuantity,
+                            denominator: lot.quantity
+                        )
+                    }
+
+                    let (nextReleasedCost, releasedOverflow) = releasedCostBasisMinor.addingReportingOverflow(
+                        releasedLotCost
                     )
+                    guard !releasedOverflow else {
+                        throw InvestmentAccountingError.arithmeticOverflow
+                    }
+                    releasedCostBasisMinor = nextReleasedCost
+                    quantityToRelease -= releasedQuantity
+                    lot.quantity -= releasedQuantity
+                    lot.costBasisMinor -= releasedLotCost
+
+                    if lot.quantity == 0 {
+                        firstOpenLotIndex += 1
+                    } else {
+                        openLots[firstOpenLotIndex] = lot
+                    }
                 }
 
                 let (realizedProfitLossMinor, profitOverflow) = trade.accountingGrossAmountMinor.subtractingReportingOverflow(
@@ -136,7 +179,13 @@ nonisolated enum InvestmentAccountingEngine {
                 guard !profitOverflow else { throw InvestmentAccountingError.arithmeticOverflow }
 
                 positionQuantity -= trade.quantity
-                positionCostBasisMinor -= releasedCostBasisMinor
+                let (nextPositionCost, costOverflow) = positionCostBasisMinor.subtractingReportingOverflow(
+                    releasedCostBasisMinor
+                )
+                guard !costOverflow, nextPositionCost >= 0 else {
+                    throw InvestmentAccountingError.arithmeticOverflow
+                }
+                positionCostBasisMinor = nextPositionCost
                 if positionQuantity == 0 {
                     positionCostBasisMinor = 0
                 }
@@ -147,7 +196,8 @@ nonisolated enum InvestmentAccountingEngine {
                         releasedCostBasisMinor: releasedCostBasisMinor,
                         realizedProfitLossMinor: realizedProfitLossMinor,
                         positionQuantityAfter: positionQuantity,
-                        positionCostBasisAfterMinor: positionCostBasisMinor
+                        positionCostBasisAfterMinor: positionCostBasisMinor,
+                        openLotCountAfter: openLots.count - firstOpenLotIndex
                     )
                 )
             }
@@ -197,27 +247,12 @@ nonisolated struct InvestmentAssetPositionSnapshot: Equatable, Identifiable {
     let channelID: UUID
     let quantity: Decimal
     let remainingCostBasisMinor: Int64
-    let marketValueMinor: Int64?
-
-    var averageUnitCostMinor: Int64? {
-        guard quantity > 0, remainingCostBasisMinor >= 0 else { return nil }
-        var value = Decimal(remainingCostBasisMinor) / quantity
-        var rounded = Decimal()
-        NSDecimalRound(&rounded, &value, 0, .plain)
-        let number = NSDecimalNumber(decimal: rounded)
-        guard number != .notANumber,
-              number.compare(NSDecimalNumber(value: Int64.max)) != .orderedDescending else {
-            return nil
-        }
-        return number.int64Value
-    }
+    let openLotCount: Int
 }
 
 nonisolated struct InvestmentPortfolioSummary: Equatable {
-    let investedCapitalMinor: Int64
-    let marketValueMinor: Int64
+    let remainingInventoryCostMinor: Int64
     let realizedProfitLossMinor: Int64
-    let unrealizedProfitLossMinor: Int64
     let investmentWalletBalanceMinor: Int64
 }
 
@@ -229,11 +264,8 @@ nonisolated enum InvestmentSummaryLogic {
         period: DateInterval?,
         investmentWalletBalanceMinor: Int64
     ) -> InvestmentPortfolioSummary {
-        let investedCapitalMinor = positions.reduce(into: Int64.zero) {
+        let remainingInventoryCostMinor = positions.reduce(into: Int64.zero) {
             $0 = saturatingAdd($0, max($1.remainingCostBasisMinor, 0))
-        }
-        let marketValueMinor = positions.reduce(into: Int64.zero) {
-            $0 = saturatingAdd($0, max($1.marketValueMinor ?? $1.remainingCostBasisMinor, 0))
         }
         let realizedProfitLossMinor = trades.reduce(into: Int64.zero) { partial, trade in
             guard trade.realizedProfitLossMinor != 0,
@@ -245,10 +277,8 @@ nonisolated enum InvestmentSummaryLogic {
         }
 
         return InvestmentPortfolioSummary(
-            investedCapitalMinor: investedCapitalMinor,
-            marketValueMinor: marketValueMinor,
+            remainingInventoryCostMinor: remainingInventoryCostMinor,
             realizedProfitLossMinor: realizedProfitLossMinor,
-            unrealizedProfitLossMinor: saturatingSubtract(marketValueMinor, investedCapitalMinor),
             investmentWalletBalanceMinor: investmentWalletBalanceMinor
         )
     }
@@ -259,11 +289,6 @@ nonisolated enum InvestmentSummaryLogic {
         return rhs >= 0 ? .max : .min
     }
 
-    private static func saturatingSubtract(_ lhs: Int64, _ rhs: Int64) -> Int64 {
-        let (value, overflow) = lhs.subtractingReportingOverflow(rhs)
-        guard overflow else { return value }
-        return rhs >= 0 ? .min : .max
-    }
 }
 
 nonisolated enum InvestmentPeriodLogic {
@@ -288,6 +313,29 @@ nonisolated enum InvestmentPeriodLogic {
     ) -> Date {
         let start = monthInterval(containing: date, calendar: calendar).start
         return calendar.date(byAdding: .month, value: value, to: start) ?? start
+    }
+}
+
+nonisolated enum InvestmentAssetSearchLogic {
+    static func matches(
+        productName: String,
+        channelName: String,
+        query: String,
+        locale: Locale = Locale(identifier: "vi_VN")
+    ) -> Bool {
+        let query = normalized(query, locale: locale)
+        guard !query.isEmpty else { return true }
+        return normalized(productName, locale: locale).contains(query)
+            || normalized(channelName, locale: locale).contains(query)
+    }
+
+    private static func normalized(_ value: String, locale: Locale) -> String {
+        value.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: locale
+        )
+        .replacingOccurrences(of: "đ", with: "d")
+        .replacingOccurrences(of: "Đ", with: "d")
     }
 }
 

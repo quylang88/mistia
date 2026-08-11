@@ -35,13 +35,14 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(reopenedBills.first?.autoPayDay, 10)
     }
 
-    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV8() {
+    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV9() {
         let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
         let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
         let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
         let v6ModelNames = MistiaSchemaV6.models.map { String(reflecting: $0) }
         let v7ModelNames = MistiaSchemaV7.models.map { String(reflecting: $0) }
         let v8ModelNames = MistiaSchemaV8.models.map { String(reflecting: $0) }
+        let v9ModelNames = MistiaSchemaV9.models.map { String(reflecting: $0) }
 
         XCTAssertEqual(schemaNames.count, Set(schemaNames).count)
         XCTAssertEqual(schemaNames, [
@@ -49,9 +50,10 @@ final class MistiaMigrationPlanTests: XCTestCase {
             "MistiaCoreLogic.MistiaSchemaV5",
             "MistiaCoreLogic.MistiaSchemaV6",
             "MistiaCoreLogic.MistiaSchemaV7",
-            "MistiaCoreLogic.MistiaSchemaV8"
+            "MistiaCoreLogic.MistiaSchemaV8",
+            "MistiaCoreLogic.MistiaSchemaV9"
         ])
-        XCTAssertEqual(MistiaMigrationPlan.stages.count, 3)
+        XCTAssertEqual(MistiaMigrationPlan.stages.count, 4)
         XCTAssertEqual(
             MistiaLegacyV4ToV5MigrationPlan.schemas.map { String(reflecting: $0) },
             ["MistiaCoreLogic.MistiaSchemaV4", "MistiaCoreLogic.MistiaSchemaV5"]
@@ -69,9 +71,229 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.MistiaSchemaV7InvestmentModels.InvestmentTrade"))
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentWalletPosting"))
-        XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.InvestmentAsset"))
+        XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV8InvestmentModels.InvestmentAsset"))
         XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.InvestmentTrade"))
         XCTAssertFalse(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV7InvestmentModels.InvestmentAsset"))
+        XCTAssertTrue(v9ModelNames.contains("MistiaCoreLogic.MistiaSchemaV9InvestmentModels.InvestmentAsset"))
+        XCTAssertFalse(v9ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
+    }
+
+    func testV8InvestmentStoreMigratesToV9WithoutValuations() throws {
+        let storeURL = temporaryStoreURL()
+        defer { try? removeStoreArtifacts(at: storeURL) }
+
+        let ownerID = UUID()
+        let channelID = UUID()
+        let assetID = UUID()
+        let valuationID = UUID()
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
+        do {
+            let container = try ModelContainer(for: v8Schema, configurations: [v8Configuration])
+            let context = ModelContext(container)
+            context.insert(InvestmentChannel(id: channelID, ownerUserID: ownerID, name: "Cards"))
+            context.insert(
+                MistiaSchemaV8.InvestmentAsset(
+                    id: assetID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    name: "Legacy product",
+                    currencyCode: "JPY"
+                )
+            )
+            context.insert(
+                InvestmentValuation(
+                    id: valuationID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    assetID: assetID,
+                    marketValueMinor: 1_000,
+                    accountingMarketValueMinor: 1_000,
+                    currencyCode: "JPY",
+                    accountingCurrencyCode: "JPY"
+                )
+            )
+            context.insert(
+                SyncConflict(
+                    entityRawValue: "investment_valuations",
+                    recordID: valuationID,
+                    conflictKindRawValue: MistiaSyncConflictKind.editEdit.rawValue,
+                    localPayloadJSON: "{}",
+                    remotePayloadJSON: "{}",
+                    baseVersion: 1,
+                    remoteVersion: 2
+                )
+            )
+            try context.save()
+        }
+
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
+        let migrated = try MistiaDataStack.LaunchState.openContainer(
+            schema: v9Schema,
+            configuration: v9Configuration,
+            storeURL: storeURL,
+            fileManager: .default
+        )
+        let context = ModelContext(migrated)
+
+        XCTAssertEqual(try context.fetch(FetchDescriptor<InvestmentAsset>()).first?.id, assetID)
+        XCTAssertNil(try context.fetch(FetchDescriptor<InvestmentAsset>()).first?.imagePath)
+        XCTAssertEqual(
+            try context.fetch(FetchDescriptor<SyncConflict>()).map(\.entityRawValue),
+            []
+        )
+    }
+
+    func testV8InvestmentStoreRebuildsTradeSnapshotsAndPostingsWithFIFO() throws {
+        let storeURL = temporaryStoreURL()
+        defer { try? removeStoreArtifacts(at: storeURL) }
+
+        let ownerID = UUID()
+        let channelID = UUID()
+        let assetID = UUID()
+        let fundingWalletID = UUID()
+        let capitalWalletID = UUID()
+        let firstBuyID = UUID()
+        let secondBuyID = UUID()
+        let saleID = UUID()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
+        do {
+            let container = try ModelContainer(for: v8Schema, configurations: [v8Configuration])
+            let context = ModelContext(container)
+            context.insert(
+                LedgerWallet(
+                    id: fundingWalletID,
+                    name: "Funding",
+                    kind: .cash,
+                    iconSymbolName: "banknote.fill",
+                    iconColorHex: "#000000",
+                    currencyCode: "JPY"
+                )
+            )
+            context.insert(
+                LedgerWallet(
+                    id: capitalWalletID,
+                    name: "Capital return",
+                    kind: .bank,
+                    iconSymbolName: "building.columns.fill",
+                    iconColorHex: "#000000",
+                    currencyCode: "JPY"
+                )
+            )
+            context.insert(
+                LedgerWallet(
+                    id: InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerID),
+                    name: "Investment",
+                    kind: .investment,
+                    iconSymbolName: LedgerWalletKind.investment.defaultIconSymbolName,
+                    iconColorHex: LedgerWalletKind.investment.defaultColorHex,
+                    currencyCode: "JPY"
+                )
+            )
+            context.insert(InvestmentChannel(id: channelID, ownerUserID: ownerID, name: "Cards"))
+            context.insert(
+                MistiaSchemaV8.InvestmentAsset(
+                    id: assetID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    name: "Product",
+                    currencyCode: "JPY"
+                )
+            )
+
+            context.insert(
+                InvestmentTrade(
+                    id: firstBuyID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    assetID: assetID,
+                    kind: .buy,
+                    quantity: 2,
+                    grossAmountMinor: 200,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 200,
+                    accountingCurrencyCode: "JPY",
+                    fundingWalletID: fundingWalletID,
+                    fundingWalletCurrencyCode: "JPY",
+                    fundingWalletAmountMinor: 200,
+                    positionQuantityAfter: 2,
+                    positionCostBasisAfterMinor: 200,
+                    occurredAt: start,
+                    createdAt: start
+                )
+            )
+            context.insert(
+                InvestmentTrade(
+                    id: secondBuyID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    assetID: assetID,
+                    kind: .buy,
+                    quantity: 1,
+                    grossAmountMinor: 150,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 150,
+                    accountingCurrencyCode: "JPY",
+                    fundingWalletID: fundingWalletID,
+                    fundingWalletCurrencyCode: "JPY",
+                    fundingWalletAmountMinor: 150,
+                    positionQuantityAfter: 3,
+                    positionCostBasisAfterMinor: 350,
+                    occurredAt: start.addingTimeInterval(1),
+                    createdAt: start.addingTimeInterval(1)
+                )
+            )
+            context.insert(
+                InvestmentTrade(
+                    id: saleID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    assetID: assetID,
+                    kind: .sell,
+                    quantity: 1,
+                    grossAmountMinor: 160,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 160,
+                    accountingCurrencyCode: "JPY",
+                    capitalReturnWalletID: capitalWalletID,
+                    capitalReturnWalletCurrencyCode: "JPY",
+                    capitalReturnWalletAmountMinor: 117,
+                    releasedCostBasisMinor: 117,
+                    realizedProfitLossMinor: 43,
+                    positionQuantityAfter: 2,
+                    positionCostBasisAfterMinor: 233,
+                    occurredAt: start.addingTimeInterval(2),
+                    createdAt: start.addingTimeInterval(2)
+                )
+            )
+            try context.save()
+        }
+
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
+        let migrated = try MistiaDataStack.LaunchState.openContainer(
+            schema: v9Schema,
+            configuration: v9Configuration,
+            storeURL: storeURL,
+            fileManager: .default
+        )
+        let context = ModelContext(migrated)
+        let trades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+        let sale = try XCTUnwrap(trades.first(where: { $0.id == saleID }))
+
+        XCTAssertEqual(sale.releasedCostBasisMinor, 100)
+        XCTAssertEqual(sale.realizedProfitLossMinor, 60)
+        XCTAssertEqual(sale.capitalReturnWalletAmountMinor, 100)
+        XCTAssertEqual(sale.positionQuantityAfter, 2)
+        XCTAssertEqual(sale.positionCostBasisAfterMinor, 250)
+
+        let postings = try context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+            .filter { $0.tradeID == saleID }
+        XCTAssertEqual(postings.first(where: { $0.role == .capitalReturn })?.amountMinor, 100)
+        XCTAssertEqual(postings.first(where: { $0.role == .realizedProfit })?.amountMinor, 60)
     }
 
     func testV7InvestmentStoreMigratesWithoutOpeningPositionOrFees() throws {
@@ -207,7 +429,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v8Schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV9.self)
         let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v8Schema,
@@ -312,7 +534,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v8Schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV9.self)
         let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
         XCTAssertThrowsError(
             try MistiaDataStack.LaunchState.openContainer(

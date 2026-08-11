@@ -147,6 +147,34 @@ final class MistiaSyncOutboxTests: XCTestCase {
         )
     }
 
+    func testLegacyValuationMutationIsPrunedBeforeOutboxDecode() throws {
+        let suiteName = makeDefaultsSuiteName()
+        let defaults = try makeDefaults(suiteName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let key = "mistia-sync-outbox-prune-investment-valuations-test"
+        let walletMutation = MistiaSyncMutation(
+            entity: .wallet,
+            recordID: UUID(),
+            subjectUserID: UUID(),
+            kind: .upsert,
+            modifiedAt: Date(timeIntervalSince1970: 10)
+        )
+        let encoded = try JSONEncoder.mistiaSyncEncoder.encode([walletMutation])
+        let rows = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
+        var valuationRow = try XCTUnwrap(rows.first)
+        valuationRow["entity"] = "investment_valuations"
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: rows + [valuationRow]),
+            forKey: key
+        )
+
+        let outbox = MistiaSyncOutbox(defaults: defaults, key: key)
+
+        XCTAssertEqual(outbox.allMutations, [walletMutation])
+        let persisted = try XCTUnwrap(defaults.data(forKey: key))
+        XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains("investment_valuations"))
+    }
+
     private func makeDefaultsSuiteName() -> String {
         "MistiaSyncOutboxTests.\(UUID().uuidString)"
     }

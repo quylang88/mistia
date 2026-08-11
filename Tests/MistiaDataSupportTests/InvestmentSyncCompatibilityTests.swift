@@ -27,7 +27,6 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
         XCTAssertTrue(snapshot.investmentChannels.isEmpty)
         XCTAssertTrue(snapshot.investmentAssets.isEmpty)
         XCTAssertTrue(snapshot.investmentTrades.isEmpty)
-        XCTAssertTrue(snapshot.investmentValuations.isEmpty)
         XCTAssertTrue(snapshot.investmentPostings.isEmpty)
     }
 
@@ -56,5 +55,62 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
         )
 
         XCTAssertNil(wallet.systemPurposeRawValue)
+    }
+
+    func testLegacyInvestmentAssetPayloadDecodesWithoutImagePath() throws {
+        let payload = """
+        {
+          "id": "20000000-0000-4000-8000-000000000002",
+          "user_id": "10000000-0000-4000-8000-000000000001",
+          "channel_id": "30000000-0000-4000-8000-000000000001",
+          "name": "Card A",
+          "currency_code": "JPY",
+          "sort_order": 0,
+          "is_archived": false,
+          "created_at": "2026-08-09T00:00:00.000Z",
+          "updated_at": "2026-08-09T00:00:00.000Z",
+          "sync_version": 1
+        }
+        """
+
+        let asset = try JSONDecoder.mistiaRemoteAPIDecoder.decode(
+            RemoteInvestmentAsset.self,
+            from: Data(payload.utf8)
+        )
+
+        XCTAssertNil(asset.imagePath)
+    }
+
+    func testLegacyBackupSnapshotIgnoresRemovedInvestmentValuations() throws {
+        let payload = """
+        {
+          "wallets": [],
+          "creditCardProfiles": [],
+          "categories": [],
+          "settlementGroups": [],
+          "transactions": [],
+          "budgetPlans": [],
+          "savingsGoals": [],
+          "recurringBillPlans": [],
+          "installmentPlans": [],
+          "dueOccurrences": [],
+          "investmentChannels": [],
+          "investmentAssets": [],
+          "investmentTrades": [],
+          "investmentValuations": [
+            {"id":"20000000-0000-4000-8000-000000000099","marketValueMinor":999}
+          ],
+          "investmentPostings": []
+        }
+        """
+
+        let snapshot = try JSONDecoder().decode(
+            MistiaRemoteSnapshot.self,
+            from: Data(payload.utf8)
+        )
+
+        XCTAssertTrue(snapshot.investmentAssets.isEmpty)
+        XCTAssertTrue(snapshot.investmentTrades.isEmpty)
+        XCTAssertTrue(snapshot.investmentPostings.isEmpty)
     }
 }

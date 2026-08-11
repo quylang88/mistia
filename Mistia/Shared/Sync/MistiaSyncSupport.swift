@@ -164,10 +164,6 @@ nonisolated extension InvestmentTrade: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .investmentTrade
 }
 
-nonisolated extension InvestmentValuation: MistiaSyncLocalRecord {
-    static let syncEntity: MistiaSyncEntity = .investmentValuation
-}
-
 nonisolated extension InvestmentWalletPosting: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .investmentPosting
 }
@@ -430,16 +426,6 @@ nonisolated private extension MistiaSyncUploadRecord {
                     row.quantityDecimalString,
                     currency(row.grossAmountMinor, code: row.currencyCode),
                     date(row.occurredAt),
-                    deleted(row.deletedAt),
-                    version(row.syncVersion)
-                )
-            )
-        case .investmentValuation(let row):
-            return MistiaSyncConflictRecordSummary(
-                title: L10n.investment.valuation.title,
-                detail: compactJoined(
-                    currency(row.marketValueMinor, code: row.currencyCode),
-                    date(row.valuedAt),
                     deleted(row.deletedAt),
                     version(row.syncVersion)
                 )

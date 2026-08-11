@@ -1,5 +1,7 @@
+import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
 
 private enum InvestmentHubPeriod: String, CaseIterable, Identifiable {
     case month
@@ -19,7 +21,6 @@ private enum InvestmentHubSheet: Identifiable {
     case channel(UUID?)
     case asset(UUID?)
     case trade(kind: InvestmentTradeKind, id: UUID?)
-    case valuation(assetID: UUID, id: UUID?)
     case wallet
 
     var id: String {
@@ -27,7 +28,6 @@ private enum InvestmentHubSheet: Identifiable {
         case .channel(let id): "channel-\(id?.uuidString ?? "new")"
         case .asset(let id): "asset-\(id?.uuidString ?? "new")"
         case .trade(let kind, let id): "trade-\(kind.rawValue)-\(id?.uuidString ?? "new")"
-        case .valuation(let assetID, let id): "valuation-\(assetID.uuidString)-\(id?.uuidString ?? "new")"
         case .wallet: "wallet"
         }
     }
@@ -45,7 +45,6 @@ struct InvestmentHubView: View {
     @Query private var channels: [InvestmentChannel]
     @Query private var assets: [InvestmentAsset]
     @Query private var trades: [InvestmentTrade]
-    @Query private var valuations: [InvestmentValuation]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
@@ -170,7 +169,7 @@ struct InvestmentHubView: View {
                 channelID: asset.channelID,
                 quantity: position.quantity,
                 remainingCostBasisMinor: position.costBasisMinor,
-                marketValueMinor: latestValuation(for: asset)?.accountingMarketValueMinor
+                openLotCount: position.openLotCount
             )
         }
         let calculations = ownerTrades.map {
@@ -179,7 +178,8 @@ struct InvestmentHubView: View {
                 releasedCostBasisMinor: $0.releasedCostBasisMinor,
                 realizedProfitLossMinor: $0.realizedProfitLossMinor,
                 positionQuantityAfter: $0.positionQuantityAfter,
-                positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor
+                positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor,
+                openLotCountAfter: 0
             )
         }
         return InvestmentSummaryLogic.summary(
@@ -434,17 +434,17 @@ struct InvestmentHubView: View {
                     channelID: asset.channelID,
                     quantity: position.quantity,
                     remainingCostBasisMinor: position.costBasisMinor,
-                    marketValueMinor: latestValuation(for: asset)?.accountingMarketValueMinor
+                    openLotCount: position.openLotCount
                 )
                 let detail = positionDetail(for: snapshot)
                 Button {
-                    if canCreate { activeSheet = .valuation(assetID: asset.id, id: nil) }
+                    if canEdit { activeSheet = .asset(asset.id) }
                 } label: {
                     InvestmentPositionRow(
+                        imagePath: asset.imagePath,
                         assetName: asset.name,
                         detail: detail,
                         remainingCapitalMinor: snapshot.remainingCostBasisMinor,
-                        marketValueMinor: snapshot.marketValueMinor,
                         currencyCode: accountingCurrencyCode
                     )
                 }
@@ -452,14 +452,6 @@ struct InvestmentHubView: View {
                 .contextMenu {
                     if canEdit {
                         Button(L10n.management.management.edit) { activeSheet = .asset(asset.id) }
-                        if let valuation = latestValuation(for: asset) {
-                            Button(L10n.investment.valuation.title) {
-                                activeSheet = .valuation(assetID: asset.id, id: valuation.id)
-                            }
-                            Button(L10n.common.delete, role: .destructive) {
-                                delete(valuation)
-                            }
-                        }
                         Button(L10n.common.archive, role: .destructive) { archive(asset) }
                     } else {
                         Button(L10n.investment.permission.requestEdit) { requestPermission(.edit) }
@@ -471,12 +463,12 @@ struct InvestmentHubView: View {
 
     private func positionDetail(for snapshot: InvestmentAssetPositionSnapshot) -> String {
         let quantity = InvestmentDecimalCoding.string(from: snapshot.quantity)
-        guard let average = snapshot.averageUnitCostMinor else {
-            return L10n.investment.hub.quantityOnly(quantity)
+        guard snapshot.quantity > 0 else {
+            return L10n.investment.hub.outOfStock
         }
         return L10n.investment.hub.positionDetails(
             quantity,
-            average.formattedCurrency(code: accountingCurrencyCode)
+            String(snapshot.openLotCount)
         )
     }
 
@@ -498,8 +490,16 @@ struct InvestmentHubView: View {
                     if canEdit { activeSheet = .trade(kind: trade.kind, id: trade.id) }
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: trade.kind == .buy ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                            .foregroundStyle(trade.kind == .buy ? Color.blue : Color.green)
+                        ZStack(alignment: .bottomTrailing) {
+                            InvestmentProductThumbnail(
+                                imagePath: assets.first(where: { $0.id == trade.assetID })?.imagePath,
+                                size: 44
+                            )
+                            Image(systemName: trade.kind == .buy ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(trade.kind == .buy ? Color.blue : Color.green)
+                                .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                        }
                         VStack(alignment: .leading, spacing: 3) {
                             Text(assetName(for: trade.assetID))
                                 .font(.subheadline.weight(.semibold))
@@ -553,14 +553,14 @@ struct InvestmentHubView: View {
                     selectedChannelID: selectedChannelID,
                     hasHistory: assetID.map { id in
                         trades.contains { $0.assetID == id }
-                            || valuations.contains { $0.assetID == id }
                     } ?? false,
                     canEditExisting: canEdit
                 ) { errorMessage = $0 }
             case .trade(let kind, let tradeID):
                 InvestmentTradeEditorSheet(
                     ownerUserID: ownerUserID,
-                    assets: ownerAssets.isEmpty ? assets.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived } : ownerAssets,
+                    channels: ownerChannels,
+                    assets: assets.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived },
                     trade: trades.first { $0.id == tradeID },
                     initialKind: kind,
                     wallets: wallets,
@@ -571,17 +571,6 @@ struct InvestmentHubView: View {
                         delete(trade)
                     }
                 ) { errorMessage = $0 }
-            case .valuation(let assetID, let valuationID):
-                if let asset = assets.first(where: { $0.id == assetID }) {
-                    InvestmentValuationEditorSheet(
-                        ownerUserID: ownerUserID,
-                        asset: asset,
-                        valuation: valuations.first { $0.id == valuationID },
-                        canEditExisting: canEdit
-                    ) {
-                        errorMessage = $0
-                    }
-                }
             case .wallet:
                 InvestmentWalletDetailView(ownerUserID: ownerUserID)
             }
@@ -635,23 +624,28 @@ struct InvestmentHubView: View {
         }
     }
 
-    private func position(for asset: InvestmentAsset) -> (quantity: Decimal, costBasisMinor: Int64) {
+    private func position(for asset: InvestmentAsset) -> (quantity: Decimal, costBasisMinor: Int64, openLotCount: Int) {
         let assetTrades = trades
             .filter { $0.assetID == asset.id && $0.deletedAt == nil }
             .sorted(by: oldestTradeFirst)
-        guard let last = assetTrades.last else {
-            return (0, 0)
+        guard !assetTrades.isEmpty else {
+            return (0, 0, 0)
         }
-        return (last.positionQuantityAfter, last.positionCostBasisAfterMinor)
-    }
-
-    private func latestValuation(for asset: InvestmentAsset) -> InvestmentValuation? {
-        valuations
-            .filter { $0.assetID == asset.id && $0.deletedAt == nil }
-            .max { lhs, rhs in
-                if lhs.valuedAt != rhs.valuedAt { return lhs.valuedAt < rhs.valuedAt }
-                return lhs.createdAt < rhs.createdAt
-            }
+        let inputs = assetTrades.map {
+            InvestmentTradeInput(
+                id: $0.id,
+                kind: $0.kind,
+                quantity: $0.quantity,
+                accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
+                occurredAt: $0.occurredAt,
+                createdAt: $0.createdAt
+            )
+        }
+        guard let last = try? InvestmentAccountingEngine.recalculate(trades: inputs).last else {
+            let persisted = assetTrades.last
+            return (persisted?.positionQuantityAfter ?? 0, persisted?.positionCostBasisAfterMinor ?? 0, 0)
+        }
+        return (last.positionQuantityAfter, last.positionCostBasisAfterMinor, last.openLotCountAfter)
     }
 
     private func assetName(for assetID: UUID) -> String {
@@ -768,22 +762,6 @@ struct InvestmentHubView: View {
         }
     }
 
-    private func delete(_ valuation: InvestmentValuation) {
-        valuation.deletedAt = .now
-        valuation.updatedAt = .now
-        do {
-            try modelContext.save()
-            sessionStore.recordDelete(
-                entity: .investmentValuation,
-                recordID: valuation.id,
-                modifiedAt: valuation.updatedAt,
-                subjectUserIDOverride: valuation.ownerUserID
-            )
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
 }
 
 private struct InvestmentPeriodControl: View {
@@ -821,41 +799,17 @@ private struct InvestmentPortfolioSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(L10n.investment.hub.investedCapital)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(summary.investedCapitalMinor.formattedCurrency(code: currencyCode))
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-
-            HStack(alignment: .top, spacing: 20) {
-                metric(
-                    title: L10n.investment.hub.marketValue,
-                    amount: summary.marketValueMinor,
-                    tint: .primary
-                )
-                metric(
-                    title: L10n.investment.hub.unrealizedProfitLoss,
-                    amount: summary.unrealizedProfitLossMinor,
-                    tint: profitColor(summary.unrealizedProfitLossMinor)
-                )
-            }
-
-            if summary.realizedProfitLossMinor != 0 {
-                Divider()
-                HStack {
-                    Text(L10n.investment.hub.realizedProfitLoss)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(summary.realizedProfitLossMinor.formattedCurrency(code: currencyCode))
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(profitColor(summary.realizedProfitLossMinor))
-                }
-            }
+            metric(
+                title: L10n.investment.hub.investedCapital,
+                amount: summary.remainingInventoryCostMinor,
+                tint: .primary
+            )
+            Divider()
+            metric(
+                title: L10n.investment.hub.realizedProfitLoss,
+                amount: summary.realizedProfitLossMinor,
+                tint: profitColor(summary.realizedProfitLossMinor)
+            )
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -927,15 +881,52 @@ private struct InvestmentPrimaryActions: View {
     }
 }
 
+private struct InvestmentProductThumbnail: View {
+    @Environment(SessionStore.self) private var sessionStore
+    let imagePath: String?
+    let size: CGFloat
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Color(uiColor: .tertiarySystemFill)
+                    Image(systemName: "shippingbox.fill")
+                        .font(.system(size: size * 0.36, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: max(10, size * 0.22), style: .continuous))
+        .task(id: imagePath) {
+            image = nil
+            guard let imagePath else { return }
+            let session = try? await sessionStore.refreshedSession()
+            guard let data = try? await InvestmentProductImageRemoteService().jpegData(
+                path: imagePath,
+                session: session
+            ) else { return }
+            image = UIImage(data: data)
+        }
+    }
+}
+
 private struct InvestmentPositionRow: View {
+    let imagePath: String?
     let assetName: String
     let detail: String
     let remainingCapitalMinor: Int64
-    let marketValueMinor: Int64?
     let currencyCode: String
 
     var body: some View {
         HStack(spacing: 12) {
+            InvestmentProductThumbnail(imagePath: imagePath, size: 44)
             VStack(alignment: .leading, spacing: 4) {
                 Text(assetName)
                     .font(.subheadline.weight(.semibold))
@@ -946,14 +937,12 @@ private struct InvestmentPositionRow: View {
             }
             Spacer(minLength: 12)
             VStack(alignment: .trailing, spacing: 4) {
+                Text(L10n.investment.hub.costBasis)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 Text(remainingCapitalMinor.formattedCurrency(code: currencyCode))
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
-                if let marketValueMinor {
-                    Text(marketValueMinor.formattedCurrency(code: currencyCode))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .padding(14)
@@ -1062,6 +1051,11 @@ private struct InvestmentAssetEditorSheet: View {
     @State private var channelID: UUID?
     @State private var name = ""
     @State private var currencyCode = "JPY"
+    @State private var draftAssetID = UUID()
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var selectedImage: UIImage?
+    @State private var removesExistingImage = false
+    @State private var showsCamera = false
 
     var body: some View {
         NavigationStack {
@@ -1081,6 +1075,55 @@ private struct InvestmentAssetEditorSheet: View {
                     }
                     .disabled(asset != nil && hasHistory)
                 }
+                Section(L10n.investment.asset.imageOptional) {
+                    HStack {
+                        Spacer()
+                        Group {
+                            if let selectedImage {
+                                Image(uiImage: selectedImage)
+                                    .resizable()
+                                    .scaledToFill()
+                            } else if !removesExistingImage, let imagePath = asset?.imagePath {
+                                InvestmentProductThumbnail(imagePath: imagePath, size: 104)
+                            } else {
+                                ZStack {
+                                    Color(uiColor: .tertiarySystemFill)
+                                    Image(systemName: "photo.badge.plus")
+                                        .font(.system(size: 30, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .frame(width: 104, height: 104)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        Spacer()
+                    }
+                    Menu {
+                        Button {
+                            showsCamera = true
+                        } label: {
+                            Label(L10n.investment.asset.takePhoto, systemImage: "camera")
+                        }
+                        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            Label(L10n.investment.asset.choosePhoto, systemImage: "photo.on.rectangle")
+                        }
+                    } label: {
+                        Label(
+                            selectedImage == nil && asset?.imagePath == nil
+                                ? L10n.investment.asset.addImage
+                                : L10n.investment.asset.replaceImage,
+                            systemImage: "photo.badge.plus"
+                        )
+                    }
+                    if selectedImage != nil || (!removesExistingImage && asset?.imagePath != nil) {
+                        Button(L10n.investment.asset.removeImage, role: .destructive) {
+                            selectedImage = nil
+                            selectedPhotoItem = nil
+                            removesExistingImage = true
+                        }
+                    }
+                }
             }
             .navigationTitle(L10n.investment.asset.newTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -1094,6 +1137,22 @@ private struct InvestmentAssetEditorSheet: View {
                 }
             }
             .onAppear { hydrate() }
+            .onChange(of: selectedPhotoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    guard let data = try? await item.loadTransferable(type: Data.self),
+                          let image = UIImage(data: data) else { return }
+                    selectedImage = image
+                    removesExistingImage = false
+                }
+            }
+        }
+        .sheet(isPresented: $showsCamera) {
+            InvestmentCameraPicker { image in
+                selectedImage = image
+                removesExistingImage = false
+            }
+            .ignoresSafeArea()
         }
     }
 
@@ -1101,15 +1160,35 @@ private struct InvestmentAssetEditorSheet: View {
         channelID = asset?.channelID ?? selectedChannelID ?? channels.first?.id
         name = asset?.name ?? ""
         currencyCode = asset?.currencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
+        draftAssetID = asset?.id ?? draftAssetID
     }
 
     private func save() {
         guard let channelID else { return }
         do {
+            let targetAssetID = asset?.id ?? draftAssetID
+            var imagePath = asset?.imagePath
+            if let selectedImage {
+                let normalized = try InvestmentProductImageProcessing.normalizedJPEG(selectedImage)
+                imagePath = try InvestmentProductImageStore().stageReplacement(
+                    ownerUserID: ownerUserID,
+                    assetID: targetAssetID,
+                    jpegData: normalized.fullSize,
+                    thumbnailData: normalized.thumbnail,
+                    replacing: asset?.imagePath
+                )
+            } else if removesExistingImage {
+                try InvestmentProductImageStore().stageRemoval(
+                    assetID: targetAssetID,
+                    path: asset?.imagePath
+                )
+                imagePath = nil
+            }
             if let asset {
                 asset.channelID = channelID
                 asset.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 asset.currencyCode = MistiaCurrencyLogic.normalizedCode(currencyCode)
+                asset.imagePath = imagePath
                 asset.updatedAt = .now
                 try modelContext.save()
                 sessionStore.recordUpsert(
@@ -1120,10 +1199,12 @@ private struct InvestmentAssetEditorSheet: View {
                 )
             } else {
                 let asset = try InvestmentPersistenceService.createAsset(
+                    id: targetAssetID,
                     ownerUserID: ownerUserID,
                     channelID: channelID,
                     name: name,
                     currencyCode: currencyCode,
+                    imagePath: imagePath,
                     context: modelContext
                 )
                 sessionStore.recordUpsert(
@@ -1140,12 +1221,112 @@ private struct InvestmentAssetEditorSheet: View {
     }
 }
 
+private struct InvestmentAssetPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let assets: [InvestmentAsset]
+    let channels: [InvestmentChannel]
+    @Binding var selection: UUID?
+    @State private var searchText = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField(L10n.investment.trade.searchAsset, text: $searchText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel(L10n.investment.trade.clearSearch)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 46)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+
+                List {
+                    ForEach(visibleChannels) { channel in
+                        Section(channel.name) {
+                            ForEach(filteredAssets(in: channel)) { asset in
+                                Button {
+                                    selection = asset.id
+                                    dismiss()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        InvestmentProductThumbnail(imagePath: asset.imagePath, size: 44)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(asset.name)
+                                                .font(.body.weight(.semibold))
+                                                .foregroundStyle(.primary)
+                                            Text(channel.name)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        if selection == asset.id {
+                                            Image(systemName: "checkmark")
+                                                .font(.body.weight(.bold))
+                                                .foregroundStyle(MistiaAccent.purple.color)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle(L10n.investment.trade.chooseAsset)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.common.cancel) { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var visibleChannels: [InvestmentChannel] {
+        channels.filter { !filteredAssets(in: $0).isEmpty }
+    }
+
+    private func filteredAssets(in channel: InvestmentChannel) -> [InvestmentAsset] {
+        return assets
+            .filter { asset in
+                guard asset.channelID == channel.id else { return false }
+                return InvestmentAssetSearchLogic.matches(
+                    productName: asset.name,
+                    channelName: channel.name,
+                    query: searchText
+                )
+            }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+    }
+
+}
+
 private struct InvestmentTradeEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
 
     let ownerUserID: UUID
+    let channels: [InvestmentChannel]
     let assets: [InvestmentAsset]
     let trade: InvestmentTrade?
     let initialKind: InvestmentTradeKind
@@ -1163,6 +1344,9 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var grossAmount = ""
     @State private var note = ""
     @State private var occurredAt = Date()
+    @State private var showsAssetPicker = false
+    @State private var draftTradeID = UUID()
+    @State private var draftCreatedAt = Date()
 
     private var selectedAsset: InvestmentAsset? { assets.first { $0.id == assetID } }
     private var accountingCurrencyCode: String {
@@ -1190,27 +1374,34 @@ private struct InvestmentTradeEditorSheet: View {
     }
     private var availableQuantity: Decimal {
         guard let selectedAsset else { return 0 }
-        let assetTrades = try? InvestmentAccountingEngine.recalculate(
-            trades: assetsTrades(selectedAsset).filter { $0.id != trade?.id }.map {
-                InvestmentTradeInput(
-                    id: $0.id,
-                    kind: $0.kind,
-                    quantity: $0.quantity,
-                    accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
-                    occurredAt: $0.occurredAt,
-                    createdAt: $0.createdAt
-                )
-            }
-        )
-        return assetTrades?.last?.positionQuantityAfter ?? 0
+        return availableQuantity(for: selectedAsset)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Picker(L10n.investment.trade.asset, selection: $assetID) {
-                    ForEach(assets) { asset in Text(asset.name).tag(Optional(asset.id)) }
+                Button {
+                    showsAssetPicker = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(L10n.investment.trade.asset)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        if let selectedAsset {
+                            InvestmentProductThumbnail(imagePath: selectedAsset.imagePath, size: 34)
+                            Text(selectedAsset.name)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        } else {
+                            Text(L10n.investment.trade.chooseAsset)
+                                .foregroundStyle(.secondary)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+                .buttonStyle(.plain)
                 Picker(L10n.investment.title, selection: $kind) {
                     Text(L10n.investment.hub.buy).tag(InvestmentTradeKind.buy)
                     Text(L10n.investment.hub.sell).tag(InvestmentTradeKind.sell)
@@ -1225,8 +1416,15 @@ private struct InvestmentTradeEditorSheet: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    MistiaCurrencyInputField(L10n.investment.trade.grossAmount, text: $grossAmount)
-                    DatePicker(L10n.investment.trade.date, selection: $occurredAt)
+                    MistiaCurrencyInputField(
+                        kind == .buy ? L10n.investment.trade.buyTotal : L10n.investment.trade.sellTotal,
+                        text: $grossAmount
+                    )
+                    MistiaDatePickerRow(
+                        title: L10n.investment.trade.time,
+                        selection: $occurredAt,
+                        mode: .dateAndTime
+                    )
                     TextField(L10n.investment.trade.note, text: $note)
                 }
                 Section {
@@ -1263,7 +1461,18 @@ private struct InvestmentTradeEditorSheet: View {
                 if !availableWallets.contains(where: { $0.id == walletID }) {
                     walletID = availableWallets.first?.id
                 }
+                if kind == .sell,
+                   !selectableAssets.contains(where: { $0.id == assetID }) {
+                    assetID = selectableAssets.first?.id
+                }
             }
+        }
+        .sheet(isPresented: $showsAssetPicker) {
+            InvestmentAssetPickerSheet(
+                assets: selectableAssets,
+                channels: channels,
+                selection: $assetID
+            )
         }
     }
 
@@ -1277,7 +1486,10 @@ private struct InvestmentTradeEditorSheet: View {
 
     private func hydrate() {
         kind = trade?.kind ?? initialKind
-        assetID = trade?.assetID ?? assets.first?.id
+        draftTradeID = trade?.id ?? draftTradeID
+        draftCreatedAt = trade?.createdAt ?? draftCreatedAt
+        assetID = trade?.assetID
+            ?? (kind == .sell ? selectableAssets.first?.id : assets.first?.id)
         walletID = trade.flatMap { $0.kind == .buy ? $0.fundingWalletID : $0.capitalReturnWalletID }
             ?? availableWallets.first?.id
         quantity = trade.map { InvestmentDecimalCoding.string(from: $0.quantity) } ?? ""
@@ -1293,6 +1505,37 @@ private struct InvestmentTradeEditorSheet: View {
         return (try? context.fetch(FetchDescriptor<InvestmentTrade>()))?
             .filter { $0.assetID == asset.id && $0.deletedAt == nil }
             .sorted(by: oldestTradeFirst) ?? []
+    }
+
+    private var selectableAssets: [InvestmentAsset] {
+        guard kind == .sell else { return assets }
+        return assets.filter { asset in
+            availableQuantity(for: asset) > 0 || asset.id == trade?.assetID
+        }
+    }
+
+    private func availableQuantity(for asset: InvestmentAsset) -> Decimal {
+        let prospectiveID = trade?.id ?? draftTradeID
+        let prospectiveCreatedAt = trade?.createdAt ?? draftCreatedAt
+        let eligible = assetsTrades(asset).filter { candidate in
+            guard candidate.id != trade?.id else { return false }
+            if candidate.occurredAt != occurredAt { return candidate.occurredAt < occurredAt }
+            if candidate.createdAt != prospectiveCreatedAt { return candidate.createdAt < prospectiveCreatedAt }
+            return MistiaStableUUIDOrdering.precedes(candidate.id, prospectiveID)
+        }
+        let calculations = try? InvestmentAccountingEngine.recalculate(
+            trades: eligible.map {
+                InvestmentTradeInput(
+                    id: $0.id,
+                    kind: $0.kind,
+                    quantity: $0.quantity,
+                    accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
+                    occurredAt: $0.occurredAt,
+                    createdAt: $0.createdAt
+                )
+            }
+        )
+        return calculations?.last?.positionQuantityAfter ?? 0
     }
 
     private func save() {
@@ -1366,101 +1609,6 @@ private struct InvestmentTradeEditorSheet: View {
                     subjectUserIDOverride: ownerUserID
                 )
             }
-            dismiss()
-        } catch {
-            onError(error.localizedDescription)
-        }
-    }
-}
-
-private struct InvestmentValuationEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SessionStore.self) private var sessionStore
-
-    let ownerUserID: UUID
-    let asset: InvestmentAsset
-    let valuation: InvestmentValuation?
-    let canEditExisting: Bool
-    let onError: (String) -> Void
-    @State private var marketValue = ""
-    @State private var valuedAt = Date()
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                MistiaCurrencyInputField(L10n.investment.valuation.marketValue, text: $marketValue)
-                DatePicker(L10n.investment.trade.date, selection: $valuedAt)
-            }
-            .navigationTitle(L10n.investment.valuation.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L10n.common.cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.common.save) { save() }
-                        .disabled(
-                            marketValue.currencyInputToMinorUnits(currencyCode: asset.currencyCode) < 0
-                                || (valuation != nil && !canEditExisting)
-                        )
-                }
-            }
-            .onAppear {
-                guard let valuation else { return }
-                marketValue = MistiaCurrencyInputFormatting.groupedInput(
-                    String(valuation.marketValueMinor)
-                )
-                valuedAt = valuation.valuedAt
-            }
-        }
-    }
-
-    private func save() {
-        let amount = marketValue.currencyInputToMinorUnits(currencyCode: asset.currencyCode)
-        let accountingCurrency = investmentAccountingCurrency(ownerUserID: ownerUserID, context: modelContext)
-        let rates = MistiaCurrencySettings.rates()
-        guard let accountingAmount = MistiaCurrencyLogic.convertedMinorAmount(
-            amount,
-            from: asset.currencyCode,
-            to: accountingCurrency,
-            rates: rates
-        ) else {
-            onError(L10n.investment.error.missingExchangeRate)
-            return
-        }
-        let now = Date()
-        let record = valuation ?? InvestmentValuation(
-            ownerUserID: ownerUserID,
-            channelID: asset.channelID,
-            assetID: asset.id,
-            marketValueMinor: amount,
-            accountingMarketValueMinor: accountingAmount,
-            currencyCode: asset.currencyCode,
-            accountingCurrencyCode: accountingCurrency,
-            valuedAt: valuedAt,
-            createdAt: now,
-            updatedAt: now
-        )
-        if valuation == nil { modelContext.insert(record) }
-        record.marketValueMinor = amount
-        record.accountingMarketValueMinor = accountingAmount
-        record.currencyCode = asset.currencyCode
-        record.accountingCurrencyCode = accountingCurrency
-        record.exchangeRateDecimalString = rateSnapshot(
-            from: asset.currencyCode,
-            to: accountingCurrency,
-            rates: rates
-        )
-        record.valuedAt = valuedAt
-        record.updatedAt = now
-        record.deletedAt = nil
-        do {
-            try modelContext.save()
-            sessionStore.recordUpsert(
-                entity: .investmentValuation,
-                recordID: record.id,
-                modifiedAt: record.updatedAt,
-                subjectUserIDOverride: ownerUserID
-            )
             dismiss()
         } catch {
             onError(error.localizedDescription)
@@ -1643,15 +1791,96 @@ private struct InvestmentWalletTransferSheet: View {
     }
 }
 
+private enum InvestmentProductImageProcessing {
+    struct Result {
+        let fullSize: Data
+        let thumbnail: Data
+    }
+
+    static func normalizedJPEG(_ image: UIImage) throws -> Result {
+        let fullImage = resized(image, maximumLongEdge: 1_600)
+        var quality: CGFloat = 0.9
+        var fullData = fullImage.jpegData(compressionQuality: quality)
+        while (fullData?.count ?? .max) > 4_000_000, quality > 0.25 {
+            quality -= 0.1
+            fullData = fullImage.jpegData(compressionQuality: quality)
+        }
+        guard let fullData, fullData.count <= 4_000_000 else {
+            throw InvestmentProductImageError.imageTooLarge
+        }
+        let thumbnailImage = resized(image, maximumLongEdge: 240)
+        guard let thumbnail = thumbnailImage.jpegData(compressionQuality: 0.78) else {
+            throw InvestmentProductImageError.imageTooLarge
+        }
+        return Result(fullSize: fullData, thumbnail: thumbnail)
+    }
+
+    private static func resized(_ image: UIImage, maximumLongEdge: CGFloat) -> UIImage {
+        let size = image.size
+        let longEdge = max(size.width, size.height)
+        let scale = longEdge > maximumLongEdge ? maximumLongEdge / longEdge : 1
+        let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            UIColor.systemBackground.setFill()
+            UIRectFill(CGRect(origin: .zero, size: target))
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+}
+
+private enum InvestmentProductImageError: LocalizedError {
+    case imageTooLarge
+
+    var errorDescription: String? {
+        L10n.investment.error.imageTooLarge
+    }
+}
+
+private struct InvestmentCameraPicker: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    let onImage: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: InvestmentCameraPicker
+
+        init(parent: InvestmentCameraPicker) {
+            self.parent = parent
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.onImage(image)
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+    }
+}
+
 private func parsedDecimal(_ text: String) -> Decimal {
     let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
     return Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) ?? 0
-}
-
-private func investmentAccountingCurrency(ownerUserID: UUID, context: ModelContext) -> String {
-    let walletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
-    let wallet = try? context.fetch(FetchDescriptor<LedgerWallet>()).first { $0.id == walletID }
-    return wallet?.currencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
 }
 
 private func matchingRate(from source: String, to target: String, rates: [MistiaExchangeRate]) -> (rate: MistiaExchangeRate, isInverse: Bool)? {

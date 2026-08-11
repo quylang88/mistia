@@ -73,7 +73,6 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         let investmentChannels: [RemoteInvestmentChannel] = try await fetchRows(entity: .investmentChannel, subjectUserID: subjectUserID, session: session)
         let investmentAssets: [RemoteInvestmentAsset] = try await fetchRows(entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
         let investmentTrades: [RemoteInvestmentTrade] = try await fetchRows(entity: .investmentTrade, subjectUserID: subjectUserID, session: session)
-        let investmentValuations: [RemoteInvestmentValuation] = try await fetchRows(entity: .investmentValuation, subjectUserID: subjectUserID, session: session)
         let investmentPostings: [RemoteInvestmentWalletPosting] = try await fetchRows(entity: .investmentPosting, subjectUserID: subjectUserID, session: session)
 
         return MistiaRemoteSnapshot(
@@ -91,7 +90,6 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             investmentChannels: investmentChannels,
             investmentAssets: investmentAssets,
             investmentTrades: investmentTrades,
-            investmentValuations: investmentValuations,
             investmentPostings: investmentPostings
         )
     }
@@ -131,8 +129,6 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentAsset)
         case .investmentTrade:
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentTrade)
-        case .investmentValuation:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentValuation)
         case .investmentPosting:
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentPosting)
         }
@@ -174,14 +170,15 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .investmentChannel(let row):
             return .investmentChannel(try await createRow(row, entity: .investmentChannel, subjectUserID: subjectUserID, session: session))
         case .investmentAsset(let row):
-            return .investmentAsset(try await createRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session))
+            try await uploadPendingInvestmentImage(for: row, session: session)
+            let saved = try await createRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
+            await finalizeInvestmentImageUpdate(assetID: row.id, session: session)
+            return .investmentAsset(saved)
         case .investmentTrade(let row):
             guard let trade = try await mutateInvestmentTrade(row, expectedVersion: nil, force: false, session: session) else {
                 throw SupabaseServiceError.invalidResponse
             }
             return .investmentTrade(trade)
-        case .investmentValuation(let row):
-            return .investmentValuation(try await createRow(row, entity: .investmentValuation, subjectUserID: subjectUserID, session: session))
         case .investmentPosting:
             throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
@@ -226,12 +223,21 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .investmentChannel(let row):
             return try await updateRow(row, entity: .investmentChannel, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentChannel)
         case .investmentAsset(let row):
-            return try await updateRow(row, entity: .investmentAsset, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentAsset)
+            try await uploadPendingInvestmentImage(for: row, session: session)
+            let saved: RemoteInvestmentAsset? = try await updateRow(
+                row,
+                entity: .investmentAsset,
+                expectedVersion: expectedVersion,
+                subjectUserID: subjectUserID,
+                session: session
+            )
+            if saved != nil {
+                await finalizeInvestmentImageUpdate(assetID: row.id, session: session)
+            }
+            return saved.map(MistiaSyncUploadRecord.investmentAsset)
         case .investmentTrade(let row):
             return try await mutateInvestmentTrade(row, expectedVersion: expectedVersion, force: false, session: session)
                 .map(MistiaSyncUploadRecord.investmentTrade)
-        case .investmentValuation(let row):
-            return try await updateRow(row, entity: .investmentValuation, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentValuation)
         case .investmentPosting:
             throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
@@ -337,9 +343,6 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
                 deviceID: deviceID,
                 session: session
             ).map(MistiaSyncUploadRecord.investmentTrade)
-        case .investmentValuation:
-            let rows: [RemoteInvestmentValuation] = try await performRequest(request: request)
-            return rows.first.map(MistiaSyncUploadRecord.investmentValuation)
         case .investmentPosting:
             throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
@@ -376,14 +379,15 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .investmentChannel(let row):
             return .investmentChannel(try await upsertRow(row, entity: .investmentChannel, subjectUserID: subjectUserID, session: session))
         case .investmentAsset(let row):
-            return .investmentAsset(try await upsertRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session))
+            try await uploadPendingInvestmentImage(for: row, session: session)
+            let saved = try await upsertRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
+            await finalizeInvestmentImageUpdate(assetID: row.id, session: session)
+            return .investmentAsset(saved)
         case .investmentTrade(let row):
             guard let trade = try await mutateInvestmentTrade(row, expectedVersion: nil, force: true, session: session) else {
                 throw SupabaseServiceError.invalidResponse
             }
             return .investmentTrade(trade)
-        case .investmentValuation(let row):
-            return .investmentValuation(try await upsertRow(row, entity: .investmentValuation, subjectUserID: subjectUserID, session: session))
         case .investmentPosting:
             throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
         }
@@ -405,6 +409,90 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             session: session
         )
         return rows.first { $0.id == row.id }
+    }
+
+    private func uploadPendingInvestmentImage(
+        for asset: RemoteInvestmentAsset,
+        session: SupabaseAuthSession
+    ) async throws {
+        guard let path = asset.imagePath,
+              let data = try InvestmentProductImageStore().uploadData(for: path) else {
+            return
+        }
+        let configuration = try configuration()
+        let url = storageObjectURL(configuration: configuration, objectPath: path)
+        var request = authorizedRequest(url: url, session: session)
+        request.httpMethod = "POST"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("false", forHTTPHeaderField: "x-upsert")
+        request.httpBody = data
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseServiceError.invalidResponse
+        }
+        var uploadSucceeded = (200..<300).contains(httpResponse.statusCode)
+        if !uploadSucceeded, [400, 409].contains(httpResponse.statusCode) {
+            uploadSucceeded = try await remoteInvestmentImageMatches(data, at: url, session: session)
+        }
+        guard uploadSucceeded else {
+            throw syncRequestErrorMessage(
+                request: request,
+                statusCode: httpResponse.statusCode,
+                data: responseData
+            )
+        }
+        try InvestmentProductImageStore().markUploadSucceeded(for: path)
+    }
+
+    private func remoteInvestmentImageMatches(
+        _ expectedData: Data,
+        at url: URL,
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        let request = authorizedRequest(url: url, session: session)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { return false }
+        return (200..<300).contains(httpResponse.statusCode) && data == expectedData
+    }
+
+    private func finalizeInvestmentImageUpdate(
+        assetID: UUID,
+        session: SupabaseAuthSession
+    ) async {
+        let store = InvestmentProductImageStore()
+        try? store.markAssetUpdateSucceeded(assetID: assetID)
+        guard let configuration = try? configuration(),
+              let paths = try? store.pendingDeletionPaths() else {
+            return
+        }
+        for path in paths {
+            var request = authorizedRequest(
+                url: storageObjectURL(configuration: configuration, objectPath: path),
+                session: session
+            )
+            request.httpMethod = "DELETE"
+            guard let (_, response) = try? await URLSession.shared.data(for: request),
+                  let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) || httpResponse.statusCode == 404 else {
+                continue
+            }
+            try? store.markDeletionSucceeded(for: path)
+        }
+    }
+
+    private func storageObjectURL(
+        configuration: MistiaSyncConfiguration,
+        objectPath: String
+    ) -> URL {
+        objectPath.split(separator: "/").reduce(
+            configuration.projectURL
+                .appending(path: "storage")
+                .appending(path: "v1")
+                .appending(path: "object")
+                .appending(path: "investment-product-images")
+        ) { url, component in
+            url.appending(path: String(component))
+        }
     }
 
     private func deleteInvestmentTrade(

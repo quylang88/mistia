@@ -213,6 +213,8 @@ enum MistiaSchemaV7: VersionedSchema {
 }
 
 enum MistiaSchemaV8: VersionedSchema {
+    typealias InvestmentAsset = MistiaSchemaV8InvestmentModels.InvestmentAsset
+
     static var versionIdentifier: Schema.Version {
         Schema.Version(8, 0, 0)
     }
@@ -240,6 +242,38 @@ enum MistiaSchemaV8: VersionedSchema {
             InvestmentAsset.self,
             InvestmentTrade.self,
             InvestmentValuation.self,
+            InvestmentWalletPosting.self
+        ]
+    }
+}
+
+enum MistiaSchemaV9: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(9, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            SettlementGroup.self,
+            SettlementParticipant.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self,
+            InvestmentChannel.self,
+            InvestmentAsset.self,
+            InvestmentTrade.self,
             InvestmentWalletPosting.self
         ]
     }
@@ -287,7 +321,8 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
             MistiaSchemaV5.self,
             MistiaSchemaV6.self,
             MistiaSchemaV7.self,
-            MistiaSchemaV8.self
+            MistiaSchemaV8.self,
+            MistiaSchemaV9.self
         ]
     }
 
@@ -330,7 +365,17 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
                     )
                 },
                 didMigrate: { context in
-                    try InvestmentV8Migration.rebuildDerivedAccounting(context: context)
+                    try InvestmentPersistenceService.rebuildDerivedAccountingForV8(context: context)
+                }
+            ),
+            MigrationStage.custom(
+                fromVersion: MistiaSchemaV8.self,
+                toVersion: MistiaSchemaV9.self,
+                willMigrate: nil,
+                didMigrate: { context in
+                    try InvestmentPersistenceService.rebuildDerivedAccountingForFIFO(
+                        context: context
+                    )
                 }
             )
         ]
@@ -405,12 +450,6 @@ private enum InvestmentV8Migration {
                 }
             }
         }
-    }
-
-    static func rebuildDerivedAccounting(context: ModelContext) throws {
-        try InvestmentPersistenceService.rebuildDerivedAccountingAfterLegacyFieldRemoval(
-            context: context
-        )
     }
 
     private static func isValidPositiveRate(_ value: String?) -> Bool {

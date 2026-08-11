@@ -270,10 +270,10 @@ final class InvestmentPersistenceTests: XCTestCase {
         )
 
         let recalculatedSell = try XCTUnwrap(fetchTrade(id: sellDraft.id, fixture))
-        XCTAssertEqual(recalculatedSell.releasedCostBasisMinor, 150)
-        XCTAssertEqual(recalculatedSell.realizedProfitLossMinor, 30)
+        XCTAssertEqual(recalculatedSell.releasedCostBasisMinor, 100)
+        XCTAssertEqual(recalculatedSell.realizedProfitLossMinor, 80)
         let systemWallet = try XCTUnwrap(fetchSystemWallet(fixture))
-        XCTAssertEqual(try balance(systemWallet, fixture), 30)
+        XCTAssertEqual(try balance(systemWallet, fixture), 80)
     }
 
     func testCrossCurrencyWalletLegsPreserveAccountingSaleIdentityAfterRounding() throws {
@@ -490,7 +490,6 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertTrue(try fixture.context.fetch(FetchDescriptor<InvestmentChannel>()).isEmpty)
         XCTAssertTrue(try fixture.context.fetch(FetchDescriptor<InvestmentAsset>()).isEmpty)
         XCTAssertTrue(try fixture.context.fetch(FetchDescriptor<InvestmentTrade>()).isEmpty)
-        XCTAssertTrue(try fixture.context.fetch(FetchDescriptor<InvestmentValuation>()).isEmpty)
         XCTAssertTrue(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).isEmpty)
         XCTAssertTrue(
             try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
@@ -1060,7 +1059,7 @@ final class InvestmentPersistenceTests: XCTestCase {
     }
 
     private func makeFixture() throws -> Fixture {
-        let schema = Schema(versionedSchema: MistiaSchemaV8.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)

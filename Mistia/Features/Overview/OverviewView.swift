@@ -110,18 +110,16 @@ private struct OverviewRenderSnapshotCache {
 }
 
 private struct InvestmentOverviewSnapshot {
-    let investedCapitalMinor: Int64
+    let remainingInventoryCostMinor: Int64
     let realizedProfitLossMinor: Int64
-    let walletBalanceMinor: Int64
-    let marketValueInPrimaryCurrencyMinor: Int64
+    let inventoryCostInPrimaryCurrencyMinor: Int64
     let currencyCode: String
 
     static func empty(currencyCode: String) -> InvestmentOverviewSnapshot {
         InvestmentOverviewSnapshot(
-            investedCapitalMinor: 0,
+            remainingInventoryCostMinor: 0,
             realizedProfitLossMinor: 0,
-            walletBalanceMinor: 0,
-            marketValueInPrimaryCurrencyMinor: 0,
+            inventoryCostInPrimaryCurrencyMinor: 0,
             currencyCode: currencyCode
         )
     }
@@ -156,7 +154,6 @@ struct OverviewRenderSnapshotCacheKey: Hashable {
     let investmentChannelSignature: MistiaCollectionChangeSignature
     let investmentAssetSignature: MistiaCollectionChangeSignature
     let investmentTradeSignature: MistiaCollectionChangeSignature
-    let investmentValuationSignature: MistiaCollectionChangeSignature
 }
 
 struct OverviewView: View {
@@ -192,7 +189,6 @@ struct OverviewView: View {
     @Query private var storedInvestmentChannels: [InvestmentChannel]
     @Query private var storedInvestmentAssets: [InvestmentAsset]
     @Query private var storedInvestmentTrades: [InvestmentTrade]
-    @Query private var storedInvestmentValuations: [InvestmentValuation]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     private struct StatementTarget: Identifiable, Hashable {
@@ -402,7 +398,7 @@ struct OverviewView: View {
             currencyCode: currencyCode,
             balanceIndex: balanceIndex,
             exchangeRates: appExchangeRates,
-            additionalAssetValueMinor: investmentSnapshot.marketValueInPrimaryCurrencyMinor,
+            additionalAssetValueMinor: investmentSnapshot.inventoryCostInPrimaryCurrencyMinor,
             familyTransactions: usesAggregateFamilyBudgetSpending ? familyTransactions : [],
             familySpendingAvailable: usesAggregateFamilyBudgetSpending,
             referenceDate: .now,
@@ -560,12 +556,6 @@ struct OverviewView: View {
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
                 remoteVersion: \.remoteVersion
-            ),
-            investmentValuationSignature: MistiaCollectionChangeSignature.make(
-                storedInvestmentValuations,
-                updatedAt: \.updatedAt,
-                deletedAt: \.deletedAt,
-                remoteVersion: \.remoteVersion
             )
         )
     }
@@ -642,18 +632,12 @@ struct OverviewView: View {
                 .sorted(by: oldestOverviewInvestmentTradeFirst)
             let quantity = assetTrades.last?.positionQuantityAfter ?? 0
             let costBasis = assetTrades.last?.positionCostBasisAfterMinor ?? 0
-            let latestValuation = storedInvestmentValuations
-                .filter { $0.assetID == asset.id && $0.deletedAt == nil }
-                .max { lhs, rhs in
-                    if lhs.valuedAt != rhs.valuedAt { return lhs.valuedAt < rhs.valuedAt }
-                    return lhs.createdAt < rhs.createdAt
-                }
             return InvestmentAssetPositionSnapshot(
                 id: asset.id,
                 channelID: asset.channelID,
                 quantity: quantity,
                 remainingCostBasisMinor: costBasis,
-                marketValueMinor: latestValuation?.accountingMarketValueMinor
+                openLotCount: 0
             )
         }
 
@@ -686,25 +670,25 @@ struct OverviewView: View {
                     releasedCostBasisMinor: $0.releasedCostBasisMinor,
                     realizedProfitLossMinor: $0.realizedProfitLossMinor,
                     positionQuantityAfter: $0.positionQuantityAfter,
-                    positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor
+                    positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor,
+                    openLotCountAfter: 0
                 )
             },
             tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
             period: DateInterval(start: monthStart, end: monthEnd),
             investmentWalletBalanceMinor: walletBalance
         )
-        let marketValueInPrimaryCurrency = MistiaCurrencyLogic.convertedMinorAmount(
-            summary.marketValueMinor,
+        let inventoryCostInPrimaryCurrency = MistiaCurrencyLogic.convertedMinorAmount(
+            summary.remainingInventoryCostMinor,
             from: accountingCurrency,
             to: currencyCode,
             rates: appExchangeRates
-        ) ?? (accountingCurrency == MistiaCurrencyLogic.normalizedCode(currencyCode) ? summary.marketValueMinor : 0)
+        ) ?? (accountingCurrency == MistiaCurrencyLogic.normalizedCode(currencyCode) ? summary.remainingInventoryCostMinor : 0)
 
         return InvestmentOverviewSnapshot(
-            investedCapitalMinor: summary.investedCapitalMinor,
+            remainingInventoryCostMinor: summary.remainingInventoryCostMinor,
             realizedProfitLossMinor: summary.realizedProfitLossMinor,
-            walletBalanceMinor: summary.investmentWalletBalanceMinor,
-            marketValueInPrimaryCurrencyMinor: marketValueInPrimaryCurrency,
+            inventoryCostInPrimaryCurrencyMinor: inventoryCostInPrimaryCurrency,
             currencyCode: accountingCurrency
         )
     }
@@ -1466,19 +1450,10 @@ private struct InvestmentOverviewCard: View {
                     VStack(spacing: 0) {
                         rowItem(
                             title: L10n.investment.hub.investedCapital,
-                            value: snapshot.investedCapitalMinor.formattedCurrency(code: snapshot.currencyCode),
+                            value: snapshot.remainingInventoryCostMinor.formattedCurrency(code: snapshot.currencyCode),
                             valueColor: .primary,
                             iconToken: "mistia.wallet.investment",
                             tint: MistiaAccent.purple.color
-                        )
-                        Divider()
-                            .padding(.leading, 56)
-                        rowItem(
-                            title: L10n.investment.hub.marketValue,
-                            value: snapshot.marketValueInPrimaryCurrencyMinor.formattedCurrency(code: snapshot.currencyCode),
-                            valueColor: .primary,
-                            iconToken: "mistia.category.parent.income.investment_finance",
-                            tint: .indigo
                         )
                         Divider()
                             .padding(.leading, 56)

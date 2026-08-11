@@ -1145,7 +1145,6 @@ nonisolated enum MistiaBootstrap {
              .investmentChannel,
              .investmentAsset,
              .investmentTrade,
-             .investmentValuation,
              .investmentPosting:
             return []
         }

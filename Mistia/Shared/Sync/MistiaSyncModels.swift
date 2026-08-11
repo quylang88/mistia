@@ -1037,7 +1037,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
     let investmentChannels: [RemoteInvestmentChannel]
     let investmentAssets: [RemoteInvestmentAsset]
     let investmentTrades: [RemoteInvestmentTrade]
-    let investmentValuations: [RemoteInvestmentValuation]
     let investmentPostings: [RemoteInvestmentWalletPosting]
 
     private enum CodingKeys: String, CodingKey {
@@ -1055,7 +1054,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         case investmentChannels
         case investmentAssets
         case investmentTrades
-        case investmentValuations
         case investmentPostings
     }
 
@@ -1074,7 +1072,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         investmentChannels: [RemoteInvestmentChannel] = [],
         investmentAssets: [RemoteInvestmentAsset] = [],
         investmentTrades: [RemoteInvestmentTrade] = [],
-        investmentValuations: [RemoteInvestmentValuation] = [],
         investmentPostings: [RemoteInvestmentWalletPosting] = []
     ) {
         self.wallets = wallets
@@ -1091,7 +1088,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         self.investmentChannels = investmentChannels
         self.investmentAssets = investmentAssets
         self.investmentTrades = investmentTrades
-        self.investmentValuations = investmentValuations
         self.investmentPostings = investmentPostings
     }
 
@@ -1111,7 +1107,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         investmentChannels = try container.decodeIfPresent([RemoteInvestmentChannel].self, forKey: .investmentChannels) ?? []
         investmentAssets = try container.decodeIfPresent([RemoteInvestmentAsset].self, forKey: .investmentAssets) ?? []
         investmentTrades = try container.decodeIfPresent([RemoteInvestmentTrade].self, forKey: .investmentTrades) ?? []
-        investmentValuations = try container.decodeIfPresent([RemoteInvestmentValuation].self, forKey: .investmentValuations) ?? []
         investmentPostings = try container.decodeIfPresent([RemoteInvestmentWalletPosting].self, forKey: .investmentPostings) ?? []
     }
 
@@ -1130,7 +1125,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
         investmentChannels: [],
         investmentAssets: [],
         investmentTrades: [],
-        investmentValuations: [],
         investmentPostings: []
     )
 
@@ -1149,7 +1143,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
             + investmentChannels.count
             + investmentAssets.count
             + investmentTrades.count
-            + investmentValuations.count
             + investmentPostings.count
     }
 
@@ -1168,7 +1161,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
             + investmentChannels.activeRemoteRowCount
             + investmentAssets.activeRemoteRowCount
             + investmentTrades.activeRemoteRowCount
-            + investmentValuations.activeRemoteRowCount
             + investmentPostings.activeRemoteRowCount
     }
 
@@ -1223,7 +1215,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
     var activeInvestmentChannels: [RemoteInvestmentChannel] { investmentChannels.filter { $0.deletedAt == nil } }
     var activeInvestmentAssets: [RemoteInvestmentAsset] { investmentAssets.filter { $0.deletedAt == nil } }
     var activeInvestmentTrades: [RemoteInvestmentTrade] { investmentTrades.filter { $0.deletedAt == nil } }
-    var activeInvestmentValuations: [RemoteInvestmentValuation] { investmentValuations.filter { $0.deletedAt == nil } }
     var activeInvestmentPostings: [RemoteInvestmentWalletPosting] { investmentPostings.filter { $0.deletedAt == nil } }
 
     var fingerprint: String {
@@ -1242,7 +1233,6 @@ nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
             investmentChannels: investmentChannels.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
             investmentAssets: investmentAssets.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
             investmentTrades: investmentTrades.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
-            investmentValuations: investmentValuations.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) },
             investmentPostings: investmentPostings.sorted { MistiaStableUUIDOrdering.precedes($0.id, $1.id) }
         )
 
@@ -1300,7 +1290,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
     case investmentChannel(RemoteInvestmentChannel)
     case investmentAsset(RemoteInvestmentAsset)
     case investmentTrade(RemoteInvestmentTrade)
-    case investmentValuation(RemoteInvestmentValuation)
     case investmentPosting(RemoteInvestmentWalletPosting)
 
     var entity: MistiaSyncEntity {
@@ -1330,7 +1319,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel: .investmentChannel
         case .investmentAsset: .investmentAsset
         case .investmentTrade: .investmentTrade
-        case .investmentValuation: .investmentValuation
         case .investmentPosting: .investmentPosting
         }
     }
@@ -1362,7 +1350,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): row.id
         case .investmentAsset(let row): row.id
         case .investmentTrade(let row): row.id
-        case .investmentValuation(let row): row.id
         case .investmentPosting(let row): row.id
         }
     }
@@ -1394,7 +1381,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): row.updatedAt
         case .investmentAsset(let row): row.updatedAt
         case .investmentTrade(let row): row.updatedAt
-        case .investmentValuation(let row): row.updatedAt
         case .investmentPosting(let row): row.updatedAt
         }
     }
@@ -1426,7 +1412,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): row.userID
         case .investmentAsset(let row): row.userID
         case .investmentTrade(let row): row.userID
-        case .investmentValuation(let row): row.userID
         case .investmentPosting(let row): row.userID
         }
     }
@@ -1458,7 +1443,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): row.deletedAt
         case .investmentAsset(let row): row.deletedAt
         case .investmentTrade(let row): row.deletedAt
-        case .investmentValuation(let row): row.deletedAt
         case .investmentPosting(let row): row.deletedAt
         }
     }
@@ -1490,7 +1474,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): row.syncVersion
         case .investmentAsset(let row): row.syncVersion
         case .investmentTrade(let row): row.syncVersion
-        case .investmentValuation(let row): row.syncVersion
         case .investmentPosting(let row): row.syncVersion
         }
     }
@@ -1522,7 +1505,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): row.lastModifiedByDeviceID
         case .investmentAsset(let row): row.lastModifiedByDeviceID
         case .investmentTrade(let row): row.lastModifiedByDeviceID
-        case .investmentValuation(let row): row.lastModifiedByDeviceID
         case .investmentPosting(let row): row.lastModifiedByDeviceID
         }
     }
@@ -1737,11 +1719,9 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row):
             return [entity.rawValue, row.name, row.iconSymbolName, row.iconColorHex, String(row.sortOrder), row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentAsset(let row):
-            return [entity.rawValue, row.channelID.uuidString, row.name, row.currencyCode, row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [entity.rawValue, row.channelID.uuidString, row.name, row.currencyCode, row.imagePath ?? "", row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentTrade(let row):
             return [entity.rawValue, row.channelID.uuidString, row.assetID.uuidString, row.kindRawValue, row.quantityDecimalString, String(row.grossAmountMinor), String(row.releasedCostBasisMinor), String(row.realizedProfitLossMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
-        case .investmentValuation(let row):
-            return [entity.rawValue, row.assetID.uuidString, String(row.marketValueMinor), String(row.accountingMarketValueMinor), Self.dateString(row.valuedAt), Self.dateString(row.deletedAt)].joined(separator: "|")
         case .investmentPosting(let row):
             return [entity.rawValue, row.eventID.uuidString, row.walletID.uuidString, row.roleRawValue, String(row.amountMinor), String(row.accountingAmountMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
         }
@@ -1777,7 +1757,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): return row.name
         case .investmentAsset(let row): return row.name
         case .investmentTrade(let row): return row.kindRawValue == InvestmentTradeKind.buy.rawValue ? L10n.investment.hub.buy : L10n.investment.hub.sell
-        case .investmentValuation: return L10n.investment.valuation.title
         case .investmentPosting: return L10n.investment.wallet.detailTitle
         }
     }
@@ -1791,7 +1770,7 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
 
         switch self {
         case .wallet, .creditCardProfile, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrence,
-             .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation, .investmentPosting:
+             .investmentChannel, .investmentAsset, .investmentTrade, .investmentPosting:
             return self
         case .category(var row):
             if let replacementID = mappings[row.id] {
@@ -1878,8 +1857,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
             row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentAsset(row)
         case .investmentTrade(var row):
             row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentTrade(row)
-        case .investmentValuation(var row):
-            row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentValuation(row)
         case .investmentPosting(var row):
             row.syncVersion = nextVersion; row.lastModifiedByDeviceID = deviceID; return .investmentPosting(row)
         }
@@ -1914,7 +1891,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel(let row): data = try encoder.encode(row)
         case .investmentAsset(let row): data = try encoder.encode(row)
         case .investmentTrade(let row): data = try encoder.encode(row)
-        case .investmentValuation(let row): data = try encoder.encode(row)
         case .investmentPosting(let row): data = try encoder.encode(row)
         }
 
@@ -1956,7 +1932,6 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         case .investmentChannel: return .investmentChannel(try decoder.decode(RemoteInvestmentChannel.self, from: data))
         case .investmentAsset: return .investmentAsset(try decoder.decode(RemoteInvestmentAsset.self, from: data))
         case .investmentTrade: return .investmentTrade(try decoder.decode(RemoteInvestmentTrade.self, from: data))
-        case .investmentValuation: return .investmentValuation(try decoder.decode(RemoteInvestmentValuation.self, from: data))
         case .investmentPosting: return .investmentPosting(try decoder.decode(RemoteInvestmentWalletPosting.self, from: data))
         }
     }
@@ -2016,7 +1991,6 @@ nonisolated extension MistiaRemoteSnapshot {
         for row in investmentChannels where predicate(.investmentChannel(row)) { return true }
         for row in investmentAssets where predicate(.investmentAsset(row)) { return true }
         for row in investmentTrades where predicate(.investmentTrade(row)) { return true }
-        for row in investmentValuations where predicate(.investmentValuation(row)) { return true }
         return false
     }
 
@@ -2037,7 +2011,6 @@ nonisolated extension MistiaRemoteSnapshot {
         for row in investmentChannels { body(.investmentChannel(row)) }
         for row in investmentAssets { body(.investmentAsset(row)) }
         for row in investmentTrades { body(.investmentTrade(row)) }
-        for row in investmentValuations { body(.investmentValuation(row)) }
     }
 
     private func appendUploadRecords(
@@ -2092,7 +2065,6 @@ nonisolated extension MistiaRemoteSnapshot {
         for row in investmentChannels { let record = MistiaSyncUploadRecord.investmentChannel(row); if shouldInclude(record) { records.append(record) } }
         for row in investmentAssets { let record = MistiaSyncUploadRecord.investmentAsset(row); if shouldInclude(record) { records.append(record) } }
         for row in investmentTrades { let record = MistiaSyncUploadRecord.investmentTrade(row); if shouldInclude(record) { records.append(record) } }
-        for row in investmentValuations { let record = MistiaSyncUploadRecord.investmentValuation(row); if shouldInclude(record) { records.append(record) } }
     }
 }
 
@@ -2127,7 +2099,7 @@ nonisolated extension MistiaSyncEntity {
             return L10n.shared.sync.mistiasync.installment
         case .dueOccurrenceRecord:
             return L10n.shared.sync.mistiasync.dueOccurrence
-        case .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation, .investmentPosting:
+        case .investmentChannel, .investmentAsset, .investmentTrade, .investmentPosting:
             return L10n.investment.title
         }
     }

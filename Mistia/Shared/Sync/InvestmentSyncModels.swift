@@ -38,6 +38,7 @@ nonisolated struct RemoteInvestmentAsset: MistiaRemoteRow {
     var channelID: UUID
     var name: String
     var currencyCode: String
+    var imagePath: String?
     var sortOrder: Int
     var isArchived: Bool
     var archivedAt: Date?
@@ -52,6 +53,7 @@ nonisolated struct RemoteInvestmentAsset: MistiaRemoteRow {
         case channelID = "channel_id"
         case name
         case currencyCode = "currency_code"
+        case imagePath = "image_path"
         case sortOrder = "sort_order"
         case isArchived = "is_archived"
         case archivedAt = "archived_at"
@@ -132,34 +134,6 @@ nonisolated struct RemoteInvestmentTrade: MistiaRemoteRow {
     }
 }
 
-nonisolated struct RemoteInvestmentValuation: MistiaRemoteRow {
-    static let entity: MistiaSyncEntity = .investmentValuation
-    var userID: UUID
-    var id: UUID
-    var channelID: UUID
-    var assetID: UUID
-    var marketValueMinor: Int64
-    var accountingMarketValueMinor: Int64
-    var currencyCode: String
-    var accountingCurrencyCode: String
-    var exchangeRateDecimalString: String?
-    var valuedAt: Date
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
-    var syncVersion: Int64
-    var lastModifiedByDeviceID: UUID?
-
-    enum CodingKeys: String, CodingKey {
-        case userID = "user_id", id, channelID = "channel_id", assetID = "asset_id"
-        case marketValueMinor = "market_value_minor", accountingMarketValueMinor = "accounting_market_value_minor"
-        case currencyCode = "currency_code", accountingCurrencyCode = "accounting_currency_code"
-        case exchangeRateDecimalString = "exchange_rate_decimal_string", valuedAt = "valued_at"
-        case createdAt = "created_at", updatedAt = "updated_at", deletedAt = "deleted_at"
-        case syncVersion = "sync_version", lastModifiedByDeviceID = "last_modified_by_device_id"
-    }
-}
-
 nonisolated struct RemoteInvestmentWalletPosting: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .investmentPosting
     var userID: UUID
@@ -208,7 +182,8 @@ nonisolated extension RemoteInvestmentAsset {
     init(local: InvestmentAsset) {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID,
-            name: local.name, currencyCode: local.currencyCode, sortOrder: local.sortOrder,
+            name: local.name, currencyCode: local.currencyCode, imagePath: local.imagePath,
+            sortOrder: local.sortOrder,
             isArchived: local.isArchived, archivedAt: local.archivedAt,
             createdAt: local.createdAt, updatedAt: local.updatedAt, deletedAt: local.deletedAt,
             syncVersion: local.remoteVersion, lastModifiedByDeviceID: nil
@@ -242,19 +217,6 @@ nonisolated extension RemoteInvestmentTrade {
             positionCostBasisAfterMinor: local.positionCostBasisAfterMinor,
             note: local.note, occurredAt: local.occurredAt, createdAt: local.createdAt,
             updatedAt: local.updatedAt, deletedAt: local.deletedAt,
-            syncVersion: local.remoteVersion, lastModifiedByDeviceID: nil
-        )
-    }
-}
-
-nonisolated extension RemoteInvestmentValuation {
-    init(local: InvestmentValuation) {
-        self.init(
-            userID: local.ownerUserID, id: local.id, channelID: local.channelID, assetID: local.assetID,
-            marketValueMinor: local.marketValueMinor, accountingMarketValueMinor: local.accountingMarketValueMinor,
-            currencyCode: local.currencyCode, accountingCurrencyCode: local.accountingCurrencyCode,
-            exchangeRateDecimalString: local.exchangeRateDecimalString, valuedAt: local.valuedAt,
-            createdAt: local.createdAt, updatedAt: local.updatedAt, deletedAt: local.deletedAt,
             syncVersion: local.remoteVersion, lastModifiedByDeviceID: nil
         )
     }

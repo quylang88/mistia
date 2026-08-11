@@ -2218,8 +2218,6 @@ private extension MistiaSyncEntity {
             return "chart.line.uptrend.xyaxis"
         case .investmentTrade:
             return "arrow.left.arrow.right.circle.fill"
-        case .investmentValuation:
-            return "chart.xyaxis.line"
         case .investmentPosting:
             return "list.bullet.rectangle.fill"
         }

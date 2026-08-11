@@ -1256,7 +1256,7 @@ actor SyncCoordinator {
         case .recurringBillPlan(let row):
             row.categoryID
         case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrence,
-             .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation, .investmentPosting:
+             .investmentChannel, .investmentAsset, .investmentTrade, .investmentPosting:
             nil
         }
     }
@@ -1687,7 +1687,7 @@ actor SyncCoordinator {
             return .bill
         case .installmentPlan:
             return .installment
-        case .investmentChannel, .investmentAsset, .investmentTrade, .investmentValuation:
+        case .investmentChannel, .investmentAsset, .investmentTrade:
             return .investment
         default:
             return nil
@@ -1983,11 +1983,6 @@ actor SyncCoordinator {
             row.syncVersion = max(remoteVersion, row.syncVersion)
             row.lastModifiedByDeviceID = nil
             return .investmentTrade(row)
-        case .investmentValuation(var row):
-            row.deletedAt = deletedAt
-            row.syncVersion = max(remoteVersion, row.syncVersion)
-            row.lastModifiedByDeviceID = nil
-            return .investmentValuation(row)
         case .investmentPosting(var row):
             row.deletedAt = deletedAt
             row.syncVersion = max(remoteVersion, row.syncVersion)

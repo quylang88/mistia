@@ -53,11 +53,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Mistia dùng camera để chụp ảnh bill gắn vào giao dịch.</string>
+	<string>Mistia dùng camera để chụp ảnh hóa đơn hoặc sản phẩm.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Mistia dùng Face ID để mở khóa app khi bạn bật bảo mật sinh trắc học.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Mistia dùng quyền ảnh để bạn chọn bill gắn vào giao dịch.</string>
+	<string>Mistia dùng thư viện ảnh để chọn ảnh hóa đơn hoặc sản phẩm.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
