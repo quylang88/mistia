@@ -530,13 +530,6 @@ struct InvestmentHubView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .contextMenu {
-                    if canEdit {
-                        Button(L10n.common.delete, role: .destructive) { delete(trade) }
-                    } else {
-                        Button(L10n.investment.permission.requestEdit) { requestPermission(.edit) }
-                    }
-                }
             }
         }
     }
@@ -573,7 +566,10 @@ struct InvestmentHubView: View {
                     wallets: wallets,
                     ledgerTransactions: ledgerTransactions,
                     canUseOrdinaryWallet: canUseOrdinaryWallet,
-                    canEditExisting: canEdit
+                    canEditExisting: canEdit,
+                    onDelete: { trade in
+                        delete(trade)
+                    }
                 ) { errorMessage = $0 }
             case .valuation(let assetID, let valuationID):
                 if let asset = assets.first(where: { $0.id == assetID }) {
@@ -750,8 +746,9 @@ struct InvestmentHubView: View {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    private func delete(_ trade: InvestmentTrade) {
-        guard let ownerUserID else { return }
+    @discardableResult
+    private func delete(_ trade: InvestmentTrade) -> Bool {
+        guard let ownerUserID else { return false }
         do {
             _ = try InvestmentPersistenceService.deleteTrade(
                 ownerUserID: ownerUserID,
@@ -764,8 +761,10 @@ struct InvestmentHubView: View {
                 modifiedAt: trade.updatedAt,
                 subjectUserIDOverride: ownerUserID
             )
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -1154,6 +1153,7 @@ private struct InvestmentTradeEditorSheet: View {
     let ledgerTransactions: [LedgerTransaction]
     let canUseOrdinaryWallet: (LedgerWallet) -> Bool
     let canEditExisting: Bool
+    let onDelete: (InvestmentTrade) -> Bool
     let onError: (String) -> Void
 
     @State private var kind: InvestmentTradeKind = .buy
@@ -1211,7 +1211,6 @@ private struct InvestmentTradeEditorSheet: View {
                 Picker(L10n.investment.trade.asset, selection: $assetID) {
                     ForEach(assets) { asset in Text(asset.name).tag(Optional(asset.id)) }
                 }
-                .disabled(trade?.kind == .sell)
                 Picker(L10n.investment.title, selection: $kind) {
                     Text(L10n.investment.hub.buy).tag(InvestmentTradeKind.buy)
                     Text(L10n.investment.hub.sell).tag(InvestmentTradeKind.sell)
@@ -1234,6 +1233,18 @@ private struct InvestmentTradeEditorSheet: View {
                     Picker(kind == .buy ? L10n.investment.trade.fundingWallet : L10n.investment.trade.capitalWallet, selection: $walletID) {
                         ForEach(availableWallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet.id))
+                        }
+                    }
+                }
+                if let trade, canEditExisting {
+                    MistiaDestructiveActionSection(
+                        buttonTitle: L10n.investment.trade.deleteAction,
+                        descriptionText: L10n.investment.trade.deleteDescription,
+                        popupMessage: L10n.investment.trade.deleteConfirmation,
+                        confirmationButtonTitle: L10n.common.delete
+                    ) {
+                        if onDelete(trade) {
+                            dismiss()
                         }
                     }
                 }
