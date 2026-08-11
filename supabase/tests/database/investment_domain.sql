@@ -100,6 +100,11 @@ values
         '30000000-0000-4000-8000-000000000104',
         '30000000-0000-4000-8000-000000000001',
         'Low balance', 'cash', 'banknote.fill', '#444444', 'JPY', 50
+    ),
+    (
+        '30000000-0000-4000-8000-000000000105',
+        '30000000-0000-4000-8000-000000000001',
+        'Second capital return', 'bank', 'building.columns.fill', '#555555', 'JPY', 0
     );
 
 insert into public.investment_channels(
@@ -502,6 +507,362 @@ select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000104'),
     50::bigint,
     'failed edit leaves the rejected wallet unchanged'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000406',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000301',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '2',
+            'gross_amount_minor', 100,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 100,
+            'accounting_currency_code', 'JPY',
+            'funding_wallet_id', '30000000-0000-4000-8000-000000000101',
+            'occurred_at', '2026-08-09T00:00:05Z',
+            'created_at', '2026-08-09T00:00:05Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'buy is created to cover a sell correction'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000405',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000301',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '1',
+            'gross_amount_minor', 150,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 150,
+            'accounting_currency_code', 'JPY',
+            'capital_return_wallet_id', '30000000-0000-4000-8000-000000000102',
+            'occurred_at', '2026-08-09T00:00:06Z',
+            'created_at', '2026-08-09T00:00:06Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'sale is created before correction'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000405',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000202',
+            'asset_id', '30000000-0000-4000-8000-000000000302',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '3',
+            'gross_amount_minor', 260,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 260,
+            'accounting_currency_code', 'JPY',
+            'capital_return_wallet_id', '30000000-0000-4000-8000-000000000105',
+            'note', 'Corrected sale',
+            'occurred_at', '2026-08-09T00:00:07Z',
+            'created_at', '2026-08-09T00:00:06Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'sale correction moves the same trade between assets and capital wallets'
+);
+
+select is(
+    (select kind_raw_value from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    'sell',
+    'edited sale remains a sale'
+);
+select is(
+    (select asset_id from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    '30000000-0000-4000-8000-000000000302'::uuid,
+    'edited sale moves to the selected asset'
+);
+select is(
+    (select channel_id from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    '30000000-0000-4000-8000-000000000202'::uuid,
+    'edited sale follows the selected asset channel'
+);
+select is(
+    (select quantity_decimal_string::numeric from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    3::numeric,
+    'edited sale stores the corrected quantity'
+);
+select is(
+    (select gross_amount_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    260::bigint,
+    'edited sale stores the corrected total amount'
+);
+select is(
+    (select occurred_at from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    '2026-08-09T00:00:07Z'::timestamptz,
+    'edited sale stores the corrected date'
+);
+select is(
+    (select capital_return_wallet_id from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    '30000000-0000-4000-8000-000000000105'::uuid,
+    'edited sale stores the corrected capital-return wallet'
+);
+select is(
+    (select note from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    'Corrected sale',
+    'edited sale stores the corrected note'
+);
+select is(
+    (
+        select position_quantity_after_decimal_string::numeric
+        from public.investment_trades
+        where asset_id = '30000000-0000-4000-8000-000000000301'
+          and deleted_at is null
+        order by occurred_at desc, created_at desc, id desc
+        limit 1
+    ),
+    2::numeric,
+    'old asset position is rebuilt without the moved sale'
+);
+select is(
+    (
+        select position_cost_basis_after_minor
+        from public.investment_trades
+        where asset_id = '30000000-0000-4000-8000-000000000301'
+          and deleted_at is null
+        order by occurred_at desc, created_at desc, id desc
+        limit 1
+    ),
+    100::bigint,
+    'old asset capital is rebuilt without the moved sale'
+);
+select is(
+    (select position_quantity_after_decimal_string::numeric from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    1::numeric,
+    'new asset position reflects the edited sale'
+);
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    50::bigint,
+    'new asset capital reflects the edited sale'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000102'),
+    120::bigint,
+    'old capital-return wallet is restored after moving the sale'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000105'),
+    150::bigint,
+    'new capital-return wallet receives the released cost basis'
+);
+select is(
+    (
+        select current_balance_minor from public.ledger_wallets
+        where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    ),
+    140::bigint,
+    'Investment Wallet reflects profit after moving the sale'
+);
+select is(
+    (
+        select count(distinct asset_id)::bigint
+        from public.investment_wallet_postings
+        where trade_id = '30000000-0000-4000-8000-000000000405'
+          and deleted_at is null
+    ),
+    1::bigint,
+    'edited sale active postings use one asset'
+);
+select is(
+    (
+        select asset_id
+        from public.investment_wallet_postings
+        where trade_id = '30000000-0000-4000-8000-000000000405'
+          and deleted_at is null
+        limit 1
+    ),
+    '30000000-0000-4000-8000-000000000302'::uuid,
+    'edited sale active postings follow the new asset'
+);
+
+select throws_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        (
+            select to_jsonb(trade) || jsonb_build_object(
+                'kind_raw_value', 'buy',
+                'funding_wallet_id', '30000000-0000-4000-8000-000000000101',
+                'capital_return_wallet_id', null
+            )
+            from public.investment_trades trade
+            where trade.id = '30000000-0000-4000-8000-000000000405'
+        ),
+        null,
+        false
+    )
+    $$,
+    'P0001',
+    'Investment trade kind is immutable',
+    'an existing sale cannot become a buy'
+);
+
+select throws_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        (
+            select to_jsonb(trade) || jsonb_build_object(
+                'quantity_decimal_string', '5',
+                'gross_amount_minor', 500,
+                'accounting_gross_amount_minor', 500
+            )
+            from public.investment_trades trade
+            where trade.id = '30000000-0000-4000-8000-000000000405'
+        ),
+        null,
+        false
+    )
+    $$,
+    'P0001',
+    'Sale exceeds the quantity held',
+    'moving a sale cannot oversell the target asset'
+);
+select is(
+    (select quantity_decimal_string::numeric from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    3::numeric,
+    'failed oversell leaves sale quantity unchanged'
+);
+select is(
+    (select gross_amount_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    260::bigint,
+    'failed oversell leaves sale amount unchanged'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000105'),
+    150::bigint,
+    'failed oversell leaves the capital-return wallet unchanged'
+);
+
+select lives_ok(
+    $$
+    select * from public.delete_investment_trade(
+        '30000000-0000-4000-8000-000000000405',
+        '30000000-0000-4000-8000-000000000001',
+        (select sync_version from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+        '2026-08-09T00:00:08Z'::timestamptz,
+        '30000000-0000-4000-8000-000000000901'
+    )
+    $$,
+    'sale soft delete succeeds through the trade RPC'
+);
+select ok(
+    (select deleted_at is not null from public.investment_trades where id = '30000000-0000-4000-8000-000000000405'),
+    'sale is soft deleted'
+);
+select is(
+    (
+        select position_quantity_after_decimal_string::numeric
+        from public.investment_trades
+        where asset_id = '30000000-0000-4000-8000-000000000302'
+          and deleted_at is null
+        order by occurred_at desc, created_at desc, id desc
+        limit 1
+    ),
+    4::numeric,
+    'deleting the sale restores asset quantity'
+);
+select is(
+    (
+        select position_cost_basis_after_minor
+        from public.investment_trades
+        where asset_id = '30000000-0000-4000-8000-000000000302'
+          and deleted_at is null
+        order by occurred_at desc, created_at desc, id desc
+        limit 1
+    ),
+    200::bigint,
+    'deleting the sale restores asset capital'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000105'),
+    0::bigint,
+    'deleting the sale restores the capital-return wallet'
+);
+select is(
+    (
+        select current_balance_minor from public.ledger_wallets
+        where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    ),
+    30::bigint,
+    'deleting the sale restores Investment Wallet profit'
+);
+select is(
+    (
+        select count(*)::bigint
+        from public.investment_wallet_postings
+        where trade_id = '30000000-0000-4000-8000-000000000405'
+          and deleted_at is null
+    ),
+    0::bigint,
+    'deleting the sale removes its active postings'
+);
+
+select lives_ok(
+    $$
+    select * from public.delete_investment_trade(
+        '30000000-0000-4000-8000-000000000404',
+        '30000000-0000-4000-8000-000000000001',
+        (select sync_version from public.investment_trades where id = '30000000-0000-4000-8000-000000000404'),
+        '2026-08-09T00:00:09Z'::timestamptz,
+        '30000000-0000-4000-8000-000000000901'
+    )
+    $$,
+    'buy soft delete succeeds through the trade RPC'
+);
+select ok(
+    (select deleted_at is not null from public.investment_trades where id = '30000000-0000-4000-8000-000000000404'),
+    'buy is soft deleted'
+);
+select is(
+    (
+        select count(*)::bigint
+        from public.investment_trades
+        where asset_id = '30000000-0000-4000-8000-000000000302'
+          and deleted_at is null
+    ),
+    0::bigint,
+    'deleting the buy leaves no active trade on its asset'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000103'),
+    1000::bigint,
+    'deleting the buy restores its funding wallet'
+);
+select is(
+    (
+        select count(*)::bigint
+        from public.investment_wallet_postings
+        where trade_id = '30000000-0000-4000-8000-000000000404'
+          and deleted_at is null
+    ),
+    0::bigint,
+    'deleting the buy removes its active postings'
 );
 
 select pg_temp.set_actor('30000000-0000-4000-8000-000000000002');
