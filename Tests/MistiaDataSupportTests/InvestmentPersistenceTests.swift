@@ -602,6 +602,309 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(posting.amountMinor, -200)
     }
 
+    func testEditingExistingSellMovesItBetweenAssetsAndCapitalWalletsAndRebuildsBothHistories() throws {
+        let fixture = try makeFixture()
+        let secondCapitalWallet = LedgerWallet(
+            name: "Second capital",
+            kind: .bank,
+            iconSymbolName: "building.columns.fill",
+            iconColorHex: "#333333",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0
+        )
+        fixture.context.insert(secondCapitalWallet)
+        let secondChannel = try InvestmentPersistenceService.createChannel(
+            ownerUserID: fixture.ownerID,
+            name: "Second shop",
+            iconSymbolName: "shippingbox.fill",
+            iconColorHex: "#9A67FF",
+            primaryCurrencyCode: "JPY",
+            context: fixture.context
+        ).channel
+        let secondAsset = try InvestmentPersistenceService.createAsset(
+            ownerUserID: fixture.ownerID,
+            channelID: secondChannel.id,
+            name: "Item B",
+            currencyCode: "JPY",
+            context: fixture.context
+        )
+
+        let originalBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            asset: secondAsset,
+            channel: secondChannel,
+            kind: .buy,
+            quantity: 4,
+            gross: 160,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let originalSell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(2)
+        )
+        let correctedDate = fixture.start.addingTimeInterval(3)
+
+        let result = try InvestmentPersistenceService.saveTrade(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentTradeDraft(
+                id: originalSell.id,
+                channelID: secondChannel.id,
+                assetID: secondAsset.id,
+                kind: .sell,
+                quantity: 3,
+                grossAmountMinor: 260,
+                currencyCode: "JPY",
+                accountingGrossAmountMinor: 260,
+                accountingCurrencyCode: "JPY",
+                capitalReturnWalletID: secondCapitalWallet.id,
+                note: "Corrected sale",
+                occurredAt: correctedDate,
+                createdAt: originalSell.createdAt
+            ),
+            rates: [],
+            now: correctedDate.addingTimeInterval(1),
+            context: fixture.context
+        )
+
+        let storedSell = try XCTUnwrap(fetchTrade(id: originalSell.id, fixture))
+        XCTAssertEqual(storedSell.id, originalSell.id)
+        XCTAssertEqual(storedSell.kind, .sell)
+        XCTAssertEqual(storedSell.channelID, secondChannel.id)
+        XCTAssertEqual(storedSell.assetID, secondAsset.id)
+        XCTAssertEqual(storedSell.quantity, 3)
+        XCTAssertEqual(storedSell.grossAmountMinor, 260)
+        XCTAssertEqual(storedSell.occurredAt, correctedDate)
+        XCTAssertEqual(storedSell.capitalReturnWalletID, secondCapitalWallet.id)
+        XCTAssertEqual(storedSell.note, "Corrected sale")
+        XCTAssertEqual(storedSell.releasedCostBasisMinor, 120)
+        XCTAssertEqual(storedSell.realizedProfitLossMinor, 140)
+        XCTAssertEqual(storedSell.positionQuantityAfter, 1)
+        XCTAssertEqual(storedSell.positionCostBasisAfterMinor, 40)
+
+        let rebuiltOriginalBuy = try XCTUnwrap(fetchTrade(id: originalBuy.id, fixture))
+        XCTAssertEqual(rebuiltOriginalBuy.positionQuantityAfter, 2)
+        XCTAssertEqual(rebuiltOriginalBuy.positionCostBasisAfterMinor, 100)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 0)
+        XCTAssertEqual(try balance(secondCapitalWallet, fixture), 120)
+        XCTAssertEqual(try balance(try XCTUnwrap(fetchSystemWallet(fixture)), fixture), 140)
+        XCTAssertTrue(result.walletIDs.contains(fixture.capitalWallet.id))
+        XCTAssertTrue(result.walletIDs.contains(secondCapitalWallet.id))
+
+        let activePostings = try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+            .filter { $0.tradeID == originalSell.id && $0.deletedAt == nil }
+        XCTAssertEqual(Set(activePostings.map(\.assetID)), [secondAsset.id])
+        XCTAssertTrue(activePostings.contains { $0.walletID == secondCapitalWallet.id })
+    }
+
+    func testEditingExistingSellToInsufficientTargetPositionLeavesOriginalStateUnchanged() throws {
+        let fixture = try makeFixture()
+        let secondChannel = try InvestmentPersistenceService.createChannel(
+            ownerUserID: fixture.ownerID,
+            name: "Second shop",
+            iconSymbolName: "shippingbox.fill",
+            iconColorHex: "#9A67FF",
+            primaryCurrencyCode: "JPY",
+            context: fixture.context
+        ).channel
+        let secondAsset = try InvestmentPersistenceService.createAsset(
+            ownerUserID: fixture.ownerID,
+            channelID: secondChannel.id,
+            name: "Item B",
+            currencyCode: "JPY",
+            context: fixture.context
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            asset: secondAsset,
+            channel: secondChannel,
+            kind: .buy,
+            quantity: 1,
+            gross: 40,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let originalSell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(2)
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveTrade(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentTradeDraft(
+                    id: originalSell.id,
+                    channelID: secondChannel.id,
+                    assetID: secondAsset.id,
+                    kind: .sell,
+                    quantity: 2,
+                    grossAmountMinor: 300,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 300,
+                    accountingCurrencyCode: "JPY",
+                    capitalReturnWalletID: fixture.capitalWallet.id,
+                    occurredAt: fixture.start.addingTimeInterval(3),
+                    createdAt: originalSell.createdAt
+                ),
+                rates: [],
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentAccountingError, .insufficientPosition)
+        }
+
+        let storedSell = try XCTUnwrap(fetchTrade(id: originalSell.id, fixture))
+        XCTAssertEqual(storedSell.assetID, fixture.asset.id)
+        XCTAssertEqual(storedSell.channelID, fixture.channel.id)
+        XCTAssertEqual(storedSell.quantity, 1)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 50)
+        XCTAssertNil(storedSell.deletedAt)
+    }
+
+    func testEditingExistingSellCannotChangeSellIntoBuy() throws {
+        let fixture = try makeFixture()
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveTrade(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentTradeDraft(
+                    id: sell.id,
+                    channelID: fixture.channel.id,
+                    assetID: fixture.asset.id,
+                    kind: .buy,
+                    quantity: 1,
+                    grossAmountMinor: 100,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 100,
+                    accountingCurrencyCode: "JPY",
+                    fundingWalletID: fixture.fundingWallet.id,
+                    occurredAt: fixture.start.addingTimeInterval(2),
+                    createdAt: sell.createdAt
+                ),
+                rates: [],
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .invalidTradeInput)
+        }
+        XCTAssertEqual(try fetchTrade(id: sell.id, fixture)?.kind, .sell)
+    }
+
+    func testDeletingBuySoftDeletesTradeAndRestoresFundingWallet() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+
+        let result = try InvestmentPersistenceService.deleteTrade(
+            ownerUserID: fixture.ownerID,
+            tradeID: buy.id,
+            now: fixture.start.addingTimeInterval(1),
+            context: fixture.context
+        )
+
+        let storedBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
+        XCTAssertNotNil(storedBuy.deletedAt)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 1_000)
+        XCTAssertEqual(result.deletedTradeIDs, [buy.id])
+        XCTAssertTrue(
+            try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
+                .filter { $0.financialDomain == .investment }
+                .allSatisfy { $0.deletedAt != nil }
+        )
+        XCTAssertTrue(
+            try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+                .filter { $0.tradeID == buy.id }
+                .allSatisfy { $0.deletedAt != nil }
+        )
+    }
+
+    func testDeletingSellSoftDeletesTradeAndRestoresPositionCapitalAndProfit() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        let result = try InvestmentPersistenceService.deleteTrade(
+            ownerUserID: fixture.ownerID,
+            tradeID: sell.id,
+            now: fixture.start.addingTimeInterval(2),
+            context: fixture.context
+        )
+
+        let storedBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
+        let storedSell = try XCTUnwrap(fetchTrade(id: sell.id, fixture))
+        XCTAssertNotNil(storedSell.deletedAt)
+        XCTAssertEqual(storedBuy.positionQuantityAfter, 2)
+        XCTAssertEqual(storedBuy.positionCostBasisAfterMinor, 100)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 0)
+        XCTAssertEqual(try balance(try XCTUnwrap(fetchSystemWallet(fixture)), fixture), 0)
+        XCTAssertEqual(result.deletedTradeIDs, [sell.id])
+        XCTAssertTrue(
+            try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+                .filter { $0.tradeID == sell.id }
+                .allSatisfy { $0.deletedAt != nil }
+        )
+    }
+
     func testEditingExistingTradeCannotChangeBuyIntoSell() throws {
         let fixture = try makeFixture()
         _ = try saveTrade(
@@ -811,6 +1114,8 @@ final class InvestmentPersistenceTests: XCTestCase {
     @discardableResult
     private func saveTrade(
         fixture: Fixture,
+        asset: InvestmentAsset? = nil,
+        channel: InvestmentChannel? = nil,
         kind: InvestmentTradeKind,
         quantity: Decimal,
         gross: Int64,
@@ -819,13 +1124,15 @@ final class InvestmentPersistenceTests: XCTestCase {
         occurredAt: Date,
         rates: [MistiaExchangeRate] = []
     ) throws -> InvestmentTradeDraft {
+        let resolvedAsset = asset ?? fixture.asset
+        let resolvedChannel = channel ?? fixture.channel
         let draft = InvestmentTradeDraft(
-            channelID: fixture.channel.id,
-            assetID: fixture.asset.id,
+            channelID: resolvedChannel.id,
+            assetID: resolvedAsset.id,
             kind: kind,
             quantity: quantity,
             grossAmountMinor: gross,
-            currencyCode: "JPY",
+            currencyCode: resolvedAsset.currencyCode,
             accountingGrossAmountMinor: gross,
             accountingCurrencyCode: "JPY",
             fundingWalletID: fundingWalletID,
