@@ -1,12 +1,21 @@
 import SwiftUI
 
 struct MistiaModalScaffold<Title: View, Content: View>: View {
+    enum ContentStyle {
+        /// Wraps content in a ScrollView + ZStack (default, for custom layouts)
+        case scrollView
+        /// Renders content directly — use when content is a SwiftUI Form
+        case form
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
     let titleView: Title
     let accent: Color
+    let contentStyle: ContentStyle
     let dismissGuardConfiguration: MistiaDismissGuardConfiguration?
+    let saveDisabled: Bool
     let onSave: () -> Void
     let content: Content
 
@@ -21,31 +30,42 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
     init(
         @ViewBuilder titleView: () -> Title,
         accent: Color,
+        contentStyle: ContentStyle = .scrollView,
         dismissGuardConfiguration: MistiaDismissGuardConfiguration? = nil,
+        saveDisabled: Bool = false,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         self.titleView = titleView()
         self.accent = accent
+        self.contentStyle = contentStyle
         self.dismissGuardConfiguration = dismissGuardConfiguration
+        self.saveDisabled = saveDisabled
         self.onSave = onSave
         self.content = content()
     }
 
     var body: some View {
         let modalContent = NavigationStack {
-            ZStack {
-                groupedBackground
-                    .ignoresSafeArea()
+            Group {
+                switch contentStyle {
+                case .scrollView:
+                    ZStack {
+                        groupedBackground
+                            .ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        content
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 20) {
+                                content
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 18)
+                            .padding(.top, 16)
+                            .padding(.bottom, 32)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 32)
+                case .form:
+                    content
                 }
             }
             .toolbar {
@@ -80,6 +100,7 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(accent)
+                    .disabled(saveDisabled)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -101,7 +122,9 @@ extension MistiaModalScaffold where Title == Text {
     init(
         title: String,
         accent: Color,
+        contentStyle: ContentStyle = .scrollView,
         dismissGuardConfiguration: MistiaDismissGuardConfiguration? = nil,
+        saveDisabled: Bool = false,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
@@ -111,7 +134,9 @@ extension MistiaModalScaffold where Title == Text {
                     .font(.system(size: 17, weight: .bold, design: .rounded))
             },
             accent: accent,
+            contentStyle: contentStyle,
             dismissGuardConfiguration: dismissGuardConfiguration,
+            saveDisabled: saveDisabled,
             onSave: onSave,
             content: content
         )

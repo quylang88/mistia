@@ -975,20 +975,15 @@ private struct InvestmentChannelEditorSheet: View {
     @State private var name = ""
 
     var body: some View {
-        NavigationStack {
+        MistiaModalScaffold(
+            title: L10n.investment.channel.newTitle,
+            accent: MistiaAccent.purple.color,
+            contentStyle: .form,
+            saveDisabled: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (channel != nil && !canEditExisting),
+            onSave: save
+        ) {
             Form {
                 TextField(L10n.investment.channel.namePlaceholder, text: $name)
-            }
-            .navigationTitle(L10n.investment.channel.newTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.common.cancel) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.common.save) { save() }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (channel != nil && !canEditExisting))
-                }
             }
             .onAppear { name = channel?.name ?? "" }
         }
@@ -1028,7 +1023,6 @@ private struct InvestmentChannelEditorSheet: View {
                     subjectUserIDOverride: ownerUserID
                 )
             }
-            dismiss()
         } catch {
             onError(error.localizedDescription)
         }
@@ -1058,7 +1052,13 @@ private struct InvestmentAssetEditorSheet: View {
     @State private var showsCamera = false
 
     var body: some View {
-        NavigationStack {
+        MistiaModalScaffold(
+            title: L10n.investment.asset.newTitle,
+            accent: MistiaAccent.purple.color,
+            contentStyle: .form,
+            saveDisabled: channelID == nil || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (asset != nil && !canEditExisting),
+            onSave: save
+        ) {
             Form {
                 Picker(L10n.investment.hub.channels, selection: $channelID) {
                     ForEach(channels) { channel in
@@ -1123,17 +1123,6 @@ private struct InvestmentAssetEditorSheet: View {
                             removesExistingImage = true
                         }
                     }
-                }
-            }
-            .navigationTitle(L10n.investment.asset.newTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.common.cancel) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.common.save) { save() }
-                        .disabled(channelID == nil || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (asset != nil && !canEditExisting))
                 }
             }
             .onAppear { hydrate() }
@@ -1214,7 +1203,6 @@ private struct InvestmentAssetEditorSheet: View {
                     subjectUserIDOverride: ownerUserID
                 )
             }
-            dismiss()
         } catch {
             onError(error.localizedDescription)
         }
@@ -1229,7 +1217,12 @@ private struct InvestmentAssetPickerSheet: View {
     @State private var searchText = ""
 
     var body: some View {
-        NavigationStack {
+        MistiaModalScaffold(
+            title: L10n.investment.trade.chooseAsset,
+            accent: MistiaAccent.purple.color,
+            contentStyle: .form,
+            onSave: {}
+        ) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -1288,13 +1281,6 @@ private struct InvestmentAssetPickerSheet: View {
                 .listStyle(.insetGrouped)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle(L10n.investment.trade.chooseAsset)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.common.cancel) { dismiss() }
-                }
-            }
         }
     }
 
@@ -1378,7 +1364,21 @@ private struct InvestmentTradeEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        MistiaModalScaffold(
+            titleView: {
+                Picker("", selection: $kind) {
+                    Text(L10n.investment.hub.buy).tag(InvestmentTradeKind.buy)
+                    Text(L10n.investment.hub.sell).tag(InvestmentTradeKind.sell)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .disabled(trade != nil)
+            },
+            accent: MistiaAccent.purple.color,
+            contentStyle: .form,
+            saveDisabled: !canSave,
+            onSave: save
+        ) {
             Form {
                 Button {
                     showsAssetPicker = true
@@ -1402,12 +1402,6 @@ private struct InvestmentTradeEditorSheet: View {
                     }
                 }
                 .buttonStyle(.plain)
-                Picker(L10n.investment.title, selection: $kind) {
-                    Text(L10n.investment.hub.buy).tag(InvestmentTradeKind.buy)
-                    Text(L10n.investment.hub.sell).tag(InvestmentTradeKind.sell)
-                }
-                .pickerStyle(.segmented)
-                .disabled(trade != nil)
                 Section {
                     TextField(L10n.investment.trade.quantity, text: $quantity)
                         .keyboardType(.decimalPad)
@@ -1445,15 +1439,6 @@ private struct InvestmentTradeEditorSheet: View {
                             dismiss()
                         }
                     }
-                }
-            }
-            .navigationTitle(kind == .buy ? L10n.investment.trade.newBuyTitle : L10n.investment.trade.newSellTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L10n.common.cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.common.save) { save() }
-                        .disabled(!canSave)
                 }
             }
             .onAppear { hydrate() }
@@ -1609,7 +1594,6 @@ private struct InvestmentTradeEditorSheet: View {
                     subjectUserIDOverride: ownerUserID
                 )
             }
-            dismiss()
         } catch {
             onError(error.localizedDescription)
         }
@@ -1731,21 +1715,18 @@ private struct InvestmentWalletTransferSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        MistiaModalScaffold(
+            title: L10n.investment.wallet.transferTitle,
+            accent: MistiaAccent.purple.color,
+            contentStyle: .form,
+            saveDisabled: destinationWalletID == nil || sourceAmountMinor <= 0,
+            onSave: save
+        ) {
             Form {
                 Picker(L10n.investment.transfer.destination, selection: $destinationWalletID) {
                     ForEach(destinationWallets) { wallet in Text(wallet.name).tag(Optional(wallet.id)) }
                 }
                 MistiaCurrencyInputField(L10n.investment.transfer.sourceAmount, text: $sourceAmount)
-            }
-            .navigationTitle(L10n.investment.wallet.transferTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L10n.common.cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.common.save) { save() }
-                        .disabled(destinationWalletID == nil || sourceAmountMinor <= 0)
-                }
             }
             .onAppear { destinationWalletID = destinationWalletID ?? destinationWallets.first?.id }
         }
@@ -1784,7 +1765,6 @@ private struct InvestmentWalletTransferSheet: View {
                     subjectUserIDOverride: ownerUserID
                 )
             }
-            dismiss()
         } catch {
             onError(error.localizedDescription)
         }
