@@ -22,6 +22,7 @@ private enum InvestmentHubSheet: Identifiable {
     case asset(UUID?)
     case trade(kind: InvestmentTradeKind, id: UUID?)
     case wallet
+    case lotHistory(InvestmentAsset)
 
     var id: String {
         switch self {
@@ -29,6 +30,7 @@ private enum InvestmentHubSheet: Identifiable {
         case .asset(let id): "asset-\(id?.uuidString ?? "new")"
         case .trade(let kind, let id): "trade-\(kind.rawValue)-\(id?.uuidString ?? "new")"
         case .wallet: "wallet"
+        case .lotHistory(let asset): "lotHistory-\(asset.id.uuidString)"
         }
     }
 }
@@ -441,7 +443,11 @@ struct InvestmentHubView: View {
                 )
                 let detail = positionDetail(for: snapshot)
                 Button {
-                    if canEdit { activeSheet = .asset(asset.id) }
+                    if canEdit {
+                        activeSheet = .asset(asset.id)
+                    } else if canView {
+                        activeSheet = .lotHistory(asset)
+                    }
                 } label: {
                     InvestmentPositionRow(
                         imagePath: asset.imagePath,
@@ -453,6 +459,12 @@ struct InvestmentHubView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button {
+                        activeSheet = .lotHistory(asset)
+                    } label: {
+                        Label(L10n.investment.lotHistory.title, systemImage: "clock.arrow.circlepath")
+                    }
+
                     if canEdit {
                         Button(L10n.management.management.edit) { activeSheet = .asset(asset.id) }
                         Button(L10n.common.archive, role: .destructive) { archive(asset) }
@@ -576,6 +588,12 @@ struct InvestmentHubView: View {
                 ) { errorMessage = $0 }
             case .wallet:
                 InvestmentWalletTransferSheet(ownerUserID: ownerUserID) { errorMessage = $0 }
+            case .lotHistory(let asset):
+                InvestmentAssetLotHistorySheet(
+                    asset: asset,
+                    trades: trades.filter { $0.assetID == asset.id && $0.deletedAt == nil },
+                    wallets: wallets
+                )
             }
         } else {
             EmptyView()
@@ -1870,4 +1888,275 @@ private func rateProvider(from source: String, to target: String, rates: [Mistia
 
 private func rateDate(from source: String, to target: String, rates: [MistiaExchangeRate]) -> String? {
     matchingRate(from: source, to: target, rates: rates)?.rate.rateDate
+}
+
+private struct InvestmentLotItem: Identifiable {
+    let id: UUID
+    let occurredAt: Date
+    let initialQuantity: Decimal
+    var remainingQuantity: Decimal
+    let grossAmountMinor: Int64
+    var remainingCostBasisMinor: Int64
+    let currencyCode: String
+    let fundingWalletName: String?
+    let note: String?
+
+    var unitPriceMinor: Int64 {
+        guard initialQuantity > 0 else { return 0 }
+        let grossDec = Decimal(grossAmountMinor)
+        var unitDec = grossDec / initialQuantity
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &unitDec, 0, .plain)
+        return NSDecimalNumber(decimal: rounded).int64Value
+    }
+
+    enum Status {
+        case open
+        case partiallySold
+        case closed
+    }
+
+    var status: Status {
+        if remainingQuantity <= 0 {
+            return .closed
+        } else if remainingQuantity < initialQuantity {
+            return .partiallySold
+        } else {
+            return .open
+        }
+    }
+}
+
+private struct InvestmentAssetLotHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let asset: InvestmentAsset
+    let trades: [InvestmentTrade]
+    let wallets: [LedgerWallet]
+
+    @State private var filterMode: FilterMode = .openOnly
+
+    private enum FilterMode: String, CaseIterable, Identifiable {
+        case openOnly
+        case all
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .openOnly: L10n.investment.lotHistory.openLotsOnly
+            case .all: L10n.investment.lotHistory.allLots
+            }
+        }
+    }
+
+    private var allLots: [InvestmentLotItem] {
+        let sortedTrades = trades.sorted(by: oldestTradeFirst)
+        var lots: [InvestmentLotItem] = []
+
+        for trade in sortedTrades {
+            if trade.kind == .buy {
+                let walletName = trade.fundingWalletID.flatMap { wID in
+                    wallets.first(where: { $0.id == wID })?.name
+                }
+                lots.append(
+                    InvestmentLotItem(
+                        id: trade.id,
+                        occurredAt: trade.occurredAt,
+                        initialQuantity: trade.quantity,
+                        remainingQuantity: trade.quantity,
+                        grossAmountMinor: trade.grossAmountMinor,
+                        remainingCostBasisMinor: trade.grossAmountMinor,
+                        currencyCode: trade.currencyCode,
+                        fundingWalletName: walletName,
+                        note: trade.note
+                    )
+                )
+            } else if trade.kind == .sell {
+                var quantityToDeduct = trade.quantity
+                for index in 0..<lots.count {
+                    guard quantityToDeduct > 0 else { break }
+                    if lots[index].remainingQuantity > 0 {
+                        let deduct = min(quantityToDeduct, lots[index].remainingQuantity)
+                        let costDeducted: Int64
+                        if deduct == lots[index].remainingQuantity {
+                            costDeducted = lots[index].remainingCostBasisMinor
+                        } else if lots[index].initialQuantity > 0 {
+                            let proportional = Decimal(lots[index].grossAmountMinor) * deduct / lots[index].initialQuantity
+                            var rounded = Decimal()
+                            NSDecimalRound(&rounded, &proportional, 0, .plain)
+                            costDeducted = NSDecimalNumber(decimal: rounded).int64Value
+                        } else {
+                            costDeducted = 0
+                        }
+
+                        lots[index].remainingQuantity -= deduct
+                        lots[index].remainingCostBasisMinor = max(0, lots[index].remainingCostBasisMinor - costDeducted)
+                        quantityToDeduct -= deduct
+                    }
+                }
+            }
+        }
+
+        return lots.reversed()
+    }
+
+    private var visibleLots: [InvestmentLotItem] {
+        switch filterMode {
+        case .openOnly:
+            return allLots.filter { $0.remainingQuantity > 0 }
+        case .all:
+            return allLots
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("", selection: $filterMode) {
+                    ForEach(FilterMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                if visibleLots.isEmpty {
+                    ContentUnavailableView {
+                        Label(L10n.investment.lotHistory.empty, systemImage: "tray")
+                    }
+                } else {
+                    List {
+                        ForEach(visibleLots) { lot in
+                            lotRow(lot)
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle(asset.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func lotRow(_ lot: InvestmentLotItem) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(lot.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                statusBadge(lot.status)
+            }
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.investment.lotHistory.unitPrice)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(lot.unitPriceMinor.formattedCurrency(code: lot.currencyCode))
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(L10n.investment.lotHistory.initialCost)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(lot.grossAmountMinor.formattedCurrency(code: lot.currencyCode))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+            }
+
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.investment.lotHistory.remainingQuantity)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("\(InvestmentDecimalCoding.string(from: lot.remainingQuantity)) / \(InvestmentDecimalCoding.string(from: lot.initialQuantity))")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(lot.remainingQuantity > 0 ? Color.primary : Color.secondary)
+                }
+
+                if let walletName = lot.fundingWalletName, !walletName.isEmpty {
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(L10n.investment.trade.fundingWallet)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(walletName)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if let note = lot.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(uiColor: .tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func statusBadge(_ status: InvestmentLotItem.Status) -> some View {
+        switch status {
+        case .open:
+            Text(L10n.investment.lotHistory.statusOpen)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.12))
+                .clipShape(Capsule())
+        case .partiallySold:
+            Text(L10n.investment.lotHistory.statusPartial)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.orange.opacity(0.12))
+                .clipShape(Capsule())
+        case .closed:
+            Text(L10n.investment.lotHistory.statusClosed)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.gray.opacity(0.12))
+                .clipShape(Capsule())
+        }
+    }
 }

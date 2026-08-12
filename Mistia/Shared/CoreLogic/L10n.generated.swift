@@ -790,6 +790,33 @@ nonisolated enum L10n {
             static func walletBalance(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.walletBalance", vi: "Số dư Ví Đầu tư", en: "Investment Wallet Balance", ja: "投資ウォレット残高", language: language) }
         }
 
+        nonisolated enum lotHistory {
+            static var allLots: String { L10n.tr("investment.lotHistory.allLots", vi: "Tất cả các lô", en: "All Lots", ja: "すべてのロット") }
+            static func allLots(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.allLots", vi: "Tất cả các lô", en: "All Lots", ja: "すべてのロット", language: language) }
+            static var empty: String { L10n.tr("investment.lotHistory.empty", vi: "Chưa có lô mua nào cho tài sản này.", en: "No purchase lots found for this asset.", ja: "この資産の買付ロットはありません。") }
+            static func empty(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.empty", vi: "Chưa có lô mua nào cho tài sản này.", en: "No purchase lots found for this asset.", ja: "この資産の買付ロットはありません。", language: language) }
+            static var initialCost: String { L10n.tr("investment.lotHistory.initialCost", vi: "Tổng tiền mua lô", en: "Lot Buy Amount", ja: "ロット買付総額") }
+            static func initialCost(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.initialCost", vi: "Tổng tiền mua lô", en: "Lot Buy Amount", ja: "ロット買付総額", language: language) }
+            static var initialQuantity: String { L10n.tr("investment.lotHistory.initialQuantity", vi: "Số lượng mua", en: "Initial Quantity", ja: "買付数量") }
+            static func initialQuantity(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.initialQuantity", vi: "Số lượng mua", en: "Initial Quantity", ja: "買付数量", language: language) }
+            static var openLotsOnly: String { L10n.tr("investment.lotHistory.openLotsOnly", vi: "Lô đang còn hàng", en: "Open Lots Only", ja: "保有ロットのみ") }
+            static func openLotsOnly(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.openLotsOnly", vi: "Lô đang còn hàng", en: "Open Lots Only", ja: "保有ロットのみ", language: language) }
+            static var remainingCost: String { L10n.tr("investment.lotHistory.remainingCost", vi: "Giá vốn còn lại", en: "Remaining Cost Basis", ja: "残存取得原価") }
+            static func remainingCost(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.remainingCost", vi: "Giá vốn còn lại", en: "Remaining Cost Basis", ja: "残存取得原価", language: language) }
+            static var remainingQuantity: String { L10n.tr("investment.lotHistory.remainingQuantity", vi: "Số lượng còn lại", en: "Remaining Quantity", ja: "残存数量") }
+            static func remainingQuantity(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.remainingQuantity", vi: "Số lượng còn lại", en: "Remaining Quantity", ja: "残存数量", language: language) }
+            static var statusClosed: String { L10n.tr("investment.lotHistory.statusClosed", vi: "Đã tất toán", en: "Closed", ja: "全額売却済") }
+            static func statusClosed(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.statusClosed", vi: "Đã tất toán", en: "Closed", ja: "全額売却済", language: language) }
+            static var statusOpen: String { L10n.tr("investment.lotHistory.statusOpen", vi: "Còn nguyên lô", en: "Open", ja: "未売却") }
+            static func statusOpen(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.statusOpen", vi: "Còn nguyên lô", en: "Open", ja: "未売却", language: language) }
+            static var statusPartial: String { L10n.tr("investment.lotHistory.statusPartial", vi: "Đã bán một phần", en: "Partially Sold", ja: "一部売却済") }
+            static func statusPartial(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.statusPartial", vi: "Đã bán một phần", en: "Partially Sold", ja: "一部売却済", language: language) }
+            static var title: String { L10n.tr("investment.lotHistory.title", vi: "Lịch sử lô mua", en: "Lot History", ja: "仕入れロット履歴") }
+            static func title(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.title", vi: "Lịch sử lô mua", en: "Lot History", ja: "仕入れロット履歴", language: language) }
+            static var unitPrice: String { L10n.tr("investment.lotHistory.unitPrice", vi: "Đơn giá mua", en: "Unit Buy Price", ja: "買付単価") }
+            static func unitPrice(language: MistiaAppLanguage) -> String { L10n.tr("investment.lotHistory.unitPrice", vi: "Đơn giá mua", en: "Unit Buy Price", ja: "買付単価", language: language) }
+        }
+
         nonisolated enum overview {
             static var cardTitle: String { L10n.tr("investment.overview.cardTitle", vi: "Tổng quan đầu tư", en: "Investment Overview", ja: "投資概要") }
             static func cardTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.overview.cardTitle", vi: "Tổng quan đầu tư", en: "Investment Overview", ja: "投資概要", language: language) }
