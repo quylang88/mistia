@@ -506,8 +506,10 @@ struct ManagementView: View {
                 .presentationDragIndicator(.hidden)
         }
         .sheet(item: $investmentWalletTarget) { target in
-            InvestmentWalletTransferSheet(ownerUserID: target.ownerUserID) { _ in }
-                .presentationDragIndicator(.hidden)
+            InvestmentWalletTransferSheet(ownerUserID: target.ownerUserID) { message in
+                infoAlert = ManagementInfoAlert(title: L10n.common.error, message: message)
+            }
+            .presentationDragIndicator(.hidden)
         }
         .sheet(item: $categoryEditorTarget) { target in
             ManagementCategoryEditorSheet(target: target)
