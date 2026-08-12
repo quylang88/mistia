@@ -522,7 +522,7 @@ struct InvestmentHubView: View {
                             Text(
                                 L10n.investment.hub.activityDetails(
                                     InvestmentDecimalCoding.string(from: trade.quantity),
-                                    trade.occurredAt.formatted(date: .abbreviated, time: .omitted)
+                                    MistiaDateFormatting.fullDateString(for: trade.occurredAt)
                                 )
                             )
                                 .font(.caption)
@@ -1982,7 +1982,7 @@ private struct InvestmentAssetLotHistorySheet: View {
                         if deduct == lots[index].remainingQuantity {
                             costDeducted = lots[index].remainingCostBasisMinor
                         } else if lots[index].initialQuantity > 0 {
-                            let proportional = Decimal(lots[index].grossAmountMinor) * deduct / lots[index].initialQuantity
+                            var proportional = Decimal(lots[index].grossAmountMinor) * deduct / lots[index].initialQuantity
                             var rounded = Decimal()
                             NSDecimalRound(&rounded, &proportional, 0, .plain)
                             costDeducted = NSDecimalNumber(decimal: rounded).int64Value
@@ -2059,7 +2059,7 @@ private struct InvestmentAssetLotHistorySheet: View {
     private func lotRow(_ lot: InvestmentLotItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(lot.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                Text(MistiaDateFormatting.dateTimeString(for: lot.occurredAt))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
