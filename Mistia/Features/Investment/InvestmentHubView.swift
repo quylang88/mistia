@@ -417,7 +417,7 @@ struct InvestmentHubView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "slider.horizontal.3")
         }
         .accessibilityLabel(L10n.management.management.manage)
     }
@@ -572,7 +572,7 @@ struct InvestmentHubView: View {
                     }
                 ) { errorMessage = $0 }
             case .wallet:
-                InvestmentWalletDetailView(ownerUserID: ownerUserID)
+                InvestmentWalletTransferSheet(ownerUserID: ownerUserID) { errorMessage = $0 }
             }
         } else {
             EmptyView()
@@ -1600,96 +1600,14 @@ private struct InvestmentTradeEditorSheet: View {
     }
 }
 
-struct InvestmentWalletDetailView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SessionStore.self) private var sessionStore
-    @Environment(FamilyContextStore.self) private var familyContextStore
-    @Query private var wallets: [LedgerWallet]
-    @Query private var ledgerTransactions: [LedgerTransaction]
-    @Query private var postings: [InvestmentWalletPosting]
-
-    let ownerUserID: UUID
-    @State private var showsTransfer = false
-    @State private var errorMessage: String?
-
-    private var wallet: LedgerWallet? {
-        let id = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
-        return wallets.first { $0.id == id && $0.deletedAt == nil }
-    }
-    private var balanceMinor: Int64 {
-        guard let wallet else { return 0 }
-        let snapshot = TransactionWalletSnapshot(id: wallet.id, kind: wallet.kind, openingBalanceMinor: wallet.openingBalanceMinor)
-        return TransactionLogic.walletBalanceIndex(wallets: [snapshot], records: ledgerTransactions.filter { $0.deletedAt == nil && !$0.isArchived }.map(\.snapshot)).balance(for: snapshot)
-    }
-    private var canCreate: Bool {
-        ownerUserID == sessionStore.activeLocalProfileUserID
-            || ownerUserID == sessionStore.signedInUserID
-            || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: .investment)
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.investment.hub.walletBalance)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text(balanceMinor.formattedCurrency(code: wallet?.currencyCode ?? "JPY"))
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .foregroundStyle(balanceMinor >= 0 ? Color.primary : Color.red)
-                    }
-                    .padding(.vertical, 10)
-                    Button(L10n.investment.wallet.transferOut) { showsTransfer = true }
-                        .disabled(!canCreate || balanceMinor <= 0)
-                }
-                Section(L10n.investment.hub.activity) {
-                    ForEach(walletPostings.sorted { $0.occurredAt > $1.occurredAt }) { posting in
-                        HStack {
-                            Text(postingTitle(posting.role))
-                            Spacer()
-                            Text(posting.amountMinor.formattedCurrency(code: posting.currencyCode))
-                                .foregroundStyle(posting.amountMinor >= 0 ? Color.green : Color.red)
-                        }
-                    }
-                }
-            }
-            .navigationTitle(L10n.investment.wallet.detailTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button(L10n.common.close) { dismiss() } }
-            }
-        }
-        .sheet(isPresented: $showsTransfer) {
-            InvestmentWalletTransferSheet(ownerUserID: ownerUserID) { errorMessage = $0 }
-        }
-        .alert(L10n.common.error, isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button(L10n.common.ok) { errorMessage = nil }
-        } message: { Text(errorMessage ?? L10n.common.unknownError) }
-    }
-
-    private var walletPostings: [InvestmentWalletPosting] {
-        guard let wallet else { return [] }
-        return postings.filter { $0.ownerUserID == ownerUserID && $0.walletID == wallet.id && $0.deletedAt == nil }
-    }
-
-    private func postingTitle(_ role: InvestmentPostingRole) -> String {
-        switch role {
-        case .funding: L10n.investment.hub.buy
-        case .capitalReturn: L10n.investment.hub.sell
-        case .realizedProfit: L10n.investment.hub.realizedProfitLoss
-        case .transferOut, .transferIn: L10n.investment.wallet.transferOut
-        }
-    }
-}
-
 private struct InvestmentWalletTransferSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
-    @Query private var wallets: [LedgerWallet]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
+    private var ledgerTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let ownerUserID: UUID
@@ -1700,6 +1618,18 @@ private struct InvestmentWalletTransferSheet: View {
     private var systemWallet: LedgerWallet? {
         let id = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
         return wallets.first { $0.id == id }
+    }
+    private var investmentBalanceMinor: Int64 {
+        guard let systemWallet else { return 0 }
+        let snapshot = TransactionWalletSnapshot(
+            id: systemWallet.id,
+            kind: systemWallet.kind,
+            openingBalanceMinor: systemWallet.openingBalanceMinor
+        )
+        return TransactionLogic.walletBalanceIndex(
+            wallets: [snapshot],
+            records: ledgerTransactions.map(\.snapshot)
+        ).balance(for: snapshot)
     }
     private var walletOwnerMap: [UUID: UUID] {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
@@ -1713,27 +1643,54 @@ private struct InvestmentWalletTransferSheet: View {
             return ownerUserID == currentID || familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
         }
     }
+    private var currencyCode: String { systemWallet?.currencyCode ?? "JPY" }
+    private var sourceAmountMinor: Int64 {
+        sourceAmount.currencyInputToMinorUnits(currencyCode: currencyCode)
+    }
+    private var isBalanceEmpty: Bool { investmentBalanceMinor <= 0 }
+    private var isSaveDisabled: Bool {
+        isBalanceEmpty || destinationWalletID == nil || sourceAmountMinor <= 0 || sourceAmountMinor > investmentBalanceMinor
+    }
 
     var body: some View {
         MistiaModalScaffold(
             title: L10n.investment.wallet.transferTitle,
             accent: MistiaAccent.purple.color,
             contentStyle: .form,
-            saveDisabled: destinationWalletID == nil || sourceAmountMinor <= 0,
+            saveDisabled: isSaveDisabled,
             onSave: save
         ) {
             Form {
                 Picker(L10n.investment.transfer.destination, selection: $destinationWalletID) {
                     ForEach(destinationWallets) { wallet in Text(wallet.name).tag(Optional(wallet.id)) }
                 }
-                MistiaCurrencyInputField(L10n.investment.transfer.sourceAmount, text: $sourceAmount)
+                Section {
+                    MistiaCurrencyInputField(L10n.investment.transfer.sourceAmount, text: $sourceAmount)
+                        .disabled(isBalanceEmpty)
+                    if isBalanceEmpty {
+                        Text(L10n.investment.wallet.insufficientBalance)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else {
+                        Text(
+                            L10n.investment.wallet.availableBalance(
+                                investmentBalanceMinor.formattedCurrency(code: currencyCode)
+                            )
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
             .onAppear { destinationWalletID = destinationWalletID ?? destinationWallets.first?.id }
+            .onChange(of: sourceAmount) { _, newValue in
+                guard !isBalanceEmpty else { return }
+                let entered = newValue.currencyInputToMinorUnits(currencyCode: currencyCode)
+                if entered > investmentBalanceMinor {
+                    sourceAmount = MistiaCurrencyInputFormatting.groupedInput(String(investmentBalanceMinor))
+                }
+            }
         }
-    }
-
-    private var sourceAmountMinor: Int64 {
-        sourceAmount.currencyInputToMinorUnits(currencyCode: systemWallet?.currencyCode ?? "JPY")
     }
 
     private func save() {

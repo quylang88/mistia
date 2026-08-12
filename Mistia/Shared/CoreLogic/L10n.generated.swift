@@ -871,8 +871,16 @@ nonisolated enum L10n {
         }
 
         nonisolated enum wallet {
+            static func availableBalance(_ value: String) -> String {
+                L10n.format("investment.wallet.availableBalance", vi: "Số dư hiện có: %@", en: "Available balance: %@", ja: "利用可能残高：%@", value)
+            }
+            static func availableBalance(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.wallet.availableBalance", vi: "Số dư hiện có: %@", en: "Available balance: %@", ja: "利用可能残高：%@", language: language, value)
+            }
             static var detailTitle: String { L10n.tr("investment.wallet.detailTitle", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット") }
             static func detailTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.detailTitle", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット", language: language) }
+            static var insufficientBalance: String { L10n.tr("investment.wallet.insufficientBalance", vi: "Ví đầu tư không đủ số dư để chuyển.", en: "Insufficient balance in investment wallet.", ja: "投資ウォレットの残高が不足しています。") }
+            static func insufficientBalance(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.insufficientBalance", vi: "Ví đầu tư không đủ số dư để chuyển.", en: "Insufficient balance in investment wallet.", ja: "投資ウォレットの残高が不足しています。", language: language) }
             static var name: String { L10n.tr("investment.wallet.name", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット") }
             static func name(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.name", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット", language: language) }
             static var noPositiveBalance: String { L10n.tr("investment.wallet.noPositiveBalance", vi: "Không có số dư dương để chuyển ra.", en: "There is no positive balance available to transfer.", ja: "振替可能なプラス残高がありません。") }
