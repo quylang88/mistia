@@ -51,6 +51,57 @@ final class FamilyRemoteServiceTests: XCTestCase {
         )
         XCTAssertEqual(queryItems?.first(where: { $0.name == "order" })?.value, "updated_at.asc")
     }
+
+    func testAccessibleFinanceSnapshotFetchesInvestmentRowsForRequestedOwners() async throws {
+        let ownerUserID = UUID(uuidString: "10000000-0000-4000-8000-000000000001")!
+        let service = FamilyRemoteService {
+            MistiaSyncConfiguration(
+                projectURL: URL(string: "https://example.supabase.co")!,
+                anonKey: "anon-key"
+            )
+        }
+        let session = SupabaseAuthSession(
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            tokenType: "bearer",
+            expiresAt: nil,
+            user: SupabaseAuthUser(id: UUID(), email: nil, userMetadata: nil)
+        )
+
+        _ = try await service.fetchAccessibleFinanceSnapshot(
+            userIDs: [ownerUserID],
+            session: session
+        )
+
+        let requestsByPath = Dictionary(
+            FamilyRemoteServiceURLProtocol.capturedRequests().compactMap { request in
+                request.url.map { ($0.path, request) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let expectedPaths = [
+            "/rest/v1/investment_channels",
+            "/rest/v1/investment_assets",
+            "/rest/v1/investment_trades",
+            "/rest/v1/investment_wallet_postings"
+        ]
+
+        for path in expectedPaths {
+            let request = try XCTUnwrap(
+                requestsByPath[path],
+                "Accessible family refresh must fetch \(path) after Investment View is granted."
+            )
+            let queryItems = URLComponents(
+                url: try XCTUnwrap(request.url),
+                resolvingAgainstBaseURL: false
+            )?.queryItems
+            XCTAssertEqual(
+                queryItems?.first(where: { $0.name == "user_id" })?.value,
+                "in.(\(ownerUserID.uuidString.lowercased()))"
+            )
+            XCTAssertEqual(queryItems?.first(where: { $0.name == "order" })?.value, "updated_at.asc")
+        }
+    }
 }
 
 private final class FamilyRemoteServiceURLProtocol: URLProtocol {

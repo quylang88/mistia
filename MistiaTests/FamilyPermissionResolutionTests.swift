@@ -4,6 +4,22 @@ import XCTest
 
 @MainActor
 final class FamilyPermissionResolutionTests: XCTestCase {
+    func testInvestmentHubReconcilesApprovedViewGrantAndDataWhenOpened() throws {
+        let source = try featureSource(relativePath: "Investment/InvestmentHubView.swift")
+        XCTAssertTrue(
+            source.contains(".task(id: ownerUserID)"),
+            "Investment Hub must reconcile remotely approved access when the viewed owner changes."
+        )
+
+        let body = try functionBody(named: "refreshInvestmentAccessAndData", in: source)
+        assertMarker(
+            "await familyContextStore.refreshPermissionGrant(",
+            appearsBefore: "await familyContextStore.refreshAccessibleFinance(",
+            in: body,
+            message: "Investment Hub must refresh the View grant before downloading the owner's Investment data."
+        )
+    }
+
     func testPermissionSurfacesPresentCachedPendingStateBeforeRefreshing() throws {
         let directRefresh = "await familyContextStore.resolvePendingPermissionBeforePrompt("
         let expectations: [(file: String, function: String, presentation: String, refresh: String)] = [

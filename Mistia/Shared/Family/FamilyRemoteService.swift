@@ -905,6 +905,26 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             userIDs: userIDs,
             session: session
         )
+        async let investmentChannels: [RemoteInvestmentChannel] = fetchFinanceRows(
+            path: MistiaSyncEntity.investmentChannel.tableName,
+            userIDs: userIDs,
+            session: session
+        )
+        async let investmentAssets: [RemoteInvestmentAsset] = fetchFinanceRows(
+            path: MistiaSyncEntity.investmentAsset.tableName,
+            userIDs: userIDs,
+            session: session
+        )
+        async let investmentTrades: [RemoteInvestmentTrade] = fetchFinanceRows(
+            path: MistiaSyncEntity.investmentTrade.tableName,
+            userIDs: userIDs,
+            session: session
+        )
+        async let investmentPostings: [RemoteInvestmentWalletPosting] = fetchFinanceRows(
+            path: MistiaSyncEntity.investmentPosting.tableName,
+            userIDs: userIDs,
+            session: session
+        )
 
         return MistiaRemoteSnapshot(
             wallets: try await wallets,
@@ -917,7 +937,11 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             savingsGoals: try await goals,
             recurringBillPlans: try await bills,
             installmentPlans: try await installments,
-            dueOccurrences: try await dueOccurrences
+            dueOccurrences: try await dueOccurrences,
+            investmentChannels: try await investmentChannels,
+            investmentAssets: try await investmentAssets,
+            investmentTrades: try await investmentTrades,
+            investmentPostings: try await investmentPostings
         )
     }
 

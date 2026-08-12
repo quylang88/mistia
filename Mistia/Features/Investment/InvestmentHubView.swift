@@ -281,6 +281,9 @@ struct InvestmentHubView: View {
         .onDisappear {
             uiState?.requestQuickCreateHidden(false, id: viewID)
         }
+        .task(id: ownerUserID) {
+            await refreshInvestmentAccessAndData()
+        }
     }
 
     @ViewBuilder
@@ -622,6 +625,23 @@ struct InvestmentHubView: View {
                 errorMessage = familyContextStore.lastErrorMessage ?? L10n.common.unknownError
             }
         }
+    }
+
+    private func refreshInvestmentAccessAndData() async {
+        guard let ownerUserID, !isOwner else { return }
+        let canAccess = await familyContextStore.refreshPermissionGrant(
+            ownerUserID: ownerUserID,
+            resourceType: .investment,
+            resourceID: nil,
+            scope: .view,
+            sessionStore: sessionStore
+        )
+        guard canAccess, !Task.isCancelled else { return }
+
+        await familyContextStore.refreshAccessibleFinance(
+            sessionStore: sessionStore,
+            userIDs: [ownerUserID]
+        )
     }
 
     private func position(for asset: InvestmentAsset) -> (quantity: Decimal, costBasisMinor: Int64, openLotCount: Int) {
