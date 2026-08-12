@@ -782,8 +782,8 @@ nonisolated enum L10n {
             static func quantityOnly(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("investment.hub.quantityOnly", vi: "%@ đơn vị", en: "%@ units", ja: "%@ 単位", language: language, value)
             }
-            static var realizedProfitLoss: String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận đã thực hiện", en: "Realized P&L", ja: "実現損益") }
-            static func realizedProfitLoss(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận đã thực hiện", en: "Realized P&L", ja: "実現損益", language: language) }
+            static var realizedProfitLoss: String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận", en: "Realized P&L", ja: "実現損益") }
+            static func realizedProfitLoss(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận", en: "Realized P&L", ja: "実現損益", language: language) }
             static var sell: String { L10n.tr("investment.hub.sell", vi: "Bán", en: "Sell", ja: "売却") }
             static func sell(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.sell", vi: "Bán", en: "Sell", ja: "売却", language: language) }
             static var walletBalance: String { L10n.tr("investment.hub.walletBalance", vi: "Số dư Ví Đầu tư", en: "Investment Wallet Balance", ja: "投資ウォレット残高") }

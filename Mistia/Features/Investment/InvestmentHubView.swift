@@ -835,43 +835,99 @@ private struct InvestmentPortfolioSummaryCard: View {
     let summary: InvestmentPortfolioSummary
     let currencyCode: String
 
+    private var profitColor: Color {
+        if summary.realizedProfitLossMinor > 0 { return Color.green }
+        if summary.realizedProfitLossMinor < 0 { return Color.red }
+        return Color.secondary
+    }
+
+    private var profitIcon: String {
+        if summary.realizedProfitLossMinor > 0 { return "arrow.up.right.circle.fill" }
+        if summary.realizedProfitLossMinor < 0 { return "arrow.down.right.circle.fill" }
+        return "minus.circle.fill"
+    }
+
+    private var roiPercentageText: String? {
+        guard summary.remainingInventoryCostMinor > 0 else { return nil }
+        let roi = (Double(summary.realizedProfitLossMinor) / Double(summary.remainingInventoryCostMinor)) * 100
+        guard !roi.isNaN && !roi.isInfinite else { return nil }
+        return String(format: "%+.1f%%", roi)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            metric(
-                title: L10n.investment.hub.investedCapital,
-                amount: summary.remainingInventoryCostMinor,
-                tint: .primary
+        HStack(spacing: 12) {
+            // Card 1: Vốn đang đầu tư (Căn giữa)
+            VStack(alignment: .center, spacing: 10) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(MistiaAccent.purple.color)
+
+                    Text(L10n.investment.hub.investedCapital)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Text(summary.remainingInventoryCostMinor.formattedCurrency(code: currencyCode))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
             )
-            Divider()
-            metric(
-                title: L10n.investment.hub.realizedProfitLoss,
-                amount: summary.realizedProfitLossMinor,
-                tint: profitColor(summary.realizedProfitLossMinor)
+
+            // Card 2: Lợi nhuận (Căn giữa)
+            VStack(alignment: .center, spacing: 10) {
+                HStack(spacing: 5) {
+                    Image(systemName: profitIcon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(profitColor)
+
+                    Text(L10n.investment.hub.realizedProfitLoss)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(alignment: .center, spacing: 4) {
+                    Text((summary.realizedProfitLossMinor > 0 ? "+" : "") + summary.realizedProfitLossMinor.formattedCurrency(code: currencyCode))
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(profitColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+
+                    if let roi = roiPercentageText {
+                        Text(roi)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(profitColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2.5)
+                            .background(profitColor.opacity(0.12))
+                            .clipShape(Capsule())
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                }
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
             )
         }
-        .padding(18)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private func metric(title: String, amount: Int64, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(amount.formattedCurrency(code: currencyCode))
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func profitColor(_ amount: Int64) -> Color {
-        if amount > 0 { return .green }
-        if amount < 0 { return .red }
-        return .primary
     }
 }
 
