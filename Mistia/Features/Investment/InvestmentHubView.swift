@@ -1600,7 +1600,7 @@ private struct InvestmentTradeEditorSheet: View {
     }
 }
 
-private struct InvestmentWalletTransferSheet: View {
+struct InvestmentWalletTransferSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore

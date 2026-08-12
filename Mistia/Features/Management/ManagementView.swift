@@ -506,7 +506,7 @@ struct ManagementView: View {
                 .presentationDragIndicator(.hidden)
         }
         .sheet(item: $investmentWalletTarget) { target in
-            InvestmentWalletDetailView(ownerUserID: target.ownerUserID)
+            InvestmentWalletTransferSheet(ownerUserID: target.ownerUserID) { _ in }
                 .presentationDragIndicator(.hidden)
         }
         .sheet(item: $categoryEditorTarget) { target in
