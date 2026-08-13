@@ -505,7 +505,7 @@ struct ManagementView: View {
             ManagementWalletEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
-        .sheet(item: $investmentWalletTarget) { target in
+        .sheet(item: investmentWalletTargetBinding) { target in
             InvestmentWalletTransferSheet(ownerUserID: target.ownerUserID) { message in
                 infoAlert = ManagementInfoAlert(title: L10n.common.error, message: message)
             }
@@ -764,7 +764,7 @@ struct ManagementView: View {
                                 exchangeRateIndex: exchangeRateIndex
                             ) {
                                 if let ownerUserID = investmentWalletOwnerUserID(for: wallet) {
-                                    investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)
+                                    openInvestmentWallet(ownerUserID: ownerUserID)
                                     return
                                 }
                                 if presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: wallet.id) {
@@ -831,6 +831,90 @@ struct ManagementView: View {
             return nil
         }
         return ownerUserID
+    }
+
+    private func canManageInvestment(ownerUserID: UUID) -> Bool {
+        ownerUserID == sessionStore.activeLocalProfileUserID
+            || ownerUserID == sessionStore.signedInUserID
+            || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .investment)
+    }
+
+    private var investmentWalletTargetBinding: Binding<ManagementInvestmentWalletTarget?> {
+        Binding(
+            get: {
+                guard let target = investmentWalletTarget,
+                      canManageInvestment(ownerUserID: target.ownerUserID) else {
+                    return nil
+                }
+                return target
+            },
+            set: { investmentWalletTarget = $0 }
+        )
+    }
+
+    private func openInvestmentWallet(ownerUserID: UUID) {
+        guard canManageInvestment(ownerUserID: ownerUserID) else {
+            presentInvestmentManagementPermissionPrompt(ownerUserID: ownerUserID) {
+                investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)
+            }
+            return
+        }
+        investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)
+    }
+
+    private func presentInvestmentManagementPermissionPrompt(
+        ownerUserID: UUID,
+        onGranted: @escaping () -> Void
+    ) {
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .investment,
+            resourceID: nil,
+            scope: .edit
+        )
+        showInvestmentManagementPermissionPrompt(
+            ownerUserID: ownerUserID,
+            isPending: isPending,
+            onGranted: onGranted
+        )
+
+        guard isPending else { return }
+        Task { @MainActor in
+            if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .investment,
+                resourceID: nil,
+                scope: .edit,
+                sessionStore: sessionStore
+            ) {
+                permissionPrompt = nil
+                onGranted()
+            }
+        }
+    }
+
+    private func showInvestmentManagementPermissionPrompt(
+        ownerUserID: UUID,
+        isPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
+        permissionPrompt = ManagementPermissionPrompt(
+            title: L10n.investment.permission.managementRequiredTitle,
+            message: L10n.investment.permission.managementMessage,
+            actionTitle: isPending
+                ? L10n.investment.permission.requestEditSent
+                : L10n.investment.permission.requestEdit
+        ) {
+            resolvePermissionPromptAction(
+                resourceType: .investment,
+                resourceID: nil,
+                ownerUserID: ownerUserID,
+                scope: .edit,
+                resourceName: L10n.investment.title,
+                wasPending: isPending,
+                onGranted: onGranted
+            )
+        }
     }
 
     private var activeAlert: ManagementAlertPresentation? {

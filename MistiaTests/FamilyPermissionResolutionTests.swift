@@ -51,6 +51,31 @@ final class FamilyPermissionResolutionTests: XCTestCase {
         XCTAssertTrue(source.contains("Label(permissionActionTitle(.edit), systemImage: \"lock.open\")"))
     }
 
+    func testManagementInvestmentWalletRequiresInvestmentEditPermissionBeforeOpening() throws {
+        let source = try featureSource(relativePath: "Management/ManagementView.swift")
+        let openBody = try functionBody(named: "openInvestmentWallet", in: source)
+        assertMarker(
+            "guard canManageInvestment(ownerUserID: ownerUserID)",
+            appearsBefore: "investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)",
+            in: openBody,
+            message: "Management must require Investment edit access before opening the Investment Wallet transfer sheet."
+        )
+
+        let promptBody = try functionBody(named: "presentInvestmentManagementPermissionPrompt", in: source)
+        XCTAssertTrue(promptBody.contains("resourceType: .investment"))
+        XCTAssertTrue(promptBody.contains("scope: .edit"))
+        assertMarker(
+            "showInvestmentManagementPermissionPrompt(",
+            appearsBefore: "await familyContextStore.resolvePendingPermissionBeforePrompt(",
+            in: promptBody,
+            message: "Management must show the cached pending Investment management request before refreshing it."
+        )
+        XCTAssertTrue(
+            source.contains(".sheet(item: investmentWalletTargetBinding)"),
+            "The Investment Wallet sheet binding must reject a target whose management permission was revoked."
+        )
+    }
+
     func testPermissionSurfacesPresentCachedPendingStateBeforeRefreshing() throws {
         let directRefresh = "await familyContextStore.resolvePendingPermissionBeforePrompt("
         let expectations: [(file: String, function: String, presentation: String, refresh: String)] = [
@@ -67,7 +92,8 @@ final class FamilyPermissionResolutionTests: XCTestCase {
             ("Transactions/TransactionsView.swift", "presentTransactionEditPermissionPrompt", "showTransactionEditPermissionPrompt(", directRefresh),
             ("Transactions/TransactionEditorSheet.swift", "presentTransferPermissionPrompt", "transferPermissionPrompt = prompt", directRefresh),
             ("Transactions/SettlementSheets.swift", "guardSharedExpenseEventPermission", "alertMessage =", directRefresh),
-            ("Investment/InvestmentHubView.swift", "presentPermissionPrompt", "activeAlert = InvestmentHubAlert(", directRefresh)
+            ("Investment/InvestmentHubView.swift", "presentPermissionPrompt", "activeAlert = InvestmentHubAlert(", directRefresh),
+            ("Management/ManagementView.swift", "presentInvestmentManagementPermissionPrompt", "showInvestmentManagementPermissionPrompt(", directRefresh)
         ]
 
         for expectation in expectations {
