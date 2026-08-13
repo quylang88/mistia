@@ -20,6 +20,37 @@ final class FamilyPermissionResolutionTests: XCTestCase {
         )
     }
 
+    func testInvestmentHubRoutesRestrictedActionsThroughMatchingPermissionPrompts() throws {
+        let source = try featureSource(relativePath: "Investment/InvestmentHubView.swift")
+        let expectations: [(function: String, scope: String, destination: String)] = [
+            ("openAsset", "presentPermissionPrompt(scope: .edit)", "activeSheet = .asset(asset.id)"),
+            ("openTrade", "presentPermissionPrompt(scope: .edit)", "activeSheet = .trade(kind: trade.kind, id: trade.id)"),
+            ("openNewTrade", "presentPermissionPrompt(scope: .create)", "activeSheet = .trade(kind: kind, id: nil)"),
+            ("openInvestmentWallet", "presentPermissionPrompt(scope: .edit)", "activeSheet = .wallet"),
+            ("sheetView", "if canEdit", "InvestmentWalletTransferSheet(ownerUserID: ownerUserID)")
+        ]
+
+        for expectation in expectations {
+            let body = try functionBody(named: expectation.function, in: source)
+            assertMarker(
+                expectation.scope,
+                appearsBefore: expectation.destination,
+                in: body,
+                message: "Investment Hub \(expectation.function) must request the matching permission before opening its destination."
+            )
+        }
+    }
+
+    func testInvestmentHubContextMenusExposeIconLabeledManagementActions() throws {
+        let source = try featureSource(relativePath: "Investment/InvestmentHubView.swift")
+
+        XCTAssertTrue(source.contains("Label(L10n.investment.lotHistory.title, systemImage: \"clock.arrow.circlepath\")"))
+        XCTAssertTrue(source.contains("Label(L10n.management.management.edit, systemImage: \"pencil\")"))
+        XCTAssertTrue(source.contains("Label(L10n.common.archive, systemImage: \"archivebox\")"))
+        XCTAssertTrue(source.contains("Label(L10n.investment.trade.deleteAction, systemImage: \"trash\")"))
+        XCTAssertTrue(source.contains("Label(permissionActionTitle(.edit), systemImage: \"lock.open\")"))
+    }
+
     func testPermissionSurfacesPresentCachedPendingStateBeforeRefreshing() throws {
         let directRefresh = "await familyContextStore.resolvePendingPermissionBeforePrompt("
         let expectations: [(file: String, function: String, presentation: String, refresh: String)] = [
@@ -35,7 +66,8 @@ final class FamilyPermissionResolutionTests: XCTestCase {
             ("Transactions/TransactionsView.swift", "presentEventPermissionPrompt", "showEventPermissionPrompt(", directRefresh),
             ("Transactions/TransactionsView.swift", "presentTransactionEditPermissionPrompt", "showTransactionEditPermissionPrompt(", directRefresh),
             ("Transactions/TransactionEditorSheet.swift", "presentTransferPermissionPrompt", "transferPermissionPrompt = prompt", directRefresh),
-            ("Transactions/SettlementSheets.swift", "guardSharedExpenseEventPermission", "alertMessage =", directRefresh)
+            ("Transactions/SettlementSheets.swift", "guardSharedExpenseEventPermission", "alertMessage =", directRefresh),
+            ("Investment/InvestmentHubView.swift", "presentPermissionPrompt", "activeAlert = InvestmentHubAlert(", directRefresh)
         ]
 
         for expectation in expectations {
@@ -60,7 +92,8 @@ final class FamilyPermissionResolutionTests: XCTestCase {
             ("Management/ManagementView.swift", "sendPermissionRequest", "L10n.shared.family.permissionRequest.sendingTitle"),
             ("Transactions/TransactionsView.swift", "showEventPermissionPrompt", "L10n.shared.family.permissionRequest.sendingTitle"),
             ("Transactions/TransactionsView.swift", "showTransactionEditPermissionPrompt", "L10n.shared.family.permissionRequest.sendingTitle"),
-            ("Transactions/TransactionEditorSheet.swift", "requestTransferCreatePermission", "L10n.shared.family.permissionRequest.sendingMessage")
+            ("Transactions/TransactionEditorSheet.swift", "requestTransferCreatePermission", "L10n.shared.family.permissionRequest.sendingMessage"),
+            ("Investment/InvestmentHubView.swift", "requestPermission", "L10n.shared.family.permissionRequest.sendingTitle")
         ]
 
         for expectation in expectations {

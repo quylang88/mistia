@@ -35,6 +35,31 @@ private enum InvestmentHubSheet: Identifiable {
     }
 }
 
+private struct InvestmentHubAlert: Identifiable {
+    let id: UUID
+    let title: String
+    let message: String
+    let actionTitle: String?
+    let actionIsDestructive: Bool
+    let action: (() -> Void)?
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        message: String,
+        actionTitle: String? = nil,
+        actionIsDestructive: Bool = false,
+        action: (() -> Void)? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.actionIsDestructive = actionIsDestructive
+        self.action = action
+    }
+}
+
 struct InvestmentHubView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
@@ -60,7 +85,7 @@ struct InvestmentHubView: View {
     @State private var period: InvestmentHubPeriod = .month
     @State private var selectedMonth = Date()
     @State private var activeSheet: InvestmentHubSheet?
-    @State private var errorMessage: String?
+    @State private var activeAlert: InvestmentHubAlert?
     @State private var isRequestingPermission = false
 
     init(ownerUserIDOverride: UUID? = nil, isModalPresentation: Bool = false) {
@@ -219,6 +244,26 @@ struct InvestmentHubView: View {
     }
 
     var body: some View {
+        presentedHub
+            .sheet(item: $activeSheet) { sheet in
+                sheetView(sheet)
+            }
+            .alert(item: $activeAlert, content: investmentAlert)
+            .onChange(of: ownerChannels.map(\.id)) { oldIDs, ids in
+                handleOwnerChannelIDsChanged(oldIDs, ids)
+            }
+            .onAppear {
+                uiState?.requestQuickCreateHidden(true, id: viewID)
+            }
+            .onDisappear {
+                uiState?.requestQuickCreateHidden(false, id: viewID)
+            }
+            .task(id: ownerUserID) {
+                await refreshInvestmentAccessAndData()
+            }
+    }
+
+    private var presentedHub: some View {
         NavigationStack {
             Group {
                 if canView {
@@ -261,30 +306,37 @@ struct InvestmentHubView: View {
                 }
             }
         }
-        .sheet(item: $activeSheet) { sheet in
-            sheetView(sheet)
-        }
-        .alert(L10n.common.error, isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button(L10n.common.ok) { errorMessage = nil }
-        } message: {
-            Text(errorMessage ?? L10n.common.unknownError)
-        }
-        .onChange(of: ownerChannels.map(\.id)) { _, ids in
-            if let selectedChannelID, !ids.contains(selectedChannelID) {
-                self.selectedChannelID = nil
+    }
+
+    private func investmentAlert(_ alert: InvestmentHubAlert) -> Alert {
+        if let actionTitle = alert.actionTitle,
+           let action = alert.action {
+            let buttonAction: () -> Void = {
+                _ = Task { @MainActor in
+                    await Task.yield()
+                    action()
+                }
             }
+            let actionButton: Alert.Button = alert.actionIsDestructive
+                ? .destructive(Text(actionTitle), action: buttonAction)
+                : .default(Text(actionTitle), action: buttonAction)
+            return Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                primaryButton: actionButton,
+                secondaryButton: .cancel(Text(L10n.common.cancel))
+            )
         }
-        .onAppear {
-            uiState?.requestQuickCreateHidden(true, id: viewID)
-        }
-        .onDisappear {
-            uiState?.requestQuickCreateHidden(false, id: viewID)
-        }
-        .task(id: ownerUserID) {
-            await refreshInvestmentAccessAndData()
+        return Alert(
+            title: Text(alert.title),
+            message: Text(alert.message),
+            dismissButton: .default(Text(L10n.common.ok))
+        )
+    }
+
+    private func handleOwnerChannelIDsChanged(_ oldIDs: [UUID], _ ids: [UUID]) {
+        if let selectedChannelID, !ids.contains(selectedChannelID) {
+            self.selectedChannelID = nil
         }
     }
 
@@ -355,11 +407,19 @@ struct InvestmentHubView: View {
 
     private var primaryActions: some View {
         InvestmentPrimaryActions(
-            canBuy: canCreate && !ownerAssets.isEmpty,
-            canSell: canCreate && ownerAssets.contains { position(for: $0).quantity > 0 },
-            onBuy: { activeSheet = .trade(kind: .buy, id: nil) },
-            onSell: { activeSheet = .trade(kind: .sell, id: nil) }
+            canBuy: !canCreate || canStartBuyTrade,
+            canSell: !canCreate || canStartSellTrade,
+            onBuy: { openNewTrade(kind: .buy) },
+            onSell: { openNewTrade(kind: .sell) }
         )
+    }
+
+    private var canStartBuyTrade: Bool {
+        !ownerAssets.isEmpty
+    }
+
+    private var canStartSellTrade: Bool {
+        ownerAssets.contains { position(for: $0).quantity > 0 }
     }
 
     private var managementMenu: some View {
@@ -404,7 +464,7 @@ struct InvestmentHubView: View {
             }
 
             Button(L10n.investment.hub.walletBalance, systemImage: "wallet.bifold") {
-                activeSheet = .wallet
+                openInvestmentWallet()
             }
 
             if canEdit, (!archivedOwnerChannels.isEmpty || !archivedOwnerAssets.isEmpty) {
@@ -443,11 +503,7 @@ struct InvestmentHubView: View {
                 )
                 let detail = positionDetail(for: snapshot)
                 Button {
-                    if canEdit {
-                        activeSheet = .asset(asset.id)
-                    } else if canView {
-                        activeSheet = .lotHistory(asset)
-                    }
+                    openAsset(asset)
                 } label: {
                     InvestmentPositionRow(
                         imagePath: asset.imagePath,
@@ -466,10 +522,22 @@ struct InvestmentHubView: View {
                     }
 
                     if canEdit {
-                        Button(L10n.management.management.edit) { activeSheet = .asset(asset.id) }
-                        Button(L10n.common.archive, role: .destructive) { archive(asset) }
+                        Button {
+                            activeSheet = .asset(asset.id)
+                        } label: {
+                            Label(L10n.management.management.edit, systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            archive(asset)
+                        } label: {
+                            Label(L10n.common.archive, systemImage: "archivebox")
+                        }
                     } else {
-                        Button(L10n.investment.permission.requestEdit) { requestPermission(.edit) }
+                        Button {
+                            handlePermissionMenuAction(.edit)
+                        } label: {
+                            Label(permissionActionTitle(.edit), systemImage: "lock.open")
+                        }
                     }
                 }
             }
@@ -502,7 +570,7 @@ struct InvestmentHubView: View {
             }
             ForEach(visibleTrades.sorted(by: newestTradeFirst)) { trade in
                 Button {
-                    if canEdit { activeSheet = .trade(kind: trade.kind, id: trade.id) }
+                    openTrade(trade)
                 } label: {
                     HStack(spacing: 12) {
                         ZStack(alignment: .bottomTrailing) {
@@ -545,6 +613,26 @@ struct InvestmentHubView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    if canEdit {
+                        Button {
+                            activeSheet = .trade(kind: trade.kind, id: trade.id)
+                        } label: {
+                            Label(L10n.management.management.edit, systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            confirmDelete(trade)
+                        } label: {
+                            Label(L10n.investment.trade.deleteAction, systemImage: "trash")
+                        }
+                    } else {
+                        Button {
+                            handlePermissionMenuAction(.edit)
+                        } label: {
+                            Label(permissionActionTitle(.edit), systemImage: "lock.open")
+                        }
+                    }
+                }
             }
         }
     }
@@ -559,7 +647,7 @@ struct InvestmentHubView: View {
                     channel: channels.first { $0.id == channelID },
                     primaryCurrencyCode: primaryCurrencyCode,
                     canEditExisting: canEdit
-                ) { errorMessage = $0 }
+                ) { showError($0) }
             case .asset(let assetID):
                 InvestmentAssetEditorSheet(
                     ownerUserID: ownerUserID,
@@ -570,7 +658,7 @@ struct InvestmentHubView: View {
                         trades.contains { $0.assetID == id }
                     } ?? false,
                     canEditExisting: canEdit
-                ) { errorMessage = $0 }
+                ) { showError($0) }
             case .trade(let kind, let tradeID):
                 InvestmentTradeEditorSheet(
                     ownerUserID: ownerUserID,
@@ -585,9 +673,11 @@ struct InvestmentHubView: View {
                     onDelete: { trade in
                         delete(trade)
                     }
-                ) { errorMessage = $0 }
+                ) { showError($0) }
             case .wallet:
-                InvestmentWalletTransferSheet(ownerUserID: ownerUserID) { errorMessage = $0 }
+                if canEdit {
+                    InvestmentWalletTransferSheet(ownerUserID: ownerUserID) { showError($0) }
+                }
             case .lotHistory(let asset):
                 InvestmentAssetLotHistorySheet(
                     asset: asset,
@@ -602,16 +692,10 @@ struct InvestmentHubView: View {
 
     @ViewBuilder
     private func permissionButton(scope: MistiaFamilyPermissionScope) -> some View {
-        let pending = familyContextStore.hasPendingPermissionRequest(
-            ownerUserID: ownerUserID,
-            resourceType: .investment,
-            resourceID: nil,
-            scope: scope
-        )
-        Button(pending ? L10n.investment.permission.pending : permissionTitle(scope)) {
-            requestPermission(scope)
+        Button(permissionActionTitle(scope)) {
+            handlePermissionMenuAction(scope)
         }
-        .disabled(pending || isRequestingPermission || ownerUserID == nil)
+        .disabled(isRequestingPermission || ownerUserID == nil)
         .buttonStyle(.borderedProminent)
         .tint(MistiaAccent.purple.color)
         .clipShape(Capsule())
@@ -626,9 +710,186 @@ struct InvestmentHubView: View {
         }
     }
 
+    private func permissionActionTitle(_ scope: MistiaFamilyPermissionScope) -> String {
+        let pending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .investment,
+            resourceID: nil,
+            scope: scope
+        )
+        guard pending else { return permissionTitle(scope) }
+        switch scope {
+        case .view:
+            return L10n.investment.permission.requestViewSent
+        case .create, .use:
+            return L10n.investment.permission.requestCreateSent
+        case .edit:
+            return L10n.investment.permission.requestEditSent
+        }
+    }
+
+    private func openAsset(_ asset: InvestmentAsset) {
+        guard canEdit else {
+            presentPermissionPrompt(scope: .edit) {
+                activeSheet = .asset(asset.id)
+            }
+            return
+        }
+        activeSheet = .asset(asset.id)
+    }
+
+    private func openTrade(_ trade: InvestmentTrade) {
+        guard canEdit else {
+            presentPermissionPrompt(scope: .edit) {
+                activeSheet = .trade(kind: trade.kind, id: trade.id)
+            }
+            return
+        }
+        activeSheet = .trade(kind: trade.kind, id: trade.id)
+    }
+
+    private func openNewTrade(kind: InvestmentTradeKind) {
+        guard canCreate else {
+            presentPermissionPrompt(scope: .create) {
+                openNewTrade(kind: kind)
+            }
+            return
+        }
+        guard kind == .buy ? canStartBuyTrade : canStartSellTrade else { return }
+        activeSheet = .trade(kind: kind, id: nil)
+    }
+
+    private func openInvestmentWallet() {
+        guard canEdit else {
+            presentPermissionPrompt(scope: .edit) {
+                activeSheet = .wallet
+            }
+            return
+        }
+        activeSheet = .wallet
+    }
+
+    private func presentPermissionPrompt(
+        scope: MistiaFamilyPermissionScope,
+        onGranted: @escaping () -> Void = {}
+    ) {
+        guard let ownerUserID, !isOwner else { return }
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .investment,
+            resourceID: nil,
+            scope: scope
+        )
+        let alertID = UUID()
+        activeAlert = InvestmentHubAlert(
+            id: alertID,
+            title: permissionRequiredTitle(scope),
+            message: permissionRequiredMessage(scope),
+            actionTitle: permissionActionTitle(scope)
+        ) {
+            resolvePermissionPromptAction(
+                scope: scope,
+                wasPending: isPending,
+                onGranted: onGranted
+            )
+        }
+
+        guard isPending else { return }
+        Task { @MainActor in
+            if await familyContextStore.resolvePendingPermissionBeforePrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .investment,
+                resourceID: nil,
+                scope: scope,
+                sessionStore: sessionStore
+            ) {
+                if activeAlert?.id == alertID {
+                    activeAlert = nil
+                }
+                onGranted()
+            }
+        }
+    }
+
+    private func permissionRequiredTitle(_ scope: MistiaFamilyPermissionScope) -> String {
+        switch scope {
+        case .view:
+            return L10n.investment.permission.accessRequired
+        case .create, .use:
+            return L10n.investment.permission.tradeRequiredTitle
+        case .edit:
+            return L10n.investment.permission.managementRequiredTitle
+        }
+    }
+
+    private func permissionRequiredMessage(_ scope: MistiaFamilyPermissionScope) -> String {
+        switch scope {
+        case .view:
+            return L10n.investment.permission.viewMessage
+        case .create, .use:
+            return L10n.investment.permission.tradeMessage
+        case .edit:
+            return L10n.investment.permission.managementMessage
+        }
+    }
+
+    private func resolvePermissionPromptAction(
+        scope: MistiaFamilyPermissionScope,
+        wasPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
+        if wasPending {
+            refreshPendingPermission(scope: scope, onGranted: onGranted)
+        } else {
+            requestPermission(scope)
+        }
+    }
+
+    private func handlePermissionMenuAction(_ scope: MistiaFamilyPermissionScope) {
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .investment,
+            resourceID: nil,
+            scope: scope
+        )
+        if isPending {
+            refreshPendingPermission(scope: scope)
+        } else {
+            requestPermission(scope)
+        }
+    }
+
+    private func refreshPendingPermission(
+        scope: MistiaFamilyPermissionScope,
+        onGranted: @escaping () -> Void = {}
+    ) {
+        guard let ownerUserID else { return }
+        activeAlert = InvestmentHubAlert(
+            title: L10n.investment.permission.requestSentTitle,
+            message: L10n.investment.permission.requestPendingMessage
+        )
+        Task { @MainActor in
+            let isApproved = await familyContextStore.refreshPermissionGrant(
+                ownerUserID: ownerUserID,
+                resourceType: .investment,
+                resourceID: nil,
+                scope: scope,
+                sessionStore: sessionStore
+            )
+            if isApproved {
+                activeAlert = nil
+                onGranted()
+            }
+        }
+    }
+
     private func requestPermission(_ scope: MistiaFamilyPermissionScope) {
         guard let ownerUserID, !isRequestingPermission else { return }
         isRequestingPermission = true
+        activeAlert = InvestmentHubAlert(
+            title: L10n.shared.family.permissionRequest.sendingTitle,
+            message: L10n.shared.family.permissionRequest.sendingMessage
+        )
         Task { @MainActor in
             let didRequest = await familyContextStore.requestPermission(
                 resourceType: .investment,
@@ -639,9 +900,32 @@ struct InvestmentHubView: View {
                 sessionStore: sessionStore
             )
             isRequestingPermission = false
-            if !didRequest {
-                errorMessage = familyContextStore.lastErrorMessage ?? L10n.common.unknownError
-            }
+            activeAlert = InvestmentHubAlert(
+                title: didRequest
+                    ? L10n.investment.permission.requestSentTitle
+                    : L10n.investment.permission.sendFailedTitle,
+                message: didRequest
+                    ? L10n.investment.permission.requestSentMessage
+                    : (familyContextStore.lastErrorMessage ?? L10n.investment.permission.sendFailedMessage)
+            )
+        }
+    }
+
+    private func showError(_ message: String) {
+        activeAlert = InvestmentHubAlert(
+            title: L10n.common.error,
+            message: message
+        )
+    }
+
+    private func confirmDelete(_ trade: InvestmentTrade) {
+        activeAlert = InvestmentHubAlert(
+            title: L10n.investment.trade.deleteAction,
+            message: L10n.investment.trade.deleteConfirmation,
+            actionTitle: L10n.common.delete,
+            actionIsDestructive: true
+        ) {
+            _ = delete(trade)
         }
     }
 
@@ -712,7 +996,7 @@ struct InvestmentHubView: View {
                 && position(for: asset).quantity > 0
         }
         guard !hasOpenPosition else {
-            errorMessage = L10n.investment.error.closePositionsBeforeArchive
+            showError(L10n.investment.error.closePositionsBeforeArchive)
             return
         }
         channel.isArchived = true
@@ -726,12 +1010,12 @@ struct InvestmentHubView: View {
                 modifiedAt: channel.updatedAt,
                 subjectUserIDOverride: channel.ownerUserID
             )
-        } catch { errorMessage = error.localizedDescription }
+        } catch { showError(error.localizedDescription) }
     }
 
     private func archive(_ asset: InvestmentAsset) {
         guard position(for: asset).quantity <= 0 else {
-            errorMessage = L10n.investment.error.closePositionsBeforeArchive
+            showError(L10n.investment.error.closePositionsBeforeArchive)
             return
         }
         asset.isArchived = true
@@ -745,7 +1029,7 @@ struct InvestmentHubView: View {
                 modifiedAt: asset.updatedAt,
                 subjectUserIDOverride: asset.ownerUserID
             )
-        } catch { errorMessage = error.localizedDescription }
+        } catch { showError(error.localizedDescription) }
     }
 
     private func restore(_ channel: InvestmentChannel) {
@@ -760,7 +1044,7 @@ struct InvestmentHubView: View {
                 modifiedAt: channel.updatedAt,
                 subjectUserIDOverride: channel.ownerUserID
             )
-        } catch { errorMessage = error.localizedDescription }
+        } catch { showError(error.localizedDescription) }
     }
 
     private func restore(_ asset: InvestmentAsset) {
@@ -775,7 +1059,7 @@ struct InvestmentHubView: View {
                 modifiedAt: asset.updatedAt,
                 subjectUserIDOverride: asset.ownerUserID
             )
-        } catch { errorMessage = error.localizedDescription }
+        } catch { showError(error.localizedDescription) }
     }
 
     @discardableResult
@@ -795,7 +1079,7 @@ struct InvestmentHubView: View {
             )
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            showError(error.localizedDescription)
             return false
         }
     }
