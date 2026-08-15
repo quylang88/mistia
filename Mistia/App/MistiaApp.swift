@@ -321,7 +321,7 @@ private struct MistiaProtectedLaunchView: View {
 // MARK: - Startup Loading View
 
 private struct MistiaStartupLoadingView: View {
-    private let iconSize: CGFloat = 184
+    private let iconSize: CGFloat = 164
 
     var body: some View {
         ZStack {
