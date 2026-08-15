@@ -38,7 +38,7 @@ struct MistiaApp: App {
                 } else if sessionStore.isAuthTransitioning {
                     MistiaAuthTransitionView(appLanguage: appLanguage)
                 } else if sessionStore.isBootstrapping {
-                    MistiaStartupLoadingView(appLanguage: appLanguage)
+                    MistiaStartupLoadingView()
                 } else {
                     ContentView()
                 }
@@ -54,7 +54,7 @@ struct MistiaApp: App {
                     }
                 }
                 .id(appRootIdentity)
-                .preferredColorScheme(appearanceMode.colorScheme)
+                .preferredColorScheme(rootPreferredColorScheme)
                 .environment(\.locale, appLanguage.locale)
                 .environment(\.calendar, appLanguage.calendar)
                 .environment(sessionStore)
@@ -124,6 +124,11 @@ struct MistiaApp: App {
 
     private var appearanceMode: MistiaAppearanceMode {
         MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
+    }
+
+    private var rootPreferredColorScheme: ColorScheme? {
+        guard !sessionStore.isBootstrapping else { return nil }
+        return appearanceMode.colorScheme
     }
 
     private var appLanguage: MistiaAppLanguage {
@@ -316,24 +321,18 @@ private struct MistiaProtectedLaunchView: View {
 // MARK: - Startup Loading View
 
 private struct MistiaStartupLoadingView: View {
-    let appLanguage: MistiaAppLanguage
+    private let iconSize: CGFloat = 184
 
     var body: some View {
         ZStack {
             Color(.systemBackground)
                 .ignoresSafeArea()
 
-            VStack(spacing: 14) {
-                ProgressView()
-                    .controlSize(.large)
-
-                Text(L10n.app.mistia.loadingYourData)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-            }
-            .padding(24)
+            Image("AppIconAsset")
+                .resizable()
+                .scaledToFit()
+                .frame(width: iconSize, height: iconSize)
+                .accessibilityHidden(true)
         }
-        .environment(\.locale, appLanguage.locale)
-        .environment(\.calendar, appLanguage.calendar)
     }
 }
