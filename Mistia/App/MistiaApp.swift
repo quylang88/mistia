@@ -321,7 +321,9 @@ private struct MistiaProtectedLaunchView: View {
 // MARK: - Startup Loading View
 
 private struct MistiaStartupLoadingView: View {
-    private let iconSize: CGFloat = 164
+    // Keep this in sync with MistiaLaunchIcon84V1.storyboard. If the artwork or
+    // size changes, bump the storyboard name to invalidate iOS's launch cache.
+    private let iconSize: CGFloat = 84
 
     var body: some View {
         ZStack {
@@ -334,5 +336,6 @@ private struct MistiaStartupLoadingView: View {
                 .frame(width: iconSize, height: iconSize)
                 .accessibilityHidden(true)
         }
+        .ignoresSafeArea()
     }
 }

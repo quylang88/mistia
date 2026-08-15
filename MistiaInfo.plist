@@ -71,8 +71,10 @@
 	<array>
 		<string>fetch</string>
 	</array>
+	<!-- Bump the storyboard name whenever its icon artwork or layout changes.
+	     iOS caches the rendered launch snapshot by this identity. -->
 	<key>UILaunchStoryboardName</key>
-	<string>MistiaLaunchScreen</string>
+	<string>MistiaLaunchIcon84V1</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

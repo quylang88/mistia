@@ -3,7 +3,6 @@
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="26400"/>
-        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
     </dependencies>
     <scenes>
@@ -15,18 +14,17 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="AppIconAsset" translatesAutoresizingMaskIntoConstraints="NO" id="launch-icon">
-                                <rect key="frame" x="114.5" y="356.5" width="164" height="164"/>
+                                <rect key="frame" x="154.5" y="384" width="84" height="84"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="164" id="launch-icon-width"/>
-                                    <constraint firstAttribute="height" constant="164" id="launch-icon-height"/>
+                                    <constraint firstAttribute="width" constant="84" id="launch-icon-width"/>
+                                    <constraint firstAttribute="height" constant="84" id="launch-icon-height"/>
                                 </constraints>
                             </imageView>
                         </subviews>
-                        <viewLayoutGuide key="safeArea" id="launch-safe-area"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
                             <constraint firstItem="launch-icon" firstAttribute="centerX" secondItem="launch-root-view" secondAttribute="centerX" id="launch-icon-center-x"/>
-                            <constraint firstItem="launch-icon" firstAttribute="centerY" secondItem="launch-safe-area" secondAttribute="centerY" id="launch-icon-center-y"/>
+                            <constraint firstItem="launch-icon" firstAttribute="centerY" secondItem="launch-root-view" secondAttribute="centerY" id="launch-icon-center-y"/>
                         </constraints>
                     </view>
                 </viewController>
