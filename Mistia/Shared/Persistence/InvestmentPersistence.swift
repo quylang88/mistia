@@ -843,6 +843,9 @@ enum InvestmentPersistenceService {
                 throw InvestmentPersistenceError.missingWallet
             }
         case .sell:
+            if draft.grossAmountMinor == 0 && draft.capitalReturnWalletID == nil {
+                return
+            }
             guard let walletID = draft.capitalReturnWalletID,
                   let wallet = walletsByID[walletID],
                   wallet.id != systemWallet.id,
@@ -860,11 +863,20 @@ enum InvestmentPersistenceService {
     ) throws {
         let sourceCurrency = MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
         let accountingCurrency = MistiaCurrencyLogic.normalizedCode(draft.accountingCurrencyCode)
+        let hasValidGross = draft.kind == .buy
+            ? (draft.grossAmountMinor > 0 && draft.accountingGrossAmountMinor > 0)
+            : (draft.grossAmountMinor >= 0 && draft.accountingGrossAmountMinor >= 0)
         guard draft.quantity > 0,
-              draft.grossAmountMinor > 0,
-              draft.accountingGrossAmountMinor > 0,
+              hasValidGross,
               sourceCurrency == MistiaCurrencyLogic.normalizedCode(asset.currencyCode) else {
             throw InvestmentPersistenceError.invalidTradeInput
+        }
+
+        if draft.grossAmountMinor == 0 {
+            guard draft.accountingGrossAmountMinor == 0 else {
+                throw InvestmentPersistenceError.invalidTradeInput
+            }
+            return
         }
 
         if sourceCurrency == accountingCurrency {
@@ -1033,57 +1045,65 @@ enum InvestmentPersistenceService {
             result.walletIDs.insert(wallet.id)
 
         case .sell:
-            guard let capitalWalletID = trade.capitalReturnWalletID,
-                  let capitalWallet = walletsByID[capitalWalletID] else {
-                throw InvestmentPersistenceError.missingWallet
-            }
-            let capitalAmount = try convertedWithStoredRate(
-                trade.releasedCostBasisMinor,
-                sourceCurrencyCode: trade.accountingCurrencyCode,
-                destinationCurrencyCode: capitalWallet.currencyCode,
-                rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
-            )
-            trade.capitalReturnWalletAmountMinor = capitalAmount
-
-            let capitalLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "capital-return")
-            let capitalTransaction = try upsertLedgerTransaction(
-                id: capitalLedgerID,
-                primaryKind: .income,
-                role: .investmentCapitalReturn,
-                title: assetName,
-                amountMinor: capitalAmount,
-                sourceWallet: capitalWallet,
-                destinationWallet: nil,
-                destinationAmountMinor: nil,
-                reportingAmountMinor: trade.releasedCostBasisMinor,
-                reportingCurrencyCode: trade.accountingCurrencyCode,
-                occurredAt: trade.occurredAt,
-                now: now,
-                context: context
-            )
-            trade.capitalReturnLedgerTransactionID = capitalTransaction.id
-            trade.fundingLedgerTransactionID = nil
-
-            var keepingLedgerIDs: Set<UUID> = [capitalTransaction.id]
+            var keepingLedgerIDs: Set<UUID> = []
             var keepingPostingIDs: Set<UUID> = []
-            let capitalPosting = try upsertPosting(
-                id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "capital-return-posting"),
-                ownerUserID: ownerUserID,
-                trade: trade,
-                walletID: capitalWallet.id,
-                ledgerTransactionID: capitalTransaction.id,
-                role: .capitalReturn,
-                amountMinor: capitalAmount,
-                currencyCode: capitalWallet.currencyCode,
-                accountingAmountMinor: trade.releasedCostBasisMinor,
-                now: now,
-                context: context
-            )
-            keepingPostingIDs.insert(capitalPosting.id)
-            result.ledgerTransactionIDs.insert(capitalTransaction.id)
-            result.postingIDs.insert(capitalPosting.id)
-            result.walletIDs.insert(capitalWallet.id)
-            try recordTransactionOwnership(capitalTransaction, ownerUserID: ownerUserID, now: now, context: context)
+
+            if trade.grossAmountMinor > 0 {
+                guard let capitalWalletID = trade.capitalReturnWalletID,
+                      let capitalWallet = walletsByID[capitalWalletID] else {
+                    throw InvestmentPersistenceError.missingWallet
+                }
+                let capitalAmount = try convertedWithStoredRate(
+                    trade.releasedCostBasisMinor,
+                    sourceCurrencyCode: trade.accountingCurrencyCode,
+                    destinationCurrencyCode: capitalWallet.currencyCode,
+                    rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
+                )
+                trade.capitalReturnWalletAmountMinor = capitalAmount
+
+                let capitalLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "capital-return")
+                let capitalTransaction = try upsertLedgerTransaction(
+                    id: capitalLedgerID,
+                    primaryKind: .income,
+                    role: .investmentCapitalReturn,
+                    title: assetName,
+                    amountMinor: capitalAmount,
+                    sourceWallet: capitalWallet,
+                    destinationWallet: nil,
+                    destinationAmountMinor: nil,
+                    reportingAmountMinor: trade.releasedCostBasisMinor,
+                    reportingCurrencyCode: trade.accountingCurrencyCode,
+                    occurredAt: trade.occurredAt,
+                    now: now,
+                    context: context
+                )
+                trade.capitalReturnLedgerTransactionID = capitalTransaction.id
+                trade.fundingLedgerTransactionID = nil
+
+                keepingLedgerIDs.insert(capitalTransaction.id)
+                let capitalPosting = try upsertPosting(
+                    id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "capital-return-posting"),
+                    ownerUserID: ownerUserID,
+                    trade: trade,
+                    walletID: capitalWallet.id,
+                    ledgerTransactionID: capitalTransaction.id,
+                    role: .capitalReturn,
+                    amountMinor: capitalAmount,
+                    currencyCode: capitalWallet.currencyCode,
+                    accountingAmountMinor: trade.releasedCostBasisMinor,
+                    now: now,
+                    context: context
+                )
+                keepingPostingIDs.insert(capitalPosting.id)
+                result.ledgerTransactionIDs.insert(capitalTransaction.id)
+                result.postingIDs.insert(capitalPosting.id)
+                result.walletIDs.insert(capitalWallet.id)
+                try recordTransactionOwnership(capitalTransaction, ownerUserID: ownerUserID, now: now, context: context)
+            } else {
+                trade.capitalReturnLedgerTransactionID = nil
+                trade.capitalReturnWalletAmountMinor = nil
+                trade.fundingLedgerTransactionID = nil
+            }
 
             if trade.realizedProfitLossMinor != 0 {
                 let profitLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "profit-loss")

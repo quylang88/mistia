@@ -249,6 +249,46 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(calculations.last?.realizedProfitLossMinor, 20)
     }
 
+    func testSaleWithZeroAmountRecordsTotalLossAndClearsPosition() throws {
+        let buyID = UUID()
+        let lossSellID = UUID()
+        let start = Date(timeIntervalSince1970: 7_000)
+
+        let calculations = try InvestmentAccountingEngine.calculationMap(
+            trades: [
+                trade(id: buyID, kind: .buy, quantity: 5, gross: 500, occurredAt: start),
+                trade(id: lossSellID, kind: .sell, quantity: 5, gross: 0, occurredAt: start.addingTimeInterval(1))
+            ]
+        )
+
+        let saleCalc = try XCTUnwrap(calculations[lossSellID])
+        XCTAssertEqual(saleCalc.releasedCostBasisMinor, 500)
+        XCTAssertEqual(saleCalc.realizedProfitLossMinor, -500)
+        XCTAssertEqual(saleCalc.positionQuantityAfter, 0)
+        XCTAssertEqual(saleCalc.positionCostBasisAfterMinor, 0)
+        XCTAssertEqual(saleCalc.openLotCountAfter, 0)
+    }
+
+    func testPartialLossSaleConsumesQuantityAndCostBasisCorrectly() throws {
+        let buyID = UUID()
+        let lossSellID = UUID()
+        let start = Date(timeIntervalSince1970: 8_000)
+
+        let calculations = try InvestmentAccountingEngine.calculationMap(
+            trades: [
+                trade(id: buyID, kind: .buy, quantity: 10, gross: 1_000, occurredAt: start),
+                trade(id: lossSellID, kind: .sell, quantity: 4, gross: 0, occurredAt: start.addingTimeInterval(1))
+            ]
+        )
+
+        let saleCalc = try XCTUnwrap(calculations[lossSellID])
+        XCTAssertEqual(saleCalc.releasedCostBasisMinor, 400)
+        XCTAssertEqual(saleCalc.realizedProfitLossMinor, -400)
+        XCTAssertEqual(saleCalc.positionQuantityAfter, 6)
+        XCTAssertEqual(saleCalc.positionCostBasisAfterMinor, 600)
+        XCTAssertEqual(saleCalc.openLotCountAfter, 1)
+    }
+
     private func trade(
         id: UUID = UUID(),
         kind: InvestmentTradeKind,

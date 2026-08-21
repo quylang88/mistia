@@ -896,6 +896,12 @@ nonisolated enum L10n {
             static func fundingWallet(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.fundingWallet", vi: "Ví thanh toán Mua", en: "Funding Wallet", ja: "支払元ウォレット", language: language) }
             static var grossAmount: String { L10n.tr("investment.trade.grossAmount", vi: "Tổng giá trị giao dịch", en: "Total Transaction Value", ja: "取引総額") }
             static func grossAmount(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.grossAmount", vi: "Tổng giá trị giao dịch", en: "Total Transaction Value", ja: "取引総額", language: language) }
+            static func isTotalLoss(_ value: String) -> String {
+                L10n.format("investment.trade.isTotalLoss", vi: "Thanh lý %@", en: "Liquidate at %@", ja: "%@で清算", value)
+            }
+            static func isTotalLoss(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.trade.isTotalLoss", vi: "Thanh lý %@", en: "Liquidate at %@", ja: "%@で清算", language: language, value)
+            }
             static var newBuyTitle: String { L10n.tr("investment.trade.newBuyTitle", vi: "Ghi nhận mua", en: "Record Purchase", ja: "買付を記録") }
             static func newBuyTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.newBuyTitle", vi: "Ghi nhận mua", en: "Record Purchase", ja: "買付を記録", language: language) }
             static var newSellTitle: String { L10n.tr("investment.trade.newSellTitle", vi: "Ghi nhận bán", en: "Record Sale", ja: "売却を記録") }
@@ -910,6 +916,18 @@ nonisolated enum L10n {
             static func sellTotal(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.sellTotal", vi: "Tổng tiền bán", en: "Total Sale Amount", ja: "売却総額", language: language) }
             static var time: String { L10n.tr("investment.trade.time", vi: "Thời gian", en: "Time", ja: "日時") }
             static func time(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.time", vi: "Thời gian", en: "Time", ja: "日時", language: language) }
+            static func totalLossBadge(_ value: String) -> String {
+                L10n.format("investment.trade.totalLossBadge", vi: "Thanh lý %@", en: "Liquidate %@", ja: "%@清算", value)
+            }
+            static func totalLossBadge(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.trade.totalLossBadge", vi: "Thanh lý %@", en: "Liquidate %@", ja: "%@清算", language: language, value)
+            }
+            static func totalLossDescription(_ value: String) -> String {
+                L10n.format("investment.trade.totalLossDescription", vi: "Ghi nhận thanh lý với giá %@ (lỗ toàn bộ vốn) và không phát sinh tiền về ví.", en: "Record liquidation for this quantity at %@ with no funds returned to wallet.", ja: "この数量を%@で清算として記録します。ウォレットへの入金は発生しません。", value)
+            }
+            static func totalLossDescription(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.trade.totalLossDescription", vi: "Ghi nhận thanh lý với giá %@ (lỗ toàn bộ vốn) và không phát sinh tiền về ví.", en: "Record liquidation for this quantity at %@ with no funds returned to wallet.", ja: "この数量を%@で清算として記録します。ウォレットへの入金は発生しません。", language: language, value)
+            }
         }
 
         nonisolated enum transfer {

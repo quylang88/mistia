@@ -64,6 +64,44 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(systemWallet, fixture), -30)
     }
 
+    func testSellWithZeroAmountRecordsTotalLossAndDoesNotCreditCapitalWallet() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 200,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let lossSale = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 2,
+            gross: 0,
+            capitalWalletID: nil,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        let systemWallet = try XCTUnwrap(fetchSystemWallet(fixture))
+        // Funding wallet was debited 200 from initial 1000 balance -> 800
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 800)
+        // Capital wallet was untouched (0 balance)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 0)
+        // System investment wallet absorbed the full loss of 200
+        XCTAssertEqual(try balance(systemWallet, fixture), -200)
+
+        let storedBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
+        let storedLoss = try XCTUnwrap(fetchTrade(id: lossSale.id, fixture))
+        XCTAssertEqual(storedBuy.realizedProfitLossMinor, 0)
+        XCTAssertEqual(storedLoss.releasedCostBasisMinor, 200)
+        XCTAssertEqual(storedLoss.realizedProfitLossMinor, -200)
+        XCTAssertEqual(storedLoss.positionQuantityAfter, 0)
+        XCTAssertEqual(storedLoss.positionCostBasisAfterMinor, 0)
+        XCTAssertNil(storedLoss.capitalReturnLedgerTransactionID)
+        XCTAssertNotNil(storedLoss.profitLossLedgerTransactionID)
+    }
+
     func testOutboundTransferCannotExceedPositiveInvestmentBalance() throws {
         let fixture = try makeFixture()
         _ = try saveTrade(

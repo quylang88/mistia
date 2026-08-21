@@ -99,12 +99,11 @@ nonisolated enum InvestmentAccountingEngine {
             guard trade.quantity > 0 else {
                 throw InvestmentAccountingError.invalidQuantity
             }
-            guard trade.accountingGrossAmountMinor > 0 else {
-                throw InvestmentAccountingError.invalidAmount
-            }
-
             switch trade.kind {
             case .buy:
+                guard trade.accountingGrossAmountMinor > 0 else {
+                    throw InvestmentAccountingError.invalidAmount
+                }
                 let (nextCost, costOverflow) = positionCostBasisMinor.addingReportingOverflow(
                     trade.accountingGrossAmountMinor
                 )
@@ -130,6 +129,9 @@ nonisolated enum InvestmentAccountingEngine {
                 )
 
             case .sell:
+                guard trade.accountingGrossAmountMinor >= 0 else {
+                    throw InvestmentAccountingError.invalidAmount
+                }
                 guard positionQuantity >= trade.quantity else {
                     throw InvestmentAccountingError.insufficientPosition
                 }

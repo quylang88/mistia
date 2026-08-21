@@ -578,9 +578,9 @@ struct InvestmentHubView: View {
                                 imagePath: assets.first(where: { $0.id == trade.assetID })?.imagePath,
                                 size: 44
                             )
-                            Image(systemName: trade.kind == .buy ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                            Image(systemName: trade.kind == .buy ? "arrow.down.circle.fill" : (trade.grossAmountMinor == 0 ? "minus.circle.fill" : "arrow.up.circle.fill"))
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(trade.kind == .buy ? Color.blue : Color.green)
+                                .foregroundStyle(trade.kind == .buy ? Color.blue : (trade.grossAmountMinor == 0 ? Color.red : Color.green))
                                 .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
                         }
                         VStack(alignment: .leading, spacing: 3) {
@@ -598,9 +598,15 @@ struct InvestmentHubView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 3) {
-                            Text(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
+                            if trade.kind == .sell && trade.grossAmountMinor == 0 {
+                                Text(L10n.investment.trade.totalLossBadge(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Color.red)
+                            } else {
+                                Text(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
                             if trade.kind == .sell {
                                 Text(trade.realizedProfitLossMinor.formattedCurrency(code: trade.accountingCurrencyCode))
                                     .font(.caption.weight(.semibold))
@@ -1424,10 +1430,9 @@ private struct InvestmentAssetEditorSheet: View {
     @State private var name = ""
     @State private var currencyCode = "JPY"
     @State private var draftAssetID = UUID()
-    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var imageSource: InvestmentAssetImageSource?
     @State private var selectedImage: UIImage?
     @State private var removesExistingImage = false
-    @State private var showsCamera = false
 
     var body: some View {
         MistiaModalScaffold(
@@ -1477,13 +1482,16 @@ private struct InvestmentAssetEditorSheet: View {
                         Spacer()
                     }
                     Menu {
-                        Button {
-                            showsCamera = true
-                        } label: {
-                            Label(L10n.investment.asset.takePhoto, systemImage: "camera")
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            Button {
+                                imageSource = .camera
+                            } label: {
+                                Label(L10n.investment.asset.takePhoto, systemImage: "camera")
+                            }
                         }
-                        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        Button {
+                            imageSource = .photoLibrary
+                        } label: {
                             Label(L10n.investment.asset.choosePhoto, systemImage: "photo.on.rectangle")
                         }
                     } label: {
@@ -1497,25 +1505,16 @@ private struct InvestmentAssetEditorSheet: View {
                     if selectedImage != nil || (!removesExistingImage && asset?.imagePath != nil) {
                         Button(L10n.investment.asset.removeImage, role: .destructive) {
                             selectedImage = nil
-                            selectedPhotoItem = nil
+                            imageSource = nil
                             removesExistingImage = true
                         }
                     }
                 }
             }
             .onAppear { hydrate() }
-            .onChange(of: selectedPhotoItem) { _, item in
-                guard let item else { return }
-                Task {
-                    guard let data = try? await item.loadTransferable(type: Data.self),
-                          let image = UIImage(data: data) else { return }
-                    selectedImage = image
-                    removesExistingImage = false
-                }
-            }
         }
-        .sheet(isPresented: $showsCamera) {
-            InvestmentCameraPicker { image in
+        .sheet(item: $imageSource) { source in
+            InvestmentImagePicker(sourceType: source.uiImagePickerSourceType) { image in
                 selectedImage = image
                 removesExistingImage = false
             }
@@ -1706,6 +1705,7 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var walletID: UUID?
     @State private var quantity = ""
     @State private var grossAmount = ""
+    @State private var isTotalLoss = false
     @State private var note = ""
     @State private var occurredAt = Date()
     @State private var showsAssetPicker = false
@@ -1739,6 +1739,9 @@ private struct InvestmentTradeEditorSheet: View {
     private var availableQuantity: Decimal {
         guard let selectedAsset else { return 0 }
         return availableQuantity(for: selectedAsset)
+    }
+    private var zeroAmountFormatted: String {
+        Int64(0).formattedCurrency(code: selectedAsset?.currencyCode ?? "JPY")
     }
 
     var body: some View {
@@ -1787,11 +1790,21 @@ private struct InvestmentTradeEditorSheet: View {
                         Text(L10n.investment.trade.availableQuantity(InvestmentDecimalCoding.string(from: availableQuantity)))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                        Toggle(isOn: $isTotalLoss) {
+                            Label(L10n.investment.trade.isTotalLoss(zeroAmountFormatted), systemImage: "minus.circle.fill")
+                        }
+                        .tint(Color.red)
                     }
-                    MistiaCurrencyInputField(
-                        kind == .buy ? L10n.investment.trade.buyTotal : L10n.investment.trade.sellTotal,
-                        text: $grossAmount
-                    )
+                    if kind == .sell && isTotalLoss {
+                        Text(L10n.investment.trade.totalLossDescription(zeroAmountFormatted))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        MistiaCurrencyInputField(
+                            kind == .buy ? L10n.investment.trade.buyTotal : L10n.investment.trade.sellTotal,
+                            text: $grossAmount
+                        )
+                    }
                     MistiaDatePickerRow(
                         title: L10n.investment.trade.time,
                         selection: $occurredAt,
@@ -1799,10 +1812,12 @@ private struct InvestmentTradeEditorSheet: View {
                     )
                     TextField(L10n.investment.trade.note, text: $note)
                 }
-                Section {
-                    Picker(kind == .buy ? L10n.investment.trade.fundingWallet : L10n.investment.trade.capitalWallet, selection: $walletID) {
-                        ForEach(availableWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                if !(kind == .sell && isTotalLoss) {
+                    Section {
+                        Picker(kind == .buy ? L10n.investment.trade.fundingWallet : L10n.investment.trade.capitalWallet, selection: $walletID) {
+                            ForEach(availableWallets) { wallet in
+                                Text(wallet.name).tag(Optional(wallet.id))
+                            }
                         }
                     }
                 }
@@ -1820,11 +1835,14 @@ private struct InvestmentTradeEditorSheet: View {
                 }
             }
             .onAppear { hydrate() }
-            .onChange(of: kind) { _, _ in
+            .onChange(of: kind) { _, newKind in
+                if newKind == .buy {
+                    isTotalLoss = false
+                }
                 if !availableWallets.contains(where: { $0.id == walletID }) {
                     walletID = availableWallets.first?.id
                 }
-                if kind == .sell,
+                if newKind == .sell,
                    !selectableAssets.contains(where: { $0.id == assetID }) {
                     assetID = selectableAssets.first?.id
                 }
@@ -1840,10 +1858,16 @@ private struct InvestmentTradeEditorSheet: View {
     }
 
     private var canSave: Bool {
-        guard assetID != nil, walletID != nil, selectedAsset != nil else { return false }
+        guard assetID != nil, selectedAsset != nil else { return false }
         guard parsedDecimal(quantity) > 0 else { return false }
+        if kind == .sell {
+            guard parsedDecimal(quantity) <= availableQuantity else { return false }
+            if isTotalLoss {
+                return trade == nil || canEditExisting
+            }
+        }
+        guard walletID != nil else { return false }
         guard grossAmount.currencyInputToMinorUnits(currencyCode: selectedAsset?.currencyCode ?? "JPY") > 0 else { return false }
-        if kind == .sell, parsedDecimal(quantity) > availableQuantity { return false }
         return trade == nil || canEditExisting
     }
 
@@ -1857,9 +1881,12 @@ private struct InvestmentTradeEditorSheet: View {
             ?? availableWallets.first?.id
         quantity = trade.map { InvestmentDecimalCoding.string(from: $0.quantity) } ?? ""
         if let trade {
+            isTotalLoss = trade.kind == .sell && trade.grossAmountMinor == 0
             grossAmount = MistiaCurrencyInputFormatting.groupedInput(String(trade.grossAmountMinor))
             note = trade.note ?? ""
             occurredAt = trade.occurredAt
+        } else {
+            isTotalLoss = false
         }
     }
 
@@ -1902,9 +1929,12 @@ private struct InvestmentTradeEditorSheet: View {
     }
 
     private func save() {
-        guard let asset = selectedAsset, let walletID else { return }
+        guard let asset = selectedAsset else { return }
+        let isLoss = kind == .sell && isTotalLoss
+        guard isLoss || walletID != nil else { return }
+
         let currency = asset.currencyCode
-        let grossMinor = grossAmount.currencyInputToMinorUnits(currencyCode: currency)
+        let grossMinor = isLoss ? 0 : grossAmount.currencyInputToMinorUnits(currencyCode: currency)
         let rates = MistiaCurrencySettings.rates()
         let sourceCode = MistiaCurrencyLogic.normalizedCode(currency)
         let accountingCode = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
@@ -1912,18 +1942,20 @@ private struct InvestmentTradeEditorSheet: View {
             MistiaCurrencyLogic.normalizedCode($0.currencyCode) == sourceCode
                 && MistiaCurrencyLogic.normalizedCode($0.accountingCurrencyCode) == accountingCode
         } ?? false
-        let exchangeRateDecimalString = preservesExistingCurrencyPair
+        let exchangeRateDecimalString = isLoss ? nil : (preservesExistingCurrencyPair
             ? trade?.exchangeRateDecimalString
-            : rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates)
-        let exchangeRateProvider = preservesExistingCurrencyPair
+            : rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates))
+        let exchangeRateProvider = isLoss ? nil : (preservesExistingCurrencyPair
             ? trade?.exchangeRateProvider
-            : rateProvider(from: currency, to: accountingCurrencyCode, rates: rates)
-        let exchangeRateDate = preservesExistingCurrencyPair
+            : rateProvider(from: currency, to: accountingCurrencyCode, rates: rates))
+        let exchangeRateDate = isLoss ? nil : (preservesExistingCurrencyPair
             ? trade?.exchangeRateDate
-            : rateDate(from: currency, to: accountingCurrencyCode, rates: rates)
+            : rateDate(from: currency, to: accountingCurrencyCode, rates: rates))
 
         let accountingGross: Int64
-        if sourceCode == accountingCode {
+        if isLoss {
+            accountingGross = 0
+        } else if sourceCode == accountingCode {
             accountingGross = grossMinor
         } else {
             guard let exchangeRateDecimalString,
@@ -1937,6 +1969,10 @@ private struct InvestmentTradeEditorSheet: View {
             }
             accountingGross = converted
         }
+
+        let effectiveNote = note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isLoss
+            ? L10n.investment.trade.totalLossBadge(grossMinor.formattedCurrency(code: currency))
+            : note
 
         let savedTradeID = trade?.id ?? UUID()
         do {
@@ -1956,8 +1992,8 @@ private struct InvestmentTradeEditorSheet: View {
                     exchangeRateProvider: exchangeRateProvider,
                     exchangeRateDate: exchangeRateDate,
                     fundingWalletID: kind == .buy ? walletID : nil,
-                    capitalReturnWalletID: kind == .sell ? walletID : nil,
-                    note: note,
+                    capitalReturnWalletID: isLoss ? nil : (kind == .sell ? walletID : nil),
+                    note: effectiveNote,
                     occurredAt: occurredAt,
                     createdAt: trade?.createdAt ?? .now
                 ),
@@ -2154,16 +2190,34 @@ private enum InvestmentProductImageError: LocalizedError {
     }
 }
 
-private struct InvestmentCameraPicker: UIViewControllerRepresentable {
+private enum InvestmentAssetImageSource: String, Identifiable {
+    case camera
+    case photoLibrary
+
+    var id: String { rawValue }
+
+    var uiImagePickerSourceType: UIImagePickerController.SourceType {
+        switch self {
+        case .camera:
+            .camera
+        case .photoLibrary:
+            .photoLibrary
+        }
+    }
+}
+
+private struct InvestmentImagePicker: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
+    let sourceType: UIImagePickerController.SourceType
     let onImage: (UIImage) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.cameraCaptureMode = .photo
+        picker.sourceType = sourceType
+        picker.mediaTypes = ["public.image"]
+        picker.allowsEditing = false
         picker.delegate = context.coordinator
         return picker
     }
@@ -2171,9 +2225,9 @@ private struct InvestmentCameraPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
-        let parent: InvestmentCameraPicker
+        let parent: InvestmentImagePicker
 
-        init(parent: InvestmentCameraPicker) {
+        init(parent: InvestmentImagePicker) {
             self.parent = parent
         }
 
