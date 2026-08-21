@@ -670,6 +670,7 @@ struct InvestmentHubView: View {
                     ownerUserID: ownerUserID,
                     channels: ownerChannels,
                     assets: assets.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived },
+                    trades: trades.filter { $0.deletedAt == nil },
                     trade: trades.first { $0.id == tradeID },
                     initialKind: kind,
                     wallets: wallets,
@@ -1691,6 +1692,7 @@ private struct InvestmentTradeEditorSheet: View {
     let ownerUserID: UUID
     let channels: [InvestmentChannel]
     let assets: [InvestmentAsset]
+    let trades: [InvestmentTrade]
     let trade: InvestmentTrade?
     let initialKind: InvestmentTradeKind
     let wallets: [LedgerWallet]
@@ -1890,13 +1892,6 @@ private struct InvestmentTradeEditorSheet: View {
         }
     }
 
-    private func assetsTrades(_ asset: InvestmentAsset) -> [InvestmentTrade] {
-        guard let context = asset.modelContext else { return [] }
-        return (try? context.fetch(FetchDescriptor<InvestmentTrade>()))?
-            .filter { $0.assetID == asset.id && $0.deletedAt == nil }
-            .sorted(by: oldestTradeFirst) ?? []
-    }
-
     private var selectableAssets: [InvestmentAsset] {
         guard kind == .sell else { return assets }
         return assets.filter { asset in
@@ -1905,14 +1900,9 @@ private struct InvestmentTradeEditorSheet: View {
     }
 
     private func availableQuantity(for asset: InvestmentAsset) -> Decimal {
-        let prospectiveID = trade?.id ?? draftTradeID
-        let prospectiveCreatedAt = trade?.createdAt ?? draftCreatedAt
-        let eligible = assetsTrades(asset).filter { candidate in
-            guard candidate.id != trade?.id else { return false }
-            if candidate.occurredAt != occurredAt { return candidate.occurredAt < occurredAt }
-            if candidate.createdAt != prospectiveCreatedAt { return candidate.createdAt < prospectiveCreatedAt }
-            return MistiaStableUUIDOrdering.precedes(candidate.id, prospectiveID)
-        }
+        let assetTrades = trades.filter { $0.assetID == asset.id && $0.deletedAt == nil }
+        guard !assetTrades.isEmpty else { return 0 }
+        let eligible = assetTrades.filter { $0.id != trade?.id }
         let calculations = try? InvestmentAccountingEngine.recalculate(
             trades: eligible.map {
                 InvestmentTradeInput(
