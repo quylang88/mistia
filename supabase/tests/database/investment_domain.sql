@@ -390,6 +390,53 @@ select is(
     'FIFO preserves the remaining cost of the partially consumed and newer lots'
 );
 
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000413',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000303',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '2',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-09T00:10:03Z',
+            'created_at', '2026-08-09T00:10:03Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ), null, false
+    )
+    $$,
+    'zero-amount liquidation is accepted without a wallet'
+);
+
+select is(
+    (select released_cost_basis_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000413'),
+    250::bigint,
+    'zero-amount liquidation releases all remaining cost basis'
+);
+
+select is(
+    (select realized_profit_loss_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000413'),
+    -250::bigint,
+    'zero-amount liquidation records 100% loss'
+);
+
+select is(
+    (select position_quantity_after_decimal_string from public.investment_trades where id = '30000000-0000-4000-8000-000000000413'),
+    '0',
+    'zero-amount liquidation clears position quantity'
+);
+
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000413'),
+    0::bigint,
+    'zero-amount liquidation clears position cost basis'
+);
+
 select is(
     (
         select coalesce(sum(reporting_expense_minor), 0) + coalesce(sum(reporting_income_minor), 0)
