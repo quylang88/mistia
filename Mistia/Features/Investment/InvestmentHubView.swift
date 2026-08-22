@@ -514,7 +514,7 @@ struct InvestmentHubView: View {
                         activeSheet = .channel(nil)
                     }
                 } else {
-                    Button(L10n.investment.hub.addAsset, systemImage: "shippingbox.badge.plus") {
+                    Button(L10n.investment.hub.addAsset, systemImage: "shippingbox.fill") {
                         activeSheet = .asset(nil)
                     }
                     Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
@@ -575,7 +575,7 @@ struct InvestmentHubView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "briefcase.fill")
         }
         .accessibilityLabel(L10n.management.management.manage)
     }
@@ -627,6 +627,11 @@ struct InvestmentHubView: View {
                             archive(asset)
                         } label: {
                             Label(L10n.common.archive, systemImage: "archivebox")
+                        }
+                        Button(role: .destructive) {
+                            confirmDelete(asset)
+                        } label: {
+                            Label(L10n.investment.asset.deleteAction, systemImage: "trash")
                         }
                     } else {
                         Button {
@@ -1073,6 +1078,17 @@ struct InvestmentHubView: View {
         }
     }
 
+    private func confirmDelete(_ asset: InvestmentAsset) {
+        activeAlert = InvestmentHubAlert(
+            title: L10n.investment.asset.deleteAction,
+            message: L10n.investment.asset.deleteConfirmation,
+            actionTitle: L10n.common.delete,
+            actionIsDestructive: true
+        ) {
+            _ = delete(asset)
+        }
+    }
+
     private func refreshInvestmentAccessAndData() async {
         guard let ownerUserID, !isOwner else { return }
         let canAccess = await familyContextStore.refreshPermissionGrant(
@@ -1233,6 +1249,28 @@ struct InvestmentHubView: View {
     }
 
     @discardableResult
+    private func delete(_ asset: InvestmentAsset) -> Bool {
+        guard let ownerUserID else { return false }
+        do {
+            let deletedAsset = try InvestmentPersistenceService.deleteAsset(
+                ownerUserID: ownerUserID,
+                assetID: asset.id,
+                context: modelContext
+            )
+            sessionStore.recordDelete(
+                entity: .investmentAsset,
+                recordID: deletedAsset.id,
+                modifiedAt: deletedAsset.updatedAt,
+                subjectUserIDOverride: ownerUserID
+            )
+            return true
+        } catch {
+            showError(error.localizedDescription)
+            return false
+        }
+    }
+
+    @discardableResult
     private func delete(_ trade: InvestmentTrade) -> Bool {
         guard let ownerUserID else { return false }
         do {
@@ -1353,7 +1391,10 @@ private struct InvestmentPortfolioSummaryCard: View {
                 }
 
                 HStack(alignment: .center, spacing: 4) {
-                    Text((summary.realizedProfitLossMinor > 0 ? "+" : "") + summary.realizedProfitLossMinor.formattedCurrency(code: currencyCode))
+                    Text(
+                        verbatim: (summary.realizedProfitLossMinor > 0 ? "+" : "")
+                            + summary.realizedProfitLossMinor.formattedCurrency(code: currencyCode)
+                    )
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundStyle(profitColor)
                         .lineLimit(1)
@@ -1949,7 +1990,7 @@ private struct InvestmentTradeEditorSheet: View {
     var body: some View {
         MistiaModalScaffold(
             titleView: {
-                Picker("", selection: $kind) {
+                Picker(String(), selection: $kind) {
                     Text(L10n.investment.hub.buy).tag(InvestmentTradeKind.buy)
                     Text(L10n.investment.hub.sell).tag(InvestmentTradeKind.sell)
                 }
@@ -2809,7 +2850,7 @@ private struct InvestmentAssetLotHistorySheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("", selection: $filterMode) {
+                Picker(String(), selection: $filterMode) {
                     ForEach(FilterMode.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }

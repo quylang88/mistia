@@ -60,7 +60,7 @@ struct SendFeedbackView: View {
 
                         Spacer()
 
-                        Text("\(contentText.count)/\(maxCharacterCount)")
+                        Text(L10n.settings.feedback.characterCount(contentText.count, maxCharacterCount))
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundStyle(contentText.count >= maxCharacterCount ? .red : .secondary)
                     }
@@ -250,7 +250,7 @@ private struct PhotoAttachmentSection: View {
 
                 Spacer()
 
-                Text("\(loadedImages.count)/5")
+                Text(L10n.settings.feedback.attachmentCount(loadedImages.count))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(loadedImages.count >= 5 ? MistiaAccent.purple.color : .secondary)
             }

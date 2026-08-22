@@ -670,7 +670,7 @@ select throws_ok(
     )
     $$,
     'P0001',
-    'Sale exceeds the quantity held',
+    'Sale exceeds the quantity held for the selected unit',
     'overselling rolls back the entire RPC'
 );
 
@@ -1073,7 +1073,7 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    200::bigint,
+    -50::bigint,
     'Investment Wallet reflects profit after moving the sale'
 );
 select is(
@@ -1136,7 +1136,7 @@ select throws_ok(
     )
     $$,
     'P0001',
-    'Sale exceeds the quantity held',
+    'Sale exceeds the quantity held for the selected unit',
     'moving a sale cannot oversell the target asset'
 );
 select is(
@@ -1205,7 +1205,7 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    90::bigint,
+    -160::bigint,
     'deleting the sale restores Investment Wallet profit'
 );
 select is(
@@ -1551,6 +1551,21 @@ select is(
     'failed asset edit leaves FIFO cost unchanged'
 );
 
+select throws_ok(
+    $$
+    select * from public.delete_investment_asset(
+        '30000000-0000-4000-8000-000000000304',
+        '30000000-0000-4000-8000-000000000001',
+        (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+        '2026-08-22T00:22:00Z'::timestamptz,
+        '30000000-0000-4000-8000-000000000901'
+    )
+    $$,
+    'P0001',
+    'Sell all remaining stock before deleting the investment product',
+    'asset delete RPC rejects a product with remaining inventory'
+);
+
 select lives_ok(
     $$
     select * from public.mutate_investment_asset(
@@ -1781,19 +1796,32 @@ select is(
     'failed unit edit rolls back the original trade unit'
 );
 
-select throws_ok(
+select lives_ok(
     $$
     select * from public.delete_investment_asset(
         '30000000-0000-4000-8000-000000000304',
         '30000000-0000-4000-8000-000000000001',
         (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
-        '2026-08-22T00:22:00Z'::timestamptz,
+        '2026-08-22T00:30:00Z'::timestamptz,
         '30000000-0000-4000-8000-000000000901'
     )
     $$,
-    'P0001',
-    'Investment products with history must be archived',
-    'asset delete RPC preserves products with FIFO history'
+    'asset delete RPC soft-deletes a settled product while preserving FIFO history'
+);
+select is(
+    (select deleted_at from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    '2026-08-22T00:30:00Z'::timestamptz,
+    'settled product is marked as deleted'
+);
+select is(
+    (
+        select count(*)::integer
+        from public.investment_trades
+        where asset_id = '30000000-0000-4000-8000-000000000304'
+          and deleted_at is null
+    ),
+    5,
+    'soft-deleting a settled product keeps its transaction history'
 );
 
 select * from finish();

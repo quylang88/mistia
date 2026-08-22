@@ -110,11 +110,24 @@ nonisolated struct InvestmentTradeCalculation: Equatable, Identifiable {
     let openLotCountAfter: Int
 }
 
-nonisolated enum InvestmentAccountingError: Error, Equatable {
+nonisolated enum InvestmentAccountingError: LocalizedError, Equatable {
     case invalidQuantity
     case invalidAmount
     case insufficientPosition
     case arithmeticOverflow
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidQuantity:
+            return L10n.investment.error.invalidQuantity
+        case .invalidAmount:
+            return L10n.investment.error.invalidAmount
+        case .insufficientPosition:
+            return L10n.investment.error.insufficientPosition
+        case .arithmeticOverflow:
+            return L10n.investment.error.arithmeticOverflow
+        }
+    }
 }
 
 nonisolated enum InvestmentAccountingEngine {

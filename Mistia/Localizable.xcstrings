@@ -1,34 +1,6 @@
 {
   "sourceLanguage" : "vi",
   "strings" : {
-    "" : {
-
-    },
-    "-" : {
-
-    },
-    "%lld bản ghi" : {
-
-    },
-    "%lld/%lld" : {
-      "localizations" : {
-        "vi" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld/%2$lld"
-          }
-        }
-      }
-    },
-    "%lld/5" : {
-
-    },
-    "+" : {
-
-    },
-    "💬" : {
-
-    },
     "app.mistia.loadingYourData" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -764,15 +736,6 @@
           }
         }
       }
-    },
-    "Bạn cảm thấy Mistia thế nào?" : {
-
-    },
-    "Chi tiêu" : {
-
-    },
-    "Chưa có bản sao lưu nào trên thiết bị" : {
-
     },
     "common.appName" : {
       "extractionState" : "stale",
@@ -2314,12 +2277,6 @@
           }
         }
       }
-    },
-    "Date" : {
-
-    },
-    "Để sau" : {
-
     },
     "family.family.acceptedMember" : {
       "extractionState" : "stale",
@@ -6138,12 +6095,6 @@
           }
         }
       }
-    },
-    "Giá trị" : {
-
-    },
-    "Không hỏi lại" : {
-
     },
     "management.balanceEditor.actualBalanceTitle" : {
       "extractionState" : "stale",
@@ -14885,9 +14836,6 @@
         }
       }
     },
-    "Ngày" : {
-
-    },
     "notifications.creditCard.autoPaymentFailedBody" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -22868,9 +22816,6 @@
           }
         }
       }
-    },
-    "Rating %lld out of 5" : {
-
     },
     "session.auth.cantResendEmailTitle" : {
       "extractionState" : "stale",
@@ -42399,6 +42344,8 @@
     "investment.asset.removeImage" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Remove Image"}},"ja":{"stringUnit":{"state":"translated","value":"画像を削除"}},"vi":{"stringUnit":{"state":"translated","value":"Xóa ảnh"}}}},
     "investment.asset.takePhoto" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Take Photo"}},"ja":{"stringUnit":{"state":"translated","value":"写真を撮影"}},"vi":{"stringUnit":{"state":"translated","value":"Chụp ảnh"}}}},
     "investment.asset.choosePhoto" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Choose from Library"}},"ja":{"stringUnit":{"state":"translated","value":"ライブラリから選択"}},"vi":{"stringUnit":{"state":"translated","value":"Chọn từ thư viện"}}}},
+    "investment.asset.deleteAction" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Delete Asset"}},"ja":{"stringUnit":{"state":"translated","value":"商品を削除"}},"vi":{"stringUnit":{"state":"translated","value":"Xóa tài sản"}}}},
+    "investment.asset.deleteConfirmation" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"This asset will be removed from your asset list. Its completed transaction history will be kept. Do you want to continue?"}},"ja":{"stringUnit":{"state":"translated","value":"この商品を商品リストから削除します。完了した取引履歴は保持されます。続けますか？"}},"vi":{"stringUnit":{"state":"translated","value":"Tài sản này sẽ bị xóa khỏi danh sách. Lịch sử giao dịch đã tất toán vẫn được giữ lại. Bạn có muốn tiếp tục?"}}}},
     "investment.trade.newBuyTitle" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Record Purchase"}},"ja":{"stringUnit":{"state":"translated","value":"買付を記録"}},"vi":{"stringUnit":{"state":"translated","value":"Ghi nhận mua"}}}},
     "investment.trade.newSellTitle" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Record Sale"}},"ja":{"stringUnit":{"state":"translated","value":"売却を記録"}},"vi":{"stringUnit":{"state":"translated","value":"Ghi nhận bán"}}}},
     "investment.trade.asset" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Asset"}},"ja":{"stringUnit":{"state":"translated","value":"資産"}},"vi":{"stringUnit":{"state":"translated","value":"Tài sản"}}}},
@@ -42475,6 +42422,11 @@
     "investment.error.invalidTradeInput" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The investment transaction data is invalid."}},"ja":{"stringUnit":{"state":"translated","value":"投資取引データが無効です。"}},"vi":{"stringUnit":{"state":"translated","value":"Thông tin giao dịch đầu tư không hợp lệ."}}}},
     "investment.error.invalidAssetInput" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The investment asset information is invalid."}},"ja":{"stringUnit":{"state":"translated","value":"商品の情報が無効です。"}},"vi":{"stringUnit":{"state":"translated","value":"Thông tin tài sản không hợp lệ."}}}},
     "investment.error.assetHistoryLocksAccounting" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Channel and currency cannot change after this asset has transaction history."}},"ja":{"stringUnit":{"state":"translated","value":"取引履歴がある商品のチャンネルと通貨は変更できません。"}},"vi":{"stringUnit":{"state":"translated","value":"Không thể đổi kênh hoặc tiền tệ sau khi tài sản đã có lịch sử giao dịch."}}}},
+    "investment.error.arithmeticOverflow" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The amount or quantity is too large to calculate. Please check the transaction details."}},"ja":{"stringUnit":{"state":"translated","value":"金額または数量が大きすぎて計算できません。取引内容を確認してください。"}},"vi":{"stringUnit":{"state":"translated","value":"Số tiền hoặc số lượng quá lớn để tính toán. Vui lòng kiểm tra lại thông tin giao dịch."}}}},
+    "investment.error.closePositionsBeforeDelete" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Please sell or settle all remaining inventory before deleting this asset."}},"ja":{"stringUnit":{"state":"translated","value":"この商品を削除する前に、残っている在庫をすべて販売または精算してください。"}},"vi":{"stringUnit":{"state":"translated","value":"Vui lòng bán hoặc tất toán hết hàng còn lại trước khi xóa tài sản này."}}}},
+    "investment.error.insufficientPosition" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"This change would leave a sale without enough purchased inventory. Adjust or delete the related sale first."}},"ja":{"stringUnit":{"state":"translated","value":"この変更を行うと、後の売却に必要な仕入れ在庫が不足します。関連する売却を先に修正または削除してください。"}},"vi":{"stringUnit":{"state":"translated","value":"Thay đổi này sẽ khiến một giao dịch bán không còn đủ số lượng đã mua. Vui lòng chỉnh hoặc xóa giao dịch bán liên quan trước."}}}},
+    "investment.error.invalidAmount" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The transaction amount is invalid. Please check the total amount and exchange rate."}},"ja":{"stringUnit":{"state":"translated","value":"取引金額が無効です。合計金額と為替レートを確認してください。"}},"vi":{"stringUnit":{"state":"translated","value":"Số tiền giao dịch không hợp lệ. Vui lòng kiểm tra lại tổng tiền và tỷ giá."}}}},
+    "investment.error.invalidQuantity" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Quantity must be greater than zero."}},"ja":{"stringUnit":{"state":"translated","value":"数量は0より大きい値にしてください。"}},"vi":{"stringUnit":{"state":"translated","value":"Số lượng phải lớn hơn 0."}}}},
     "investment.error.missingExchangeRate" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"An exchange rate snapshot is required for this transaction."}},"ja":{"stringUnit":{"state":"translated","value":"この取引には為替レートのスナップショットが必要です。"}},"vi":{"stringUnit":{"state":"translated","value":"Cần tỷ giá hối đoái để thực hiện giao dịch này."}}}},
     "investment.error.cannotTransferIn" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Funds cannot be transferred directly into the Investment Wallet."}},"ja":{"stringUnit":{"state":"translated","value":"投資ウォレットに直接振替することはできません。"}},"vi":{"stringUnit":{"state":"translated","value":"Không thể chuyển trực tiếp tiền vào Ví Đầu tư."}}}},
     "investment.error.closePositionsBeforeArchive" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Please sell or settle all remaining inventory before archiving."}},"ja":{"stringUnit":{"state":"translated","value":"アーカイブする前に残っている在庫をすべて販売または精算してください。"}},"vi":{"stringUnit":{"state":"translated","value":"Vui lòng bán hoặc tất toán hết hàng còn lại trước khi lưu trữ."}}}},
@@ -42483,22 +42435,19 @@
     "settings.shortcut.option.investment.title" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Investments"}},"ja":{"stringUnit":{"state":"translated","value":"投資"}},"vi":{"stringUnit":{"state":"translated","value":"Đầu tư"}}}},
     "settings.shortcut.option.investment.subtitle" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Open your investment hub"}},"ja":{"stringUnit":{"state":"translated","value":"投資ハブを開く"}},"vi":{"stringUnit":{"state":"translated","value":"Mở nhanh trung tâm đầu tư"}}}},
     "settings.shortcut.option.investment.accessibility" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Open investments"}},"ja":{"stringUnit":{"state":"translated","value":"投資を開く"}},"vi":{"stringUnit":{"state":"translated","value":"Mở đầu tư"}}}},
-    "v%@ (%@)" : {
-      "localizations" : {
-        "vi" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "v%1$@ (%2$@)"
-          }
-        }
-      }
-    },
-    "Value" : {
-
-    },
-    "Ý kiến của bạn giúp chúng tôi hoàn thiện ứng dụng hơn mỗi ngày." : {
-
-    }
+    "common.chart.date" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Date"}},"ja":{"stringUnit":{"state":"translated","value":"日付"}},"vi":{"stringUnit":{"state":"translated","value":"Ngày"}}}},
+    "common.chart.spending" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Spending"}},"ja":{"stringUnit":{"state":"translated","value":"支出"}},"vi":{"stringUnit":{"state":"translated","value":"Chi tiêu"}}}},
+    "common.chart.value" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Value"}},"ja":{"stringUnit":{"state":"translated","value":"値"}},"vi":{"stringUnit":{"state":"translated","value":"Giá trị"}}}},
+    "management.managementauth.backupRecordCount" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%lld records"}},"ja":{"stringUnit":{"state":"translated","value":"%lld件"}},"vi":{"stringUnit":{"state":"translated","value":"%lld bản ghi"}}}},
+    "management.managementauth.backupVersion" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"v%@ (%@)"}},"ja":{"stringUnit":{"state":"translated","value":"v%@（%@）"}},"vi":{"stringUnit":{"state":"translated","value":"v%@ (%@)"}}}},
+    "management.managementauth.noLocalBackup" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"No backups are available on this device."}},"ja":{"stringUnit":{"state":"translated","value":"この端末にはバックアップがありません。"}},"vi":{"stringUnit":{"state":"translated","value":"Chưa có bản sao lưu nào trên thiết bị."}}}},
+    "settings.feedback.attachmentCount" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%lld/5"}},"ja":{"stringUnit":{"state":"translated","value":"%lld/5"}},"vi":{"stringUnit":{"state":"translated","value":"%lld/5"}}}},
+    "settings.feedback.characterCount" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%lld/%lld"}},"ja":{"stringUnit":{"state":"translated","value":"%lld/%lld"}},"vi":{"stringUnit":{"state":"translated","value":"%lld/%lld"}}}},
+    "settings.feedback.prompt.later" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Later"}},"ja":{"stringUnit":{"state":"translated","value":"後で"}},"vi":{"stringUnit":{"state":"translated","value":"Để sau"}}}},
+    "settings.feedback.prompt.message" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Your feedback helps us improve Mistia every day."}},"ja":{"stringUnit":{"state":"translated","value":"ご意見はMistiaをより良くするために役立ちます。"}},"vi":{"stringUnit":{"state":"translated","value":"Ý kiến của bạn giúp chúng tôi hoàn thiện Mistia hơn mỗi ngày."}}}},
+    "settings.feedback.prompt.optOut" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Don't Ask Again"}},"ja":{"stringUnit":{"state":"translated","value":"今後表示しない"}},"vi":{"stringUnit":{"state":"translated","value":"Không hỏi lại"}}}},
+    "settings.feedback.prompt.ratingAccessibility" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Rating %lld out of 5"}},"ja":{"stringUnit":{"state":"translated","value":"5段階中%lld"}},"vi":{"stringUnit":{"state":"translated","value":"Đánh giá %lld trên 5"}}}},
+    "settings.feedback.prompt.title" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"How do you feel about Mistia?"}},"ja":{"stringUnit":{"state":"translated","value":"Mistiaはいかがですか？"}},"vi":{"stringUnit":{"state":"translated","value":"Bạn cảm thấy Mistia thế nào?"}}}}
   },
   "version" : "1.0"
 }

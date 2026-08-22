@@ -1821,8 +1821,8 @@ private struct OverviewWeekSpendingChart: View {
                 let isSelected = selectedPoint?.id == point.id
 
                 BarMark(
-                    x: .value("Ngày", point.date, unit: .day),
-                    y: .value("Giá trị", Double(point.valueMinor))
+                    x: .value(L10n.common.chart.date, point.date, unit: .day),
+                    y: .value(L10n.common.chart.value, Double(point.valueMinor))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .foregroundStyle(chartColor(for: point.intensity).gradient)

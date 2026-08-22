@@ -2088,7 +2088,7 @@ private struct ManagementInitialSyncChoiceSheet: View {
                     .padding(.bottom, 30)
                 }
             }
-            .navigationTitle("")
+            .navigationTitle(String())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -3194,7 +3194,7 @@ private struct ManagementEditProfileView: View {
         ) {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
-            Text(profileErrorMessage ?? "")
+            Text(verbatim: profileErrorMessage ?? "")
         }
         .sheet(isPresented: $showsPrivacySheet) {
             MistiaPrivacySheet(context: .profile)
@@ -5170,7 +5170,12 @@ struct ManagementBackupRestoreView: View {
                         .foregroundStyle(.primary)
 
                     if let summary = latestSummary {
-                        Text("v\(summary.manifest.appVersion) (\(summary.manifest.appBuild))")
+                        Text(
+                            L10n.management.managementauth.backupVersion(
+                                summary.manifest.appVersion,
+                                summary.manifest.appBuild
+                            )
+                        )
                             .font(.system(size: 13, weight: .regular, design: .rounded))
                             .foregroundStyle(.secondary)
 
@@ -5178,7 +5183,11 @@ struct ManagementBackupRestoreView: View {
                             showSummaryDetailSheet = true
                         } label: {
                             HStack(spacing: 4) {
-                                Text("\(summary.activeRecordCount) bản ghi")
+                                Text(
+                                    L10n.management.managementauth.backupRecordCount(
+                                        summary.activeRecordCount
+                                    )
+                                )
                                 Image(systemName: "info.circle")
                             }
                             .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -5190,7 +5199,7 @@ struct ManagementBackupRestoreView: View {
                         }
                         .padding(.top, 4)
                     } else {
-                        Text("Chưa có bản sao lưu nào trên thiết bị")
+                        Text(L10n.management.managementauth.noLocalBackup)
                             .font(.system(size: 13, weight: .regular, design: .rounded))
                             .foregroundStyle(.secondary)
                     }

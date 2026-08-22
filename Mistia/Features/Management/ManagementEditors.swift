@@ -256,7 +256,7 @@ struct ManagementWalletEditorSheet: View {
         ) {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
-            Text((alertMessage ?? ""))
+            Text(verbatim: alertMessage ?? "")
         }
         // Edge Case 6: Confirmation dialog for changing payment source wallet with debt
         .alert(
@@ -997,7 +997,7 @@ struct ManagementCategoryEditorSheet: View {
         ) {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
-            Text((alertMessage ?? ""))
+            Text(verbatim: alertMessage ?? "")
         }
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)

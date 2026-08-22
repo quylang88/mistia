@@ -712,7 +712,7 @@ struct TransactionEditorSheet: View {
         ) {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
-            Text((alertMessage ?? ""))
+            Text(verbatim: alertMessage ?? "")
         }
         .sheet(isPresented: $showsCategoryPicker) {
             MistiaCategoryPickerSheet(

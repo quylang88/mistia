@@ -3635,7 +3635,7 @@ private struct SharedExpenseSuggestionActionRow: View {
 
             if isEditing {
                 HStack(spacing: 4) {
-                    Text(isReceivable ? "+" : "-")
+                    Text(verbatim: isReceivable ? "+" : "-")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(amountColor)
 

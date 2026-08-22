@@ -43,7 +43,7 @@ struct OverviewWidgetManagementSheet: View {
 
                             Spacer()
 
-                            Toggle("", isOn: $item.isVisible)
+                            Toggle(String(), isOn: $item.isVisible)
                                 .labelsHidden()
                                 .accessibilityLabel(item.kind.localizedTitle)
                         }

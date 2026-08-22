@@ -11,15 +11,15 @@ public struct FeedbackPromptSheet: View {
 
     public var body: some View {
         VStack(spacing: 20) {
-            Text("💬")
+            Text(verbatim: "💬")
                 .font(.system(size: 44))
 
             VStack(spacing: 6) {
-                Text("Bạn cảm thấy Mistia thế nào?")
+                Text(L10n.settings.feedback.prompt.title)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
 
-                Text("Ý kiến của bạn giúp chúng tôi hoàn thiện ứng dụng hơn mỗi ngày.")
+                Text(L10n.settings.feedback.prompt.message)
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -36,7 +36,7 @@ public struct FeedbackPromptSheet: View {
             .padding(.vertical, 8)
 
             HStack {
-                Button("Để sau") {
+                Button(L10n.settings.feedback.prompt.later) {
                     hasResponded = true
                     FeedbackPromptCoordinator.shared.recordPromptResponded(optOut: false)
                     dismiss()
@@ -46,7 +46,7 @@ public struct FeedbackPromptSheet: View {
 
                 Spacer()
 
-                Button("Không hỏi lại") {
+                Button(L10n.settings.feedback.prompt.optOut) {
                     hasResponded = true
                     FeedbackPromptCoordinator.shared.recordPromptResponded(optOut: true)
                     dismiss()
@@ -93,12 +93,12 @@ private struct EmojiRatingButton: View {
             selectedRating = rating
             action(rating)
         }) {
-            Text(emoji)
+            Text(verbatim: emoji)
                 .font(.system(size: 32))
                 .padding(10)
                 .background(selectedRating == rating ? MistiaAccent.purple.color.opacity(0.2) : Color(UIColor.secondarySystemGroupedBackground))
                 .clipShape(Circle())
         }
-        .accessibilityLabel("Rating \(rating) out of 5")
+        .accessibilityLabel(L10n.settings.feedback.prompt.ratingAccessibility(rating))
     }
 }

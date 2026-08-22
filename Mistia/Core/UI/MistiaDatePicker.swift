@@ -48,7 +48,7 @@ struct MistiaDatePickerRow: View {
                 Spacer(minLength: 8)
 
                 DatePicker(
-                    "",
+                    String(),
                     selection: $selection,
                     displayedComponents: .hourAndMinute
                 )

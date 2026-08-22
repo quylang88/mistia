@@ -334,7 +334,7 @@ private struct MistiaCategoryPieChart: View {
                 let isProminent = slice.id == prominentSlice?.id
 
                 SectorMark(
-                    angle: .value("Chi tiêu", Double(slice.amountMinor)),
+                    angle: .value(L10n.common.chart.spending, Double(slice.amountMinor)),
                     innerRadius: .ratio(0.0),
                     outerRadius: .ratio(isProminent ? 1.0 : 0.92),
                     angularInset: slices.count == 1 ? 0 : 1.8

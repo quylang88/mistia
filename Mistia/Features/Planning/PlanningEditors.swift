@@ -2606,7 +2606,7 @@ private extension View {
         ) {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
-            Text((message.wrappedValue ?? ""))
+            Text(verbatim: message.wrappedValue ?? "")
         }
     }
 }

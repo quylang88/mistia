@@ -109,6 +109,7 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     case invalidTradeInput
     case invalidAssetInput
     case assetHistoryLocksAccounting
+    case assetHasRemainingInventory
     case investmentWalletCannotReceiveTransfer
     case transferExceedsPositiveBalance
 
@@ -130,6 +131,8 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
             return L10n.investment.error.invalidAssetInput
         case .assetHistoryLocksAccounting:
             return L10n.investment.error.assetHistoryLocksAccounting
+        case .assetHasRemainingInventory:
+            return L10n.investment.error.closePositionsBeforeDelete
         case .investmentWalletCannotReceiveTransfer:
             return L10n.investment.error.cannotTransferIn
         case .transferExceedsPositiveBalance:
@@ -747,6 +750,38 @@ enum InvestmentPersistenceService {
 
         try context.save()
         return result
+    }
+
+    static func deleteAsset(
+        ownerUserID: UUID,
+        assetID: UUID,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentAsset {
+        guard let asset = try fetchAsset(
+            id: assetID,
+            ownerUserID: ownerUserID,
+            context: context
+        ), asset.deletedAt == nil else {
+            throw InvestmentPersistenceError.missingAsset
+        }
+
+        let assetTrades = try activeTrades(
+            assetID: assetID,
+            ownerUserID: ownerUserID,
+            context: context
+        )
+        let unitPositions = try InvestmentAccountingEngine.unitPositions(
+            trades: assetTrades.map(InvestmentTradeInput.init)
+        )
+        guard unitPositions.allSatisfy({ $0.quantity <= 0 }) else {
+            throw InvestmentPersistenceError.assetHasRemainingInventory
+        }
+
+        asset.deletedAt = now
+        asset.updatedAt = now
+        try context.save()
+        return asset
     }
 
     static func deleteTrade(

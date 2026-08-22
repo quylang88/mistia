@@ -847,7 +847,7 @@ private struct FamilyPieChart: View {
                     let isProminent = segment.id == prominentSegment?.id
 
                     SectorMark(
-                        angle: .value("Giá trị", Double(segment.valueMinor)),
+                        angle: .value(L10n.common.chart.value, Double(segment.valueMinor)),
                         innerRadius: .ratio(0.0),
                         outerRadius: .ratio(isProminent ? 1.0 : 0.92),
                         angularInset: 1.8
@@ -1564,8 +1564,8 @@ private struct FamilyMiniTrendChart: View {
     var body: some View {
         Chart(points) { point in
             LineMark(
-                x: .value("Date", point.date),
-                y: .value("Value", Double(point.valueMinor))
+                x: .value(L10n.common.chart.date, point.date),
+                y: .value(L10n.common.chart.value, Double(point.valueMinor))
             )
             .foregroundStyle(MistiaAccent.purple.color.gradient)
             .interpolationMethod(.catmullRom)
@@ -4386,7 +4386,7 @@ private struct FamilyPermissionsSheet: View {
                 }
 
                 Section(L10n.family.family.role) {
-                    Picker("", selection: $role) {
+                    Picker(String(), selection: $role) {
                         ForEach([FamilyRole.member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }

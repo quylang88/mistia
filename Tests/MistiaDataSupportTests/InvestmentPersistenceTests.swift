@@ -1277,6 +1277,109 @@ final class InvestmentPersistenceTests: XCTestCase {
         )
     }
 
+    func testDeletingAssetWithoutHistorySoftDeletesAsset() throws {
+        let fixture = try makeFixture()
+        let deletedAt = fixture.start.addingTimeInterval(1)
+
+        let deletedAsset = try InvestmentPersistenceService.deleteAsset(
+            ownerUserID: fixture.ownerID,
+            assetID: fixture.asset.id,
+            now: deletedAt,
+            context: fixture.context
+        )
+
+        XCTAssertEqual(deletedAsset.deletedAt, deletedAt)
+        XCTAssertEqual(deletedAsset.updatedAt, deletedAt)
+        XCTAssertEqual(fixture.asset.deletedAt, deletedAt)
+    }
+
+    func testDeletingAssetWithRemainingInventoryIsRejected() throws {
+        let fixture = try makeFixture()
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.deleteAsset(
+                ownerUserID: fixture.ownerID,
+                assetID: fixture.asset.id,
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .assetHasRemainingInventory)
+        }
+        XCTAssertNil(fixture.asset.deletedAt)
+    }
+
+    func testDeletingSettledAssetSoftDeletesAssetAndKeepsTradeHistory() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 2,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        _ = try InvestmentPersistenceService.deleteAsset(
+            ownerUserID: fixture.ownerID,
+            assetID: fixture.asset.id,
+            now: fixture.start.addingTimeInterval(2),
+            context: fixture.context
+        )
+
+        XCTAssertNotNil(fixture.asset.deletedAt)
+        XCTAssertNil(try fetchTrade(id: buy.id, fixture)?.deletedAt)
+        XCTAssertNil(try fetchTrade(id: sell.id, fixture)?.deletedAt)
+    }
+
+    func testDeletingBuyRequiredByExistingSaleReturnsFriendlyError() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 75,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.deleteTrade(
+                ownerUserID: fixture.ownerID,
+                tradeID: buy.id,
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentAccountingError, .insufficientPosition)
+            XCTAssertEqual(error.localizedDescription, L10n.investment.error.insufficientPosition)
+        }
+        XCTAssertNil(try fetchTrade(id: buy.id, fixture)?.deletedAt)
+        XCTAssertNil(try fetchTrade(id: sell.id, fixture)?.deletedAt)
+    }
+
     func testDeletingSellSoftDeletesTradeAndRestoresPositionCapitalAndProfit() throws {
         let fixture = try makeFixture()
         let buy = try saveTrade(
