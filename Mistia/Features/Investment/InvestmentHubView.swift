@@ -17,6 +17,20 @@ private enum InvestmentHubPeriod: String, CaseIterable, Identifiable {
     }
 }
 
+private enum InvestmentHubTab: String, CaseIterable, Identifiable {
+    case assets
+    case activity
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .assets: L10n.investment.hub.assetsTab
+        case .activity: L10n.investment.hub.activityTab
+        }
+    }
+}
+
 private enum InvestmentHubSheet: Identifiable {
     case channel(UUID?)
     case asset(UUID?)
@@ -82,8 +96,11 @@ struct InvestmentHubView: View {
 
     @State private var viewID = UUID()
     @State private var selectedChannelID: UUID?
-    @State private var period: InvestmentHubPeriod = .month
+    @State private var period: InvestmentHubPeriod = .allTime
     @State private var selectedMonth = Date()
+    @State private var selectedTab: InvestmentHubTab = .assets
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
     @State private var activeSheet: InvestmentHubSheet?
     @State private var activeAlert: InvestmentHubAlert?
     @State private var isRequestingPermission = false
@@ -234,6 +251,37 @@ struct InvestmentHubView: View {
         ownerTrades.filter { selectedDateInterval?.contains($0.occurredAt) ?? true }
     }
 
+    private var filteredOwnerAssets: [InvestmentAsset] {
+        ownerAssets.filter { asset in
+            InvestmentAssetSearchLogic.matches(
+                productName: asset.name,
+                channelName: channelName(for: asset.channelID),
+                query: searchText
+            )
+        }
+    }
+
+    private var filteredVisibleTrades: [InvestmentTrade] {
+        let searchableTrades = isSearchPresented ? ownerTrades : visibleTrades
+        return searchableTrades.filter { trade in
+            InvestmentAssetSearchLogic.matches(
+                values: [
+                    assetName(for: trade.assetID),
+                    channelName(for: trade.channelID),
+                    trade.note ?? ""
+                ],
+                query: searchText
+            )
+        }
+    }
+
+    private var searchPrompt: String {
+        switch selectedTab {
+        case .assets: L10n.investment.hub.searchAssets
+        case .activity: L10n.investment.hub.searchActivity
+        }
+    }
+
     private var monthSelectionBounds: MistiaMonthSelectionBounds {
         let relevantDates = ownerTrades.map(\.occurredAt) + [Date()]
         return MistiaMonthSelectionBounds(
@@ -274,6 +322,12 @@ struct InvestmentHubView: View {
             }
             .navigationTitle(L10n.investment.title)
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(
+                text: $searchText,
+                isPresented: $isSearchPresented,
+                prompt: searchPrompt
+            )
+            .searchToolbarBehavior(.minimize)
             .toolbar {
                 if isModalPresentation {
                     ToolbarItem(placement: .topBarLeading) {
@@ -289,20 +343,22 @@ struct InvestmentHubView: View {
                 }
                 if canView {
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        if canCreate {
-                            Button {
-                                activeSheet = ownerChannels.isEmpty ? .channel(nil) : .asset(nil)
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-                            .accessibilityLabel(
-                                ownerChannels.isEmpty
-                                    ? L10n.investment.hub.addChannel
-                                    : L10n.investment.hub.addAsset
-                            )
+                        Button {
+                            isSearchPresented = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
                         }
+                        .accessibilityLabel(searchPrompt)
                         managementMenu
                     }
+                }
+            }
+            .onChange(of: selectedTab) { _, _ in
+                searchText = ""
+            }
+            .onChange(of: isSearchPresented) { _, presented in
+                if !presented {
+                    searchText = ""
                 }
             }
         }
@@ -367,11 +423,20 @@ struct InvestmentHubView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    periodControl
-                    summaryCard
-                    primaryActions
-                    positionsSection
-                    activitySection
+                    if !isSearchPresented {
+                        summaryCard
+                        primaryActions
+                    }
+                    tabControl
+                    switch selectedTab {
+                    case .assets:
+                        positionsSection
+                    case .activity:
+                        if !isSearchPresented {
+                            periodControl
+                        }
+                        activitySection
+                    }
                 }
                 .padding(16)
             }
@@ -414,6 +479,16 @@ struct InvestmentHubView: View {
         )
     }
 
+    private var tabControl: some View {
+        Picker(String(), selection: $selectedTab) {
+            ForEach(InvestmentHubTab.allCases) { tab in
+                Text(tab.title).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel(L10n.investment.hub.contentMode)
+    }
+
     private var canStartBuyTrade: Bool {
         !ownerAssets.isEmpty
     }
@@ -424,6 +499,21 @@ struct InvestmentHubView: View {
 
     private var managementMenu: some View {
         Menu {
+            if canCreate {
+                if ownerChannels.isEmpty {
+                    Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
+                        activeSheet = .channel(nil)
+                    }
+                } else {
+                    Button(L10n.investment.hub.addAsset, systemImage: "shippingbox.badge.plus") {
+                        activeSheet = .asset(nil)
+                    }
+                    Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
+                        activeSheet = .channel(nil)
+                    }
+                }
+            }
+
             if ownerChannels.count > 1 {
                 Menu(L10n.investment.hub.channels, systemImage: "line.3.horizontal.decrease.circle") {
                     Button {
@@ -446,12 +536,6 @@ struct InvestmentHubView: View {
                             }
                         }
                     }
-                }
-            }
-
-            if canCreate {
-                Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
-                    activeSheet = .channel(nil)
                 }
             }
 
@@ -482,7 +566,7 @@ struct InvestmentHubView: View {
                 }
             }
         } label: {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel(L10n.management.management.manage)
     }
@@ -492,7 +576,12 @@ struct InvestmentHubView: View {
             Text(L10n.investment.hub.positions)
                 .font(.headline)
 
-            ForEach(ownerAssets) { asset in
+            if filteredOwnerAssets.isEmpty, !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ContentUnavailableView.search(text: searchText)
+                    .frame(maxWidth: .infinity)
+            }
+
+            ForEach(filteredOwnerAssets) { asset in
                 let position = position(for: asset)
                 let snapshot = InvestmentAssetPositionSnapshot(
                     id: asset.id,
@@ -560,16 +649,21 @@ struct InvestmentHubView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.hub.activity)
                 .font(.headline)
-            if visibleTrades.isEmpty {
-                Text(L10n.investment.hub.noActivityForPeriod)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            if filteredVisibleTrades.isEmpty {
+                if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(L10n.investment.hub.noActivityForPeriod)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                } else {
+                    ContentUnavailableView.search(text: searchText)
+                        .frame(maxWidth: .infinity)
+                }
             }
-            ForEach(visibleTrades.sorted(by: newestTradeFirst)) { trade in
+            ForEach(filteredVisibleTrades.sorted(by: newestTradeFirst)) { trade in
                 Button {
                     openTrade(trade)
                 } label: {
@@ -992,6 +1086,10 @@ struct InvestmentHubView: View {
 
     private func assetName(for assetID: UUID) -> String {
         assets.first(where: { $0.id == assetID })?.name ?? L10n.investment.trade.asset
+    }
+
+    private func channelName(for channelID: UUID) -> String {
+        channels.first(where: { $0.id == channelID })?.name ?? ""
     }
 
     private func canUseOrdinaryWallet(_ wallet: LedgerWallet) -> Bool {
@@ -1573,36 +1671,24 @@ private struct InvestmentAssetEditorSheet: View {
                 )
                 imagePath = nil
             }
-            if let asset {
-                asset.channelID = channelID
-                asset.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                asset.currencyCode = MistiaCurrencyLogic.normalizedCode(currencyCode)
-                asset.imagePath = imagePath
-                asset.updatedAt = .now
-                try modelContext.save()
-                sessionStore.recordUpsert(
-                    entity: .investmentAsset,
-                    recordID: asset.id,
-                    modifiedAt: asset.updatedAt,
-                    subjectUserIDOverride: ownerUserID
-                )
-            } else {
-                let asset = try InvestmentPersistenceService.createAsset(
+            let savedAsset = try InvestmentPersistenceService.saveAsset(
+                ownerUserID: ownerUserID,
+                draft: InvestmentAssetDraft(
                     id: targetAssetID,
-                    ownerUserID: ownerUserID,
                     channelID: channelID,
                     name: name,
                     currencyCode: currencyCode,
                     imagePath: imagePath,
-                    context: modelContext
-                )
-                sessionStore.recordUpsert(
-                    entity: .investmentAsset,
-                    recordID: asset.id,
-                    modifiedAt: asset.updatedAt,
-                    subjectUserIDOverride: ownerUserID
-                )
-            }
+                    createdAt: asset?.createdAt ?? .now
+                ),
+                context: modelContext
+            )
+            sessionStore.recordUpsert(
+                entity: .investmentAsset,
+                recordID: savedAsset.id,
+                modifiedAt: savedAsset.updatedAt,
+                subjectUserIDOverride: ownerUserID
+            )
         } catch {
             onError(error.localizedDescription)
         }

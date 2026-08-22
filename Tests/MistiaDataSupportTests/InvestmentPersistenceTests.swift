@@ -4,6 +4,89 @@ import XCTest
 
 @MainActor
 final class InvestmentPersistenceTests: XCTestCase {
+    func testAssetSaveCreatesAndEditsProductMetadata() throws {
+        let fixture = try makeFixture()
+        let assetID = UUID()
+
+        let created = try InvestmentPersistenceService.saveAsset(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentAssetDraft(
+                id: assetID,
+                channelID: fixture.channel.id,
+                name: "  Promotional cards  ",
+                currencyCode: "jpy"
+            ),
+            context: fixture.context
+        )
+        XCTAssertEqual(created.name, "Promotional cards")
+        XCTAssertEqual(created.currencyCode, "JPY")
+
+        let updated = try InvestmentPersistenceService.saveAsset(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentAssetDraft(
+                id: assetID,
+                channelID: fixture.channel.id,
+                name: "Promotional cards – box A",
+                currencyCode: "JPY",
+                createdAt: created.createdAt
+            ),
+            context: fixture.context
+        )
+        XCTAssertEqual(updated.id, assetID)
+        XCTAssertEqual(updated.name, "Promotional cards – box A")
+        XCTAssertEqual(
+            try fixture.context.fetch(FetchDescriptor<InvestmentAsset>())
+                .filter { $0.id == assetID }
+                .count,
+            1
+        )
+    }
+
+    func testAssetAccountingIdentityIsLockedAfterFIFOHistoryExists() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+
+        let renamed = try InvestmentPersistenceService.saveAsset(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentAssetDraft(
+                id: fixture.asset.id,
+                channelID: fixture.channel.id,
+                name: "Renamed FIFO product",
+                currencyCode: "JPY",
+                createdAt: fixture.asset.createdAt
+            ),
+            context: fixture.context
+        )
+        XCTAssertEqual(renamed.name, "Renamed FIFO product")
+        XCTAssertEqual(try fetchTrade(id: buy.id, fixture)?.positionQuantityAfter, 2)
+        XCTAssertEqual(try fetchTrade(id: buy.id, fixture)?.positionCostBasisAfterMinor, 100)
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveAsset(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentAssetDraft(
+                    id: fixture.asset.id,
+                    channelID: fixture.channel.id,
+                    name: renamed.name,
+                    currencyCode: "VND",
+                    createdAt: fixture.asset.createdAt
+                ),
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .assetHistoryLocksAccounting)
+        }
+        XCTAssertEqual(fixture.asset.currencyCode, "JPY")
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 900)
+    }
+
     func testBuyAndProfitableSaleSplitCapitalAndProfitAcrossWallets() throws {
         let fixture = try makeFixture()
         let buy = try saveTrade(

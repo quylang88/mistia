@@ -171,7 +171,14 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return .investmentChannel(try await createRow(row, entity: .investmentChannel, subjectUserID: subjectUserID, session: session))
         case .investmentAsset(let row):
             try await uploadPendingInvestmentImage(for: row, session: session)
-            let saved = try await createRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
+            guard let saved = try await mutateInvestmentAsset(
+                row,
+                expectedVersion: nil,
+                force: false,
+                session: session
+            ) else {
+                throw SupabaseServiceError.invalidResponse
+            }
             await finalizeInvestmentImageUpdate(assetID: row.id, session: session)
             return .investmentAsset(saved)
         case .investmentTrade(let row):
@@ -224,11 +231,10 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return try await updateRow(row, entity: .investmentChannel, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.investmentChannel)
         case .investmentAsset(let row):
             try await uploadPendingInvestmentImage(for: row, session: session)
-            let saved: RemoteInvestmentAsset? = try await updateRow(
+            let saved = try await mutateInvestmentAsset(
                 row,
-                entity: .investmentAsset,
                 expectedVersion: expectedVersion,
-                subjectUserID: subjectUserID,
+                force: false,
                 session: session
             )
             if saved != nil {
@@ -332,8 +338,14 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             let rows: [RemoteInvestmentChannel] = try await performRequest(request: request)
             return rows.first.map(MistiaSyncUploadRecord.investmentChannel)
         case .investmentAsset:
-            let rows: [RemoteInvestmentAsset] = try await performRequest(request: request)
-            return rows.first.map(MistiaSyncUploadRecord.investmentAsset)
+            return try await deleteInvestmentAsset(
+                assetID: recordID,
+                ownerUserID: subjectUserID,
+                expectedVersion: expectedVersion,
+                modifiedAt: modifiedAt,
+                deviceID: deviceID,
+                session: session
+            ).map(MistiaSyncUploadRecord.investmentAsset)
         case .investmentTrade:
             return try await deleteInvestmentTrade(
                 tradeID: recordID,
@@ -380,7 +392,14 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return .investmentChannel(try await upsertRow(row, entity: .investmentChannel, subjectUserID: subjectUserID, session: session))
         case .investmentAsset(let row):
             try await uploadPendingInvestmentImage(for: row, session: session)
-            let saved = try await upsertRow(row, entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
+            guard let saved = try await mutateInvestmentAsset(
+                row,
+                expectedVersion: nil,
+                force: true,
+                session: session
+            ) else {
+                throw SupabaseServiceError.invalidResponse
+            }
             await finalizeInvestmentImageUpdate(assetID: row.id, session: session)
             return .investmentAsset(saved)
         case .investmentTrade(let row):
@@ -403,6 +422,24 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             functionName: "mutate_investment_trade",
             body: InvestmentTradeMutationRPCBody(
                 trade: row,
+                expectedVersion: expectedVersion,
+                force: force
+            ),
+            session: session
+        )
+        return rows.first { $0.id == row.id }
+    }
+
+    private func mutateInvestmentAsset(
+        _ row: RemoteInvestmentAsset,
+        expectedVersion: Int64?,
+        force: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteInvestmentAsset? {
+        let rows: [RemoteInvestmentAsset] = try await callRPC(
+            functionName: "mutate_investment_asset",
+            body: InvestmentAssetMutationRPCBody(
+                asset: row,
                 expectedVersion: expectedVersion,
                 force: force
             ),
@@ -507,6 +544,28 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             functionName: "delete_investment_trade",
             body: InvestmentTradeDeleteRPCBody(
                 tradeID: tradeID,
+                ownerUserID: ownerUserID,
+                expectedVersion: expectedVersion,
+                modifiedAt: modifiedAt,
+                deviceID: deviceID
+            ),
+            session: session
+        )
+        return rows.first
+    }
+
+    private func deleteInvestmentAsset(
+        assetID: UUID,
+        ownerUserID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteInvestmentAsset? {
+        let rows: [RemoteInvestmentAsset] = try await callRPC(
+            functionName: "delete_investment_asset",
+            body: InvestmentAssetDeleteRPCBody(
+                assetID: assetID,
                 ownerUserID: ownerUserID,
                 expectedVersion: expectedVersion,
                 modifiedAt: modifiedAt,
@@ -802,6 +861,34 @@ private struct InvestmentTradeMutationRPCBody: Encodable {
         case trade = "p_trade"
         case expectedVersion = "p_expected_version"
         case force = "p_force"
+    }
+}
+
+private struct InvestmentAssetMutationRPCBody: Encodable {
+    let asset: RemoteInvestmentAsset
+    let expectedVersion: Int64?
+    let force: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case asset = "p_asset"
+        case expectedVersion = "p_expected_version"
+        case force = "p_force"
+    }
+}
+
+private struct InvestmentAssetDeleteRPCBody: Encodable {
+    let assetID: UUID
+    let ownerUserID: UUID
+    let expectedVersion: Int64
+    let modifiedAt: Date
+    let deviceID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case assetID = "p_asset_id"
+        case ownerUserID = "p_owner_user_id"
+        case expectedVersion = "p_expected_version"
+        case modifiedAt = "p_modified_at"
+        case deviceID = "p_device_id"
     }
 }
 

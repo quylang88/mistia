@@ -327,10 +327,21 @@ nonisolated enum InvestmentAssetSearchLogic {
         query: String,
         locale: Locale = Locale(identifier: "vi_VN")
     ) -> Bool {
+        matches(
+            values: [productName, channelName],
+            query: query,
+            locale: locale
+        )
+    }
+
+    static func matches(
+        values: [String],
+        query: String,
+        locale: Locale = Locale(identifier: "vi_VN")
+    ) -> Bool {
         let query = normalized(query, locale: locale)
         guard !query.isEmpty else { return true }
-        return normalized(productName, locale: locale).contains(query)
-            || normalized(channelName, locale: locale).contains(query)
+        return values.contains { normalized($0, locale: locale).contains(query) }
     }
 
     private static func normalized(_ value: String, locale: Locale) -> String {

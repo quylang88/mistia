@@ -1416,6 +1416,154 @@ select is(
     'revoking View also revokes dependent Create and Edit grants'
 );
 
+select lives_ok(
+    $$
+    select * from public.mutate_investment_asset(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000304',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'name', '  RPC product  ',
+            'currency_code', 'jpy',
+            'sort_order', 3,
+            'is_archived', false,
+            'created_at', '2026-08-22T00:20:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'investment product can be created atomically through RPC'
+);
+select is(
+    (select name from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    'RPC product',
+    'asset RPC trims the product name'
+);
+select is(
+    (select currency_code from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    'JPY',
+    'asset RPC normalizes the product currency'
+);
+select is(
+    (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    1::bigint,
+    'asset RPC creates the first server version'
+);
+
+select is(
+    (
+        select count(*)::bigint
+        from public.mutate_investment_asset(
+            (
+                select to_jsonb(asset) || jsonb_build_object('name', 'Stale product edit')
+                from public.investment_assets asset
+                where id = '30000000-0000-4000-8000-000000000304'
+            ),
+            0,
+            false
+        )
+    ),
+    0::bigint,
+    'stale asset edit returns no row'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_asset(
+        (
+            select to_jsonb(asset) || jsonb_build_object(
+                'name', 'RPC product renamed',
+                'image_path', '30000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000304/30000000-0000-4000-8000-000000000803.jpg'
+            )
+            from public.investment_assets asset
+            where id = '30000000-0000-4000-8000-000000000304'
+        ),
+        (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+        false
+    )
+    $$,
+    'asset metadata and image path can be edited atomically through RPC'
+);
+select is(
+    (select name from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    'RPC product renamed',
+    'asset metadata edit is stored'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000416',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000304',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '2',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-22T00:21:00Z',
+            'created_at', '2026-08-22T00:21:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'FIFO history can be created for an RPC-managed asset'
+);
+
+select throws_ok(
+    $$
+    select * from public.mutate_investment_asset(
+        (
+            select to_jsonb(asset) || jsonb_build_object('currency_code', 'USD')
+            from public.investment_assets asset
+            where id = '30000000-0000-4000-8000-000000000304'
+        ),
+        (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+        false
+    )
+    $$,
+    'P0001',
+    'Product channel and currency are immutable after history exists',
+    'asset RPC protects FIFO identity after transaction history exists'
+);
+select is(
+    (select currency_code from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    'JPY',
+    'failed accounting identity edit leaves the asset unchanged'
+);
+select is(
+    (select position_quantity_after_decimal_string::numeric from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+    2::numeric,
+    'failed asset edit leaves FIFO quantity unchanged'
+);
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+    0::bigint,
+    'failed asset edit leaves FIFO cost unchanged'
+);
+
+select throws_ok(
+    $$
+    select * from public.delete_investment_asset(
+        '30000000-0000-4000-8000-000000000304',
+        '30000000-0000-4000-8000-000000000001',
+        (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+        '2026-08-22T00:22:00Z'::timestamptz,
+        '30000000-0000-4000-8000-000000000901'
+    )
+    $$,
+    'P0001',
+    'Investment products with history must be archived',
+    'asset delete RPC preserves products with FIFO history'
+);
+
 select * from finish();
 
 rollback;

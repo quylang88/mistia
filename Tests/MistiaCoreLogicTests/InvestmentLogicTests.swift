@@ -180,6 +180,12 @@ final class InvestmentLogicTests: XCTestCase {
                 query: "figure"
             )
         )
+        XCTAssertTrue(
+            InvestmentAssetSearchLogic.matches(
+                values: ["Card A", "Đồ sưu tầm", "Hàng khuyến mãi"],
+                query: "khuyen mai"
+            )
+        )
     }
 
     func testSummaryContainsOnlyRemainingInventoryCostAndRealizedProfit() {

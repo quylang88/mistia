@@ -1,6 +1,31 @@
 import Foundation
 import SwiftData
 
+nonisolated struct InvestmentAssetDraft: Equatable {
+    let id: UUID
+    var channelID: UUID
+    var name: String
+    var currencyCode: String
+    var imagePath: String?
+    var createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        channelID: UUID,
+        name: String,
+        currencyCode: String,
+        imagePath: String? = nil,
+        createdAt: Date = .now
+    ) {
+        self.id = id
+        self.channelID = channelID
+        self.name = name
+        self.currencyCode = currencyCode
+        self.imagePath = imagePath
+        self.createdAt = createdAt
+    }
+}
+
 nonisolated struct InvestmentTradeDraft: Equatable {
     let id: UUID
     var channelID: UUID
@@ -76,6 +101,8 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     case insufficientFunds
     case missingExchangeRate
     case invalidTradeInput
+    case invalidAssetInput
+    case assetHistoryLocksAccounting
     case investmentWalletCannotReceiveTransfer
     case transferExceedsPositiveBalance
 
@@ -93,6 +120,10 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
             return L10n.investment.error.missingExchangeRate
         case .invalidTradeInput:
             return L10n.investment.error.invalidTradeInput
+        case .invalidAssetInput:
+            return L10n.investment.error.invalidAssetInput
+        case .assetHistoryLocksAccounting:
+            return L10n.investment.error.assetHistoryLocksAccounting
         case .investmentWalletCannotReceiveTransfer:
             return L10n.investment.error.cannotTransferIn
         case .transferExceedsPositiveBalance:
@@ -386,6 +417,34 @@ enum InvestmentPersistenceService {
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentAsset {
+        try saveAsset(
+            ownerUserID: ownerUserID,
+            draft: InvestmentAssetDraft(
+                id: id,
+                channelID: channelID,
+                name: name,
+                currencyCode: currencyCode,
+                imagePath: imagePath,
+                createdAt: now
+            ),
+            now: now,
+            context: context
+        )
+    }
+
+    static func saveAsset(
+        ownerUserID: UUID,
+        draft: InvestmentAssetDraft,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentAsset {
+        let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedCurrency = MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
+        let channelID = draft.channelID
+        guard !trimmedName.isEmpty, normalizedCurrency.count == 3 else {
+            throw InvestmentPersistenceError.invalidAssetInput
+        }
+
         let channelExists = try context.fetch(
             FetchDescriptor<InvestmentChannel>(
                 predicate: #Predicate<InvestmentChannel> { channel in
@@ -397,6 +456,35 @@ enum InvestmentPersistenceService {
             )
         ).isEmpty == false
         guard channelExists else { throw InvestmentPersistenceError.missingAsset }
+
+        let draftID = draft.id
+        let existingAsset = try context.fetch(
+            FetchDescriptor<InvestmentAsset>(
+                predicate: #Predicate<InvestmentAsset> { asset in asset.id == draftID }
+            )
+        ).first
+        if let existingAsset {
+            guard existingAsset.ownerUserID == ownerUserID,
+                  existingAsset.deletedAt == nil else {
+                throw InvestmentPersistenceError.invalidAssetInput
+            }
+            let hasHistory = try context.fetch(FetchDescriptor<InvestmentTrade>())
+                .contains { $0.assetID == draftID }
+            if hasHistory,
+               (existingAsset.channelID != draft.channelID
+                    || MistiaCurrencyLogic.normalizedCode(existingAsset.currencyCode) != normalizedCurrency) {
+                throw InvestmentPersistenceError.assetHistoryLocksAccounting
+            }
+
+            existingAsset.channelID = draft.channelID
+            existingAsset.name = trimmedName
+            existingAsset.currencyCode = normalizedCurrency
+            existingAsset.imagePath = draft.imagePath
+            existingAsset.updatedAt = now
+            try context.save()
+            return existingAsset
+        }
+
         let assets = try context.fetch(
             FetchDescriptor<InvestmentAsset>(
                 predicate: #Predicate<InvestmentAsset> { asset in
@@ -407,14 +495,14 @@ enum InvestmentPersistenceService {
             )
         )
         let asset = InvestmentAsset(
-            id: id,
+            id: draft.id,
             ownerUserID: ownerUserID,
-            channelID: channelID,
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            currencyCode: MistiaCurrencyLogic.normalizedCode(currencyCode),
-            imagePath: imagePath,
+            channelID: draft.channelID,
+            name: trimmedName,
+            currencyCode: normalizedCurrency,
+            imagePath: draft.imagePath,
             sortOrder: assets.count,
-            createdAt: now,
+            createdAt: draft.createdAt,
             updatedAt: now
         )
         context.insert(asset)
