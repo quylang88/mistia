@@ -437,6 +437,202 @@ select is(
     'zero-amount liquidation clears position cost basis'
 );
 
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000414',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000303',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '3',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-09T00:10:04Z',
+            'created_at', '2026-08-09T00:10:04Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ), null, false
+    )
+    $$,
+    'zero-amount promotional buy is accepted without a wallet'
+);
+
+select is(
+    (select position_quantity_after_decimal_string::numeric from public.investment_trades where id = '30000000-0000-4000-8000-000000000414'),
+    3::numeric,
+    'promotional buy adds inventory quantity'
+);
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000414'),
+    0::bigint,
+    'promotional buy adds no invested cost basis'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000106'),
+    650::bigint,
+    'promotional buy does not debit a wallet'
+);
+select is(
+    (
+        select count(*)::bigint from public.investment_wallet_postings
+        where trade_id = '30000000-0000-4000-8000-000000000414' and deleted_at is null
+    ),
+    0::bigint,
+    'promotional buy creates no wallet posting'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        (
+            select to_jsonb(trade) || jsonb_build_object(
+                'quantity_decimal_string', '4',
+                'gross_amount_minor', 120,
+                'accounting_gross_amount_minor', 120,
+                'funding_wallet_id', '30000000-0000-4000-8000-000000000106'
+            )
+            from public.investment_trades trade
+            where id = '30000000-0000-4000-8000-000000000414'
+        ), null, false
+    )
+    $$,
+    'promotional buy can be edited into a paid buy atomically'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000106'),
+    530::bigint,
+    'editing promotional inventory into a paid buy debits the exact total once'
+);
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000414'),
+    120::bigint,
+    'paid edit replaces zero cost with the entered total cost basis'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        (
+            select to_jsonb(trade) || jsonb_build_object(
+                'quantity_decimal_string', '5',
+                'gross_amount_minor', 0,
+                'accounting_gross_amount_minor', 0,
+                'funding_wallet_id', null
+            )
+            from public.investment_trades trade
+            where id = '30000000-0000-4000-8000-000000000414'
+        ), null, false
+    )
+    $$,
+    'paid buy can be edited back into promotional inventory atomically'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000106'),
+    650::bigint,
+    'editing back to promotional inventory fully restores the funding wallet'
+);
+select is(
+    (
+        select count(*)::bigint from public.investment_wallet_postings
+        where trade_id = '30000000-0000-4000-8000-000000000414' and deleted_at is null
+    ),
+    0::bigint,
+    'editing back to promotional inventory removes the old funding posting'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000415',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000303',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '2',
+            'gross_amount_minor', 80,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 80,
+            'accounting_currency_code', 'JPY',
+            'capital_return_wallet_id', '30000000-0000-4000-8000-000000000107',
+            'occurred_at', '2026-08-09T00:10:05Z',
+            'created_at', '2026-08-09T00:10:05Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ), null, false
+    )
+    $$,
+    'sale of promotional inventory is accepted atomically'
+);
+select is(
+    (select released_cost_basis_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000415'),
+    0::bigint,
+    'sale of promotional inventory releases zero cost basis'
+);
+select is(
+    (select realized_profit_loss_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000415'),
+    80::bigint,
+    'all proceeds from promotional inventory become Investment Wallet profit'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000107'),
+    100::bigint,
+    'sale of promotional inventory does not invent capital returned to the ordinary wallet'
+);
+select is(
+    (
+        select current_balance_minor from public.ledger_wallets
+        where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    ),
+    -80::bigint,
+    'Investment Wallet includes the exact promotional sale profit'
+);
+
+select lives_ok(
+    $$
+    select * from public.delete_investment_trade(
+        '30000000-0000-4000-8000-000000000415',
+        '30000000-0000-4000-8000-000000000001',
+        (select sync_version from public.investment_trades where id = '30000000-0000-4000-8000-000000000415'),
+        '2026-08-09T00:10:06Z'::timestamptz,
+        '30000000-0000-4000-8000-000000000901'
+    )
+    $$,
+    'promotional inventory sale can be soft deleted atomically'
+);
+select is(
+    (
+        select current_balance_minor from public.ledger_wallets
+        where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    ),
+    -160::bigint,
+    'deleting the promotional sale restores the Investment Wallet exactly'
+);
+
+select lives_ok(
+    $$
+    select * from public.delete_investment_trade(
+        '30000000-0000-4000-8000-000000000414',
+        '30000000-0000-4000-8000-000000000001',
+        (select sync_version from public.investment_trades where id = '30000000-0000-4000-8000-000000000414'),
+        '2026-08-09T00:10:07Z'::timestamptz,
+        '30000000-0000-4000-8000-000000000901'
+    )
+    $$,
+    'promotional buy can be soft deleted atomically'
+);
+select ok(
+    (select deleted_at is not null from public.investment_trades where id = '30000000-0000-4000-8000-000000000414'),
+    'promotional buy is soft deleted'
+);
+select is(
+    (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000106'),
+    650::bigint,
+    'deleting promotional inventory leaves the funding wallet exact'
+);
+
 select is(
     (
         select coalesce(sum(reporting_expense_minor), 0) + coalesce(sum(reporting_income_minor), 0)

@@ -510,7 +510,8 @@ struct InvestmentHubView: View {
                         assetName: asset.name,
                         detail: detail,
                         remainingCapitalMinor: snapshot.remainingCostBasisMinor,
-                        currencyCode: accountingCurrencyCode
+                        currencyCode: accountingCurrencyCode,
+                        isSettled: snapshot.quantity <= 0
                     )
                 }
                 .buttonStyle(.plain)
@@ -578,9 +579,17 @@ struct InvestmentHubView: View {
                                 imagePath: assets.first(where: { $0.id == trade.assetID })?.imagePath,
                                 size: 44
                             )
-                            Image(systemName: trade.kind == .buy ? "arrow.down.circle.fill" : (trade.grossAmountMinor == 0 ? "minus.circle.fill" : "arrow.up.circle.fill"))
+                            Image(
+                                systemName: trade.kind == .buy
+                                    ? (trade.grossAmountMinor == 0 ? "gift.circle.fill" : "arrow.down.circle.fill")
+                                    : (trade.grossAmountMinor == 0 ? "minus.circle.fill" : "arrow.up.circle.fill")
+                            )
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(trade.kind == .buy ? Color.blue : (trade.grossAmountMinor == 0 ? Color.red : Color.green))
+                                .foregroundStyle(
+                                    trade.kind == .buy
+                                        ? (trade.grossAmountMinor == 0 ? MistiaAccent.purple.color : Color.blue)
+                                        : (trade.grossAmountMinor == 0 ? Color.red : Color.green)
+                                )
                                 .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
                         }
                         VStack(alignment: .leading, spacing: 3) {
@@ -602,6 +611,10 @@ struct InvestmentHubView: View {
                                 Text(L10n.investment.trade.totalLossBadge(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)))
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(Color.red)
+                            } else if trade.kind == .buy && trade.grossAmountMinor == 0 {
+                                Text(L10n.investment.trade.promotionalFreeBadge(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(MistiaAccent.purple.color)
                             } else {
                                 Text(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode))
                                     .font(.subheadline.weight(.semibold))
@@ -1308,14 +1321,17 @@ private struct InvestmentPositionRow: View {
     let detail: String
     let remainingCapitalMinor: Int64
     let currencyCode: String
+    let isSettled: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             InvestmentProductThumbnail(imagePath: imagePath, size: 44)
+                .saturation(isSettled ? 0 : 1)
+                .opacity(isSettled ? 0.62 : 1)
             VStack(alignment: .leading, spacing: 4) {
                 Text(assetName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isSettled ? Color.secondary : Color.primary)
                 Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1327,12 +1343,22 @@ private struct InvestmentPositionRow: View {
                     .foregroundStyle(.secondary)
                 Text(remainingCapitalMinor.formattedCurrency(code: currencyCode))
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isSettled ? Color.secondary : Color.primary)
             }
         }
         .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background(
+            isSettled
+                ? Color.gray.opacity(0.10)
+                : Color(uiColor: .secondarySystemGroupedBackground)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            if isSettled {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.gray.opacity(0.28), lineWidth: 1)
+            }
+        }
     }
 }
 
@@ -1704,6 +1730,7 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var quantity = ""
     @State private var grossAmount = ""
     @State private var isTotalLoss = false
+    @State private var isPromotionalFreeBuy = false
     @State private var note = ""
     @State private var occurredAt = Date()
     @State private var showsAssetPicker = false
@@ -1793,8 +1820,21 @@ private struct InvestmentTradeEditorSheet: View {
                         }
                         .tint(Color.red)
                     }
+                    if kind == .buy {
+                        Toggle(isOn: $isPromotionalFreeBuy) {
+                            Label(
+                                L10n.investment.trade.isPromotionalFree(zeroAmountFormatted),
+                                systemImage: "gift.circle.fill"
+                            )
+                        }
+                        .tint(MistiaAccent.purple.color)
+                    }
                     if kind == .sell && isTotalLoss {
                         Text(L10n.investment.trade.totalLossDescription(zeroAmountFormatted))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if kind == .buy && isPromotionalFreeBuy {
+                        Text(L10n.investment.trade.promotionalFreeDescription(zeroAmountFormatted))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -1810,7 +1850,7 @@ private struct InvestmentTradeEditorSheet: View {
                     )
                     TextField(L10n.investment.trade.note, text: $note)
                 }
-                if !(kind == .sell && isTotalLoss) {
+                if !isZeroAmountMode {
                     Section {
                         Picker(kind == .buy ? L10n.investment.trade.fundingWallet : L10n.investment.trade.capitalWallet, selection: $walletID) {
                             ForEach(availableWallets) { wallet in
@@ -1836,6 +1876,8 @@ private struct InvestmentTradeEditorSheet: View {
             .onChange(of: kind) { _, newKind in
                 if newKind == .buy {
                     isTotalLoss = false
+                } else {
+                    isPromotionalFreeBuy = false
                 }
                 if !availableWallets.contains(where: { $0.id == walletID }) {
                     walletID = availableWallets.first?.id
@@ -1864,6 +1906,9 @@ private struct InvestmentTradeEditorSheet: View {
                 return trade == nil || canEditExisting
             }
         }
+        if kind == .buy && isPromotionalFreeBuy {
+            return trade == nil || canEditExisting
+        }
         guard walletID != nil else { return false }
         guard grossAmount.currencyInputToMinorUnits(currencyCode: selectedAsset?.currencyCode ?? "JPY") > 0 else { return false }
         return trade == nil || canEditExisting
@@ -1880,11 +1925,13 @@ private struct InvestmentTradeEditorSheet: View {
         quantity = trade.map { InvestmentDecimalCoding.string(from: $0.quantity) } ?? ""
         if let trade {
             isTotalLoss = trade.kind == .sell && trade.grossAmountMinor == 0
+            isPromotionalFreeBuy = trade.kind == .buy && trade.grossAmountMinor == 0
             grossAmount = MistiaCurrencyInputFormatting.groupedInput(String(trade.grossAmountMinor))
             note = trade.note ?? ""
             occurredAt = trade.occurredAt
         } else {
             isTotalLoss = false
+            isPromotionalFreeBuy = false
         }
     }
 
@@ -1917,10 +1964,12 @@ private struct InvestmentTradeEditorSheet: View {
     private func save() {
         guard let asset = selectedAsset else { return }
         let isLoss = kind == .sell && isTotalLoss
-        guard isLoss || walletID != nil else { return }
+        let isPromotional = kind == .buy && isPromotionalFreeBuy
+        let isZeroAmount = isLoss || isPromotional
+        guard isZeroAmount || walletID != nil else { return }
 
         let currency = asset.currencyCode
-        let grossMinor = isLoss ? 0 : grossAmount.currencyInputToMinorUnits(currencyCode: currency)
+        let grossMinor = isZeroAmount ? 0 : grossAmount.currencyInputToMinorUnits(currencyCode: currency)
         let rates = MistiaCurrencySettings.rates()
         let sourceCode = MistiaCurrencyLogic.normalizedCode(currency)
         let accountingCode = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
@@ -1928,18 +1977,18 @@ private struct InvestmentTradeEditorSheet: View {
             MistiaCurrencyLogic.normalizedCode($0.currencyCode) == sourceCode
                 && MistiaCurrencyLogic.normalizedCode($0.accountingCurrencyCode) == accountingCode
         } ?? false
-        let exchangeRateDecimalString = isLoss ? nil : (preservesExistingCurrencyPair
+        let exchangeRateDecimalString = isZeroAmount ? nil : (preservesExistingCurrencyPair
             ? trade?.exchangeRateDecimalString
             : rateSnapshot(from: currency, to: accountingCurrencyCode, rates: rates))
-        let exchangeRateProvider = isLoss ? nil : (preservesExistingCurrencyPair
+        let exchangeRateProvider = isZeroAmount ? nil : (preservesExistingCurrencyPair
             ? trade?.exchangeRateProvider
             : rateProvider(from: currency, to: accountingCurrencyCode, rates: rates))
-        let exchangeRateDate = isLoss ? nil : (preservesExistingCurrencyPair
+        let exchangeRateDate = isZeroAmount ? nil : (preservesExistingCurrencyPair
             ? trade?.exchangeRateDate
             : rateDate(from: currency, to: accountingCurrencyCode, rates: rates))
 
         let accountingGross: Int64
-        if isLoss {
+        if isZeroAmount {
             accountingGross = 0
         } else if sourceCode == accountingCode {
             accountingGross = grossMinor
@@ -1956,9 +2005,14 @@ private struct InvestmentTradeEditorSheet: View {
             accountingGross = converted
         }
 
-        let effectiveNote = note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isLoss
-            ? L10n.investment.trade.totalLossBadge(grossMinor.formattedCurrency(code: currency))
-            : note
+        let effectiveNote: String
+        if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isLoss {
+            effectiveNote = L10n.investment.trade.totalLossBadge(grossMinor.formattedCurrency(code: currency))
+        } else if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isPromotional {
+            effectiveNote = L10n.investment.trade.promotionalFreeBadge(grossMinor.formattedCurrency(code: currency))
+        } else {
+            effectiveNote = note
+        }
 
         let savedTradeID = trade?.id ?? UUID()
         do {
@@ -1977,7 +2031,7 @@ private struct InvestmentTradeEditorSheet: View {
                     exchangeRateDecimalString: exchangeRateDecimalString,
                     exchangeRateProvider: exchangeRateProvider,
                     exchangeRateDate: exchangeRateDate,
-                    fundingWalletID: kind == .buy ? walletID : nil,
+                    fundingWalletID: isPromotional ? nil : (kind == .buy ? walletID : nil),
                     capitalReturnWalletID: isLoss ? nil : (kind == .sell ? walletID : nil),
                     note: effectiveNote,
                     occurredAt: occurredAt,
@@ -1997,6 +2051,10 @@ private struct InvestmentTradeEditorSheet: View {
         } catch {
             onError(error.localizedDescription)
         }
+    }
+
+    private var isZeroAmountMode: Bool {
+        (kind == .sell && isTotalLoss) || (kind == .buy && isPromotionalFreeBuy)
     }
 }
 

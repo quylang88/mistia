@@ -836,6 +836,14 @@ enum InvestmentPersistenceService {
     ) throws {
         switch draft.kind {
         case .buy:
+            if draft.grossAmountMinor == 0 {
+                guard draft.accountingGrossAmountMinor == 0,
+                      draft.fundingWalletID == nil,
+                      draft.capitalReturnWalletID == nil else {
+                    throw InvestmentPersistenceError.invalidWallet
+                }
+                return
+            }
             guard let walletID = draft.fundingWalletID,
                   let wallet = walletsByID[walletID],
                   !wallet.isArchived,
@@ -863,9 +871,8 @@ enum InvestmentPersistenceService {
     ) throws {
         let sourceCurrency = MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
         let accountingCurrency = MistiaCurrencyLogic.normalizedCode(draft.accountingCurrencyCode)
-        let hasValidGross = draft.kind == .buy
-            ? (draft.grossAmountMinor > 0 && draft.accountingGrossAmountMinor > 0)
-            : (draft.grossAmountMinor >= 0 && draft.accountingGrossAmountMinor >= 0)
+        let hasValidGross = (draft.grossAmountMinor == 0 && draft.accountingGrossAmountMinor == 0)
+            || (draft.grossAmountMinor > 0 && draft.accountingGrossAmountMinor > 0)
         guard draft.quantity > 0,
               hasValidGross,
               sourceCurrency == MistiaCurrencyLogic.normalizedCode(asset.currencyCode) else {
@@ -922,6 +929,9 @@ enum InvestmentPersistenceService {
         context: ModelContext
     ) throws {
         guard draft.kind == .buy else { return }
+        if draft.grossAmountMinor == 0 && draft.accountingGrossAmountMinor == 0 {
+            return
+        }
         guard let fundingWallet, let fundingAmountMinor else {
             throw InvestmentPersistenceError.missingWallet
         }
@@ -1000,6 +1010,27 @@ enum InvestmentPersistenceService {
     ) throws {
         switch trade.kind {
         case .buy:
+            if trade.grossAmountMinor == 0 {
+                trade.fundingWalletAmountMinor = nil
+                trade.fundingLedgerTransactionID = nil
+                trade.capitalReturnLedgerTransactionID = nil
+                trade.profitLossLedgerTransactionID = nil
+                try deleteUnexpectedLedgerLegs(
+                    for: trade,
+                    keeping: [],
+                    now: now,
+                    context: context,
+                    result: &result
+                )
+                try deleteUnexpectedPostings(
+                    for: trade,
+                    keeping: [],
+                    now: now,
+                    context: context,
+                    result: &result
+                )
+                break
+            }
             guard let walletID = trade.fundingWalletID,
                   let wallet = walletsByID[walletID],
                   let walletAmount = trade.fundingWalletAmountMinor else {

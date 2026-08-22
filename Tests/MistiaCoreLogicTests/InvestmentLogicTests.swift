@@ -289,6 +289,56 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(saleCalc.openLotCountAfter, 1)
     }
 
+    func testPromotionalFreeBuyAddsZeroCostInventoryAndSaleBecomesProfit() throws {
+        let freeBuyID = UUID()
+        let sellID = UUID()
+        let start = Date(timeIntervalSince1970: 9_000)
+
+        let calculations = try InvestmentAccountingEngine.calculationMap(
+            trades: [
+                trade(id: freeBuyID, kind: .buy, quantity: 3, gross: 0, occurredAt: start),
+                trade(id: sellID, kind: .sell, quantity: 2, gross: 80, occurredAt: start.addingTimeInterval(1))
+            ]
+        )
+
+        let freeBuy = try XCTUnwrap(calculations[freeBuyID])
+        XCTAssertEqual(freeBuy.positionQuantityAfter, 3)
+        XCTAssertEqual(freeBuy.positionCostBasisAfterMinor, 0)
+
+        let sale = try XCTUnwrap(calculations[sellID])
+        XCTAssertEqual(sale.releasedCostBasisMinor, 0)
+        XCTAssertEqual(sale.realizedProfitLossMinor, 80)
+        XCTAssertEqual(sale.positionQuantityAfter, 1)
+        XCTAssertEqual(sale.positionCostBasisAfterMinor, 0)
+    }
+
+    func testSummaryExcludesSettledSnapshotsEvenIfStoredCostIsStale() {
+        let summary = InvestmentSummaryLogic.summary(
+            positions: [
+                InvestmentAssetPositionSnapshot(
+                    id: UUID(),
+                    channelID: UUID(),
+                    quantity: 2,
+                    remainingCostBasisMinor: 120,
+                    openLotCount: 1
+                ),
+                InvestmentAssetPositionSnapshot(
+                    id: UUID(),
+                    channelID: UUID(),
+                    quantity: 0,
+                    remainingCostBasisMinor: 999,
+                    openLotCount: 0
+                )
+            ],
+            trades: [],
+            tradeDates: [:],
+            period: nil,
+            investmentWalletBalanceMinor: 0
+        )
+
+        XCTAssertEqual(summary.remainingInventoryCostMinor, 120)
+    }
+
     private func trade(
         id: UUID = UUID(),
         kind: InvestmentTradeKind,

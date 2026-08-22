@@ -101,7 +101,7 @@ nonisolated enum InvestmentAccountingEngine {
             }
             switch trade.kind {
             case .buy:
-                guard trade.accountingGrossAmountMinor > 0 else {
+                guard trade.accountingGrossAmountMinor >= 0 else {
                     throw InvestmentAccountingError.invalidAmount
                 }
                 let (nextCost, costOverflow) = positionCostBasisMinor.addingReportingOverflow(
@@ -266,7 +266,9 @@ nonisolated enum InvestmentSummaryLogic {
         period: DateInterval?,
         investmentWalletBalanceMinor: Int64
     ) -> InvestmentPortfolioSummary {
-        let remainingInventoryCostMinor = positions.reduce(into: Int64.zero) {
+        let remainingInventoryCostMinor = positions
+            .filter { $0.quantity > 0 }
+            .reduce(into: Int64.zero) {
             $0 = saturatingAdd($0, max($1.remainingCostBasisMinor, 0))
         }
         let realizedProfitLossMinor = trades.reduce(into: Int64.zero) { partial, trade in
