@@ -214,6 +214,7 @@ enum MistiaSchemaV7: VersionedSchema {
 
 enum MistiaSchemaV8: VersionedSchema {
     typealias InvestmentAsset = MistiaSchemaV8InvestmentModels.InvestmentAsset
+    typealias InvestmentTrade = MistiaSchemaV9InvestmentTradeModels.InvestmentTrade
 
     static var versionIdentifier: Schema.Version {
         Schema.Version(8, 0, 0)
@@ -248,8 +249,43 @@ enum MistiaSchemaV8: VersionedSchema {
 }
 
 enum MistiaSchemaV9: VersionedSchema {
+    typealias InvestmentAsset = MistiaSchemaV9InvestmentModels.InvestmentAsset
+    typealias InvestmentTrade = MistiaSchemaV9InvestmentTradeModels.InvestmentTrade
+
     static var versionIdentifier: Schema.Version {
         Schema.Version(9, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            SettlementGroup.self,
+            SettlementParticipant.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self,
+            InvestmentChannel.self,
+            InvestmentAsset.self,
+            InvestmentTrade.self,
+            InvestmentWalletPosting.self
+        ]
+    }
+}
+
+enum MistiaSchemaV10: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(10, 0, 0)
     }
 
     static var models: [any PersistentModel.Type] {
@@ -322,7 +358,8 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
             MistiaSchemaV6.self,
             MistiaSchemaV7.self,
             MistiaSchemaV8.self,
-            MistiaSchemaV9.self
+            MistiaSchemaV9.self,
+            MistiaSchemaV10.self
         ]
     }
 
@@ -364,13 +401,17 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
                         context: context
                     )
                 },
-                didMigrate: { context in
-                    try InvestmentPersistenceService.rebuildDerivedAccountingForV8(context: context)
-                }
+                didMigrate: nil
             ),
             MigrationStage.custom(
                 fromVersion: MistiaSchemaV8.self,
                 toVersion: MistiaSchemaV9.self,
+                willMigrate: nil,
+                didMigrate: nil
+            ),
+            MigrationStage.custom(
+                fromVersion: MistiaSchemaV9.self,
+                toVersion: MistiaSchemaV10.self,
                 willMigrate: nil,
                 didMigrate: { context in
                     try InvestmentPersistenceService.rebuildDerivedAccountingForFIFO(

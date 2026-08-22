@@ -42,6 +42,7 @@ nonisolated struct InvestmentTradeInput: Equatable, Identifiable {
     let id: UUID
     let kind: InvestmentTradeKind
     let quantity: Decimal
+    let unitLabel: String?
     let accountingGrossAmountMinor: Int64
     let occurredAt: Date
     let createdAt: Date
@@ -50,6 +51,7 @@ nonisolated struct InvestmentTradeInput: Equatable, Identifiable {
         id: UUID,
         kind: InvestmentTradeKind,
         quantity: Decimal,
+        unitLabel: String? = nil,
         accountingGrossAmountMinor: Int64,
         occurredAt: Date,
         createdAt: Date
@@ -57,10 +59,46 @@ nonisolated struct InvestmentTradeInput: Equatable, Identifiable {
         self.id = id
         self.kind = kind
         self.quantity = quantity
+        self.unitLabel = InvestmentUnitLabel.normalizedDisplay(unitLabel)
         self.accountingGrossAmountMinor = accountingGrossAmountMinor
         self.occurredAt = occurredAt
         self.createdAt = createdAt
     }
+}
+
+nonisolated enum InvestmentUnitLabel {
+    static let legacyKey = "__mistia_legacy_unit__"
+
+    static func normalizedDisplay(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func comparisonKey(_ value: String?) -> String {
+        guard let normalized = normalizedDisplay(value) else { return legacyKey }
+        return normalized
+            .folding(
+                options: [.caseInsensitive],
+                locale: Locale(identifier: "en_US_POSIX")
+            )
+            .lowercased(with: Locale(identifier: "en_US_POSIX"))
+    }
+
+    static func matches(_ lhs: String?, _ rhs: String?) -> Bool {
+        comparisonKey(lhs) == comparisonKey(rhs)
+    }
+}
+
+nonisolated struct InvestmentUnitPosition: Equatable, Identifiable {
+    let unitKey: String
+    let unitLabel: String?
+    let quantity: Decimal
+
+    var id: String { unitKey }
 }
 
 nonisolated struct InvestmentTradeCalculation: Equatable, Identifiable {
@@ -81,17 +119,40 @@ nonisolated enum InvestmentAccountingError: Error, Equatable {
 
 nonisolated enum InvestmentAccountingEngine {
     private struct OpenLot {
+        let unitKey: String
         var quantity: Decimal
         var costBasisMinor: Int64
+    }
+
+    private struct UnitBalance {
+        var label: String?
+        var quantity: Decimal
+    }
+
+    private struct RecalculationResult {
+        let calculations: [InvestmentTradeCalculation]
+        let unitPositions: [InvestmentUnitPosition]
     }
 
     static func recalculate(
         trades: [InvestmentTradeInput]
     ) throws -> [InvestmentTradeCalculation] {
+        try recalculateState(trades: trades).calculations
+    }
+
+    static func unitPositions(
+        trades: [InvestmentTradeInput]
+    ) throws -> [InvestmentUnitPosition] {
+        try recalculateState(trades: trades).unitPositions
+    }
+
+    private static func recalculateState(
+        trades: [InvestmentTradeInput]
+    ) throws -> RecalculationResult {
         var positionQuantity: Decimal = 0
         var positionCostBasisMinor: Int64 = 0
         var openLots: [OpenLot] = []
-        var firstOpenLotIndex = 0
+        var unitBalances: [String: UnitBalance] = [:]
         var output: [InvestmentTradeCalculation] = []
         output.reserveCapacity(trades.count)
 
@@ -99,6 +160,7 @@ nonisolated enum InvestmentAccountingEngine {
             guard trade.quantity > 0 else {
                 throw InvestmentAccountingError.invalidQuantity
             }
+            let unitKey = InvestmentUnitLabel.comparisonKey(trade.unitLabel)
             switch trade.kind {
             case .buy:
                 guard trade.accountingGrossAmountMinor >= 0 else {
@@ -111,8 +173,18 @@ nonisolated enum InvestmentAccountingEngine {
 
                 positionQuantity += trade.quantity
                 positionCostBasisMinor = nextCost
+                var unitBalance = unitBalances[unitKey] ?? UnitBalance(
+                    label: InvestmentUnitLabel.normalizedDisplay(trade.unitLabel),
+                    quantity: 0
+                )
+                unitBalance.quantity += trade.quantity
+                if unitBalance.label == nil {
+                    unitBalance.label = InvestmentUnitLabel.normalizedDisplay(trade.unitLabel)
+                }
+                unitBalances[unitKey] = unitBalance
                 openLots.append(
                     OpenLot(
+                        unitKey: unitKey,
                         quantity: trade.quantity,
                         costBasisMinor: trade.accountingGrossAmountMinor
                     )
@@ -124,7 +196,7 @@ nonisolated enum InvestmentAccountingEngine {
                         realizedProfitLossMinor: 0,
                         positionQuantityAfter: positionQuantity,
                         positionCostBasisAfterMinor: positionCostBasisMinor,
-                        openLotCountAfter: openLots.count - firstOpenLotIndex
+                        openLotCountAfter: openLots.lazy.filter { $0.quantity > 0 }.count
                     )
                 )
 
@@ -132,7 +204,7 @@ nonisolated enum InvestmentAccountingEngine {
                 guard trade.accountingGrossAmountMinor >= 0 else {
                     throw InvestmentAccountingError.invalidAmount
                 }
-                guard positionQuantity >= trade.quantity else {
+                guard (unitBalances[unitKey]?.quantity ?? 0) >= trade.quantity else {
                     throw InvestmentAccountingError.insufficientPosition
                 }
 
@@ -140,11 +212,13 @@ nonisolated enum InvestmentAccountingEngine {
                 var releasedCostBasisMinor: Int64 = 0
 
                 while quantityToRelease > 0 {
-                    guard firstOpenLotIndex < openLots.count else {
+                    guard let lotIndex = openLots.firstIndex(where: {
+                        $0.unitKey == unitKey && $0.quantity > 0
+                    }) else {
                         throw InvestmentAccountingError.insufficientPosition
                     }
 
-                    var lot = openLots[firstOpenLotIndex]
+                    var lot = openLots[lotIndex]
                     let releasedQuantity = min(quantityToRelease, lot.quantity)
                     let releasedLotCost: Int64
                     if releasedQuantity == lot.quantity {
@@ -168,11 +242,7 @@ nonisolated enum InvestmentAccountingEngine {
                     lot.quantity -= releasedQuantity
                     lot.costBasisMinor -= releasedLotCost
 
-                    if lot.quantity == 0 {
-                        firstOpenLotIndex += 1
-                    } else {
-                        openLots[firstOpenLotIndex] = lot
-                    }
+                    openLots[lotIndex] = lot
                 }
 
                 let (realizedProfitLossMinor, profitOverflow) = trade.accountingGrossAmountMinor.subtractingReportingOverflow(
@@ -181,6 +251,9 @@ nonisolated enum InvestmentAccountingEngine {
                 guard !profitOverflow else { throw InvestmentAccountingError.arithmeticOverflow }
 
                 positionQuantity -= trade.quantity
+                var unitBalance = unitBalances[unitKey]!
+                unitBalance.quantity -= trade.quantity
+                unitBalances[unitKey] = unitBalance
                 let (nextPositionCost, costOverflow) = positionCostBasisMinor.subtractingReportingOverflow(
                     releasedCostBasisMinor
                 )
@@ -199,13 +272,24 @@ nonisolated enum InvestmentAccountingEngine {
                         realizedProfitLossMinor: realizedProfitLossMinor,
                         positionQuantityAfter: positionQuantity,
                         positionCostBasisAfterMinor: positionCostBasisMinor,
-                        openLotCountAfter: openLots.count - firstOpenLotIndex
+                        openLotCountAfter: openLots.lazy.filter { $0.quantity > 0 }.count
                     )
                 )
             }
         }
 
-        return output
+        let positions = unitBalances.compactMap { key, balance -> InvestmentUnitPosition? in
+            guard balance.quantity > 0 else { return nil }
+            return InvestmentUnitPosition(
+                unitKey: key,
+                unitLabel: balance.label,
+                quantity: balance.quantity
+            )
+        }
+        .sorted { lhs, rhs in
+            lhs.unitKey.localizedStandardCompare(rhs.unitKey) == .orderedAscending
+        }
+        return RecalculationResult(calculations: output, unitPositions: positions)
     }
 
     static func calculationMap(

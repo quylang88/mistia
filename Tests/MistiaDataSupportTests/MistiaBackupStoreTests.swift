@@ -283,7 +283,8 @@ final class MistiaBackupStoreTests: XCTestCase {
             channelID: channel.id,
             name: "Rare card",
             currencyCode: "JPY",
-            imagePath: "\(ownerUserID.uuidString.lowercased())/asset/product.jpg"
+            imagePath: "\(ownerUserID.uuidString.lowercased())/asset/product.jpg",
+            defaultUnitLabel: "pack"
         )
         let trade = InvestmentTrade(
             ownerUserID: ownerUserID,
@@ -291,6 +292,7 @@ final class MistiaBackupStoreTests: XCTestCase {
             assetID: asset.id,
             kind: .sell,
             quantity: 1,
+            unitLabel: "box",
             grossAmountMinor: 80,
             currencyCode: "JPY",
             accountingGrossAmountMinor: 80,
@@ -346,13 +348,15 @@ final class MistiaBackupStoreTests: XCTestCase {
             try fetchAll(InvestmentAsset.self, in: targetContainer).first?.imagePath,
             "\(ownerUserID.uuidString.lowercased())/asset/product.jpg"
         )
+        XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.defaultUnitLabel, "pack")
+        XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.unitLabel, "box")
         XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.realizedProfitLossMinor, 30)
         XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first?.amountMinor, 30)
     }
 
     func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
         let container = try makeV7Container()
-        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV10.self)
 
         XCTAssertEqual(schema.entities.count, 21)
         XCTAssertEqual(try MistiaSyncLocalStore.totalObjectCount(in: container), 0)
@@ -365,7 +369,7 @@ final class MistiaBackupStoreTests: XCTestCase {
     }
 
     private func makeV7Container() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

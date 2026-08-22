@@ -2948,6 +2948,7 @@ nonisolated enum MistiaSyncLocalStore {
         asset.name = row.name
         asset.currencyCode = row.currencyCode
         asset.imagePath = row.imagePath
+        asset.defaultUnitLabel = row.defaultUnitLabel
         asset.sortOrder = row.sortOrder
         asset.isArchived = row.isArchived
         asset.archivedAt = row.archivedAt
@@ -2983,6 +2984,7 @@ nonisolated enum MistiaSyncLocalStore {
         trade.assetID = row.assetID
         trade.kindRawValue = row.kindRawValue
         trade.quantityDecimalString = row.quantityDecimalString
+        trade.unitLabel = row.unitLabel
         trade.grossAmountMinor = row.grossAmountMinor
         trade.currencyCode = row.currencyCode
         trade.accountingGrossAmountMinor = row.accountingGrossAmountMinor

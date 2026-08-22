@@ -7,6 +7,7 @@ nonisolated struct InvestmentAssetDraft: Equatable {
     var name: String
     var currencyCode: String
     var imagePath: String?
+    var defaultUnitLabel: String?
     var createdAt: Date
 
     init(
@@ -15,6 +16,7 @@ nonisolated struct InvestmentAssetDraft: Equatable {
         name: String,
         currencyCode: String,
         imagePath: String? = nil,
+        defaultUnitLabel: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -22,6 +24,7 @@ nonisolated struct InvestmentAssetDraft: Equatable {
         self.name = name
         self.currencyCode = currencyCode
         self.imagePath = imagePath
+        self.defaultUnitLabel = InvestmentUnitLabel.normalizedDisplay(defaultUnitLabel)
         self.createdAt = createdAt
     }
 }
@@ -32,6 +35,7 @@ nonisolated struct InvestmentTradeDraft: Equatable {
     var assetID: UUID
     var kind: InvestmentTradeKind
     var quantity: Decimal
+    var unitLabel: String?
     var grossAmountMinor: Int64
     var currencyCode: String
     var accountingGrossAmountMinor: Int64
@@ -51,6 +55,7 @@ nonisolated struct InvestmentTradeDraft: Equatable {
         assetID: UUID,
         kind: InvestmentTradeKind,
         quantity: Decimal,
+        unitLabel: String? = nil,
         grossAmountMinor: Int64,
         currencyCode: String,
         accountingGrossAmountMinor: Int64,
@@ -69,6 +74,7 @@ nonisolated struct InvestmentTradeDraft: Equatable {
         self.assetID = assetID
         self.kind = kind
         self.quantity = quantity
+        self.unitLabel = InvestmentUnitLabel.normalizedDisplay(unitLabel)
         self.grossAmountMinor = grossAmountMinor
         self.currencyCode = currencyCode
         self.accountingGrossAmountMinor = accountingGrossAmountMinor
@@ -414,6 +420,7 @@ enum InvestmentPersistenceService {
         name: String,
         currencyCode: String,
         imagePath: String? = nil,
+        defaultUnitLabel: String? = nil,
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentAsset {
@@ -425,6 +432,7 @@ enum InvestmentPersistenceService {
                 name: name,
                 currencyCode: currencyCode,
                 imagePath: imagePath,
+                defaultUnitLabel: defaultUnitLabel,
                 createdAt: now
             ),
             now: now,
@@ -440,6 +448,7 @@ enum InvestmentPersistenceService {
     ) throws -> InvestmentAsset {
         let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedCurrency = MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
+        let normalizedDefaultUnit = InvestmentUnitLabel.normalizedDisplay(draft.defaultUnitLabel)
         let channelID = draft.channelID
         guard !trimmedName.isEmpty, normalizedCurrency.count == 3 else {
             throw InvestmentPersistenceError.invalidAssetInput
@@ -480,7 +489,32 @@ enum InvestmentPersistenceService {
             existingAsset.name = trimmedName
             existingAsset.currencyCode = normalizedCurrency
             existingAsset.imagePath = draft.imagePath
+            let resolvesLegacyUnits = existingAsset.defaultUnitLabel == nil
+                && normalizedDefaultUnit != nil
+            existingAsset.defaultUnitLabel = normalizedDefaultUnit
             existingAsset.updatedAt = now
+            if resolvesLegacyUnits, let normalizedDefaultUnit {
+                let assetTrades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+                    .filter { $0.assetID == existingAsset.id && $0.unitLabel == nil }
+                for trade in assetTrades {
+                    trade.unitLabel = normalizedDefaultUnit
+                }
+                if !assetTrades.isEmpty {
+                    try rebuildDerivedAccounting(
+                        assets: [
+                            RebuildAsset(
+                                id: existingAsset.id,
+                                ownerUserID: existingAsset.ownerUserID,
+                                name: existingAsset.name
+                            )
+                        ],
+                        now: now,
+                        scrubLegacyConflicts: false,
+                        context: context
+                    )
+                    return existingAsset
+                }
+            }
             try context.save()
             return existingAsset
         }
@@ -501,6 +535,7 @@ enum InvestmentPersistenceService {
             name: trimmedName,
             currencyCode: normalizedCurrency,
             imagePath: draft.imagePath,
+            defaultUnitLabel: normalizedDefaultUnit,
             sortOrder: assets.count,
             createdAt: draft.createdAt,
             updatedAt: now
@@ -641,6 +676,7 @@ enum InvestmentPersistenceService {
             assetID: draft.assetID,
             kind: draft.kind,
             quantity: draft.quantity,
+            unitLabel: draft.unitLabel,
             grossAmountMinor: draft.grossAmountMinor,
             currencyCode: draft.currencyCode,
             accountingGrossAmountMinor: draft.accountingGrossAmountMinor,
@@ -1070,6 +1106,7 @@ enum InvestmentPersistenceService {
         trade.assetID = draft.assetID
         trade.kind = draft.kind
         trade.quantity = draft.quantity
+        trade.unitLabel = InvestmentUnitLabel.normalizedDisplay(draft.unitLabel)
         trade.grossAmountMinor = draft.grossAmountMinor
         trade.currencyCode = MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
         trade.accountingGrossAmountMinor = draft.accountingGrossAmountMinor
@@ -1606,6 +1643,7 @@ private nonisolated extension InvestmentTradeInput {
             id: trade.id,
             kind: trade.kind,
             quantity: trade.quantity,
+            unitLabel: trade.unitLabel,
             accountingGrossAmountMinor: trade.accountingGrossAmountMinor,
             occurredAt: trade.occurredAt,
             createdAt: trade.createdAt
@@ -1619,6 +1657,7 @@ private nonisolated extension InvestmentTradeDraft {
             id: id,
             kind: kind,
             quantity: quantity,
+            unitLabel: unitLabel,
             accountingGrossAmountMinor: accountingGrossAmountMinor,
             occurredAt: occurredAt,
             createdAt: createdAt

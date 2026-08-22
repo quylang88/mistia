@@ -84,6 +84,7 @@ let package = Package(
                 "Persistence/MistiaMigration.swift",
                 "Persistence/MistiaSchemaV7InvestmentModels.swift",
                 "Persistence/MistiaSchemaV8InvestmentModels.swift",
+                "Persistence/MistiaSchemaV9InvestmentTradeModel.swift",
                 "Persistence/MistiaSchemaV4Models.swift",
                 "Persistence/MistiaSchemaV5Models.swift",
                 "Persistence/NotificationModels.swift",

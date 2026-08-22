@@ -79,6 +79,35 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
         )
 
         XCTAssertNil(asset.imagePath)
+        XCTAssertNil(asset.defaultUnitLabel)
+    }
+
+    func testLegacyInvestmentTradePayloadDecodesWithoutUnitLabel() throws {
+        let trade = InvestmentTrade(
+            ownerUserID: UUID(),
+            channelID: UUID(),
+            assetID: UUID(),
+            kind: .buy,
+            quantity: 1,
+            unitLabel: "pack",
+            grossAmountMinor: 100,
+            currencyCode: "JPY",
+            accountingGrossAmountMinor: 100,
+            accountingCurrencyCode: "JPY"
+        )
+        let encoded = try JSONEncoder.mistiaRemoteAPIEncoder.encode(RemoteInvestmentTrade(local: trade))
+        var payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        payload.removeValue(forKey: "unit_label")
+
+        let decoded = try JSONDecoder.mistiaRemoteAPIDecoder.decode(
+            RemoteInvestmentTrade.self,
+            from: JSONSerialization.data(withJSONObject: payload)
+        )
+
+        XCTAssertNil(decoded.unitLabel)
+        XCTAssertEqual(decoded.grossAmountMinor, 100)
     }
 
     func testLegacyBackupSnapshotIgnoresRemovedInvestmentValuations() throws {
@@ -122,6 +151,7 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
             name: "Gold Bar",
             currencyCode: "JPY",
             imagePath: nil,
+            defaultUnitLabel: nil,
             sortOrder: 0,
             isArchived: false,
             archivedAt: nil,
@@ -148,6 +178,7 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
             name: "Gold Bar",
             currencyCode: "JPY",
             imagePath: expectedPath,
+            defaultUnitLabel: "bar",
             sortOrder: 0,
             isArchived: false,
             archivedAt: nil,
@@ -163,5 +194,6 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
 
         XCTAssertNotNil(jsonObject)
         XCTAssertEqual(jsonObject?["image_path"] as? String, expectedPath)
+        XCTAssertEqual(jsonObject?["default_unit_label"] as? String, "bar")
     }
 }

@@ -294,6 +294,20 @@ struct TransactionTitleSuggestion: Equatable, Identifiable {
     let title: String
 }
 
+nonisolated struct MistiaTextHistoryRecord: Equatable, Identifiable {
+    let id: UUID
+    let value: String
+    let occurredAt: Date
+    let createdAt: Date
+}
+
+nonisolated private struct MistiaTextHistoryAccumulator {
+    var displayValue: String
+    var latestOccurredAt: Date
+    var latestCreatedAt: Date
+    var usageCount: Int
+}
+
 nonisolated enum TransactionCrossCurrencyTransferDestinationDisplayStyle: Equatable {
     case exactDestination
     case approximateDestination
@@ -1852,6 +1866,75 @@ nonisolated enum TransactionLogic {
             }
             .prefix(limit)
             .map { $0.suggestion }
+    }
+
+    static func textHistorySuggestions<Records: Sequence>(
+        from records: Records,
+        query: String,
+        limit: Int = 5
+    ) -> [TransactionTitleSuggestion] where Records.Element == MistiaTextHistoryRecord {
+        guard limit > 0,
+              let normalizedQuery = normalizeCounterpartyName(query),
+              !normalizedQuery.isEmpty else {
+            return []
+        }
+
+        var grouped: [String: MistiaTextHistoryAccumulator] = [:]
+        for record in records {
+            guard let displayValue = InvestmentUnitLabel.normalizedDisplay(record.value),
+                  let normalizedValue = normalizeCounterpartyName(displayValue),
+                  titleSuggestionMatchRank(
+                      query: normalizedQuery,
+                      normalizedTitle: normalizedValue
+                  ) != nil else {
+                continue
+            }
+            let key = InvestmentUnitLabel.comparisonKey(displayValue)
+            if var match = grouped[key] {
+                match.usageCount += 1
+                if record.occurredAt > match.latestOccurredAt
+                    || (record.occurredAt == match.latestOccurredAt
+                        && record.createdAt > match.latestCreatedAt) {
+                    match.displayValue = displayValue
+                    match.latestOccurredAt = record.occurredAt
+                    match.latestCreatedAt = record.createdAt
+                }
+                grouped[key] = match
+            } else {
+                grouped[key] = MistiaTextHistoryAccumulator(
+                    displayValue: displayValue,
+                    latestOccurredAt: record.occurredAt,
+                    latestCreatedAt: record.createdAt,
+                    usageCount: 1
+                )
+            }
+        }
+
+        return grouped.compactMap { key, match -> (TransactionTitleSuggestion, Int, Date, Date, Int)? in
+            guard let normalizedValue = normalizeCounterpartyName(match.displayValue),
+                  let rank = titleSuggestionMatchRank(
+                      query: normalizedQuery,
+                      normalizedTitle: normalizedValue
+                  ) else {
+                return nil
+            }
+            return (
+                TransactionTitleSuggestion(id: key, title: match.displayValue),
+                rank,
+                match.latestOccurredAt,
+                match.latestCreatedAt,
+                match.usageCount
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.1 != rhs.1 { return lhs.1 < rhs.1 }
+            if lhs.2 != rhs.2 { return lhs.2 > rhs.2 }
+            if lhs.3 != rhs.3 { return lhs.3 > rhs.3 }
+            if lhs.4 != rhs.4 { return lhs.4 > rhs.4 }
+            return lhs.0.title.localizedCaseInsensitiveCompare(rhs.0.title) == .orderedAscending
+        }
+        .prefix(limit)
+        .map(\.0)
     }
 
     static func effectiveBalance<Records: Sequence>(

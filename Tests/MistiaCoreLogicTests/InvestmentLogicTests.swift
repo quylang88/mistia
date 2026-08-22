@@ -117,6 +117,89 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(calculations[finalSellID]?.positionCostBasisAfterMinor, 0)
     }
 
+    func testInventoryKeepsPackAndBoxAsIndependentPositions() throws {
+        let start = Date(timeIntervalSince1970: 4_700)
+        let trades = [
+            trade(kind: .buy, quantity: 30, unit: "pack", gross: 3_000, occurredAt: start),
+            trade(kind: .buy, quantity: 1, unit: "box", gross: 800, occurredAt: start.addingTimeInterval(1))
+        ]
+
+        let positions = try InvestmentAccountingEngine.unitPositions(trades: trades)
+
+        XCTAssertEqual(
+            positions,
+            [
+                InvestmentUnitPosition(unitKey: "box", unitLabel: "box", quantity: 1),
+                InvestmentUnitPosition(unitKey: "pack", unitLabel: "pack", quantity: 30)
+            ]
+        )
+    }
+
+    func testBoxSaleConsumesOnlyBoxFIFOAndPreservesPackCost() throws {
+        let sellID = UUID()
+        let start = Date(timeIntervalSince1970: 4_800)
+        let trades = [
+            trade(kind: .buy, quantity: 30, unit: "pack", gross: 3_000, occurredAt: start),
+            trade(kind: .buy, quantity: 2, unit: "box", gross: 800, occurredAt: start.addingTimeInterval(1)),
+            trade(id: sellID, kind: .sell, quantity: 1, unit: "BOX", gross: 600, occurredAt: start.addingTimeInterval(2))
+        ]
+
+        let calculations = try InvestmentAccountingEngine.calculationMap(trades: trades)
+        let positions = try InvestmentAccountingEngine.unitPositions(trades: trades)
+
+        XCTAssertEqual(calculations[sellID]?.releasedCostBasisMinor, 400)
+        XCTAssertEqual(calculations[sellID]?.realizedProfitLossMinor, 200)
+        XCTAssertEqual(calculations[sellID]?.positionCostBasisAfterMinor, 3_400)
+        XCTAssertEqual(positions.first(where: { $0.unitKey == "pack" })?.quantity, 30)
+        XCTAssertEqual(positions.first(where: { $0.unitKey == "box" })?.quantity, 1)
+    }
+
+    func testSaleRejectsUnitOversellEvenWhenOtherUnitsRemain() {
+        let start = Date(timeIntervalSince1970: 4_900)
+
+        XCTAssertThrowsError(
+            try InvestmentAccountingEngine.recalculate(
+                trades: [
+                    trade(kind: .buy, quantity: 30, unit: "pack", gross: 3_000, occurredAt: start),
+                    trade(kind: .buy, quantity: 1, unit: "box", gross: 800, occurredAt: start.addingTimeInterval(1)),
+                    trade(kind: .sell, quantity: 2, unit: "box", gross: 1_200, occurredAt: start.addingTimeInterval(2))
+                ]
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentAccountingError, .insufficientPosition)
+        }
+    }
+
+    func testUnitLabelsTrimCollapseWhitespaceAndCompareCaseInsensitively() throws {
+        let start = Date(timeIntervalSince1970: 4_950)
+        let positions = try InvestmentAccountingEngine.unitPositions(
+            trades: [
+                trade(kind: .buy, quantity: 2, unit: "  Gift   Box  ", gross: 200, occurredAt: start),
+                trade(kind: .buy, quantity: 1, unit: "gift box", gross: 150, occurredAt: start.addingTimeInterval(1)),
+                trade(kind: .sell, quantity: 1, unit: "GIFT BOX", gross: 180, occurredAt: start.addingTimeInterval(2))
+            ]
+        )
+
+        XCTAssertEqual(positions.count, 1)
+        XCTAssertEqual(positions.first?.unitLabel, "Gift Box")
+        XCTAssertEqual(positions.first?.quantity, 2)
+    }
+
+    func testUnitHistorySuggestionsDeduplicateAndPreferPrefixThenRecencyFrequency() {
+        let now = Date(timeIntervalSince1970: 5_000)
+        let suggestions = TransactionLogic.textHistorySuggestions(
+            from: [
+                MistiaTextHistoryRecord(id: UUID(), value: "Pack", occurredAt: now.addingTimeInterval(-30), createdAt: now.addingTimeInterval(-30)),
+                MistiaTextHistoryRecord(id: UUID(), value: " pack ", occurredAt: now, createdAt: now),
+                MistiaTextHistoryRecord(id: UUID(), value: "Gift pack", occurredAt: now.addingTimeInterval(10), createdAt: now.addingTimeInterval(10)),
+                MistiaTextHistoryRecord(id: UUID(), value: "Package", occurredAt: now.addingTimeInterval(-10), createdAt: now.addingTimeInterval(-10))
+            ],
+            query: "pa"
+        )
+
+        XCTAssertEqual(suggestions.map(\.title), ["pack", "Package", "Gift pack"])
+    }
+
     func testInvestmentMonthIntervalUsesSelectedMonth() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
@@ -356,6 +439,7 @@ final class InvestmentLogicTests: XCTestCase {
         id: UUID = UUID(),
         kind: InvestmentTradeKind,
         quantity: Decimal,
+        unit: String? = nil,
         gross: Int64,
         occurredAt: Date = Date(timeIntervalSince1970: 10_000),
         createdAt: Date = Date(timeIntervalSince1970: 10_000)
@@ -364,6 +448,7 @@ final class InvestmentLogicTests: XCTestCase {
             id: id,
             kind: kind,
             quantity: quantity,
+            unitLabel: unit,
             accountingGrossAmountMinor: gross,
             occurredAt: occurredAt,
             createdAt: createdAt

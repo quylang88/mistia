@@ -80,6 +80,13 @@ private struct InvestmentHubAlert: Identifiable {
     }
 }
 
+private struct InvestmentAssetPositionState {
+    let quantity: Decimal
+    let costBasisMinor: Int64
+    let openLotCount: Int
+    let unitPositions: [InvestmentUnitPosition]
+}
+
 struct InvestmentHubView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
@@ -587,15 +594,8 @@ struct InvestmentHubView: View {
                 let position = position(for: asset)
                 let hasTrades = trades.contains { $0.assetID == asset.id && $0.deletedAt == nil }
                 let isSettled = hasTrades && position.quantity <= 0
-                let snapshot = InvestmentAssetPositionSnapshot(
-                    id: asset.id,
-                    channelID: asset.channelID,
-                    quantity: position.quantity,
-                    remainingCostBasisMinor: position.costBasisMinor,
-                    openLotCount: position.openLotCount
-                )
-                let detail = positionDetail(for: snapshot, hasTrades: hasTrades)
-                let showsCostBasis = hasTrades && snapshot.quantity > 0
+                let detail = positionDetail(for: position, asset: asset, hasTrades: hasTrades)
+                let showsCostBasis = hasTrades && position.quantity > 0
                 Button {
                     openAsset(asset)
                 } label: {
@@ -603,7 +603,7 @@ struct InvestmentHubView: View {
                         imagePath: asset.imagePath,
                         assetName: asset.name,
                         detail: detail,
-                        remainingCapitalMinor: snapshot.remainingCostBasisMinor,
+                        remainingCapitalMinor: position.costBasisMinor,
                         currencyCode: accountingCurrencyCode,
                         isSettled: isSettled,
                         showsCostBasis: showsCostBasis
@@ -641,20 +641,31 @@ struct InvestmentHubView: View {
     }
 
     private func positionDetail(
-        for snapshot: InvestmentAssetPositionSnapshot,
+        for position: InvestmentAssetPositionState,
+        asset: InvestmentAsset,
         hasTrades: Bool
     ) -> String {
         guard hasTrades else {
             return L10n.investment.hub.statusNew
         }
-        guard snapshot.quantity > 0 else {
+        guard position.quantity > 0 else {
             return L10n.investment.hub.outOfStock
         }
-        let quantity = InvestmentDecimalCoding.string(from: snapshot.quantity)
-        return L10n.investment.hub.positionDetails(
-            quantity,
-            String(snapshot.openLotCount)
-        )
+        let defaultKey = InvestmentUnitLabel.comparisonKey(asset.defaultUnitLabel)
+        let unitDetails = position.unitPositions
+            .sorted { lhs, rhs in
+                if lhs.unitKey == defaultKey { return true }
+                if rhs.unitKey == defaultKey { return false }
+                if lhs.unitLabel == nil { return true }
+                if rhs.unitLabel == nil { return false }
+                return (lhs.unitLabel ?? "").localizedStandardCompare(rhs.unitLabel ?? "") == .orderedAscending
+            }
+            .map { formattedInvestmentQuantity($0.quantity, unitLabel: $0.unitLabel) }
+            .joined(separator: " ・ ")
+        let details = unitDetails.isEmpty
+            ? formattedInvestmentQuantity(position.quantity, unitLabel: asset.defaultUnitLabel)
+            : unitDetails
+        return L10n.investment.hub.positionDetails(details)
     }
 
     private var activitySection: some View {
@@ -708,7 +719,10 @@ struct InvestmentHubView: View {
                                 .foregroundStyle(.primary)
                             Text(
                                 L10n.investment.hub.activityDetails(
-                                    InvestmentDecimalCoding.string(from: trade.quantity),
+                                    formattedInvestmentQuantity(
+                                        trade.quantity,
+                                        unitLabel: effectiveUnitLabel(for: trade)
+                                    ),
                                     MistiaDateFormatting.fullDateString(for: trade.occurredAt)
                                 )
                             )
@@ -1076,28 +1090,50 @@ struct InvestmentHubView: View {
         )
     }
 
-    private func position(for asset: InvestmentAsset) -> (quantity: Decimal, costBasisMinor: Int64, openLotCount: Int) {
+    private func position(for asset: InvestmentAsset) -> InvestmentAssetPositionState {
         let assetTrades = trades
             .filter { $0.assetID == asset.id && $0.deletedAt == nil }
             .sorted(by: oldestTradeFirst)
         guard !assetTrades.isEmpty else {
-            return (0, 0, 0)
+            return InvestmentAssetPositionState(
+                quantity: 0,
+                costBasisMinor: 0,
+                openLotCount: 0,
+                unitPositions: []
+            )
         }
         let inputs = assetTrades.map {
             InvestmentTradeInput(
                 id: $0.id,
                 kind: $0.kind,
                 quantity: $0.quantity,
+                unitLabel: $0.unitLabel ?? asset.defaultUnitLabel,
                 accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
                 occurredAt: $0.occurredAt,
                 createdAt: $0.createdAt
             )
         }
-        guard let last = try? InvestmentAccountingEngine.recalculate(trades: inputs).last else {
+        guard let calculations = try? InvestmentAccountingEngine.recalculate(trades: inputs),
+              let unitPositions = try? InvestmentAccountingEngine.unitPositions(trades: inputs),
+              let last = calculations.last else {
             let persisted = assetTrades.last
-            return (persisted?.positionQuantityAfter ?? 0, persisted?.positionCostBasisAfterMinor ?? 0, 0)
+            return InvestmentAssetPositionState(
+                quantity: persisted?.positionQuantityAfter ?? 0,
+                costBasisMinor: persisted?.positionCostBasisAfterMinor ?? 0,
+                openLotCount: 0,
+                unitPositions: []
+            )
         }
-        return (last.positionQuantityAfter, last.positionCostBasisAfterMinor, last.openLotCountAfter)
+        return InvestmentAssetPositionState(
+            quantity: last.positionQuantityAfter,
+            costBasisMinor: last.positionCostBasisAfterMinor,
+            openLotCount: last.openLotCountAfter,
+            unitPositions: unitPositions
+        )
+    }
+
+    private func effectiveUnitLabel(for trade: InvestmentTrade) -> String? {
+        trade.unitLabel ?? assets.first(where: { $0.id == trade.assetID })?.defaultUnitLabel
     }
 
     private func assetName(for assetID: UUID) -> String {
@@ -1484,6 +1520,14 @@ private func newestAssetFirst(_ lhs: InvestmentAsset, _ rhs: InvestmentAsset) ->
     return MistiaStableUUIDOrdering.precedes(lhs.id, rhs.id)
 }
 
+private func formattedInvestmentQuantity(_ quantity: Decimal, unitLabel: String?) -> String {
+    let quantityText = InvestmentDecimalCoding.string(from: quantity)
+    guard let unitLabel = InvestmentUnitLabel.normalizedDisplay(unitLabel) else {
+        return quantityText
+    }
+    return "\(quantityText) \(unitLabel)"
+}
+
 private func oldestTradeFirst(_ lhs: InvestmentTrade, _ rhs: InvestmentTrade) -> Bool {
     if lhs.occurredAt != rhs.occurredAt { return lhs.occurredAt < rhs.occurredAt }
     if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
@@ -1578,6 +1622,7 @@ private struct InvestmentAssetEditorSheet: View {
     @State private var channelID: UUID?
     @State private var name = ""
     @State private var currencyCode = "JPY"
+    @State private var defaultUnitLabel = ""
     @State private var draftAssetID = UUID()
     @State private var imageSource: InvestmentAssetImageSource?
     @State private var selectedImage: UIImage?
@@ -1588,7 +1633,10 @@ private struct InvestmentAssetEditorSheet: View {
             title: L10n.investment.asset.newTitle,
             accent: MistiaAccent.purple.color,
             contentStyle: .form,
-            saveDisabled: channelID == nil || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (asset != nil && !canEditExisting),
+            saveDisabled: channelID == nil
+                || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || InvestmentUnitLabel.normalizedDisplay(defaultUnitLabel) == nil
+                || (asset != nil && !canEditExisting),
             onSave: save
         ) {
             Form {
@@ -1600,6 +1648,9 @@ private struct InvestmentAssetEditorSheet: View {
                 .disabled(asset != nil && hasHistory)
                 Section {
                     TextField(L10n.investment.asset.namePlaceholder, text: $name)
+                    TextField(L10n.investment.asset.defaultUnitPlaceholder, text: $defaultUnitLabel)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     Picker(L10n.investment.asset.currency, selection: $currencyCode) {
                         ForEach(MistiaCurrencySettings.enabledCurrencyCodes(), id: \.self) { code in
                             Text(code).tag(code)
@@ -1671,6 +1722,7 @@ private struct InvestmentAssetEditorSheet: View {
         channelID = asset?.channelID ?? selectedChannelID ?? channels.first?.id
         name = asset?.name ?? ""
         currencyCode = asset?.currencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
+        defaultUnitLabel = asset?.defaultUnitLabel ?? ""
         draftAssetID = asset?.id ?? draftAssetID
     }
 
@@ -1703,6 +1755,7 @@ private struct InvestmentAssetEditorSheet: View {
                     name: name,
                     currencyCode: currencyCode,
                     imagePath: imagePath,
+                    defaultUnitLabel: defaultUnitLabel,
                     createdAt: asset?.createdAt ?? .now
                 ),
                 context: modelContext
@@ -1816,6 +1869,10 @@ private struct InvestmentAssetPickerSheet: View {
 
 }
 
+private enum InvestmentTradeEditorFocusedField: Hashable {
+    case unit
+}
+
 private struct InvestmentTradeEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -1839,6 +1896,7 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var assetID: UUID?
     @State private var walletID: UUID?
     @State private var quantity = ""
+    @State private var unitLabel = ""
     @State private var grossAmount = ""
     @State private var isTotalLoss = false
     @State private var isPromotionalFreeBuy = false
@@ -1847,6 +1905,11 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var showsAssetPicker = false
     @State private var draftTradeID = UUID()
     @State private var draftCreatedAt = Date()
+    @State private var cachedUnitSuggestions: [TransactionTitleSuggestion] = []
+    @State private var suppressUnitSuggestions = false
+    @State private var isApplyingUnitSuggestion = false
+    @State private var unitSuggestionRefreshTask: Task<Void, Never>?
+    @FocusState private var focusedField: InvestmentTradeEditorFocusedField?
 
     private var selectedAsset: InvestmentAsset? { assets.first { $0.id == assetID } }
     private var accountingCurrencyCode: String {
@@ -1874,7 +1937,10 @@ private struct InvestmentTradeEditorSheet: View {
     }
     private var availableQuantity: Decimal {
         guard let selectedAsset else { return 0 }
-        return availableQuantity(for: selectedAsset)
+        return availableQuantity(for: selectedAsset, unitLabel: unitLabel)
+    }
+    private var hasUnresolvedLegacyUnit: Bool {
+        InvestmentUnitLabel.normalizedDisplay(selectedAsset?.defaultUnitLabel) == nil
     }
     private var zeroAmountFormatted: String {
         Int64(0).formattedCurrency(code: selectedAsset?.currencyCode ?? "JPY")
@@ -1920,10 +1986,60 @@ private struct InvestmentTradeEditorSheet: View {
                 }
                 .buttonStyle(.plain)
                 Section {
-                    TextField(L10n.investment.trade.quantity, text: $quantity)
-                        .keyboardType(.decimalPad)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            TextField(L10n.investment.trade.quantity, text: $quantity)
+                                .keyboardType(.decimalPad)
+                                .frame(maxWidth: .infinity)
+
+                            Divider()
+
+                            TextField(L10n.investment.trade.unit, text: $unitLabel)
+                                .focused($focusedField, equals: .unit)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .frame(maxWidth: .infinity)
+                                .onChange(of: focusedField) { _, newValue in
+                                    if newValue == .unit {
+                                        suppressUnitSuggestions = false
+                                    }
+                                    scheduleUnitSuggestionsRefresh()
+                                }
+                                .onChange(of: unitLabel) { _, _ in
+                                    if isApplyingUnitSuggestion {
+                                        isApplyingUnitSuggestion = false
+                                        cachedUnitSuggestions = []
+                                    } else {
+                                        suppressUnitSuggestions = false
+                                        scheduleUnitSuggestionsRefresh()
+                                    }
+                                }
+                        }
+
+                        if shouldShowUnitSuggestions {
+                            MistiaHistorySuggestionsPanel(
+                                suggestions: cachedUnitSuggestions,
+                                onApply: applyUnitSuggestion
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.snappy(duration: 0.2), value: shouldShowUnitSuggestions)
+
+                    if hasUnresolvedLegacyUnit {
+                        Text(L10n.investment.trade.resolveUnitBeforeTrading)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     if kind == .sell {
-                        Text(L10n.investment.trade.availableQuantity(InvestmentDecimalCoding.string(from: availableQuantity)))
+                        Text(
+                            L10n.investment.trade.availableQuantity(
+                                formattedInvestmentQuantity(
+                                    availableQuantity,
+                                    unitLabel: InvestmentUnitLabel.normalizedDisplay(unitLabel)
+                                )
+                            )
+                        )
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Toggle(isOn: $isTotalLoss) {
@@ -1985,6 +2101,10 @@ private struct InvestmentTradeEditorSheet: View {
                 }
             }
             .onAppear { hydrate() }
+            .onDisappear {
+                unitSuggestionRefreshTask?.cancel()
+                unitSuggestionRefreshTask = nil
+            }
             .onChange(of: kind) { _, newKind in
                 if newKind == .buy {
                     isTotalLoss = false
@@ -1998,6 +2118,15 @@ private struct InvestmentTradeEditorSheet: View {
                    !selectableAssets.contains(where: { $0.id == assetID }) {
                     assetID = selectableAssets.first?.id
                 }
+                if trade == nil, let selectedAsset {
+                    unitLabel = preferredUnitLabel(for: selectedAsset)
+                }
+                scheduleUnitSuggestionsRefresh()
+            }
+            .onChange(of: assetID) { oldValue, newValue in
+                guard oldValue != newValue, trade == nil, let selectedAsset else { return }
+                unitLabel = preferredUnitLabel(for: selectedAsset)
+                scheduleUnitSuggestionsRefresh()
             }
         }
         .sheet(isPresented: $showsAssetPicker) {
@@ -2012,6 +2141,8 @@ private struct InvestmentTradeEditorSheet: View {
     private var canSave: Bool {
         guard assetID != nil, selectedAsset != nil else { return false }
         guard parsedDecimal(quantity) > 0 else { return false }
+        guard InvestmentUnitLabel.normalizedDisplay(unitLabel) != nil,
+              !hasUnresolvedLegacyUnit else { return false }
         if kind == .sell {
             guard parsedDecimal(quantity) <= availableQuantity else { return false }
             if isTotalLoss {
@@ -2035,6 +2166,9 @@ private struct InvestmentTradeEditorSheet: View {
         walletID = trade.flatMap { $0.kind == .buy ? $0.fundingWalletID : $0.capitalReturnWalletID }
             ?? availableWallets.first?.id
         quantity = trade.map { InvestmentDecimalCoding.string(from: $0.quantity) } ?? ""
+        unitLabel = trade.flatMap { InvestmentUnitLabel.normalizedDisplay($0.unitLabel) }
+            ?? selectedAsset.map(preferredUnitLabel(for:))
+            ?? ""
         if let trade {
             isTotalLoss = trade.kind == .sell && trade.grossAmountMinor == 0
             isPromotionalFreeBuy = trade.kind == .buy && trade.grossAmountMinor == 0
@@ -2047,30 +2181,134 @@ private struct InvestmentTradeEditorSheet: View {
         }
     }
 
-    private var selectableAssets: [InvestmentAsset] {
-        guard kind == .sell else { return assets }
-        return assets.filter { asset in
-            availableQuantity(for: asset) > 0 || asset.id == trade?.assetID
+    private var shouldShowUnitSuggestions: Bool {
+        focusedField == .unit
+            && !suppressUnitSuggestions
+            && !cachedUnitSuggestions.isEmpty
+    }
+
+    private func scheduleUnitSuggestionsRefresh() {
+        unitSuggestionRefreshTask?.cancel()
+        unitSuggestionRefreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            refreshUnitSuggestionsNow()
         }
     }
 
-    private func availableQuantity(for asset: InvestmentAsset) -> Decimal {
+    private func refreshUnitSuggestionsNow() {
+        guard focusedField == .unit,
+              !suppressUnitSuggestions,
+              InvestmentUnitLabel.normalizedDisplay(unitLabel) != nil else {
+            cachedUnitSuggestions = []
+            return
+        }
+
+        var records = unitHistoryRecords
+        if kind == .sell, let selectedAsset {
+            let availableKeys = Set(availableUnitPositions(for: selectedAsset).map(\.unitKey))
+            records = records.filter {
+                availableKeys.contains(InvestmentUnitLabel.comparisonKey($0.value))
+            }
+        }
+        cachedUnitSuggestions = TransactionLogic.textHistorySuggestions(
+            from: records,
+            query: unitLabel,
+            limit: 5
+        )
+    }
+
+    private var unitHistoryRecords: [MistiaTextHistoryRecord] {
+        let ownerAssetsByID = Dictionary(
+            uniqueKeysWithValues: assets
+                .filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
+                .map { ($0.id, $0) }
+        )
+        var records = trades.compactMap { trade -> MistiaTextHistoryRecord? in
+            guard trade.ownerUserID == ownerUserID,
+                  trade.deletedAt == nil,
+                  let asset = ownerAssetsByID[trade.assetID],
+                  let label = InvestmentUnitLabel.normalizedDisplay(
+                      trade.unitLabel ?? asset.defaultUnitLabel
+                  ) else {
+                return nil
+            }
+            return MistiaTextHistoryRecord(
+                id: trade.id,
+                value: label,
+                occurredAt: trade.occurredAt,
+                createdAt: trade.createdAt
+            )
+        }
+        records.append(contentsOf: ownerAssetsByID.values.compactMap { asset in
+            guard let label = InvestmentUnitLabel.normalizedDisplay(asset.defaultUnitLabel) else {
+                return nil
+            }
+            return MistiaTextHistoryRecord(
+                id: asset.id,
+                value: label,
+                occurredAt: asset.updatedAt,
+                createdAt: asset.createdAt
+            )
+        })
+        return records
+    }
+
+    private func applyUnitSuggestion(_ suggestion: TransactionTitleSuggestion) {
+        isApplyingUnitSuggestion = true
+        suppressUnitSuggestions = true
+        unitLabel = suggestion.title
+    }
+
+    private func preferredUnitLabel(for asset: InvestmentAsset) -> String {
+        let positions = availableUnitPositions(for: asset)
+        if let defaultLabel = InvestmentUnitLabel.normalizedDisplay(asset.defaultUnitLabel) {
+            if kind == .buy
+                || positions.contains(where: {
+                    $0.unitKey == InvestmentUnitLabel.comparisonKey(defaultLabel)
+                }) {
+                return defaultLabel
+            }
+        }
+        return positions
+            .sorted {
+                ($0.unitLabel ?? "").localizedStandardCompare($1.unitLabel ?? "") == .orderedAscending
+            }
+            .compactMap(\.unitLabel)
+            .first ?? ""
+    }
+
+    private var selectableAssets: [InvestmentAsset] {
+        guard kind == .sell else { return assets }
+        return assets.filter { asset in
+            !availableUnitPositions(for: asset).isEmpty || asset.id == trade?.assetID
+        }
+    }
+
+    private func availableQuantity(for asset: InvestmentAsset, unitLabel: String) -> Decimal {
+        let key = InvestmentUnitLabel.comparisonKey(unitLabel)
+        return availableUnitPositions(for: asset)
+            .first(where: { $0.unitKey == key })?
+            .quantity ?? 0
+    }
+
+    private func availableUnitPositions(for asset: InvestmentAsset) -> [InvestmentUnitPosition] {
         let assetTrades = trades.filter { $0.assetID == asset.id && $0.deletedAt == nil }
-        guard !assetTrades.isEmpty else { return 0 }
+        guard !assetTrades.isEmpty else { return [] }
         let eligible = assetTrades.filter { $0.id != trade?.id }
-        let calculations = try? InvestmentAccountingEngine.recalculate(
+        return (try? InvestmentAccountingEngine.unitPositions(
             trades: eligible.map {
                 InvestmentTradeInput(
                     id: $0.id,
                     kind: $0.kind,
                     quantity: $0.quantity,
+                    unitLabel: $0.unitLabel ?? asset.defaultUnitLabel,
                     accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
                     occurredAt: $0.occurredAt,
                     createdAt: $0.createdAt
                 )
             }
-        )
-        return calculations?.last?.positionQuantityAfter ?? 0
+        )) ?? []
     }
 
     private func save() {
@@ -2136,6 +2374,7 @@ private struct InvestmentTradeEditorSheet: View {
                     assetID: asset.id,
                     kind: kind,
                     quantity: parsedDecimal(quantity),
+                    unitLabel: unitLabel,
                     grossAmountMinor: grossMinor,
                     currencyCode: currency,
                     accountingGrossAmountMinor: accountingGross,
@@ -2445,6 +2684,8 @@ private struct InvestmentLotItem: Identifiable {
     let occurredAt: Date
     let initialQuantity: Decimal
     var remainingQuantity: Decimal
+    let unitLabel: String?
+    let unitKey: String
     let grossAmountMinor: Int64
     var remainingCostBasisMinor: Int64
     let currencyCode: String
@@ -2505,6 +2746,7 @@ private struct InvestmentAssetLotHistorySheet: View {
         var lots: [InvestmentLotItem] = []
 
         for trade in sortedTrades {
+            let effectiveUnitLabel = trade.unitLabel ?? asset.defaultUnitLabel
             if trade.kind == .buy {
                 let walletName = trade.fundingWalletID.flatMap { wID in
                     wallets.first(where: { $0.id == wID })?.name
@@ -2515,6 +2757,8 @@ private struct InvestmentAssetLotHistorySheet: View {
                         occurredAt: trade.occurredAt,
                         initialQuantity: trade.quantity,
                         remainingQuantity: trade.quantity,
+                        unitLabel: effectiveUnitLabel,
+                        unitKey: InvestmentUnitLabel.comparisonKey(effectiveUnitLabel),
                         grossAmountMinor: trade.grossAmountMinor,
                         remainingCostBasisMinor: trade.grossAmountMinor,
                         currencyCode: trade.currencyCode,
@@ -2524,9 +2768,11 @@ private struct InvestmentAssetLotHistorySheet: View {
                 )
             } else if trade.kind == .sell {
                 var quantityToDeduct = trade.quantity
+                let saleUnitKey = InvestmentUnitLabel.comparisonKey(effectiveUnitLabel)
                 for index in 0..<lots.count {
                     guard quantityToDeduct > 0 else { break }
-                    if lots[index].remainingQuantity > 0 {
+                    if lots[index].remainingQuantity > 0,
+                       lots[index].unitKey == saleUnitKey {
                         let deduct = min(quantityToDeduct, lots[index].remainingQuantity)
                         let costDeducted: Int64
                         if deduct == lots[index].remainingQuantity {
@@ -2647,7 +2893,9 @@ private struct InvestmentAssetLotHistorySheet: View {
                     Text(L10n.investment.lotHistory.remainingQuantity)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Text("\(InvestmentDecimalCoding.string(from: lot.remainingQuantity)) / \(InvestmentDecimalCoding.string(from: lot.initialQuantity))")
+                    Text(
+                        verbatim: "\(formattedInvestmentQuantity(lot.remainingQuantity, unitLabel: lot.unitLabel)) / \(formattedInvestmentQuantity(lot.initialQuantity, unitLabel: lot.unitLabel))"
+                    )
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(lot.remainingQuantity > 0 ? Color.primary : Color.secondary)
                 }

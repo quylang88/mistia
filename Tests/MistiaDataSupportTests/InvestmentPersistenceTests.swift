@@ -42,6 +42,124 @@ final class InvestmentPersistenceTests: XCTestCase {
         )
     }
 
+    func testFirstDefaultUnitOnLegacyAssetBackfillsItsUnitlessHistoryWithoutChangingAccounting() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 80,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let beforeBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
+        let beforeSell = try XCTUnwrap(fetchTrade(id: sell.id, fixture))
+        let beforeAccounting = (
+            beforeBuy.grossAmountMinor,
+            beforeSell.grossAmountMinor,
+            beforeSell.releasedCostBasisMinor,
+            beforeSell.realizedProfitLossMinor,
+            beforeSell.positionCostBasisAfterMinor,
+            try balance(fixture.fundingWallet, fixture),
+            try balance(fixture.capitalWallet, fixture)
+        )
+
+        let saved = try InvestmentPersistenceService.saveAsset(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentAssetDraft(
+                id: fixture.asset.id,
+                channelID: fixture.channel.id,
+                name: fixture.asset.name,
+                currencyCode: fixture.asset.currencyCode,
+                defaultUnitLabel: "  gift   pack ",
+                createdAt: fixture.asset.createdAt
+            ),
+            context: fixture.context
+        )
+
+        let afterBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
+        let afterSell = try XCTUnwrap(fetchTrade(id: sell.id, fixture))
+        XCTAssertEqual(saved.defaultUnitLabel, "gift pack")
+        XCTAssertEqual(afterBuy.unitLabel, "gift pack")
+        XCTAssertEqual(afterSell.unitLabel, "gift pack")
+        XCTAssertEqual(afterBuy.grossAmountMinor, beforeAccounting.0)
+        XCTAssertEqual(afterSell.grossAmountMinor, beforeAccounting.1)
+        XCTAssertEqual(afterSell.releasedCostBasisMinor, beforeAccounting.2)
+        XCTAssertEqual(afterSell.realizedProfitLossMinor, beforeAccounting.3)
+        XCTAssertEqual(afterSell.positionCostBasisAfterMinor, beforeAccounting.4)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), beforeAccounting.5)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), beforeAccounting.6)
+    }
+
+    func testEditingTradeUnitRebuildsHistoryAndRejectsHistoricalUnitOversellAtomically() throws {
+        let fixture = try makeFixture()
+        let packBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            unit: "pack",
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            unit: "box",
+            gross: 300,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let sale = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            unit: "pack",
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(2)
+        )
+        let balanceBefore = try balance(fixture.fundingWallet, fixture)
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveTrade(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentTradeDraft(
+                    id: packBuy.id,
+                    channelID: fixture.channel.id,
+                    assetID: fixture.asset.id,
+                    kind: .buy,
+                    quantity: 1,
+                    unitLabel: "box",
+                    grossAmountMinor: 100,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 100,
+                    accountingCurrencyCode: "JPY",
+                    fundingWalletID: fixture.fundingWallet.id,
+                    occurredAt: fixture.start,
+                    createdAt: packBuy.createdAt
+                ),
+                rates: [],
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentAccountingError, .insufficientPosition)
+        }
+
+        XCTAssertEqual(try fetchTrade(id: packBuy.id, fixture)?.unitLabel, "pack")
+        XCTAssertEqual(try fetchTrade(id: sale.id, fixture)?.releasedCostBasisMinor, 100)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), balanceBefore)
+    }
+
     func testAssetAccountingIdentityIsLockedAfterFIFOHistoryExists() throws {
         let fixture = try makeFixture()
         let buy = try saveTrade(
@@ -1355,7 +1473,7 @@ final class InvestmentPersistenceTests: XCTestCase {
     }
 
     private func makeFixture() throws -> Fixture {
-        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
@@ -1413,6 +1531,7 @@ final class InvestmentPersistenceTests: XCTestCase {
         channel: InvestmentChannel? = nil,
         kind: InvestmentTradeKind,
         quantity: Decimal,
+        unit: String? = nil,
         gross: Int64,
         fundingWalletID: UUID? = nil,
         capitalWalletID: UUID? = nil,
@@ -1426,6 +1545,7 @@ final class InvestmentPersistenceTests: XCTestCase {
             assetID: resolvedAsset.id,
             kind: kind,
             quantity: quantity,
+            unitLabel: unit,
             grossAmountMinor: gross,
             currencyCode: resolvedAsset.currencyCode,
             accountingGrossAmountMinor: gross,

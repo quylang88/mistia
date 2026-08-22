@@ -676,6 +676,8 @@ nonisolated enum L10n {
             static func choosePhoto(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.choosePhoto", vi: "Chọn từ thư viện", en: "Choose from Library", ja: "ライブラリから選択", language: language) }
             static var currency: String { L10n.tr("investment.asset.currency", vi: "Tiền tệ giao dịch", en: "Trading Currency", ja: "取引通貨") }
             static func currency(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.currency", vi: "Tiền tệ giao dịch", en: "Trading Currency", ja: "取引通貨", language: language) }
+            static var defaultUnitPlaceholder: String { L10n.tr("investment.asset.defaultUnitPlaceholder", vi: "Đơn vị mặc định, ví dụ: pack, box, thùng", en: "Default unit, e.g., pack, box, carton", ja: "デフォルト単位（例：パック、箱、ケース）") }
+            static func defaultUnitPlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.defaultUnitPlaceholder", vi: "Đơn vị mặc định, ví dụ: pack, box, thùng", en: "Default unit, e.g., pack, box, carton", ja: "デフォルト単位（例：パック、箱、ケース）", language: language) }
             static var imageOptional: String { L10n.tr("investment.asset.imageOptional", vi: "Ảnh tài sản (không bắt buộc)", en: "Asset Image (Optional)", ja: "資産画像（任意）") }
             static func imageOptional(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.imageOptional", vi: "Ảnh tài sản (không bắt buộc)", en: "Asset Image (Optional)", ja: "資産画像（任意）", language: language) }
             static var name: String { L10n.tr("investment.asset.name", vi: "Tên tài sản", en: "Asset Name", ja: "資産名") }
@@ -739,10 +741,10 @@ nonisolated enum L10n {
             static var activity: String { L10n.tr("investment.hub.activity", vi: "Lịch sử giao dịch", en: "Transaction History", ja: "取引履歴") }
             static func activity(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.activity", vi: "Lịch sử giao dịch", en: "Transaction History", ja: "取引履歴", language: language) }
             static func activityDetails(_ arg1: String, _ arg2: String) -> String {
-                L10n.format("investment.hub.activityDetails", vi: "%@ đơn vị · %@", en: "%@ units · %@", ja: "%@ 単位 · %@", arg1, arg2)
+                L10n.format("investment.hub.activityDetails", vi: "%@ ・ %@", en: "%@ · %@", ja: "%@・%@", arg1, arg2)
             }
             static func activityDetails(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.hub.activityDetails", vi: "%@ đơn vị · %@", en: "%@ units · %@", ja: "%@ 単位 · %@", language: language, arg1, arg2)
+                L10n.format("investment.hub.activityDetails", vi: "%@ ・ %@", en: "%@ · %@", ja: "%@・%@", language: language, arg1, arg2)
             }
             static var activityTab: String { L10n.tr("investment.hub.activityTab", vi: "Lịch sử", en: "History", ja: "履歴") }
             static func activityTab(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.activityTab", vi: "Lịch sử", en: "History", ja: "履歴", language: language) }
@@ -776,11 +778,11 @@ nonisolated enum L10n {
             static func noActivityForPeriod(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.noActivityForPeriod", vi: "Chưa có giao dịch trong thời gian này.", en: "No transactions during this period.", ja: "この期間の取引履歴はありません。", language: language) }
             static var outOfStock: String { L10n.tr("investment.hub.outOfStock", vi: "Đã tất toán", en: "Position Closed", ja: "ポジション決済済") }
             static func outOfStock(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.outOfStock", vi: "Đã tất toán", en: "Position Closed", ja: "ポジション決済済", language: language) }
-            static func positionDetails(_ arg1: String, _ arg2: String) -> String {
-                L10n.format("investment.hub.positionDetails", vi: "Còn %@ · %@ lô giao dịch", en: "Holding %@ · %@ lots", ja: "保有数 %@・%@ ロット", arg1, arg2)
+            static func positionDetails(_ value: String) -> String {
+                L10n.format("investment.hub.positionDetails", vi: "Còn %@", en: "Remaining %@", ja: "残り %@", value)
             }
-            static func positionDetails(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.hub.positionDetails", vi: "Còn %@ · %@ lô giao dịch", en: "Holding %@ · %@ lots", ja: "保有数 %@・%@ ロット", language: language, arg1, arg2)
+            static func positionDetails(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.hub.positionDetails", vi: "Còn %@", en: "Remaining %@", ja: "残り %@", language: language, value)
             }
             static var positions: String { L10n.tr("investment.hub.positions", vi: "Danh mục tài sản", en: "Asset Holdings", ja: "保有資産") }
             static func positions(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.positions", vi: "Danh mục tài sản", en: "Asset Holdings", ja: "保有資産", language: language) }
@@ -930,6 +932,8 @@ nonisolated enum L10n {
             static func promotionalFreeDescription(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này vào kho và không trừ tiền từ ví.", en: "Add this quantity to inventory without deducting money from a wallet.", ja: "この数量を在庫に追加し、ウォレットからは差し引きません。", language: language) }
             static var quantity: String { L10n.tr("investment.trade.quantity", vi: "Số lượng", en: "Quantity", ja: "数量") }
             static func quantity(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.quantity", vi: "Số lượng", en: "Quantity", ja: "数量", language: language) }
+            static var resolveUnitBeforeTrading: String { L10n.tr("investment.trade.resolveUnitBeforeTrading", vi: "Hãy bổ sung đơn vị mặc định trong phần Sửa tài sản trước khi ghi thêm giao dịch.", en: "Add a default unit in Edit Asset before recording another transaction.", ja: "次の取引を記録する前に、資産の編集でデフォルト単位を追加してください。") }
+            static func resolveUnitBeforeTrading(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.resolveUnitBeforeTrading", vi: "Hãy bổ sung đơn vị mặc định trong phần Sửa tài sản trước khi ghi thêm giao dịch.", en: "Add a default unit in Edit Asset before recording another transaction.", ja: "次の取引を記録する前に、資産の編集でデフォルト単位を追加してください。", language: language) }
             static var searchAsset: String { L10n.tr("investment.trade.searchAsset", vi: "Tìm tài sản hoặc kênh", en: "Search assets or channels", ja: "資産またはチャンネルを検索") }
             static func searchAsset(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.searchAsset", vi: "Tìm tài sản hoặc kênh", en: "Search assets or channels", ja: "資産またはチャンネルを検索", language: language) }
             static var sellTotal: String { L10n.tr("investment.trade.sellTotal", vi: "Tổng tiền bán", en: "Total Sale Amount", ja: "売却総額") }
@@ -948,6 +952,8 @@ nonisolated enum L10n {
             static func totalLossDescription(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("investment.trade.totalLossDescription", vi: "Ghi nhận thanh lý với giá %@ (lỗ toàn bộ vốn) và không phát sinh tiền về ví.", en: "Record liquidation for this quantity at %@ with no funds returned to wallet.", ja: "この数量を%@で清算として記録します。ウォレットへの入金は発生しません。", language: language, value)
             }
+            static var unit: String { L10n.tr("investment.trade.unit", vi: "Đơn vị", en: "Unit", ja: "単位") }
+            static func unit(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.unit", vi: "Đơn vị", en: "Unit", ja: "単位", language: language) }
         }
 
         nonisolated enum transfer {

@@ -35,7 +35,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(reopenedBills.first?.autoPayDay, 10)
     }
 
-    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV9() {
+    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV10() {
         let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
         let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
         let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
@@ -43,6 +43,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
         let v7ModelNames = MistiaSchemaV7.models.map { String(reflecting: $0) }
         let v8ModelNames = MistiaSchemaV8.models.map { String(reflecting: $0) }
         let v9ModelNames = MistiaSchemaV9.models.map { String(reflecting: $0) }
+        let v10ModelNames = MistiaSchemaV10.models.map { String(reflecting: $0) }
 
         XCTAssertEqual(schemaNames.count, Set(schemaNames).count)
         XCTAssertEqual(schemaNames, [
@@ -51,9 +52,10 @@ final class MistiaMigrationPlanTests: XCTestCase {
             "MistiaCoreLogic.MistiaSchemaV6",
             "MistiaCoreLogic.MistiaSchemaV7",
             "MistiaCoreLogic.MistiaSchemaV8",
-            "MistiaCoreLogic.MistiaSchemaV9"
+            "MistiaCoreLogic.MistiaSchemaV9",
+            "MistiaCoreLogic.MistiaSchemaV10"
         ])
-        XCTAssertEqual(MistiaMigrationPlan.stages.count, 4)
+        XCTAssertEqual(MistiaMigrationPlan.stages.count, 5)
         XCTAssertEqual(
             MistiaLegacyV4ToV5MigrationPlan.schemas.map { String(reflecting: $0) },
             ["MistiaCoreLogic.MistiaSchemaV4", "MistiaCoreLogic.MistiaSchemaV5"]
@@ -72,13 +74,16 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentWalletPosting"))
         XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV8InvestmentModels.InvestmentAsset"))
-        XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.InvestmentTrade"))
+        XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV9InvestmentTradeModels.InvestmentTrade"))
         XCTAssertFalse(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV7InvestmentModels.InvestmentAsset"))
         XCTAssertTrue(v9ModelNames.contains("MistiaCoreLogic.MistiaSchemaV9InvestmentModels.InvestmentAsset"))
+        XCTAssertTrue(v9ModelNames.contains("MistiaCoreLogic.MistiaSchemaV9InvestmentTradeModels.InvestmentTrade"))
         XCTAssertFalse(v9ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
+        XCTAssertTrue(v10ModelNames.contains("MistiaCoreLogic.MistiaSchemaV10InvestmentModels.InvestmentAsset"))
+        XCTAssertTrue(v10ModelNames.contains("MistiaCoreLogic.InvestmentTrade"))
     }
 
-    func testV8InvestmentStoreMigratesToV9WithoutValuations() throws {
+    func testV8InvestmentStoreMigratesToV10WithoutValuations() throws {
         let storeURL = temporaryStoreURL()
         defer { try? removeStoreArtifacts(at: storeURL) }
 
@@ -127,7 +132,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v9Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v9Schema,
@@ -143,6 +148,100 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.fetch(FetchDescriptor<SyncConflict>()).map(\.entityRawValue),
             []
         )
+    }
+
+    func testV9UnitlessInvestmentStoreOpensInV10WithoutChangingAccounting() throws {
+        let storeURL = temporaryStoreURL()
+        defer { try? removeStoreArtifacts(at: storeURL) }
+
+        let ownerID = UUID()
+        let channelID = UUID()
+        let assetID = UUID()
+        let tradeID = UUID()
+        let walletID = UUID()
+        let ledgerID = UUID()
+        let postingID = UUID()
+        let occurredAt = Date(timeIntervalSince1970: 1_700_100_000)
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
+        do {
+            let container = try ModelContainer(for: v9Schema, configurations: [v9Configuration])
+            let context = ModelContext(container)
+            context.insert(InvestmentChannel(id: channelID, ownerUserID: ownerID, name: "Legacy"))
+            context.insert(
+                MistiaSchemaV9.InvestmentAsset(
+                    id: assetID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    name: "Legacy stock",
+                    currencyCode: "JPY"
+                )
+            )
+            context.insert(
+                MistiaSchemaV9.InvestmentTrade(
+                    id: tradeID,
+                    ownerUserID: ownerID,
+                    channelID: channelID,
+                    assetID: assetID,
+                    kind: .buy,
+                    quantity: 30,
+                    grossAmountMinor: 3_000,
+                    currencyCode: "JPY",
+                    accountingGrossAmountMinor: 3_000,
+                    accountingCurrencyCode: "JPY",
+                    fundingWalletID: walletID,
+                    fundingWalletCurrencyCode: "JPY",
+                    fundingWalletAmountMinor: 3_000,
+                    fundingLedgerTransactionID: ledgerID,
+                    positionQuantityAfter: 30,
+                    positionCostBasisAfterMinor: 3_000,
+                    occurredAt: occurredAt,
+                    createdAt: occurredAt,
+                    updatedAt: occurredAt
+                )
+            )
+            context.insert(
+                InvestmentWalletPosting(
+                    id: postingID,
+                    ownerUserID: ownerID,
+                    eventID: tradeID,
+                    tradeID: tradeID,
+                    assetID: assetID,
+                    walletID: walletID,
+                    ledgerTransactionID: ledgerID,
+                    role: .funding,
+                    amountMinor: -3_000,
+                    currencyCode: "JPY",
+                    accountingAmountMinor: -3_000,
+                    accountingCurrencyCode: "JPY",
+                    occurredAt: occurredAt,
+                    createdAt: occurredAt,
+                    updatedAt: occurredAt
+                )
+            )
+            try context.save()
+        }
+
+        let v10Schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let v10Configuration = ModelConfiguration("default", schema: v10Schema, url: storeURL)
+        let migrated = try MistiaDataStack.LaunchState.openContainer(
+            schema: v10Schema,
+            configuration: v10Configuration,
+            storeURL: storeURL,
+            fileManager: .default
+        )
+        let context = ModelContext(migrated)
+        let asset = try XCTUnwrap(context.fetch(FetchDescriptor<InvestmentAsset>()).first)
+        let trade = try XCTUnwrap(context.fetch(FetchDescriptor<InvestmentTrade>()).first)
+        let posting = try XCTUnwrap(context.fetch(FetchDescriptor<InvestmentWalletPosting>()).first)
+
+        XCTAssertNil(asset.defaultUnitLabel)
+        XCTAssertNil(trade.unitLabel)
+        XCTAssertEqual(trade.quantity, 30)
+        XCTAssertEqual(trade.grossAmountMinor, 3_000)
+        XCTAssertEqual(trade.positionCostBasisAfterMinor, 3_000)
+        XCTAssertEqual(posting.amountMinor, -3_000)
+        XCTAssertEqual(posting.accountingAmountMinor, -3_000)
     }
 
     func testV8InvestmentStoreRebuildsTradeSnapshotsAndPostingsWithFIFO() throws {
@@ -272,7 +371,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v9Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v9Schema,
@@ -429,7 +528,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v8Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v8Schema,
@@ -534,7 +633,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v8Schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
         XCTAssertThrowsError(
             try MistiaDataStack.LaunchState.openContainer(
@@ -571,6 +670,23 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("is_self boolean not null default false"))
         XCTAssertTrue(migration.contains("settlement_participants_group_id_idx"))
         XCTAssertTrue(migration.contains("settlement_participants_family_select"))
+    }
+
+    func testInvestmentUnitsMigrationKeepsCloudColumnsNullableAndPatchesAtomicRPCs() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260822050000_add_investment_units.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("add column if not exists default_unit_label text"))
+        XCTAssertTrue(migration.contains("add column if not exists unit_label text"))
+        XCTAssertFalse(migration.contains("default_unit_label text not null"))
+        XCTAssertFalse(migration.contains("unit_label text not null"))
+        XCTAssertTrue(migration.contains("public.investment_unit_key(trade_row.unit_label)"))
+        XCTAssertTrue(migration.contains("incoming.unit_label := existing.unit_label"))
+        XCTAssertTrue(migration.contains("incoming.unit_label := public.investment_normalize_unit_label(asset_row.default_unit_label)"))
+        XCTAssertTrue(migration.contains("incoming.default_unit_label := existing.default_unit_label"))
+        XCTAssertTrue(migration.contains("set unit_label = incoming.default_unit_label"))
+        XCTAssertTrue(migration.contains("perform public.investment_rebuild_asset"))
     }
 
     func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {

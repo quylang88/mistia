@@ -161,6 +161,8 @@ select hasnt_column('public', 'investment_assets', 'opening_cost_minor', 'asset 
 select hasnt_column('public', 'investment_trades', 'fee_minor', 'trade fee is removed');
 select hasnt_column('public', 'investment_trades', 'accounting_fee_minor', 'accounting fee is removed');
 select has_column('public', 'investment_assets', 'image_path', 'product image object path is stored on the asset');
+select has_column('public', 'investment_assets', 'default_unit_label', 'asset stores an optional default inventory unit');
+select has_column('public', 'investment_trades', 'unit_label', 'trade stores an optional inventory unit');
 select hasnt_table('public', 'investment_valuations', 'manual investment valuations are removed');
 select is(
     (
@@ -1547,6 +1549,236 @@ select is(
     (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
     0::bigint,
     'failed asset edit leaves FIFO cost unchanged'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_asset(
+        (
+            select to_jsonb(asset) || jsonb_build_object('default_unit_label', '  pack  ')
+            from public.investment_assets asset
+            where id = '30000000-0000-4000-8000-000000000304'
+        ),
+        (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+        false
+    )
+    $$,
+    'first asset default unit atomically resolves legacy history'
+);
+select is(
+    (select default_unit_label from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    'pack',
+    'asset default unit is trimmed and stored'
+);
+select is(
+    (select unit_label from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+    'pack',
+    'legacy unitless trade is backfilled by the asset mutation'
+);
+select is(
+    (select position_quantity_after_decimal_string::numeric from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+    2::numeric,
+    'unit backfill preserves aggregate quantity accounting'
+);
+select is(
+    (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+    0::bigint,
+    'unit backfill preserves aggregate cost accounting'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_asset(
+        (
+            select (to_jsonb(asset) - 'default_unit_label') || jsonb_build_object('name', 'Old client product edit')
+            from public.investment_assets asset
+            where id = '30000000-0000-4000-8000-000000000304'
+        ),
+        (select sync_version from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+        false
+    )
+    $$,
+    'old asset payload without the unit key can still edit metadata'
+);
+select is(
+    (select default_unit_label from public.investment_assets where id = '30000000-0000-4000-8000-000000000304'),
+    'pack',
+    'old asset payload preserves the current default unit'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        (
+            select (to_jsonb(trade) - 'unit_label') || jsonb_build_object('note', 'Old client trade edit')
+            from public.investment_trades trade
+            where id = '30000000-0000-4000-8000-000000000416'
+        ),
+        (select sync_version from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+        false
+    )
+    $$,
+    'old trade payload without the unit key can still edit an existing trade'
+);
+select is(
+    (select unit_label from public.investment_trades where id = '30000000-0000-4000-8000-000000000416'),
+    'pack',
+    'old trade payload preserves the current trade unit'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000417',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000304',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '1',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-22T00:23:00Z',
+            'created_at', '2026-08-22T00:23:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'new trade from an old app inherits the asset default unit'
+);
+select is(
+    (select unit_label from public.investment_trades where id = '30000000-0000-4000-8000-000000000417'),
+    'pack',
+    'old-client trade creation stores the asset default unit'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000418',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000304',
+            'kind_raw_value', 'buy',
+            'quantity_decimal_string', '1',
+            'unit_label', '  Box ',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-22T00:24:00Z',
+            'created_at', '2026-08-22T00:24:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'a second independent unit can be bought for the same asset'
+);
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000419',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000304',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '1',
+            'unit_label', 'box',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-22T00:25:00Z',
+            'created_at', '2026-08-22T00:25:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'unit matching is case insensitive when selling Box inventory'
+);
+select throws_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000420',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000304',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '1',
+            'unit_label', 'BOX',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-22T00:26:00Z',
+            'created_at', '2026-08-22T00:26:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'P0001',
+    'Sale exceeds the quantity held for the selected unit',
+    'sale cannot borrow stock from another unit'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000421',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'channel_id', '30000000-0000-4000-8000-000000000201',
+            'asset_id', '30000000-0000-4000-8000-000000000304',
+            'kind_raw_value', 'sell',
+            'quantity_decimal_string', '3',
+            'unit_label', 'pack',
+            'gross_amount_minor', 0,
+            'currency_code', 'JPY',
+            'accounting_gross_amount_minor', 0,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-22T00:27:00Z',
+            'created_at', '2026-08-22T00:27:00Z',
+            'last_modified_by_device_id', '30000000-0000-4000-8000-000000000901'
+        ),
+        null,
+        false
+    )
+    $$,
+    'all remaining pack inventory can be sold independently'
+);
+select throws_ok(
+    $$
+    select * from public.mutate_investment_trade(
+        (
+            select to_jsonb(trade) || jsonb_build_object('unit_label', 'box')
+            from public.investment_trades trade
+            where id = '30000000-0000-4000-8000-000000000417'
+        ),
+        (select sync_version from public.investment_trades where id = '30000000-0000-4000-8000-000000000417'),
+        false
+    )
+    $$,
+    'P0001',
+    'Sale exceeds the quantity held for the selected unit',
+    'editing a historical unit is rejected when it makes a later sale oversell'
+);
+select is(
+    (select unit_label from public.investment_trades where id = '30000000-0000-4000-8000-000000000417'),
+    'pack',
+    'failed unit edit rolls back the original trade unit'
 );
 
 select throws_ok(

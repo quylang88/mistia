@@ -169,7 +169,67 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
 
 }
 
-typealias InvestmentAsset = MistiaSchemaV9InvestmentModels.InvestmentAsset
+enum MistiaSchemaV10InvestmentModels {
+@Model
+nonisolated final class InvestmentAsset: Identifiable, Hashable {
+    static func == (lhs: InvestmentAsset, rhs: InvestmentAsset) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    @Attribute(.unique) var id: UUID
+    var ownerUserID: UUID
+    var channelID: UUID
+    var name: String
+    var currencyCode: String
+    var imagePath: String?
+    var defaultUnitLabel: String?
+    var sortOrder: Int
+    var isArchived: Bool
+    var archivedAt: Date?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
+
+    init(
+        id: UUID = UUID(),
+        ownerUserID: UUID,
+        channelID: UUID,
+        name: String,
+        currencyCode: String,
+        imagePath: String? = nil,
+        defaultUnitLabel: String? = nil,
+        sortOrder: Int = 0,
+        isArchived: Bool = false,
+        archivedAt: Date? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
+    ) {
+        self.id = id
+        self.ownerUserID = ownerUserID
+        self.channelID = channelID
+        self.name = name
+        self.currencyCode = currencyCode
+        self.imagePath = imagePath
+        self.defaultUnitLabel = defaultUnitLabel
+        self.sortOrder = sortOrder
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
+    }
+}
+}
+
+typealias InvestmentAsset = MistiaSchemaV10InvestmentModels.InvestmentAsset
 
 @Model
 nonisolated final class InvestmentTrade: Identifiable, Hashable {
@@ -187,6 +247,7 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
     var assetID: UUID
     var kindRawValue: String
     var quantityDecimalString: String
+    var unitLabel: String?
     var grossAmountMinor: Int64
     var currencyCode: String
     var accountingGrossAmountMinor: Int64
@@ -223,6 +284,7 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
         assetID: UUID,
         kind: InvestmentTradeKind,
         quantity: Decimal,
+        unitLabel: String? = nil,
         grossAmountMinor: Int64,
         currencyCode: String,
         accountingGrossAmountMinor: Int64,
@@ -258,6 +320,7 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
         self.assetID = assetID
         self.kindRawValue = kind.rawValue
         self.quantityDecimalString = InvestmentDecimalCoding.string(from: quantity)
+        self.unitLabel = unitLabel
         self.grossAmountMinor = max(grossAmountMinor, 0)
         self.currencyCode = currencyCode
         self.accountingGrossAmountMinor = max(accountingGrossAmountMinor, 0)

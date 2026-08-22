@@ -39,6 +39,7 @@ nonisolated struct RemoteInvestmentAsset: MistiaRemoteRow {
     var name: String
     var currencyCode: String
     var imagePath: String?
+    var defaultUnitLabel: String?
     var sortOrder: Int
     var isArchived: Bool
     var archivedAt: Date?
@@ -54,6 +55,7 @@ nonisolated struct RemoteInvestmentAsset: MistiaRemoteRow {
         case name
         case currencyCode = "currency_code"
         case imagePath = "image_path"
+        case defaultUnitLabel = "default_unit_label"
         case sortOrder = "sort_order"
         case isArchived = "is_archived"
         case archivedAt = "archived_at"
@@ -73,6 +75,7 @@ nonisolated struct RemoteInvestmentTrade: MistiaRemoteRow {
     var assetID: UUID
     var kindRawValue: String
     var quantityDecimalString: String
+    var unitLabel: String?
     var grossAmountMinor: Int64
     var currencyCode: String
     var accountingGrossAmountMinor: Int64
@@ -108,6 +111,7 @@ nonisolated struct RemoteInvestmentTrade: MistiaRemoteRow {
         case channelID = "channel_id", assetID = "asset_id"
         case kindRawValue = "kind_raw_value"
         case quantityDecimalString = "quantity_decimal_string"
+        case unitLabel = "unit_label"
         case grossAmountMinor = "gross_amount_minor"
         case currencyCode = "currency_code"
         case accountingGrossAmountMinor = "accounting_gross_amount_minor"
@@ -221,6 +225,7 @@ nonisolated extension RemoteInvestmentAsset {
         name = try container.decode(String.self, forKey: .name)
         currencyCode = try container.decode(String.self, forKey: .currencyCode)
         imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath)
+        defaultUnitLabel = try container.decodeIfPresent(String.self, forKey: .defaultUnitLabel)
         sortOrder = try container.decode(Int.self, forKey: .sortOrder)
         isArchived = try container.decode(Bool.self, forKey: .isArchived)
         archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
@@ -239,6 +244,7 @@ nonisolated extension RemoteInvestmentAsset {
         try container.encode(name, forKey: .name)
         try container.encode(currencyCode, forKey: .currencyCode)
         try container.encode(imagePath, forKey: .imagePath)
+        try container.encode(defaultUnitLabel, forKey: .defaultUnitLabel)
         try container.encode(sortOrder, forKey: .sortOrder)
         try container.encode(isArchived, forKey: .isArchived)
         try container.encode(archivedAt, forKey: .archivedAt)
@@ -253,6 +259,7 @@ nonisolated extension RemoteInvestmentAsset {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID,
             name: local.name, currencyCode: local.currencyCode, imagePath: local.imagePath,
+            defaultUnitLabel: local.defaultUnitLabel,
             sortOrder: local.sortOrder,
             isArchived: local.isArchived, archivedAt: local.archivedAt,
             createdAt: local.createdAt, updatedAt: local.updatedAt, deletedAt: local.deletedAt,
@@ -270,6 +277,7 @@ nonisolated extension RemoteInvestmentTrade {
         assetID = try container.decode(UUID.self, forKey: .assetID)
         kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
         quantityDecimalString = try container.decode(String.self, forKey: .quantityDecimalString)
+        unitLabel = try container.decodeIfPresent(String.self, forKey: .unitLabel)
         grossAmountMinor = try container.decode(Int64.self, forKey: .grossAmountMinor)
         currencyCode = try container.decode(String.self, forKey: .currencyCode)
         accountingGrossAmountMinor = try container.decode(Int64.self, forKey: .accountingGrossAmountMinor)
@@ -309,6 +317,7 @@ nonisolated extension RemoteInvestmentTrade {
         try container.encode(assetID, forKey: .assetID)
         try container.encode(kindRawValue, forKey: .kindRawValue)
         try container.encode(quantityDecimalString, forKey: .quantityDecimalString)
+        try container.encode(unitLabel, forKey: .unitLabel)
         try container.encode(grossAmountMinor, forKey: .grossAmountMinor)
         try container.encode(currencyCode, forKey: .currencyCode)
         try container.encode(accountingGrossAmountMinor, forKey: .accountingGrossAmountMinor)
@@ -344,6 +353,7 @@ nonisolated extension RemoteInvestmentTrade {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID, assetID: local.assetID,
             kindRawValue: local.kindRawValue, quantityDecimalString: local.quantityDecimalString,
+            unitLabel: local.unitLabel,
             grossAmountMinor: local.grossAmountMinor, currencyCode: local.currencyCode,
             accountingGrossAmountMinor: local.accountingGrossAmountMinor,
             accountingCurrencyCode: local.accountingCurrencyCode,
