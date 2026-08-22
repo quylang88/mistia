@@ -350,12 +350,6 @@ struct InvestmentHubView: View {
                 }
                 if canView {
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button {
-                            isSearchPresented = true
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                        }
-                        .accessibilityLabel(searchPrompt)
                         managementMenu
                     }
                 }
