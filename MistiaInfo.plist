@@ -45,7 +45,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>565</string>
+	<string>648</string>
 	<key>GIDClientID</key>
 	<string>741455632256-ldcq90u77edu4rhh7b6pmjnpqjsh34vv.apps.googleusercontent.com</string>
 	<key>GIDServerClientID</key>
@@ -71,8 +71,6 @@
 	<array>
 		<string>fetch</string>
 	</array>
-	<!-- Bump the storyboard name whenever its icon artwork or layout changes.
-	     iOS caches the rendered launch snapshot by this identity. -->
 	<key>UILaunchStoryboardName</key>
 	<string>MistiaLaunchIcon84V1</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
