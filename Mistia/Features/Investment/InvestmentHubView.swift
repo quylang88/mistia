@@ -160,6 +160,7 @@ struct InvestmentHubView: View {
                 && !$0.isArchived
                 && (selectedChannelID == nil || $0.channelID == selectedChannelID)
         }
+        .sorted(by: newestAssetFirst)
     }
 
     private var archivedOwnerChannels: [InvestmentChannel] {
@@ -584,6 +585,8 @@ struct InvestmentHubView: View {
 
             ForEach(filteredOwnerAssets) { asset in
                 let position = position(for: asset)
+                let hasTrades = trades.contains { $0.assetID == asset.id && $0.deletedAt == nil }
+                let isSettled = hasTrades && position.quantity <= 0
                 let snapshot = InvestmentAssetPositionSnapshot(
                     id: asset.id,
                     channelID: asset.channelID,
@@ -591,7 +594,8 @@ struct InvestmentHubView: View {
                     remainingCostBasisMinor: position.costBasisMinor,
                     openLotCount: position.openLotCount
                 )
-                let detail = positionDetail(for: snapshot)
+                let detail = positionDetail(for: snapshot, hasTrades: hasTrades)
+                let showsCostBasis = hasTrades && snapshot.quantity > 0
                 Button {
                     openAsset(asset)
                 } label: {
@@ -601,7 +605,8 @@ struct InvestmentHubView: View {
                         detail: detail,
                         remainingCapitalMinor: snapshot.remainingCostBasisMinor,
                         currencyCode: accountingCurrencyCode,
-                        isSettled: snapshot.quantity <= 0
+                        isSettled: isSettled,
+                        showsCostBasis: showsCostBasis
                     )
                 }
                 .buttonStyle(.plain)
@@ -635,11 +640,17 @@ struct InvestmentHubView: View {
         }
     }
 
-    private func positionDetail(for snapshot: InvestmentAssetPositionSnapshot) -> String {
-        let quantity = InvestmentDecimalCoding.string(from: snapshot.quantity)
+    private func positionDetail(
+        for snapshot: InvestmentAssetPositionSnapshot,
+        hasTrades: Bool
+    ) -> String {
+        guard hasTrades else {
+            return L10n.investment.hub.statusNew
+        }
         guard snapshot.quantity > 0 else {
             return L10n.investment.hub.outOfStock
         }
+        let quantity = InvestmentDecimalCoding.string(from: snapshot.quantity)
         return L10n.investment.hub.positionDetails(
             quantity,
             String(snapshot.openLotCount)
@@ -1425,6 +1436,7 @@ private struct InvestmentPositionRow: View {
     let remainingCapitalMinor: Int64
     let currencyCode: String
     let isSettled: Bool
+    let showsCostBasis: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1440,13 +1452,15 @@ private struct InvestmentPositionRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 12)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(L10n.investment.hub.costBasis)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(remainingCapitalMinor.formattedCurrency(code: currencyCode))
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(isSettled ? Color.secondary : Color.primary)
+            if showsCostBasis {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(L10n.investment.hub.costBasis)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(remainingCapitalMinor.formattedCurrency(code: currencyCode))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(isSettled ? Color.secondary : Color.primary)
+                }
             }
         }
         .padding(14)
@@ -1463,6 +1477,11 @@ private struct InvestmentPositionRow: View {
             }
         }
     }
+}
+
+private func newestAssetFirst(_ lhs: InvestmentAsset, _ rhs: InvestmentAsset) -> Bool {
+    if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+    return MistiaStableUUIDOrdering.precedes(lhs.id, rhs.id)
 }
 
 private func oldestTradeFirst(_ lhs: InvestmentTrade, _ rhs: InvestmentTrade) -> Bool {

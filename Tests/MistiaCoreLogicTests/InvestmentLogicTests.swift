@@ -345,6 +345,13 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(summary.remainingInventoryCostMinor, 120)
     }
 
+    func testNewAssetStatusLocalization() {
+        XCTAssertEqual(L10n.investment.hub.statusNew(language: .vietnamese), "Mới")
+        XCTAssertEqual(L10n.investment.hub.statusNew(language: .english), "New")
+        XCTAssertEqual(L10n.investment.hub.statusNew(language: .japanese), "新規")
+        XCTAssertEqual(L10n.investment.hub.outOfStock(language: .vietnamese), "Đã tất toán")
+    }
+
     private func trade(
         id: UUID = UUID(),
         kind: InvestmentTradeKind,

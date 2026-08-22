@@ -798,6 +798,8 @@ nonisolated enum L10n {
             static func searchAssets(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.searchAssets", vi: "Tìm tài sản hoặc kênh", en: "Search assets or channels", ja: "商品またはチャンネルを検索", language: language) }
             static var sell: String { L10n.tr("investment.hub.sell", vi: "Bán", en: "Sell", ja: "売却") }
             static func sell(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.sell", vi: "Bán", en: "Sell", ja: "売却", language: language) }
+            static var statusNew: String { L10n.tr("investment.hub.statusNew", vi: "Mới", en: "New", ja: "新規") }
+            static func statusNew(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.statusNew", vi: "Mới", en: "New", ja: "新規", language: language) }
             static var walletBalance: String { L10n.tr("investment.hub.walletBalance", vi: "Số dư Ví Đầu tư", en: "Investment Wallet Balance", ja: "投資ウォレット残高") }
             static func walletBalance(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.walletBalance", vi: "Số dư Ví Đầu tư", en: "Investment Wallet Balance", ja: "投資ウォレット残高", language: language) }
         }
