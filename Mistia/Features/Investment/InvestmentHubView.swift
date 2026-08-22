@@ -31,6 +31,12 @@ private enum InvestmentHubTab: String, CaseIterable, Identifiable {
     }
 }
 
+private enum InvestmentPromotionalAppearance {
+    static func accent(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? MistiaAccent.checkmarkPurple.color : MistiaAccent.purple.color
+    }
+}
+
 private enum InvestmentHubSheet: Identifiable {
     case channel(UUID?)
     case asset(UUID?)
@@ -77,6 +83,7 @@ private struct InvestmentHubAlert: Identifiable {
 struct InvestmentHubView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
@@ -681,7 +688,11 @@ struct InvestmentHubView: View {
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(
                                     trade.kind == .buy
-                                        ? (trade.grossAmountMinor == 0 ? MistiaAccent.purple.color : Color.blue)
+                                        ? (
+                                            trade.grossAmountMinor == 0
+                                                ? InvestmentPromotionalAppearance.accent(for: colorScheme)
+                                                : Color.blue
+                                        )
                                         : (trade.grossAmountMinor == 0 ? Color.red : Color.green)
                                 )
                                 .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
@@ -706,9 +717,9 @@ struct InvestmentHubView: View {
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(Color.red)
                             } else if trade.kind == .buy && trade.grossAmountMinor == 0 {
-                                Text(L10n.investment.trade.promotionalFreeBadge(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)))
+                                Text(L10n.investment.trade.promotionalFreeBadge)
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(MistiaAccent.purple.color)
+                                    .foregroundStyle(InvestmentPromotionalAppearance.accent(for: colorScheme))
                             } else {
                                 Text(trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode))
                                     .font(.subheadline.weight(.semibold))
@@ -1795,6 +1806,7 @@ private struct InvestmentAssetPickerSheet: View {
 private struct InvestmentTradeEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
 
     let ownerUserID: UUID
@@ -1908,19 +1920,20 @@ private struct InvestmentTradeEditorSheet: View {
                     }
                     if kind == .buy {
                         Toggle(isOn: $isPromotionalFreeBuy) {
-                            Label(
-                                L10n.investment.trade.isPromotionalFree(zeroAmountFormatted),
-                                systemImage: "gift.circle.fill"
-                            )
+                            HStack(spacing: 8) {
+                                Image(systemName: "gift.circle.fill")
+                                    .foregroundStyle(InvestmentPromotionalAppearance.accent(for: colorScheme))
+                                Text(L10n.investment.trade.isPromotionalFree)
+                            }
                         }
-                        .tint(MistiaAccent.purple.color)
+                        .tint(InvestmentPromotionalAppearance.accent(for: colorScheme))
                     }
                     if kind == .sell && isTotalLoss {
                         Text(L10n.investment.trade.totalLossDescription(zeroAmountFormatted))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else if kind == .buy && isPromotionalFreeBuy {
-                        Text(L10n.investment.trade.promotionalFreeDescription(zeroAmountFormatted))
+                        Text(L10n.investment.trade.promotionalFreeDescription)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -2095,7 +2108,7 @@ private struct InvestmentTradeEditorSheet: View {
         if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isLoss {
             effectiveNote = L10n.investment.trade.totalLossBadge(grossMinor.formattedCurrency(code: currency))
         } else if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isPromotional {
-            effectiveNote = L10n.investment.trade.promotionalFreeBadge(grossMinor.formattedCurrency(code: currency))
+            effectiveNote = L10n.investment.trade.promotionalFreeBadge
         } else {
             effectiveNote = note
         }

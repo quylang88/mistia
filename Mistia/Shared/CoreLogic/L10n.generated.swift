@@ -908,12 +908,8 @@ nonisolated enum L10n {
             static func fundingWallet(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.fundingWallet", vi: "Ví thanh toán Mua", en: "Funding Wallet", ja: "支払元ウォレット", language: language) }
             static var grossAmount: String { L10n.tr("investment.trade.grossAmount", vi: "Tổng giá trị giao dịch", en: "Total Transaction Value", ja: "取引総額") }
             static func grossAmount(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.grossAmount", vi: "Tổng giá trị giao dịch", en: "Total Transaction Value", ja: "取引総額", language: language) }
-            static func isPromotionalFree(_ value: String) -> String {
-                L10n.format("investment.trade.isPromotionalFree", vi: "Hàng khuyến mãi giá %@", en: "Promotional items at %@", ja: "%@の販促品", value)
-            }
-            static func isPromotionalFree(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.trade.isPromotionalFree", vi: "Hàng khuyến mãi giá %@", en: "Promotional items at %@", ja: "%@の販促品", language: language, value)
-            }
+            static var isPromotionalFree: String { L10n.tr("investment.trade.isPromotionalFree", vi: "Hàng khuyến mãi", en: "Promotional item", ja: "販促品") }
+            static func isPromotionalFree(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.isPromotionalFree", vi: "Hàng khuyến mãi", en: "Promotional item", ja: "販促品", language: language) }
             static func isTotalLoss(_ value: String) -> String {
                 L10n.format("investment.trade.isTotalLoss", vi: "Thanh lý %@", en: "Liquidate at %@", ja: "%@で清算", value)
             }
@@ -926,18 +922,10 @@ nonisolated enum L10n {
             static func newSellTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.newSellTitle", vi: "Ghi nhận bán", en: "Record Sale", ja: "売却を記録", language: language) }
             static var note: String { L10n.tr("investment.trade.note", vi: "Ghi chú", en: "Note", ja: "メモ") }
             static func note(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.note", vi: "Ghi chú", en: "Note", ja: "メモ", language: language) }
-            static func promotionalFreeBadge(_ value: String) -> String {
-                L10n.format("investment.trade.promotionalFreeBadge", vi: "Khuyến mãi %@", en: "Promotional %@", ja: "販促品 %@", value)
-            }
-            static func promotionalFreeBadge(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.trade.promotionalFreeBadge", vi: "Khuyến mãi %@", en: "Promotional %@", ja: "販促品 %@", language: language, value)
-            }
-            static func promotionalFreeDescription(_ value: String) -> String {
-                L10n.format("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này với giá vốn %@ và không trừ tiền từ ví.", en: "Add this quantity with a %@ cost basis and no money deducted from a wallet.", ja: "この数量を取得原価%@で追加し、ウォレットからは差し引きません。", value)
-            }
-            static func promotionalFreeDescription(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này với giá vốn %@ và không trừ tiền từ ví.", en: "Add this quantity with a %@ cost basis and no money deducted from a wallet.", ja: "この数量を取得原価%@で追加し、ウォレットからは差し引きません。", language: language, value)
-            }
+            static var promotionalFreeBadge: String { L10n.tr("investment.trade.promotionalFreeBadge", vi: "Khuyến mãi", en: "Promotional", ja: "販促品") }
+            static func promotionalFreeBadge(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.promotionalFreeBadge", vi: "Khuyến mãi", en: "Promotional", ja: "販促品", language: language) }
+            static var promotionalFreeDescription: String { L10n.tr("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này vào kho và không trừ tiền từ ví.", en: "Add this quantity to inventory without deducting money from a wallet.", ja: "この数量を在庫に追加し、ウォレットからは差し引きません。") }
+            static func promotionalFreeDescription(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này vào kho và không trừ tiền từ ví.", en: "Add this quantity to inventory without deducting money from a wallet.", ja: "この数量を在庫に追加し、ウォレットからは差し引きません。", language: language) }
             static var quantity: String { L10n.tr("investment.trade.quantity", vi: "Số lượng", en: "Quantity", ja: "数量") }
             static func quantity(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.quantity", vi: "Số lượng", en: "Quantity", ja: "数量", language: language) }
             static var searchAsset: String { L10n.tr("investment.trade.searchAsset", vi: "Tìm tài sản hoặc kênh", en: "Search assets or channels", ja: "資産またはチャンネルを検索") }
