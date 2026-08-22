@@ -686,8 +686,6 @@ nonisolated enum L10n {
             static func newTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.newTitle", vi: "Tài sản đầu tư", en: "Investment Asset", ja: "投資資産", language: language) }
             static var removeImage: String { L10n.tr("investment.asset.removeImage", vi: "Xóa ảnh", en: "Remove Image", ja: "画像を削除") }
             static func removeImage(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.removeImage", vi: "Xóa ảnh", en: "Remove Image", ja: "画像を削除", language: language) }
-            static var replaceImage: String { L10n.tr("investment.asset.replaceImage", vi: "Thay ảnh", en: "Change Image", ja: "画像を差し替え") }
-            static func replaceImage(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.replaceImage", vi: "Thay ảnh", en: "Change Image", ja: "画像を差し替え", language: language) }
             static var takePhoto: String { L10n.tr("investment.asset.takePhoto", vi: "Chụp ảnh", en: "Take Photo", ja: "写真を撮影") }
             static func takePhoto(language: MistiaAppLanguage) -> String { L10n.tr("investment.asset.takePhoto", vi: "Chụp ảnh", en: "Take Photo", ja: "写真を撮影", language: language) }
         }

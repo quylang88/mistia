@@ -1482,32 +1482,28 @@ private struct InvestmentAssetEditorSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                         Spacer()
                     }
-                    Menu {
-                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                            Button {
-                                imageSource = .camera
-                            } label: {
-                                Label(L10n.investment.asset.takePhoto, systemImage: "camera")
-                            }
-                        }
-                        Button {
-                            imageSource = .photoLibrary
-                        } label: {
-                            Label(L10n.investment.asset.choosePhoto, systemImage: "photo.on.rectangle")
-                        }
-                    } label: {
-                        Label(
-                            selectedImage == nil && asset?.imagePath == nil
-                                ? L10n.investment.asset.addImage
-                                : L10n.investment.asset.replaceImage,
-                            systemImage: "photo.badge.plus"
-                        )
-                    }
                     if selectedImage != nil || (!removesExistingImage && asset?.imagePath != nil) {
                         Button(L10n.investment.asset.removeImage, role: .destructive) {
                             selectedImage = nil
                             imageSource = nil
                             removesExistingImage = true
+                        }
+                    } else {
+                        Menu {
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                Button {
+                                    imageSource = .camera
+                                } label: {
+                                    Label(L10n.investment.asset.takePhoto, systemImage: "camera")
+                                }
+                            }
+                            Button {
+                                imageSource = .photoLibrary
+                            } label: {
+                                Label(L10n.investment.asset.choosePhoto, systemImage: "photo.on.rectangle")
+                            }
+                        } label: {
+                            Label(L10n.investment.asset.addImage, systemImage: "photo.badge.plus")
                         }
                     }
                 }
@@ -1537,7 +1533,7 @@ private struct InvestmentAssetEditorSheet: View {
             var imagePath = asset?.imagePath
             if let selectedImage {
                 let normalized = try InvestmentProductImageProcessing.normalizedJPEG(selectedImage)
-                imagePath = try InvestmentProductImageStore().stageReplacement(
+                imagePath = try InvestmentProductImageStore().stageImage(
                     ownerUserID: ownerUserID,
                     assetID: targetAssetID,
                     jpegData: normalized.fullSize,

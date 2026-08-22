@@ -113,4 +113,55 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
         XCTAssertTrue(snapshot.investmentTrades.isEmpty)
         XCTAssertTrue(snapshot.investmentPostings.isEmpty)
     }
+
+    func testInvestmentAssetEncodingWithNilImagePathIncludesExplicitNull() throws {
+        let asset = RemoteInvestmentAsset(
+            userID: UUID(),
+            id: UUID(),
+            channelID: UUID(),
+            name: "Gold Bar",
+            currencyCode: "JPY",
+            imagePath: nil,
+            sortOrder: 0,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: .now,
+            updatedAt: .now,
+            deletedAt: nil,
+            syncVersion: 1,
+            lastModifiedByDeviceID: nil
+        )
+
+        let data = try JSONEncoder.mistiaRemoteAPIEncoder.encode(asset)
+        let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        XCTAssertNotNil(jsonObject)
+        XCTAssertTrue(jsonObject?["image_path"] is NSNull, "Expected image_path to be explicitly encoded as null so database updates clear the column")
+    }
+
+    func testInvestmentAssetEncodingWithImagePathIncludesValue() throws {
+        let expectedPath = "owner-id/asset-id/image.jpg"
+        let asset = RemoteInvestmentAsset(
+            userID: UUID(),
+            id: UUID(),
+            channelID: UUID(),
+            name: "Gold Bar",
+            currencyCode: "JPY",
+            imagePath: expectedPath,
+            sortOrder: 0,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: .now,
+            updatedAt: .now,
+            deletedAt: nil,
+            syncVersion: 1,
+            lastModifiedByDeviceID: nil
+        )
+
+        let data = try JSONEncoder.mistiaRemoteAPIEncoder.encode(asset)
+        let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        XCTAssertNotNil(jsonObject)
+        XCTAssertEqual(jsonObject?["image_path"] as? String, expectedPath)
+    }
 }

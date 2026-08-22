@@ -24,12 +24,12 @@ nonisolated final class InvestmentProductImageStore: @unchecked Sendable {
             .appending(path: "InvestmentProductImages", directoryHint: .isDirectory)
     }
 
-    func stageReplacement(
+    func stageImage(
         ownerUserID: UUID,
         assetID: UUID,
         jpegData: Data,
         thumbnailData: Data,
-        replacing oldPath: String?
+        replacing oldPath: String? = nil
     ) throws -> String {
         let path = [
             ownerUserID.uuidString.lowercased(),
@@ -54,6 +54,22 @@ nonisolated final class InvestmentProductImageStore: @unchecked Sendable {
             try saveManifest(manifest)
         }
         return path
+    }
+
+    func stageReplacement(
+        ownerUserID: UUID,
+        assetID: UUID,
+        jpegData: Data,
+        thumbnailData: Data,
+        replacing oldPath: String?
+    ) throws -> String {
+        try stageImage(
+            ownerUserID: ownerUserID,
+            assetID: assetID,
+            jpegData: jpegData,
+            thumbnailData: thumbnailData,
+            replacing: oldPath
+        )
     }
 
     func stageRemoval(assetID: UUID, path: String?) throws {

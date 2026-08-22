@@ -167,6 +167,40 @@ nonisolated struct RemoteInvestmentWalletPosting: MistiaRemoteRow {
 }
 
 nonisolated extension RemoteInvestmentChannel {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        iconSymbolName = try container.decode(String.self, forKey: .iconSymbolName)
+        iconColorHex = try container.decode(String.self, forKey: .iconColorHex)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(iconSymbolName, forKey: .iconSymbolName)
+        try container.encode(iconColorHex, forKey: .iconColorHex)
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(isArchived, forKey: .isArchived)
+        try container.encode(archivedAt, forKey: .archivedAt)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(syncVersion, forKey: .syncVersion)
+        try container.encode(lastModifiedByDeviceID, forKey: .lastModifiedByDeviceID)
+    }
+
     init(local: InvestmentChannel) {
         self.init(
             userID: local.ownerUserID, id: local.id, name: local.name,
@@ -179,6 +213,42 @@ nonisolated extension RemoteInvestmentChannel {
 }
 
 nonisolated extension RemoteInvestmentAsset {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        channelID = try container.decode(UUID.self, forKey: .channelID)
+        name = try container.decode(String.self, forKey: .name)
+        currencyCode = try container.decode(String.self, forKey: .currencyCode)
+        imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(id, forKey: .id)
+        try container.encode(channelID, forKey: .channelID)
+        try container.encode(name, forKey: .name)
+        try container.encode(currencyCode, forKey: .currencyCode)
+        try container.encode(imagePath, forKey: .imagePath)
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(isArchived, forKey: .isArchived)
+        try container.encode(archivedAt, forKey: .archivedAt)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(syncVersion, forKey: .syncVersion)
+        try container.encode(lastModifiedByDeviceID, forKey: .lastModifiedByDeviceID)
+    }
+
     init(local: InvestmentAsset) {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID,
@@ -192,6 +262,84 @@ nonisolated extension RemoteInvestmentAsset {
 }
 
 nonisolated extension RemoteInvestmentTrade {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        channelID = try container.decode(UUID.self, forKey: .channelID)
+        assetID = try container.decode(UUID.self, forKey: .assetID)
+        kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
+        quantityDecimalString = try container.decode(String.self, forKey: .quantityDecimalString)
+        grossAmountMinor = try container.decode(Int64.self, forKey: .grossAmountMinor)
+        currencyCode = try container.decode(String.self, forKey: .currencyCode)
+        accountingGrossAmountMinor = try container.decode(Int64.self, forKey: .accountingGrossAmountMinor)
+        accountingCurrencyCode = try container.decode(String.self, forKey: .accountingCurrencyCode)
+        exchangeRateDecimalString = try container.decodeIfPresent(String.self, forKey: .exchangeRateDecimalString)
+        exchangeRateProvider = try container.decodeIfPresent(String.self, forKey: .exchangeRateProvider)
+        exchangeRateDate = try container.decodeIfPresent(String.self, forKey: .exchangeRateDate)
+        fundingWalletID = try container.decodeIfPresent(UUID.self, forKey: .fundingWalletID)
+        capitalReturnWalletID = try container.decodeIfPresent(UUID.self, forKey: .capitalReturnWalletID)
+        fundingWalletCurrencyCode = try container.decodeIfPresent(String.self, forKey: .fundingWalletCurrencyCode)
+        capitalReturnWalletCurrencyCode = try container.decodeIfPresent(String.self, forKey: .capitalReturnWalletCurrencyCode)
+        fundingWalletAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .fundingWalletAmountMinor)
+        capitalReturnWalletAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .capitalReturnWalletAmountMinor)
+        fundingToAccountingRateDecimalString = try container.decodeIfPresent(String.self, forKey: .fundingToAccountingRateDecimalString)
+        accountingToCapitalReturnRateDecimalString = try container.decodeIfPresent(String.self, forKey: .accountingToCapitalReturnRateDecimalString)
+        fundingLedgerTransactionID = try container.decodeIfPresent(UUID.self, forKey: .fundingLedgerTransactionID)
+        capitalReturnLedgerTransactionID = try container.decodeIfPresent(UUID.self, forKey: .capitalReturnLedgerTransactionID)
+        profitLossLedgerTransactionID = try container.decodeIfPresent(UUID.self, forKey: .profitLossLedgerTransactionID)
+        releasedCostBasisMinor = try container.decode(Int64.self, forKey: .releasedCostBasisMinor)
+        realizedProfitLossMinor = try container.decode(Int64.self, forKey: .realizedProfitLossMinor)
+        positionQuantityAfterDecimalString = try container.decode(String.self, forKey: .positionQuantityAfterDecimalString)
+        positionCostBasisAfterMinor = try container.decode(Int64.self, forKey: .positionCostBasisAfterMinor)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        occurredAt = try container.decode(Date.self, forKey: .occurredAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(id, forKey: .id)
+        try container.encode(channelID, forKey: .channelID)
+        try container.encode(assetID, forKey: .assetID)
+        try container.encode(kindRawValue, forKey: .kindRawValue)
+        try container.encode(quantityDecimalString, forKey: .quantityDecimalString)
+        try container.encode(grossAmountMinor, forKey: .grossAmountMinor)
+        try container.encode(currencyCode, forKey: .currencyCode)
+        try container.encode(accountingGrossAmountMinor, forKey: .accountingGrossAmountMinor)
+        try container.encode(accountingCurrencyCode, forKey: .accountingCurrencyCode)
+        try container.encode(exchangeRateDecimalString, forKey: .exchangeRateDecimalString)
+        try container.encode(exchangeRateProvider, forKey: .exchangeRateProvider)
+        try container.encode(exchangeRateDate, forKey: .exchangeRateDate)
+        try container.encode(fundingWalletID, forKey: .fundingWalletID)
+        try container.encode(capitalReturnWalletID, forKey: .capitalReturnWalletID)
+        try container.encode(fundingWalletCurrencyCode, forKey: .fundingWalletCurrencyCode)
+        try container.encode(capitalReturnWalletCurrencyCode, forKey: .capitalReturnWalletCurrencyCode)
+        try container.encode(fundingWalletAmountMinor, forKey: .fundingWalletAmountMinor)
+        try container.encode(capitalReturnWalletAmountMinor, forKey: .capitalReturnWalletAmountMinor)
+        try container.encode(fundingToAccountingRateDecimalString, forKey: .fundingToAccountingRateDecimalString)
+        try container.encode(accountingToCapitalReturnRateDecimalString, forKey: .accountingToCapitalReturnRateDecimalString)
+        try container.encode(fundingLedgerTransactionID, forKey: .fundingLedgerTransactionID)
+        try container.encode(capitalReturnLedgerTransactionID, forKey: .capitalReturnLedgerTransactionID)
+        try container.encode(profitLossLedgerTransactionID, forKey: .profitLossLedgerTransactionID)
+        try container.encode(releasedCostBasisMinor, forKey: .releasedCostBasisMinor)
+        try container.encode(realizedProfitLossMinor, forKey: .realizedProfitLossMinor)
+        try container.encode(positionQuantityAfterDecimalString, forKey: .positionQuantityAfterDecimalString)
+        try container.encode(positionCostBasisAfterMinor, forKey: .positionCostBasisAfterMinor)
+        try container.encode(note, forKey: .note)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(syncVersion, forKey: .syncVersion)
+        try container.encode(lastModifiedByDeviceID, forKey: .lastModifiedByDeviceID)
+    }
+
     init(local: InvestmentTrade) {
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID, assetID: local.assetID,
@@ -223,6 +371,50 @@ nonisolated extension RemoteInvestmentTrade {
 }
 
 nonisolated extension RemoteInvestmentWalletPosting {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        eventID = try container.decode(UUID.self, forKey: .eventID)
+        tradeID = try container.decodeIfPresent(UUID.self, forKey: .tradeID)
+        assetID = try container.decodeIfPresent(UUID.self, forKey: .assetID)
+        walletID = try container.decode(UUID.self, forKey: .walletID)
+        ledgerTransactionID = try container.decode(UUID.self, forKey: .ledgerTransactionID)
+        roleRawValue = try container.decode(String.self, forKey: .roleRawValue)
+        amountMinor = try container.decode(Int64.self, forKey: .amountMinor)
+        currencyCode = try container.decode(String.self, forKey: .currencyCode)
+        accountingAmountMinor = try container.decode(Int64.self, forKey: .accountingAmountMinor)
+        accountingCurrencyCode = try container.decode(String.self, forKey: .accountingCurrencyCode)
+        occurredAt = try container.decode(Date.self, forKey: .occurredAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(id, forKey: .id)
+        try container.encode(eventID, forKey: .eventID)
+        try container.encode(tradeID, forKey: .tradeID)
+        try container.encode(assetID, forKey: .assetID)
+        try container.encode(walletID, forKey: .walletID)
+        try container.encode(ledgerTransactionID, forKey: .ledgerTransactionID)
+        try container.encode(roleRawValue, forKey: .roleRawValue)
+        try container.encode(amountMinor, forKey: .amountMinor)
+        try container.encode(currencyCode, forKey: .currencyCode)
+        try container.encode(accountingAmountMinor, forKey: .accountingAmountMinor)
+        try container.encode(accountingCurrencyCode, forKey: .accountingCurrencyCode)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(syncVersion, forKey: .syncVersion)
+        try container.encode(lastModifiedByDeviceID, forKey: .lastModifiedByDeviceID)
+    }
+
     init(local: InvestmentWalletPosting) {
         self.init(
             userID: local.ownerUserID, id: local.id, eventID: local.eventID,
