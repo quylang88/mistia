@@ -196,4 +196,96 @@ final class InvestmentSyncCompatibilityTests: XCTestCase {
         XCTAssertEqual(jsonObject?["image_path"] as? String, expectedPath)
         XCTAssertEqual(jsonObject?["default_unit_label"] as? String, "bar")
     }
+
+    func testInvestmentAssetPayloadFingerprintIncludesDefaultUnitLabelAndMetadata() {
+        let baseAsset = RemoteInvestmentAsset(
+            userID: UUID(),
+            id: UUID(),
+            channelID: UUID(),
+            name: "Gold Bar",
+            currencyCode: "JPY",
+            imagePath: nil,
+            defaultUnitLabel: nil,
+            sortOrder: 0,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: .now,
+            updatedAt: .now,
+            deletedAt: nil,
+            syncVersion: 1,
+            lastModifiedByDeviceID: nil
+        )
+
+        var assetWithUnit = baseAsset
+        assetWithUnit.defaultUnitLabel = "g"
+
+        var assetWithSortOrder = baseAsset
+        assetWithSortOrder.sortOrder = 5
+
+        var assetWithArchivedAt = baseAsset
+        assetWithArchivedAt.archivedAt = Date(timeIntervalSince1970: 100_000)
+
+        let baseFingerprint = MistiaSyncUploadRecord.investmentAsset(baseAsset).payloadFingerprint
+        let unitFingerprint = MistiaSyncUploadRecord.investmentAsset(assetWithUnit).payloadFingerprint
+        let sortFingerprint = MistiaSyncUploadRecord.investmentAsset(assetWithSortOrder).payloadFingerprint
+        let archivedFingerprint = MistiaSyncUploadRecord.investmentAsset(assetWithArchivedAt).payloadFingerprint
+
+        XCTAssertNotEqual(baseFingerprint, unitFingerprint, "Adding or editing defaultUnitLabel must change the payloadFingerprint")
+        XCTAssertNotEqual(baseFingerprint, sortFingerprint, "Changing sortOrder must change the payloadFingerprint")
+        XCTAssertNotEqual(baseFingerprint, archivedFingerprint, "Changing archivedAt must change the payloadFingerprint")
+    }
+
+    func testInvestmentTradePayloadFingerprintIncludesUnitLabelAndAccountingDetails() {
+        let baseTrade = RemoteInvestmentTrade(
+            userID: UUID(),
+            id: UUID(),
+            channelID: UUID(),
+            assetID: UUID(),
+            kindRawValue: InvestmentTradeKind.buy.rawValue,
+            quantityDecimalString: "10",
+            unitLabel: nil,
+            grossAmountMinor: 100_000,
+            currencyCode: "VND",
+            accountingGrossAmountMinor: 100_000,
+            accountingCurrencyCode: "VND",
+            exchangeRateDecimalString: nil,
+            exchangeRateProvider: nil,
+            exchangeRateDate: nil,
+            fundingWalletID: nil,
+            capitalReturnWalletID: nil,
+            fundingWalletCurrencyCode: nil,
+            capitalReturnWalletCurrencyCode: nil,
+            fundingWalletAmountMinor: nil,
+            capitalReturnWalletAmountMinor: nil,
+            fundingToAccountingRateDecimalString: nil,
+            accountingToCapitalReturnRateDecimalString: nil,
+            fundingLedgerTransactionID: nil,
+            capitalReturnLedgerTransactionID: nil,
+            profitLossLedgerTransactionID: nil,
+            releasedCostBasisMinor: 0,
+            realizedProfitLossMinor: 0,
+            positionQuantityAfterDecimalString: "10",
+            positionCostBasisAfterMinor: 100_000,
+            note: nil,
+            occurredAt: Date(timeIntervalSince1970: 1_000_000),
+            createdAt: .now,
+            updatedAt: .now,
+            deletedAt: nil,
+            syncVersion: 1,
+            lastModifiedByDeviceID: nil
+        )
+
+        var tradeWithUnit = baseTrade
+        tradeWithUnit.unitLabel = "cổ"
+
+        var tradeWithNote = baseTrade
+        tradeWithNote.note = "DCA monthly"
+
+        let baseFingerprint = MistiaSyncUploadRecord.investmentTrade(baseTrade).payloadFingerprint
+        let unitFingerprint = MistiaSyncUploadRecord.investmentTrade(tradeWithUnit).payloadFingerprint
+        let noteFingerprint = MistiaSyncUploadRecord.investmentTrade(tradeWithNote).payloadFingerprint
+
+        XCTAssertNotEqual(baseFingerprint, unitFingerprint, "Adding or changing unitLabel must change trade payloadFingerprint")
+        XCTAssertNotEqual(baseFingerprint, noteFingerprint, "Adding or changing note must change trade payloadFingerprint")
+    }
 }

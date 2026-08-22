@@ -1717,13 +1717,79 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
                 Self.dateString(row.deletedAt)
             ].joined(separator: "|")
         case .investmentChannel(let row):
-            return [entity.rawValue, row.name, row.iconSymbolName, row.iconColorHex, String(row.sortOrder), row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [
+                entity.rawValue,
+                row.name,
+                row.iconSymbolName,
+                row.iconColorHex,
+                "\(row.sortOrder)",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
         case .investmentAsset(let row):
-            return [entity.rawValue, row.channelID.uuidString, row.name, row.currencyCode, row.imagePath ?? "", row.isArchived ? "1" : "0", Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [
+                entity.rawValue,
+                row.channelID.uuidString.lowercased(),
+                row.name,
+                row.currencyCode,
+                row.imagePath ?? "",
+                row.defaultUnitLabel ?? "",
+                "\(row.sortOrder)",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
         case .investmentTrade(let row):
-            return [entity.rawValue, row.channelID.uuidString, row.assetID.uuidString, row.kindRawValue, row.quantityDecimalString, String(row.grossAmountMinor), String(row.releasedCostBasisMinor), String(row.realizedProfitLossMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [
+                entity.rawValue,
+                row.channelID.uuidString.lowercased(),
+                row.assetID.uuidString.lowercased(),
+                row.kindRawValue,
+                row.quantityDecimalString,
+                row.unitLabel ?? "",
+                "\(row.grossAmountMinor)",
+                row.currencyCode,
+                "\(row.accountingGrossAmountMinor)",
+                row.accountingCurrencyCode,
+                row.exchangeRateDecimalString ?? "",
+                row.exchangeRateProvider ?? "",
+                row.exchangeRateDate ?? "",
+                row.fundingWalletID?.uuidString.lowercased() ?? "",
+                row.capitalReturnWalletID?.uuidString.lowercased() ?? "",
+                row.fundingWalletCurrencyCode ?? "",
+                row.capitalReturnWalletCurrencyCode ?? "",
+                row.fundingWalletAmountMinor.map(String.init) ?? "",
+                row.capitalReturnWalletAmountMinor.map(String.init) ?? "",
+                row.fundingToAccountingRateDecimalString ?? "",
+                row.accountingToCapitalReturnRateDecimalString ?? "",
+                row.fundingLedgerTransactionID?.uuidString.lowercased() ?? "",
+                row.capitalReturnLedgerTransactionID?.uuidString.lowercased() ?? "",
+                row.profitLossLedgerTransactionID?.uuidString.lowercased() ?? "",
+                "\(row.releasedCostBasisMinor)",
+                "\(row.realizedProfitLossMinor)",
+                row.positionQuantityAfterDecimalString,
+                "\(row.positionCostBasisAfterMinor)",
+                row.note ?? "",
+                Self.dateString(row.occurredAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
         case .investmentPosting(let row):
-            return [entity.rawValue, row.eventID.uuidString, row.walletID.uuidString, row.roleRawValue, String(row.amountMinor), String(row.accountingAmountMinor), Self.dateString(row.occurredAt), Self.dateString(row.deletedAt)].joined(separator: "|")
+            return [
+                entity.rawValue,
+                row.eventID.uuidString.lowercased(),
+                row.tradeID?.uuidString.lowercased() ?? "",
+                row.assetID?.uuidString.lowercased() ?? "",
+                row.walletID.uuidString.lowercased(),
+                row.ledgerTransactionID.uuidString.lowercased(),
+                row.roleRawValue,
+                "\(row.amountMinor)",
+                row.currencyCode,
+                "\(row.accountingAmountMinor)",
+                row.accountingCurrencyCode,
+                Self.dateString(row.occurredAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
         }
     }
 
