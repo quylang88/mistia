@@ -465,3 +465,103 @@ nonisolated enum InvestmentCurrencyConversion {
         return number.int64Value
     }
 }
+
+nonisolated struct InvestmentCashPostingSnapshot: Equatable, Sendable {
+    let walletID: UUID
+    let currencyCode: String
+    let amountMinor: Int64
+    let accountingAmountMinor: Int64
+    let accountingCurrencyCode: String
+    let bucket: InvestmentCashBucket
+}
+
+nonisolated enum InvestmentCashAllocationLogic {
+    static func snapshot(
+        postings: [InvestmentCashPostingSnapshot],
+        accountingCurrencyCode: String,
+        unidentifiedMinor: Int64 = 0
+    ) -> InvestmentCashAllocationSnapshot {
+        struct Totals {
+            var currencyCode: String
+            var booked: Int64 = 0
+            var unreconciled: Int64 = 0
+            var originalBooked: Int64 = 0
+            var originalUnreconciled: Int64 = 0
+        }
+
+        let normalizedAccountingCurrency = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
+        var totalsByWallet: [UUID: Totals] = [:]
+        for posting in postings where MistiaCurrencyLogic.normalizedCode(posting.accountingCurrencyCode) == normalizedAccountingCurrency {
+            var totals = totalsByWallet[posting.walletID]
+                ?? Totals(currencyCode: MistiaCurrencyLogic.normalizedCode(posting.currencyCode))
+            switch posting.bucket {
+            case .booked:
+                totals.booked = saturatingAdd(totals.booked, posting.accountingAmountMinor)
+                totals.originalBooked = saturatingAdd(totals.originalBooked, posting.amountMinor)
+            case .unreconciled:
+                totals.unreconciled = saturatingAdd(totals.unreconciled, posting.accountingAmountMinor)
+                totals.originalUnreconciled = saturatingAdd(totals.originalUnreconciled, posting.amountMinor)
+            }
+            totalsByWallet[posting.walletID] = totals
+        }
+
+        let locations = totalsByWallet.map { walletID, totals in
+            InvestmentWalletCashLocation(
+                walletID: walletID,
+                currencyCode: totals.currencyCode,
+                bookedMinor: totals.booked,
+                unreconciledMinor: totals.unreconciled,
+                originalBookedMinor: totals.originalBooked,
+                originalUnreconciledMinor: totals.originalUnreconciled
+            )
+        }
+        .filter { $0.totalMinor != 0 || $0.bookedMinor != 0 || $0.unreconciledMinor != 0 }
+        .sorted { MistiaStableUUIDOrdering.precedes($0.walletID, $1.walletID) }
+
+        return InvestmentCashAllocationSnapshot(
+            accountingCurrencyCode: normalizedAccountingCurrency,
+            locations: locations,
+            unidentifiedMinor: unidentifiedMinor
+        )
+    }
+
+    static func usagePreview(
+        requestedMinor: Int64,
+        visibleWalletBalanceMinor: Int64,
+        bookedInvestmentMinor: Int64,
+        unreconciledInvestmentMinor: Int64,
+        totalInvestmentMinor: Int64
+    ) -> InvestmentFundUsagePreview {
+        let requested = max(requestedMinor, 0)
+        let booked = max(bookedInvestmentMinor, 0)
+        let unreconciled = max(unreconciledInvestmentMinor, 0)
+        let ordinaryAvailable = max(visibleWalletBalanceMinor - booked, 0)
+        var remaining = max(requested - ordinaryAvailable, 0)
+        let bookedToUse = min(booked, remaining)
+        remaining -= bookedToUse
+        let unreconciledToUse = min(unreconciled, remaining)
+        remaining -= unreconciledToUse
+        let outcome: InvestmentFundUsageOutcome
+        if remaining > 0 {
+            outcome = .insufficientFunds
+        } else if bookedToUse > 0 || unreconciledToUse > 0 {
+            outcome = .requiresConfirmation
+        } else {
+            outcome = .ordinaryFundsOnly
+        }
+        return InvestmentFundUsagePreview(
+            requestedMinor: requested,
+            ordinaryAvailableMinor: ordinaryAvailable,
+            bookedToUseMinor: bookedToUse,
+            unreconciledToUseMinor: unreconciledToUse,
+            remainingInvestmentMinor: max(totalInvestmentMinor - bookedToUse - unreconciledToUse, 0),
+            outcome: outcome
+        )
+    }
+
+    private static func saturatingAdd(_ lhs: Int64, _ rhs: Int64) -> Int64 {
+        let (value, overflow) = lhs.addingReportingOverflow(rhs)
+        guard overflow else { return value }
+        return rhs >= 0 ? .max : .min
+    }
+}

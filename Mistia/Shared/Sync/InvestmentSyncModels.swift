@@ -148,6 +148,8 @@ nonisolated struct RemoteInvestmentWalletPosting: MistiaRemoteRow {
     var walletID: UUID
     var ledgerTransactionID: UUID
     var roleRawValue: String
+    var cashBucketRawValue: String? = nil
+    var cashOriginRawValue: String? = nil
     var amountMinor: Int64
     var currencyCode: String
     var accountingAmountMinor: Int64
@@ -163,6 +165,7 @@ nonisolated struct RemoteInvestmentWalletPosting: MistiaRemoteRow {
         case userID = "user_id", id, eventID = "event_id", tradeID = "trade_id", assetID = "asset_id"
         case walletID = "wallet_id", ledgerTransactionID = "ledger_transaction_id"
         case roleRawValue = "role_raw_value", amountMinor = "amount_minor", currencyCode = "currency_code"
+        case cashBucketRawValue = "cash_bucket_raw_value", cashOriginRawValue = "cash_origin_raw_value"
         case accountingAmountMinor = "accounting_amount_minor", accountingCurrencyCode = "accounting_currency_code"
         case occurredAt = "occurred_at", createdAt = "created_at", updatedAt = "updated_at"
         case deletedAt = "deleted_at", syncVersion = "sync_version"
@@ -391,6 +394,8 @@ nonisolated extension RemoteInvestmentWalletPosting {
         walletID = try container.decode(UUID.self, forKey: .walletID)
         ledgerTransactionID = try container.decode(UUID.self, forKey: .ledgerTransactionID)
         roleRawValue = try container.decode(String.self, forKey: .roleRawValue)
+        cashBucketRawValue = try container.decodeIfPresent(String.self, forKey: .cashBucketRawValue)
+        cashOriginRawValue = try container.decodeIfPresent(String.self, forKey: .cashOriginRawValue)
         amountMinor = try container.decode(Int64.self, forKey: .amountMinor)
         currencyCode = try container.decode(String.self, forKey: .currencyCode)
         accountingAmountMinor = try container.decode(Int64.self, forKey: .accountingAmountMinor)
@@ -413,6 +418,8 @@ nonisolated extension RemoteInvestmentWalletPosting {
         try container.encode(walletID, forKey: .walletID)
         try container.encode(ledgerTransactionID, forKey: .ledgerTransactionID)
         try container.encode(roleRawValue, forKey: .roleRawValue)
+        try container.encode(cashBucketRawValue, forKey: .cashBucketRawValue)
+        try container.encode(cashOriginRawValue, forKey: .cashOriginRawValue)
         try container.encode(amountMinor, forKey: .amountMinor)
         try container.encode(currencyCode, forKey: .currencyCode)
         try container.encode(accountingAmountMinor, forKey: .accountingAmountMinor)
@@ -426,10 +433,16 @@ nonisolated extension RemoteInvestmentWalletPosting {
     }
 
     init(local: InvestmentWalletPosting) {
+        self.init(local: local, cashMetadata: nil)
+    }
+
+    init(local: InvestmentWalletPosting, cashMetadata: InvestmentCashPostingMetadata?) {
         self.init(
             userID: local.ownerUserID, id: local.id, eventID: local.eventID,
             tradeID: local.tradeID, assetID: local.assetID, walletID: local.walletID,
             ledgerTransactionID: local.ledgerTransactionID, roleRawValue: local.roleRawValue,
+            cashBucketRawValue: cashMetadata?.cashBucketRawValue,
+            cashOriginRawValue: cashMetadata?.cashOriginRawValue,
             amountMinor: local.amountMinor, currencyCode: local.currencyCode,
             accountingAmountMinor: local.accountingAmountMinor,
             accountingCurrencyCode: local.accountingCurrencyCode, occurredAt: local.occurredAt,

@@ -151,6 +151,19 @@ enum PlanningPersistenceError: LocalizedError {
     }
 }
 
+struct PlanningInvestmentFundUsageConfirmation: LocalizedError {
+    let preview: InvestmentFundUsagePreview
+    let ownerUserID: UUID
+    let currencyCode: String
+
+    var errorDescription: String? {
+        L10n.investment.wallet.useFundsMessage(
+            preview.investmentToUseMinor.formattedCurrency(code: currencyCode),
+            preview.remainingInvestmentMinor.formattedCurrency(code: currencyCode)
+        )
+    }
+}
+
 enum PlanningDueRowTone {
     case normal
     case warning
@@ -178,6 +191,8 @@ struct PlanningSavedDuePayment {
     let transaction: LedgerTransaction
     let occurrenceID: UUID
     let subjectUserID: UUID?
+    let investmentPostingIDs: Set<UUID>
+    let additionalTransactionIDs: Set<UUID>
 }
 
 struct PlanningUndoneDuePayment {
@@ -196,6 +211,7 @@ enum PlanningPersistenceSupport {
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
         actorUserID: UUID?,
+        confirmedInvestmentFundUsagePreview: InvestmentFundUsagePreview? = nil,
         calendar: Calendar = MistiaCalendar.current
     ) throws -> PlanningSavedDuePayment {
         let now = Date()
@@ -203,12 +219,47 @@ enum PlanningPersistenceSupport {
         guard let sourceWallet = wallets.first(where: { $0.id == draft.sourceWalletID }) else {
             throw PlanningPersistenceError.missingWallet
         }
-        try validateSourceWalletCanCoverPayment(
-            sourceWallet: sourceWallet,
-            amountMinor: draft.amountMinor,
-            wallets: wallets,
-            modelContext: modelContext
+        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
+        let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
+            forWalletID: sourceWallet.id,
+            ownershipScopes: ownershipScopes
         )
+        var investmentUsagePreview: InvestmentFundUsagePreview?
+        if sourceWallet.kind != .creditCard, let subjectUserID {
+            let visibleBalance = try InvestmentPersistenceService.currentBalance(
+                wallet: sourceWallet,
+                context: modelContext
+            )
+            let preview = try InvestmentPersistenceService.fundUsagePreview(
+                ownerUserID: subjectUserID,
+                wallet: sourceWallet,
+                requestedMinor: draft.amountMinor,
+                visibleWalletBalanceMinor: visibleBalance,
+                context: modelContext
+            )
+            switch preview.outcome {
+            case .requiresConfirmation:
+                guard confirmedInvestmentFundUsagePreview == preview else {
+                    throw PlanningInvestmentFundUsageConfirmation(
+                        preview: preview,
+                        ownerUserID: subjectUserID,
+                        currencyCode: sourceWallet.currencyCode
+                    )
+                }
+                investmentUsagePreview = preview
+            case .insufficientFunds:
+                throw PlanningPersistenceError.insufficientWalletBalance
+            case .ordinaryFundsOnly:
+                break
+            }
+        } else {
+            try validateSourceWalletCanCoverPayment(
+                sourceWallet: sourceWallet,
+                amountMinor: draft.amountMinor,
+                wallets: wallets,
+                modelContext: modelContext
+            )
+        }
 
         let transaction = LedgerTransaction(
             primaryKind: draft.primaryKind,
@@ -238,11 +289,6 @@ enum PlanningPersistenceSupport {
         }
 
         modelContext.insert(transaction)
-        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
-        let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
-            forWalletID: sourceWallet.id,
-            ownershipScopes: ownershipScopes
-        )
         if let subjectUserID {
             try MistiaRecordOwnershipStore.upsert(
                 entity: .transaction,
@@ -274,11 +320,26 @@ enum PlanningPersistenceSupport {
             calendar: calendar
         )
 
+        let investmentUsageResult: InvestmentPersistenceResult
+        if let investmentUsagePreview, let subjectUserID {
+            investmentUsageResult = try InvestmentPersistenceService.recordFundUsage(
+                ownerUserID: subjectUserID,
+                transaction: transaction,
+                preview: investmentUsagePreview,
+                now: now,
+                context: modelContext
+            )
+        } else {
+            investmentUsageResult = InvestmentPersistenceResult()
+        }
+
         try modelContext.save()
         return PlanningSavedDuePayment(
             transaction: transaction,
             occurrenceID: occurrence.id,
-            subjectUserID: subjectUserID
+            subjectUserID: subjectUserID,
+            investmentPostingIDs: investmentUsageResult.postingIDs,
+            additionalTransactionIDs: investmentUsageResult.ledgerTransactionIDs
         )
     }
 

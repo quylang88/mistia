@@ -5,6 +5,20 @@ struct ManagementWalletEditorTarget: Identifiable {
     let id = UUID()
     let wallet: LedgerWallet?
     let defaultKind: LedgerWalletKind
+    let suggestedName: String?
+    let onSaved: ((LedgerWallet) -> Void)?
+
+    init(
+        wallet: LedgerWallet?,
+        defaultKind: LedgerWalletKind,
+        suggestedName: String? = nil,
+        onSaved: ((LedgerWallet) -> Void)? = nil
+    ) {
+        self.wallet = wallet
+        self.defaultKind = defaultKind
+        self.suggestedName = suggestedName
+        self.onSaved = onSaved
+    }
 }
 
 struct ManagementCategoryEditorTarget: Identifiable {
@@ -43,6 +57,9 @@ struct ManagementWalletEditorSheet: View {
     private var storedTransactions: [LedgerTransaction]
     @Query
     private var ownershipScopes: [OwnedRecordScope]
+    @Query private var investmentPostings: [InvestmentWalletPosting]
+    @Query private var investmentCashPostingMetadata: [InvestmentCashPostingMetadata]
+    @Query private var investmentWalletConfigurations: [InvestmentWalletConfiguration]
 
     let target: ManagementWalletEditorTarget
 
@@ -61,9 +78,13 @@ struct ManagementWalletEditorSheet: View {
     init(target: ManagementWalletEditorTarget) {
         self.target = target
         let initialDraft = WalletDraft(wallet: target.wallet, defaultKind: target.defaultKind)
-        self.initialDraft = initialDraft
-        _draft = State(initialValue: initialDraft)
-        _dismissBaselineDraft = State(initialValue: initialDraft)
+        var resolvedInitialDraft = initialDraft
+        if target.wallet == nil, let suggestedName = target.suggestedName {
+            resolvedInitialDraft.name = suggestedName
+        }
+        self.initialDraft = resolvedInitialDraft
+        _draft = State(initialValue: resolvedInitialDraft)
+        _dismissBaselineDraft = State(initialValue: resolvedInitialDraft)
     }
 
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
@@ -436,6 +457,14 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private func performSave() {
+        if let existingWallet = target.wallet,
+           walletHasProtectedInvestmentCash(existingWallet),
+           (MistiaCurrencyLogic.normalizedCode(existingWallet.currencyCode)
+                != MistiaCurrencyLogic.normalizedCode(draft.currencyCode)
+            || existingWallet.kind != draft.kind) {
+            alertMessage = L10n.investment.error.walletHoldsCash
+            return
+        }
         let defaultName: String
         switch draft.kind {
         case .bank:
@@ -519,6 +548,7 @@ struct ManagementWalletEditorSheet: View {
                     modifiedAt: now
                 )
             }
+            target.onSaved?(walletForSync)
             dismiss()
         } catch {
             alertMessage = L10n.management.management.couldnTSaveThisWalletRightNow + " \(error.localizedDescription)"
@@ -665,6 +695,11 @@ struct ManagementWalletEditorSheet: View {
     private func archiveWallet() {
         guard let wallet = target.wallet else { return }
 
+        if walletHasProtectedInvestmentCash(wallet) {
+            alertMessage = L10n.investment.error.walletHoldsCash
+            return
+        }
+
         // Edge Case 5: Validate cannot archive credit card with outstanding debt
         if wallet.kind == .creditCard {
             let currentDebt = currentDebtBalanceSnapshot(for: wallet)
@@ -703,6 +738,21 @@ struct ManagementWalletEditorSheet: View {
         } catch {
             alertMessage = L10n.management.management.couldnTSaveTheArchiveState + " \(error.localizedDescription)"
         }
+    }
+
+    private func walletHasProtectedInvestmentCash(_ wallet: LedgerWallet) -> Bool {
+        if investmentWalletConfigurations.contains(where: { $0.linkedWalletID == wallet.id }) {
+            return true
+        }
+        let cashPostingIDs = Set(investmentCashPostingMetadata.map(\.id))
+        return investmentPostings.reduce(Int64.zero) { total, posting in
+            guard
+                posting.walletID == wallet.id
+                    && posting.deletedAt == nil
+                    && cashPostingIDs.contains(posting.id)
+            else { return total }
+            return total + posting.accountingAmountMinor
+        } != 0
     }
 
     private func nextSortOrder() -> Int {

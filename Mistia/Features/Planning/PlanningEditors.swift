@@ -1681,6 +1681,7 @@ struct PlanningInstallmentEditorSheet: View {
     @State private var alertMessage: String?
     @State private var showsDeleteConfirmation = false
     @State private var showsIconPicker = false
+    @State private var investmentFundUsageConfirmation: PlanningInvestmentFundUsageConfirmation?
 
     init(target: PlanningInstallmentEditorTarget) {
         self.target = target
@@ -1821,6 +1822,22 @@ struct PlanningInstallmentEditorSheet: View {
                 draft.iconColorHex = colorHex
             }
         }
+        .alert(
+            L10n.investment.wallet.useFundsTitle,
+            isPresented: Binding(
+                get: { investmentFundUsageConfirmation != nil },
+                set: { if !$0 { investmentFundUsageConfirmation = nil } }
+            ),
+            presenting: investmentFundUsageConfirmation
+        ) { confirmation in
+            Button(L10n.common.cancel, role: .cancel) {}
+            Button(L10n.investment.wallet.useFundsAction) {
+                investmentFundUsageConfirmation = nil
+                payEarly(confirmedPreview: confirmation.preview)
+            }
+        } message: { confirmation in
+            Text(verbatim: confirmation.errorDescription ?? "")
+        }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
             L10n.planning.planning.deleteThisItem,
@@ -1896,7 +1913,7 @@ struct PlanningInstallmentEditorSheet: View {
         }
     }
 
-    private func payEarly() {
+    private func payEarly(confirmedPreview: InvestmentFundUsagePreview? = nil) {
         guard let dueItem = target.dueItem else { return }
 
         do {
@@ -1913,7 +1930,8 @@ struct PlanningInstallmentEditorSheet: View {
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext,
-                actorUserID: sessionStore.activeLocalProfileUserID
+                actorUserID: sessionStore.activeLocalProfileUserID,
+                confirmedInvestmentFundUsagePreview: confirmedPreview
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
@@ -1926,7 +1944,25 @@ struct PlanningInstallmentEditorSheet: View {
                 recordID: savedPayment.occurrenceID,
                 modifiedAt: savedPayment.transaction.updatedAt
             )
+            for transactionID in savedPayment.additionalTransactionIDs {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transactionID,
+                    modifiedAt: savedPayment.transaction.updatedAt,
+                    subjectUserIDOverride: savedPayment.subjectUserID
+                )
+            }
+            for postingID in savedPayment.investmentPostingIDs {
+                sessionStore.recordUpsert(
+                    entity: .investmentPosting,
+                    recordID: postingID,
+                    modifiedAt: savedPayment.transaction.updatedAt,
+                    subjectUserIDOverride: savedPayment.subjectUserID
+                )
+            }
             dismiss()
+        } catch let confirmation as PlanningInvestmentFundUsageConfirmation {
+            investmentFundUsageConfirmation = confirmation
         } catch {
             alertMessage = error.localizedDescription
         }

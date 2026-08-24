@@ -78,11 +78,33 @@ enum MistiaRecurringBillMaintenance {
                    let walletID = snap.paymentWalletID,
                    let paymentWallet = snapshot.walletByID[walletID] {
 
-                    let canPay = balanceSufficientToCover(
+                    let balanceCanPay = balanceSufficientToCover(
                         amount: amount,
                         wallet: paymentWallet,
                         balanceIndex: snapshot.balanceIndex
                     )
+                    let ownerUserID = TransactionAuditStore.resolveOwnerUserID(
+                        forWalletID: paymentWallet.id,
+                        ownershipScopes: snapshot.ownershipScopes
+                    )
+                    let visibleBalance = snapshot.balanceIndex.balance(
+                        for: TransactionWalletSnapshot(
+                            id: paymentWallet.id,
+                            kind: paymentWallet.kind,
+                            openingBalanceMinor: paymentWallet.openingBalanceMinor
+                        )
+                    )
+                    let investmentPreview = ownerUserID.flatMap {
+                        try? InvestmentPersistenceService.fundUsagePreview(
+                            ownerUserID: $0,
+                            wallet: paymentWallet,
+                            requestedMinor: amount,
+                            visibleWalletBalanceMinor: visibleBalance,
+                            context: modelContext
+                        )
+                    }
+                    let needsInvestmentConfirmation = investmentPreview?.outcome == .requiresConfirmation
+                    let canPay = balanceCanPay && !needsInvestmentConfirmation
 
                     if canPay {
                         await attemptAutoPay(
@@ -103,7 +125,9 @@ enum MistiaRecurringBillMaintenance {
                         upsertNotification(
                             key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
                             title: L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaymentFailed,
-                            body: L10n.shared.notifications.mistiarecurringbillmaintenance.insufficientBalanceToAutoPayValuePlease(String(describing: bill.name)),
+                            body: needsInvestmentConfirmation
+                                ? L10n.investment.wallet.automaticPausedMessage(bill.name)
+                                : L10n.shared.notifications.mistiarecurringbillmaintenance.insufficientBalanceToAutoPayValuePlease(String(describing: bill.name)),
                             kind: .billAutoPaymentFailed,
                             bill: bill,
                             dueItem: dueItem,

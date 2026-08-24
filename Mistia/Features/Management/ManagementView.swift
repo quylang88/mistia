@@ -124,7 +124,7 @@ private struct ManagementRenderSnapshotCacheKey: Hashable {
     let investmentChannelSignature: MistiaCollectionChangeSignature
 }
 
-private struct ManagementInvestmentWalletTarget: Identifiable {
+private struct ManagementInvestmentWalletTarget: Identifiable, Hashable {
     let ownerUserID: UUID
     var id: UUID { ownerUserID }
 }
@@ -496,6 +496,9 @@ struct ManagementView: View {
                     FamilyOverviewScreen()
                 }
             }
+            .navigationDestination(item: $investmentWalletTarget) { target in
+                InvestmentWalletDetailView(ownerUserID: target.ownerUserID)
+            }
         }
         .familyMemberViewingExitAlert(
             prompt: $memberViewingExitPrompt,
@@ -504,12 +507,6 @@ struct ManagementView: View {
         .sheet(item: $walletEditorTarget) { target in
             ManagementWalletEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
-        }
-        .sheet(item: investmentWalletTargetBinding) { target in
-            InvestmentWalletTransferSheet(ownerUserID: target.ownerUserID) { message in
-                infoAlert = ManagementInfoAlert(title: L10n.common.error, message: message)
-            }
-            .presentationDragIndicator(.hidden)
         }
         .sheet(item: $categoryEditorTarget) { target in
             ManagementCategoryEditorSheet(target: target)
@@ -839,26 +836,7 @@ struct ManagementView: View {
             || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .investment)
     }
 
-    private var investmentWalletTargetBinding: Binding<ManagementInvestmentWalletTarget?> {
-        Binding(
-            get: {
-                guard let target = investmentWalletTarget,
-                      canManageInvestment(ownerUserID: target.ownerUserID) else {
-                    return nil
-                }
-                return target
-            },
-            set: { investmentWalletTarget = $0 }
-        )
-    }
-
     private func openInvestmentWallet(ownerUserID: UUID) {
-        guard canManageInvestment(ownerUserID: ownerUserID) else {
-            presentInvestmentManagementPermissionPrompt(ownerUserID: ownerUserID) {
-                investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)
-            }
-            return
-        }
         investmentWalletTarget = ManagementInvestmentWalletTarget(ownerUserID: ownerUserID)
     }
 

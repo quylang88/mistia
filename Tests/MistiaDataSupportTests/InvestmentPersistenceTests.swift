@@ -735,6 +735,17 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 800)
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 200)
         XCTAssertEqual(try balance(try XCTUnwrap(fetchSystemWallet(fixture)), fixture), 51)
+        let cashSnapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        let capitalLocation = try XCTUnwrap(
+            cashSnapshot.locations.first { $0.walletID == fixture.capitalWallet.id }
+        )
+        XCTAssertEqual(capitalLocation.unreconciledMinor, 51)
+        XCTAssertEqual(capitalLocation.originalUnreconciledMinor, 102)
+        XCTAssertEqual(capitalLocation.currencyCode, "VND")
     }
 
     func testOversellLeavesExistingPositionAndWalletBalancesUnchanged() throws {
@@ -1564,6 +1575,180 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 910)
     }
 
+    func testInvestmentCashSaleReconciliationAndConsumptionScenario() throws {
+        let fixture = try makeFixture()
+        let linkedWallet = LedgerWallet(
+            name: "Investment Cash",
+            kind: .cash,
+            iconSymbolName: "banknote.fill",
+            iconColorHex: "#9A67FF",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0
+        )
+        fixture.context.insert(linkedWallet)
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .wallet,
+            recordID: linkedWallet.id,
+            ownerUserID: fixture.ownerID,
+            context: fixture.context
+        )
+        _ = try InvestmentPersistenceService.setLinkedWallet(
+            ownerUserID: fixture.ownerID,
+            linkedWalletID: linkedWallet.id,
+            context: fixture.context
+        )
+
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        var snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(snapshot.totalMinor, 50)
+        XCTAssertEqual(snapshot.locations.first { $0.walletID == fixture.capitalWallet.id }?.unreconciledMinor, 50)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 100)
+
+        _ = try InvestmentPersistenceService.reconcileCash(
+            ownerUserID: fixture.ownerID,
+            requests: [
+                InvestmentReconciliationRequest(
+                    walletID: fixture.capitalWallet.id,
+                    accountingAmountMinor: 50
+                )
+            ],
+            context: fixture.context
+        )
+        snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(snapshot.unreconciledMinor, 0)
+        XCTAssertEqual(snapshot.locations.first { $0.walletID == linkedWallet.id }?.bookedMinor, 50)
+        XCTAssertEqual(try balance(linkedWallet, fixture), 50)
+
+        let preview = try InvestmentPersistenceService.fundUsagePreview(
+            ownerUserID: fixture.ownerID,
+            wallet: linkedWallet,
+            requestedMinor: 20,
+            visibleWalletBalanceMinor: 50,
+            context: fixture.context
+        )
+        XCTAssertEqual(preview.bookedToUseMinor, 20)
+        XCTAssertEqual(preview.remainingInvestmentMinor, 30)
+        let expense = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Use investment cash",
+            amountMinor: 20,
+            sourceCurrencyCode: "JPY",
+            occurredAt: fixture.start.addingTimeInterval(2),
+            sourceWallet: linkedWallet
+        )
+        fixture.context.insert(expense)
+        _ = try InvestmentPersistenceService.recordFundUsage(
+            ownerUserID: fixture.ownerID,
+            transaction: expense,
+            preview: preview,
+            context: fixture.context
+        )
+        try fixture.context.save()
+        snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(snapshot.totalMinor, 30)
+
+        _ = try InvestmentPersistenceService.clearFundUsage(
+            ownerUserID: fixture.ownerID,
+            transactionID: expense.id,
+            context: fixture.context
+        )
+        try fixture.context.save()
+        snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(snapshot.totalMinor, 50)
+
+        let creditCard = LedgerWallet(
+            name: "Card",
+            kind: .creditCard,
+            iconSymbolName: "creditcard.fill",
+            iconColorHex: "#222222",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0
+        )
+        fixture.context.insert(creditCard)
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .wallet,
+            recordID: creditCard.id,
+            ownerUserID: fixture.ownerID,
+            context: fixture.context
+        )
+        let cardPayment = LedgerTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Pay card",
+            amountMinor: 20,
+            sourceCurrencyCode: "JPY",
+            destinationCurrencyCode: "JPY",
+            destinationAmountMinor: 20,
+            occurredAt: fixture.start.addingTimeInterval(3),
+            sourceWallet: linkedWallet,
+            destinationWallet: creditCard
+        )
+        fixture.context.insert(cardPayment)
+        _ = try InvestmentPersistenceService.recordFundUsage(
+            ownerUserID: fixture.ownerID,
+            transaction: cardPayment,
+            preview: preview,
+            context: fixture.context
+        )
+        try fixture.context.save()
+        snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(snapshot.totalMinor, 30)
+        XCTAssertNil(snapshot.locations.first { $0.walletID == creditCard.id })
+
+        let remoteSnapshot = try MistiaSyncLocalStore.exportSnapshot(
+            for: fixture.ownerID,
+            from: fixture.container
+        )
+        XCTAssertEqual(
+            remoteSnapshot.wallets.first {
+                $0.id == InvestmentSystemWalletIdentity.walletID(ownerUserID: fixture.ownerID)
+            }?.investmentLinkedWalletID,
+            linkedWallet.id
+        )
+        XCTAssertTrue(
+            remoteSnapshot.investmentPostings.contains {
+                $0.cashBucketRawValue == InvestmentCashBucket.booked.rawValue
+                    && $0.cashOriginRawValue != nil
+            }
+        )
+    }
+
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext
@@ -1576,7 +1761,7 @@ final class InvestmentPersistenceTests: XCTestCase {
     }
 
     private func makeFixture() throws -> Fixture {
-        let schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV11.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)

@@ -95,6 +95,7 @@ nonisolated struct RemoteLedgerWallet: MistiaRemoteRow {
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
     var systemPurposeRawValue: String? = nil
+    var investmentLinkedWalletID: UUID? = nil
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -116,6 +117,7 @@ nonisolated struct RemoteLedgerWallet: MistiaRemoteRow {
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
         case systemPurposeRawValue = "system_purpose_raw_value"
+        case investmentLinkedWalletID = "investment_linked_wallet_id"
     }
 }
 
@@ -141,6 +143,7 @@ nonisolated extension RemoteLedgerWallet {
         syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
         lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
         systemPurposeRawValue = try container.decodeIfPresent(String.self, forKey: .systemPurposeRawValue)
+        investmentLinkedWalletID = try container.decodeIfPresent(UUID.self, forKey: .investmentLinkedWalletID)
     }
 }
 

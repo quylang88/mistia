@@ -90,7 +90,7 @@ nonisolated struct InvestmentTradeDraft: Equatable {
     }
 }
 
-nonisolated struct InvestmentPersistenceResult: Equatable {
+nonisolated struct InvestmentPersistenceResult: Equatable, Sendable {
     var walletIDs: Set<UUID> = []
     var tradeIDs: Set<UUID> = []
     var postingIDs: Set<UUID> = []
@@ -175,6 +175,275 @@ enum InvestmentPersistenceService {
         context: ModelContext
     ) throws {
         try rebuildDerivedAccounting(now: now, scrubLegacyConflicts: true, context: context)
+    }
+
+    static func cashAllocationSnapshot(
+        ownerUserID: UUID,
+        accountingCurrencyCode: String,
+        context: ModelContext
+    ) throws -> InvestmentCashAllocationSnapshot {
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID && posting.deletedAt == nil
+                }
+            )
+        )
+        let cashMetadataByPostingID = Dictionary(
+            uniqueKeysWithValues: try context.fetch(
+                FetchDescriptor<InvestmentCashPostingMetadata>(
+                    predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                        metadata.ownerUserID == ownerUserID
+                    }
+                )
+            ).map { ($0.id, $0) }
+        )
+        return InvestmentCashAllocationLogic.snapshot(
+            postings: postings.compactMap { posting in
+                guard let bucket = cashMetadataByPostingID[posting.id]?.cashBucket else { return nil }
+                return InvestmentCashPostingSnapshot(
+                    walletID: posting.walletID,
+                    currencyCode: posting.currencyCode,
+                    amountMinor: posting.amountMinor,
+                    accountingAmountMinor: posting.accountingAmountMinor,
+                    accountingCurrencyCode: posting.accountingCurrencyCode,
+                    bucket: bucket
+                )
+            },
+            accountingCurrencyCode: accountingCurrencyCode
+        )
+    }
+
+    static func configuration(
+        ownerUserID: UUID,
+        createIfMissing: Bool = true,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentWalletConfiguration? {
+        let configurationID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        let descriptor = FetchDescriptor<InvestmentWalletConfiguration>(
+            predicate: #Predicate<InvestmentWalletConfiguration> { configuration in
+                configuration.id == configurationID
+            }
+        )
+        if let configuration = try context.fetch(descriptor).first {
+            return configuration
+        }
+        guard createIfMissing else { return nil }
+        let configuration = InvestmentWalletConfiguration(
+            id: configurationID,
+            ownerUserID: ownerUserID,
+            systemWalletID: configurationID,
+            createdAt: now,
+            updatedAt: now
+        )
+        context.insert(configuration)
+        return configuration
+    }
+
+    @discardableResult
+    static func setLinkedWallet(
+        ownerUserID: UUID,
+        linkedWalletID: UUID?,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentWalletConfiguration {
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        guard let systemWallet = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in wallet.id == systemWalletID }
+            )
+        ).first else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        if let linkedWalletID {
+            guard let wallet = try context.fetch(
+                FetchDescriptor<LedgerWallet>(
+                    predicate: #Predicate<LedgerWallet> { wallet in wallet.id == linkedWalletID }
+                )
+            ).first,
+            wallet.id != systemWalletID,
+            wallet.kind != .creditCard,
+            wallet.kind != .investment,
+            !wallet.isArchived,
+            wallet.deletedAt == nil,
+            MistiaCurrencyLogic.normalizedCode(wallet.currencyCode)
+                == MistiaCurrencyLogic.normalizedCode(systemWallet.currencyCode) else {
+                throw InvestmentPersistenceError.invalidWallet
+            }
+            try validateWalletOwnership(
+                ownerUserID: ownerUserID,
+                walletIDs: [wallet.id],
+                context: context
+            )
+        }
+        let configuration = try configuration(
+            ownerUserID: ownerUserID,
+            now: now,
+            context: context
+        )!
+        configuration.linkedWalletID = linkedWalletID
+        configuration.updatedAt = now
+        // The cloud stores this preference on the system wallet row. Bump the
+        // wallet timestamp so conditional sync cannot discard a link change as stale.
+        systemWallet.updatedAt = now
+        try context.save()
+        return configuration
+    }
+
+    @discardableResult
+    static func changeLinkedWallet(
+        ownerUserID: UUID,
+        linkedWalletID: UUID,
+        moveAllBookedCash: Bool,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        let previousConfiguration = try configuration(
+            ownerUserID: ownerUserID,
+            createIfMissing: true,
+            context: context
+        )
+        let previousLinkedWalletID = previousConfiguration?.linkedWalletID
+        let configuration = try setLinkedWallet(
+            ownerUserID: ownerUserID,
+            linkedWalletID: linkedWalletID,
+            now: now,
+            context: context
+        )
+        var result = InvestmentPersistenceResult(walletIDs: [configuration.systemWalletID, linkedWalletID])
+        guard moveAllBookedCash,
+              let previousLinkedWalletID,
+              previousLinkedWalletID != linkedWalletID else {
+            return result
+        }
+        let wallets = try context.fetch(FetchDescriptor<LedgerWallet>())
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        guard let systemWallet = walletsByID[configuration.systemWalletID],
+              let sourceWallet = walletsByID[previousLinkedWalletID],
+              let destinationWallet = walletsByID[linkedWalletID] else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        let snapshot = try cashAllocationSnapshot(
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: systemWallet.currencyCode,
+            context: context
+        )
+        let amount = max(
+            snapshot.locations.first { $0.walletID == previousLinkedWalletID }?.bookedMinor ?? 0,
+            0
+        )
+        guard amount > 0 else { return result }
+        let eventID = UUID()
+        let ledgerID = InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "linked-wallet-move")
+        let transaction = try upsertLedgerTransaction(
+            id: ledgerID,
+            primaryKind: .transfer,
+            role: .investmentReconciliation,
+            title: L10n.investment.wallet.changeAndTransferAll,
+            amountMinor: amount,
+            sourceWallet: sourceWallet,
+            destinationWallet: destinationWallet,
+            destinationAmountMinor: amount,
+            reportingAmountMinor: amount,
+            reportingCurrencyCode: systemWallet.currencyCode,
+            occurredAt: now,
+            now: now,
+            context: context
+        )
+        try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
+        let sourcePosting = try upsertCashPosting(
+            id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "old-linked-cash-posting"),
+            ownerUserID: ownerUserID,
+            eventID: eventID,
+            walletID: sourceWallet.id,
+            ledgerTransactionID: ledgerID,
+            role: .cashTransfer,
+            bucket: .booked,
+            origin: .manual,
+            amountMinor: -amount,
+            currencyCode: sourceWallet.currencyCode,
+            accountingAmountMinor: -amount,
+            accountingCurrencyCode: systemWallet.currencyCode,
+            occurredAt: now,
+            now: now,
+            context: context
+        )
+        let destinationPosting = try upsertCashPosting(
+            id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "new-linked-cash-posting"),
+            ownerUserID: ownerUserID,
+            eventID: eventID,
+            walletID: destinationWallet.id,
+            ledgerTransactionID: ledgerID,
+            role: .cashTransfer,
+            bucket: .booked,
+            origin: .manual,
+            amountMinor: amount,
+            currencyCode: destinationWallet.currencyCode,
+            accountingAmountMinor: amount,
+            accountingCurrencyCode: systemWallet.currencyCode,
+            occurredAt: now,
+            now: now,
+            context: context
+        )
+        result.walletIDs.insert(previousLinkedWalletID)
+        result.postingIDs.formUnion([sourcePosting.id, destinationPosting.id])
+        result.ledgerTransactionIDs.insert(transaction.id)
+        try context.save()
+        return result
+    }
+
+    static func rebuildCashAllocations(
+        origin: InvestmentCashPostingOrigin = .derived,
+        now: Date = .now,
+        context: ModelContext
+    ) throws {
+        let trades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+            .filter { $0.deletedAt == nil && $0.kind == .sell && $0.realizedProfitLossMinor != 0 }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt { return $0.occurredAt < $1.occurredAt }
+                return MistiaStableUUIDOrdering.precedes($0.id, $1.id)
+            }
+        for trade in trades {
+            guard let walletID = trade.capitalReturnWalletID,
+                  let ledgerID = trade.profitLossLedgerTransactionID else { continue }
+            let cashCurrencyCode = trade.capitalReturnWalletCurrencyCode ?? trade.accountingCurrencyCode
+            let localCashAmount = try convertedWithStoredRate(
+                trade.realizedProfitLossMinor,
+                sourceCurrencyCode: trade.accountingCurrencyCode,
+                destinationCurrencyCode: cashCurrencyCode,
+                rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
+            )
+            let configuration = try configuration(
+                ownerUserID: trade.ownerUserID,
+                createIfMissing: true,
+                now: now,
+                context: context
+            )
+            let bucket: InvestmentCashBucket = configuration?.linkedWalletID == walletID
+                ? .booked
+                : .unreconciled
+            _ = try upsertCashPosting(
+                id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
+                ownerUserID: trade.ownerUserID,
+                eventID: trade.id,
+                tradeID: trade.id,
+                assetID: trade.assetID,
+                walletID: walletID,
+                ledgerTransactionID: ledgerID,
+                role: .cashAccrual,
+                bucket: bucket,
+                origin: origin,
+                amountMinor: localCashAmount,
+                currencyCode: cashCurrencyCode,
+                accountingAmountMinor: trade.realizedProfitLossMinor,
+                accountingCurrencyCode: trade.accountingCurrencyCode,
+                occurredAt: trade.occurredAt,
+                now: now,
+                context: context
+            )
+        }
+        try context.save()
     }
 
     private static func rebuildDerivedAccounting(
@@ -643,6 +912,7 @@ enum InvestmentPersistenceService {
         }
 
         try validateFundingCapacity(
+            ownerUserID: ownerUserID,
             draft: draft,
             fundingWallet: fundingWallet,
             fundingAmountMinor: fundingAmountMinor,
@@ -816,6 +1086,21 @@ enum InvestmentPersistenceService {
         }
 
         var result = InvestmentPersistenceResult(deletedTradeIDs: [tradeID])
+        for transactionID in [
+            trade.fundingLedgerTransactionID,
+            trade.capitalReturnLedgerTransactionID,
+            trade.profitLossLedgerTransactionID
+        ].compactMap({ $0 }) {
+            let cleared = try clearFundUsage(
+                ownerUserID: ownerUserID,
+                transactionID: transactionID,
+                now: now,
+                context: context
+            )
+            result.walletIDs.formUnion(cleared.walletIDs)
+            result.postingIDs.formUnion(cleared.postingIDs)
+            result.ledgerTransactionIDs.formUnion(cleared.ledgerTransactionIDs)
+        }
         trade.deletedAt = now
         trade.updatedAt = now
         try deleteLedgerLegs(for: trade, now: now, context: context, result: &result)
@@ -964,6 +1249,315 @@ enum InvestmentPersistenceService {
         )
     }
 
+    static func reconcileCash(
+        ownerUserID: UUID,
+        requests: [InvestmentReconciliationRequest],
+        occurredAt: Date = .now,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentReconciliationResult {
+        guard let configuration = try configuration(
+            ownerUserID: ownerUserID,
+            createIfMissing: false,
+            context: context
+        ), let linkedWalletID = configuration.linkedWalletID else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        let wallets = try context.fetch(FetchDescriptor<LedgerWallet>())
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        guard let systemWallet = walletsByID[systemWalletID],
+              let linkedWallet = walletsByID[linkedWalletID] else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        try validateWalletOwnership(
+            ownerUserID: ownerUserID,
+            walletIDs: Set(requests.map(\.walletID) + [linkedWalletID]).map { $0 },
+            context: context
+        )
+
+        var snapshot = try cashAllocationSnapshot(
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: systemWallet.currencyCode,
+            context: context
+        )
+        var result = InvestmentPersistenceResult(walletIDs: [systemWalletID, linkedWalletID])
+        var instructions: [InvestmentReconciliationInstruction] = []
+
+        for request in requests where request.accountingAmountMinor > 0 {
+            guard request.walletID != linkedWalletID,
+                  let holderWallet = walletsByID[request.walletID],
+                  let location = snapshot.locations.first(where: { $0.walletID == request.walletID }),
+                  location.unreconciledMinor != 0,
+                  request.accountingAmountMinor <= absWithoutOverflow(location.unreconciledMinor) else {
+                throw InvestmentPersistenceError.invalidTradeInput
+            }
+            let isPositive = location.unreconciledMinor > 0
+            let eventID = UUID()
+            let ledgerID = InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "cash-reconciliation")
+            let ledgerSource = isPositive ? systemWallet : linkedWallet
+            let ledgerDestination = isPositive ? linkedWallet : systemWallet
+            let transaction = try upsertLedgerTransaction(
+                id: ledgerID,
+                primaryKind: .transfer,
+                role: .investmentReconciliation,
+                title: L10n.investment.cash.reconciliationTitle,
+                amountMinor: request.accountingAmountMinor,
+                sourceWallet: ledgerSource,
+                destinationWallet: ledgerDestination,
+                destinationAmountMinor: request.accountingAmountMinor,
+                reportingAmountMinor: request.accountingAmountMinor,
+                reportingCurrencyCode: systemWallet.currencyCode,
+                occurredAt: occurredAt,
+                now: now,
+                context: context
+            )
+            try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
+
+            let holderAccountingDelta = isPositive
+                ? -request.accountingAmountMinor
+                : request.accountingAmountMinor
+            let holderLocalDelta = try proportionalLocalCashDelta(
+                accountingDeltaMinor: holderAccountingDelta,
+                location: location,
+                ownerUserID: ownerUserID,
+                context: context
+            )
+            let holderPosting = try upsertCashPosting(
+                id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "holder-cash-posting"),
+                ownerUserID: ownerUserID,
+                eventID: eventID,
+                walletID: holderWallet.id,
+                ledgerTransactionID: ledgerID,
+                role: .cashReconciliation,
+                bucket: .unreconciled,
+                origin: .manual,
+                amountMinor: holderLocalDelta,
+                currencyCode: holderWallet.currencyCode,
+                accountingAmountMinor: holderAccountingDelta,
+                accountingCurrencyCode: systemWallet.currencyCode,
+                occurredAt: occurredAt,
+                now: now,
+                context: context
+            )
+            let linkedAccountingDelta = isPositive
+                ? request.accountingAmountMinor
+                : -request.accountingAmountMinor
+            let linkedPosting = try upsertCashPosting(
+                id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "linked-cash-posting"),
+                ownerUserID: ownerUserID,
+                eventID: eventID,
+                walletID: linkedWallet.id,
+                ledgerTransactionID: ledgerID,
+                role: .cashReconciliation,
+                bucket: .booked,
+                origin: .manual,
+                amountMinor: linkedAccountingDelta,
+                currencyCode: linkedWallet.currencyCode,
+                accountingAmountMinor: linkedAccountingDelta,
+                accountingCurrencyCode: systemWallet.currencyCode,
+                occurredAt: occurredAt,
+                now: now,
+                context: context
+            )
+            result.walletIDs.insert(holderWallet.id)
+            result.postingIDs.formUnion([holderPosting.id, linkedPosting.id])
+            result.ledgerTransactionIDs.insert(transaction.id)
+            instructions.append(
+                InvestmentReconciliationInstruction(
+                    id: eventID,
+                    sourceWalletID: isPositive ? holderWallet.id : linkedWallet.id,
+                    destinationWalletID: isPositive ? linkedWallet.id : holderWallet.id,
+                    accountingAmountMinor: request.accountingAmountMinor
+                )
+            )
+
+            snapshot = try cashAllocationSnapshot(
+                ownerUserID: ownerUserID,
+                accountingCurrencyCode: systemWallet.currencyCode,
+                context: context
+            )
+        }
+        try context.save()
+        return InvestmentReconciliationResult(instructions: instructions, persistence: result)
+    }
+
+    static func fundUsagePreview(
+        ownerUserID: UUID,
+        wallet: LedgerWallet,
+        requestedMinor: Int64,
+        visibleWalletBalanceMinor: Int64,
+        context: ModelContext
+    ) throws -> InvestmentFundUsagePreview {
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        guard let systemWallet = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in wallet.id == systemWalletID }
+            )
+        ).first else {
+            return InvestmentCashAllocationLogic.usagePreview(
+                requestedMinor: requestedMinor,
+                visibleWalletBalanceMinor: visibleWalletBalanceMinor,
+                bookedInvestmentMinor: 0,
+                unreconciledInvestmentMinor: 0,
+                totalInvestmentMinor: 0
+            )
+        }
+        let snapshot = try cashAllocationSnapshot(
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: systemWallet.currencyCode,
+            context: context
+        )
+        let location = snapshot.locations.first { $0.walletID == wallet.id }
+        return InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: requestedMinor,
+            visibleWalletBalanceMinor: visibleWalletBalanceMinor,
+            bookedInvestmentMinor: location?.bookedMinor ?? 0,
+            unreconciledInvestmentMinor: location?.unreconciledMinor ?? 0,
+            totalInvestmentMinor: snapshot.totalMinor
+        )
+    }
+
+    static func recordFundUsage(
+        ownerUserID: UUID,
+        transaction: LedgerTransaction,
+        preview: InvestmentFundUsagePreview,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        guard preview.investmentToUseMinor > 0,
+              let sourceWallet = transaction.sourceWallet else {
+            return InvestmentPersistenceResult()
+        }
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        guard let systemWallet = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in wallet.id == systemWalletID }
+            )
+        ).first else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        var result = InvestmentPersistenceResult(walletIDs: [sourceWallet.id])
+        let candidateDestinationWallet = transaction.primaryKind == .transfer
+            && transaction.transferSubtype == .internalTransfer
+            && transaction.destinationWallet?.kind != .creditCard
+            ? transaction.destinationWallet
+            : nil
+        let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let destinationWallet = candidateDestinationWallet.flatMap { wallet in
+            TransactionAuditStore.resolveOwnerUserID(
+                forWalletID: wallet.id,
+                ownershipScopes: ownershipScopes
+            ) == ownerUserID ? wallet : nil
+        }
+
+        for (bucket, amount, component) in [
+            (InvestmentCashBucket.booked, preview.bookedToUseMinor, "booked"),
+            (InvestmentCashBucket.unreconciled, preview.unreconciledToUseMinor, "unreconciled")
+        ] where amount > 0 {
+            let posting = try upsertCashPosting(
+                id: InvestmentLedgerIdentity.derivedID(eventID: transaction.id, component: "cash-consumption-\(component)"),
+                ownerUserID: ownerUserID,
+                eventID: transaction.id,
+                walletID: sourceWallet.id,
+                ledgerTransactionID: transaction.id,
+                role: destinationWallet == nil ? .cashConsumption : .cashTransfer,
+                bucket: bucket,
+                origin: .derived,
+                amountMinor: -amount,
+                currencyCode: sourceWallet.currencyCode,
+                accountingAmountMinor: -amount,
+                accountingCurrencyCode: systemWallet.currencyCode,
+                occurredAt: transaction.occurredAt,
+                now: now,
+                context: context
+            )
+            result.postingIDs.insert(posting.id)
+
+            if let destinationWallet {
+                let destinationPosting = try upsertCashPosting(
+                    id: InvestmentLedgerIdentity.derivedID(eventID: transaction.id, component: "cash-destination-\(component)"),
+                    ownerUserID: ownerUserID,
+                    eventID: transaction.id,
+                    walletID: destinationWallet.id,
+                    ledgerTransactionID: transaction.id,
+                    role: .cashTransfer,
+                    bucket: .booked,
+                    origin: .derived,
+                    amountMinor: amount,
+                    currencyCode: destinationWallet.currencyCode,
+                    accountingAmountMinor: amount,
+                    accountingCurrencyCode: systemWallet.currencyCode,
+                    occurredAt: transaction.occurredAt,
+                    now: now,
+                    context: context
+                )
+                result.walletIDs.insert(destinationWallet.id)
+                result.postingIDs.insert(destinationPosting.id)
+            }
+
+            if bucket == .unreconciled {
+                let adjustmentID = InvestmentLedgerIdentity.derivedID(eventID: transaction.id, component: "cash-unreconciled-adjustment")
+                let adjustment = try upsertLedgerTransaction(
+                    id: adjustmentID,
+                    primaryKind: .transfer,
+                    role: .investmentReserveUse,
+                    title: L10n.investment.cash.automaticReconciliationTitle,
+                    amountMinor: amount,
+                    sourceWallet: systemWallet,
+                    destinationWallet: sourceWallet,
+                    destinationAmountMinor: amount,
+                    reportingAmountMinor: amount,
+                    reportingCurrencyCode: systemWallet.currencyCode,
+                    occurredAt: transaction.occurredAt,
+                    now: now,
+                    context: context
+                )
+                try recordTransactionOwnership(adjustment, ownerUserID: ownerUserID, now: now, context: context)
+                result.walletIDs.insert(systemWallet.id)
+                result.ledgerTransactionIDs.insert(adjustment.id)
+            }
+        }
+        return result
+    }
+
+    static func clearFundUsage(
+        ownerUserID: UUID,
+        transactionID: UUID,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID
+                        && posting.eventID == transactionID
+                        && posting.deletedAt == nil
+                }
+            )
+        )
+        var result = InvestmentPersistenceResult()
+        for posting in postings where posting.role == .cashConsumption || posting.role == .cashTransfer {
+            posting.deletedAt = now
+            posting.updatedAt = now
+            result.postingIDs.insert(posting.id)
+            result.walletIDs.insert(posting.walletID)
+        }
+        let adjustmentID = InvestmentLedgerIdentity.derivedID(
+            eventID: transactionID,
+            component: "cash-unreconciled-adjustment"
+        )
+        if let adjustment = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in transaction.id == adjustmentID }
+            )
+        ).first, adjustment.deletedAt == nil {
+            adjustment.markDeleted(at: now)
+            result.ledgerTransactionIDs.insert(adjustment.id)
+        }
+        return result
+    }
+
     static func currentBalance(
         wallet: LedgerWallet,
         excludingTransactionIDs: Set<UUID> = [],
@@ -1080,6 +1674,7 @@ enum InvestmentPersistenceService {
     }
 
     private static func validateFundingCapacity(
+        ownerUserID: UUID,
         draft: InvestmentTradeDraft,
         fundingWallet: LedgerWallet?,
         fundingAmountMinor: Int64?,
@@ -1124,7 +1719,14 @@ enum InvestmentPersistenceService {
                 throw InvestmentPersistenceError.insufficientFunds
             }
         } else {
-            guard balance >= fundingAmountMinor else {
+            let preview = try fundUsagePreview(
+                ownerUserID: ownerUserID,
+                wallet: fundingWallet,
+                requestedMinor: fundingAmountMinor,
+                visibleWalletBalanceMinor: balance,
+                context: context
+            )
+            guard preview.outcome != .insufficientFunds else {
                 throw InvestmentPersistenceError.insufficientFunds
             }
         }
@@ -1238,6 +1840,12 @@ enum InvestmentPersistenceService {
         case .sell:
             var keepingLedgerIDs: Set<UUID> = []
             var keepingPostingIDs: Set<UUID> = []
+            let linkedWalletID = try configuration(
+                ownerUserID: ownerUserID,
+                createIfMissing: true,
+                now: now,
+                context: context
+            )?.linkedWalletID
 
             if trade.grossAmountMinor > 0 {
                 guard let capitalWalletID = trade.capitalReturnWalletID,
@@ -1297,6 +1905,9 @@ enum InvestmentPersistenceService {
             }
 
             if trade.realizedProfitLossMinor != 0 {
+                let cashWallet = trade.capitalReturnWalletID.flatMap { walletsByID[$0] }
+                let booksDirectlyToLinkedWallet = cashWallet?.id == linkedWalletID
+                let profitWallet = booksDirectlyToLinkedWallet ? cashWallet ?? systemWallet : systemWallet
                 let profitLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "profit-loss")
                 let profitTransaction = try upsertLedgerTransaction(
                     id: profitLedgerID,
@@ -1304,7 +1915,7 @@ enum InvestmentPersistenceService {
                     role: .investmentRealizedProfit,
                     title: assetName,
                     amountMinor: absWithoutOverflow(trade.realizedProfitLossMinor),
-                    sourceWallet: systemWallet,
+                    sourceWallet: profitWallet,
                     destinationWallet: nil,
                     destinationAmountMinor: nil,
                     reportingAmountMinor: absWithoutOverflow(trade.realizedProfitLossMinor),
@@ -1319,11 +1930,11 @@ enum InvestmentPersistenceService {
                     id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "profit-loss-posting"),
                     ownerUserID: ownerUserID,
                     trade: trade,
-                    walletID: systemWallet.id,
+                    walletID: profitWallet.id,
                     ledgerTransactionID: profitTransaction.id,
                     role: .realizedProfit,
                     amountMinor: trade.realizedProfitLossMinor,
-                    currencyCode: systemWallet.currencyCode,
+                    currencyCode: profitWallet.currencyCode,
                     accountingAmountMinor: trade.realizedProfitLossMinor,
                     now: now,
                     context: context
@@ -1331,8 +1942,38 @@ enum InvestmentPersistenceService {
                 keepingPostingIDs.insert(profitPosting.id)
                 result.ledgerTransactionIDs.insert(profitTransaction.id)
                 result.postingIDs.insert(profitPosting.id)
-                result.walletIDs.insert(systemWallet.id)
+                result.walletIDs.insert(profitWallet.id)
                 try recordTransactionOwnership(profitTransaction, ownerUserID: ownerUserID, now: now, context: context)
+
+                if let cashWallet {
+                    let cashAmount = try convertedWithStoredRate(
+                        trade.realizedProfitLossMinor,
+                        sourceCurrencyCode: trade.accountingCurrencyCode,
+                        destinationCurrencyCode: cashWallet.currencyCode,
+                        rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
+                    )
+                    let cashPosting = try upsertCashPosting(
+                        id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
+                        ownerUserID: ownerUserID,
+                        eventID: trade.id,
+                        tradeID: trade.id,
+                        assetID: trade.assetID,
+                        walletID: cashWallet.id,
+                        ledgerTransactionID: profitTransaction.id,
+                        role: .cashAccrual,
+                        bucket: booksDirectlyToLinkedWallet ? .booked : .unreconciled,
+                        origin: .derived,
+                        amountMinor: cashAmount,
+                        currencyCode: cashWallet.currencyCode,
+                        accountingAmountMinor: trade.realizedProfitLossMinor,
+                        accountingCurrencyCode: trade.accountingCurrencyCode,
+                        occurredAt: trade.occurredAt,
+                        now: now,
+                        context: context
+                    )
+                    keepingPostingIDs.insert(cashPosting.id)
+                    result.postingIDs.insert(cashPosting.id)
+                }
             } else {
                 trade.profitLossLedgerTransactionID = nil
             }
@@ -1465,6 +2106,116 @@ enum InvestmentPersistenceService {
         posting.updatedAt = now
         posting.deletedAt = nil
         return posting
+    }
+
+    private static func upsertCashPosting(
+        id: UUID,
+        ownerUserID: UUID,
+        eventID: UUID,
+        tradeID: UUID? = nil,
+        assetID: UUID? = nil,
+        walletID: UUID,
+        ledgerTransactionID: UUID,
+        role: InvestmentPostingRole,
+        bucket: InvestmentCashBucket,
+        origin: InvestmentCashPostingOrigin,
+        amountMinor: Int64,
+        currencyCode: String,
+        accountingAmountMinor: Int64,
+        accountingCurrencyCode: String,
+        occurredAt: Date,
+        now: Date,
+        context: ModelContext
+    ) throws -> InvestmentWalletPosting {
+        let descriptor = FetchDescriptor<InvestmentWalletPosting>(
+            predicate: #Predicate<InvestmentWalletPosting> { posting in posting.id == id }
+        )
+        let posting = try context.fetch(descriptor).first ?? InvestmentWalletPosting(
+            id: id,
+            ownerUserID: ownerUserID,
+            eventID: eventID,
+            tradeID: tradeID,
+            assetID: assetID,
+            walletID: walletID,
+            ledgerTransactionID: ledgerTransactionID,
+            role: role,
+            amountMinor: amountMinor,
+            currencyCode: currencyCode,
+            accountingAmountMinor: accountingAmountMinor,
+            accountingCurrencyCode: accountingCurrencyCode,
+            occurredAt: occurredAt,
+            createdAt: now,
+            updatedAt: now
+        )
+        if posting.modelContext == nil {
+            context.insert(posting)
+        }
+        posting.ownerUserID = ownerUserID
+        posting.eventID = eventID
+        posting.tradeID = tradeID
+        posting.assetID = assetID
+        posting.walletID = walletID
+        posting.ledgerTransactionID = ledgerTransactionID
+        posting.role = role
+        posting.amountMinor = amountMinor
+        posting.currencyCode = MistiaCurrencyLogic.normalizedCode(currencyCode)
+        posting.accountingAmountMinor = accountingAmountMinor
+        posting.accountingCurrencyCode = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
+        posting.occurredAt = occurredAt
+        posting.updatedAt = now
+        posting.deletedAt = nil
+        let metadataDescriptor = FetchDescriptor<InvestmentCashPostingMetadata>(
+            predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in metadata.id == id }
+        )
+        let metadata = try context.fetch(metadataDescriptor).first ?? InvestmentCashPostingMetadata(
+            id: id,
+            ownerUserID: ownerUserID,
+            cashBucket: bucket,
+            cashOrigin: origin,
+            createdAt: now,
+            updatedAt: now
+        )
+        if metadata.modelContext == nil {
+            context.insert(metadata)
+        }
+        metadata.ownerUserID = ownerUserID
+        metadata.cashBucket = bucket
+        metadata.cashOrigin = origin
+        metadata.updatedAt = now
+        return posting
+    }
+
+    private static func proportionalLocalCashDelta(
+        accountingDeltaMinor: Int64,
+        location: InvestmentWalletCashLocation,
+        ownerUserID: UUID,
+        context: ModelContext
+    ) throws -> Int64 {
+        let locationWalletID = location.walletID
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID
+                        && posting.walletID == locationWalletID
+                        && posting.deletedAt == nil
+                }
+            )
+        )
+        let postingIDs = Set(postings.map(\.id))
+        let unreconciledIDs = Set(
+            try context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>())
+                .filter { postingIDs.contains($0.id) && $0.cashBucket == .unreconciled }
+                .map(\.id)
+        )
+        let unreconciledPostings = postings.filter { unreconciledIDs.contains($0.id) }
+        let localOutstanding = unreconciledPostings.reduce(Int64.zero) { $0 + $1.amountMinor }
+        let accountingOutstanding = location.unreconciledMinor
+        guard accountingOutstanding != 0 else { return accountingDeltaMinor }
+        var value = Decimal(localOutstanding) * Decimal(accountingDeltaMinor)
+            / Decimal(accountingOutstanding)
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 0, .plain)
+        return NSDecimalNumber(decimal: rounded).int64Value
     }
 
     private static func deleteUnexpectedLedgerLegs(

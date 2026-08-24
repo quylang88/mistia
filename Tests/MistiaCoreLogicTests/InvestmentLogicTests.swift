@@ -435,6 +435,73 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(L10n.investment.hub.outOfStock(language: .vietnamese), "Đã tất toán")
     }
 
+    func testCashAllocationSeparatesBookedAndUnreconciledByWallet() {
+        let linkedID = UUID()
+        let bankID = UUID()
+        let snapshot = InvestmentCashAllocationLogic.snapshot(
+            postings: [
+                InvestmentCashPostingSnapshot(
+                    walletID: linkedID,
+                    currencyCode: "JPY",
+                    amountMinor: 50,
+                    accountingAmountMinor: 50,
+                    accountingCurrencyCode: "JPY",
+                    bucket: .booked
+                ),
+                InvestmentCashPostingSnapshot(
+                    walletID: bankID,
+                    currencyCode: "JPY",
+                    amountMinor: 30,
+                    accountingAmountMinor: 30,
+                    accountingCurrencyCode: "JPY",
+                    bucket: .unreconciled
+                ),
+                InvestmentCashPostingSnapshot(
+                    walletID: bankID,
+                    currencyCode: "JPY",
+                    amountMinor: -10,
+                    accountingAmountMinor: -10,
+                    accountingCurrencyCode: "JPY",
+                    bucket: .unreconciled
+                )
+            ],
+            accountingCurrencyCode: "JPY"
+        )
+
+        XCTAssertEqual(snapshot.bookedMinor, 50)
+        XCTAssertEqual(snapshot.unreconciledMinor, 20)
+        XCTAssertEqual(snapshot.totalMinor, 70)
+        XCTAssertEqual(snapshot.locations.first { $0.walletID == bankID }?.unreconciledMinor, 20)
+    }
+
+    func testFundUsageConsumesOrdinaryThenBookedThenUnreconciled() {
+        let preview = InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: 120,
+            visibleWalletBalanceMinor: 100,
+            bookedInvestmentMinor: 40,
+            unreconciledInvestmentMinor: 30,
+            totalInvestmentMinor: 70
+        )
+
+        XCTAssertEqual(preview.ordinaryAvailableMinor, 60)
+        XCTAssertEqual(preview.bookedToUseMinor, 40)
+        XCTAssertEqual(preview.unreconciledToUseMinor, 20)
+        XCTAssertEqual(preview.remainingInvestmentMinor, 10)
+        XCTAssertEqual(preview.outcome, .requiresConfirmation)
+    }
+
+    func testFundUsageRejectsAmountBeyondPhysicalCash() {
+        let preview = InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: 101,
+            visibleWalletBalanceMinor: 80,
+            bookedInvestmentMinor: 30,
+            unreconciledInvestmentMinor: 20,
+            totalInvestmentMinor: 50
+        )
+
+        XCTAssertEqual(preview.outcome, .insufficientFunds)
+    }
+
     private func trade(
         id: UUID = UUID(),
         kind: InvestmentTradeKind,

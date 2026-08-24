@@ -44,6 +44,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
         let v8ModelNames = MistiaSchemaV8.models.map { String(reflecting: $0) }
         let v9ModelNames = MistiaSchemaV9.models.map { String(reflecting: $0) }
         let v10ModelNames = MistiaSchemaV10.models.map { String(reflecting: $0) }
+        let v11ModelNames = MistiaSchemaV11.models.map { String(reflecting: $0) }
 
         XCTAssertEqual(schemaNames.count, Set(schemaNames).count)
         XCTAssertEqual(schemaNames, [
@@ -53,9 +54,10 @@ final class MistiaMigrationPlanTests: XCTestCase {
             "MistiaCoreLogic.MistiaSchemaV7",
             "MistiaCoreLogic.MistiaSchemaV8",
             "MistiaCoreLogic.MistiaSchemaV9",
-            "MistiaCoreLogic.MistiaSchemaV10"
+            "MistiaCoreLogic.MistiaSchemaV10",
+            "MistiaCoreLogic.MistiaSchemaV11"
         ])
-        XCTAssertEqual(MistiaMigrationPlan.stages.count, 5)
+        XCTAssertEqual(MistiaMigrationPlan.stages.count, 6)
         XCTAssertEqual(
             MistiaLegacyV4ToV5MigrationPlan.schemas.map { String(reflecting: $0) },
             ["MistiaCoreLogic.MistiaSchemaV4", "MistiaCoreLogic.MistiaSchemaV5"]
@@ -72,7 +74,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.MistiaSchemaV7InvestmentModels.InvestmentAsset"))
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.MistiaSchemaV7InvestmentModels.InvestmentTrade"))
         XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
-        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.InvestmentWalletPosting"))
+        XCTAssertTrue(v7ModelNames.contains("MistiaCoreLogic.MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting"))
         XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV8InvestmentModels.InvestmentAsset"))
         XCTAssertTrue(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV9InvestmentTradeModels.InvestmentTrade"))
         XCTAssertFalse(v8ModelNames.contains("MistiaCoreLogic.MistiaSchemaV7InvestmentModels.InvestmentAsset"))
@@ -81,6 +83,10 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertFalse(v9ModelNames.contains("MistiaCoreLogic.InvestmentValuation"))
         XCTAssertTrue(v10ModelNames.contains("MistiaCoreLogic.MistiaSchemaV10InvestmentModels.InvestmentAsset"))
         XCTAssertTrue(v10ModelNames.contains("MistiaCoreLogic.InvestmentTrade"))
+        XCTAssertTrue(v10ModelNames.contains("MistiaCoreLogic.MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting"))
+        XCTAssertTrue(v11ModelNames.contains("MistiaCoreLogic.MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting"))
+        XCTAssertTrue(v11ModelNames.contains("MistiaCoreLogic.InvestmentCashPostingMetadata"))
+        XCTAssertTrue(v11ModelNames.contains("MistiaCoreLogic.InvestmentWalletConfiguration"))
     }
 
     func testV8InvestmentStoreMigratesToV10WithoutValuations() throws {
@@ -132,7 +138,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v9Schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV11.self)
         let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v9Schema,
@@ -201,7 +207,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
                 )
             )
             context.insert(
-                InvestmentWalletPosting(
+                MistiaSchemaV9.InvestmentWalletPosting(
                     id: postingID,
                     ownerUserID: ownerID,
                     eventID: tradeID,
@@ -222,7 +228,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v10Schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let v10Schema = Schema(versionedSchema: MistiaSchemaV11.self)
         let v10Configuration = ModelConfiguration("default", schema: v10Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v10Schema,
@@ -233,7 +239,11 @@ final class MistiaMigrationPlanTests: XCTestCase {
         let context = ModelContext(migrated)
         let asset = try XCTUnwrap(context.fetch(FetchDescriptor<InvestmentAsset>()).first)
         let trade = try XCTUnwrap(context.fetch(FetchDescriptor<InvestmentTrade>()).first)
-        let posting = try XCTUnwrap(context.fetch(FetchDescriptor<InvestmentWalletPosting>()).first)
+        let posting = try XCTUnwrap(
+            context.fetch(
+                FetchDescriptor<InvestmentWalletPosting>()
+            ).first
+        )
 
         XCTAssertNil(asset.defaultUnitLabel)
         XCTAssertNil(trade.unitLabel)
@@ -371,7 +381,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v9Schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let v9Schema = Schema(versionedSchema: MistiaSchemaV11.self)
         let v9Configuration = ModelConfiguration("default", schema: v9Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v9Schema,
@@ -389,7 +399,9 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(sale.positionQuantityAfter, 2)
         XCTAssertEqual(sale.positionCostBasisAfterMinor, 250)
 
-        let postings = try context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>()
+        )
             .filter { $0.tradeID == saleID }
         XCTAssertEqual(postings.first(where: { $0.role == .capitalReturn })?.amountMinor, 100)
         XCTAssertEqual(postings.first(where: { $0.role == .realizedProfit })?.amountMinor, 60)
@@ -480,7 +492,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
                 )
             )
             context.insert(
-                InvestmentWalletPosting(
+                MistiaSchemaV7.InvestmentWalletPosting(
                     id: fundingPostingID,
                     ownerUserID: ownerID,
                     eventID: tradeID,
@@ -528,7 +540,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v8Schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV11.self)
         let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
         let migrated = try MistiaDataStack.LaunchState.openContainer(
             schema: v8Schema,
@@ -543,7 +555,9 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(stored.positionCostBasisAfterMinor, 120)
         XCTAssertEqual(stored.fundingWalletAmountMinor, 120)
         let ledger = try ModelContext(migrated).fetch(FetchDescriptor<LedgerTransaction>())
-        let posting = try ModelContext(migrated).fetch(FetchDescriptor<InvestmentWalletPosting>())
+        let posting = try ModelContext(migrated).fetch(
+            FetchDescriptor<InvestmentWalletPosting>()
+        )
         XCTAssertEqual(ledger.first(where: { $0.id == fundingLedgerID })?.amountMinor, 120)
         XCTAssertEqual(ledger.first(where: { $0.id == fundingLedgerID })?.reportingAmountMinor, 120)
         XCTAssertEqual(posting.first(where: { $0.id == fundingPostingID })?.amountMinor, -120)
@@ -633,7 +647,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
             try context.save()
         }
 
-        let v8Schema = Schema(versionedSchema: MistiaSchemaV10.self)
+        let v8Schema = Schema(versionedSchema: MistiaSchemaV11.self)
         let v8Configuration = ModelConfiguration("default", schema: v8Schema, url: storeURL)
         XCTAssertThrowsError(
             try MistiaDataStack.LaunchState.openContainer(
@@ -687,6 +701,25 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("incoming.default_unit_label := existing.default_unit_label"))
         XCTAssertTrue(migration.contains("set unit_label = incoming.default_unit_label"))
         XCTAssertTrue(migration.contains("perform public.investment_rebuild_asset"))
+    }
+
+    func testInvestmentCashMigrationLinksWalletsAndSerializesBatchReconciliation() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260824090000_link_investment_cash_wallet.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("add column if not exists investment_linked_wallet_id uuid"))
+        XCTAssertTrue(migration.contains("add column if not exists cash_bucket_raw_value text"))
+        XCTAssertTrue(migration.contains("'booked', 'unreconciled'"))
+        XCTAssertTrue(migration.contains("'derived', 'inferred', 'manual'"))
+        XCTAssertTrue(migration.contains("create or replace function public.mutate_investment_cash_postings"))
+        XCTAssertTrue(migration.contains("pg_advisory_xact_lock"))
+        XCTAssertTrue(migration.contains("A reconciliation event must contain exactly two postings"))
+        XCTAssertTrue(migration.contains("Reconciliation exceeds the outstanding investment cash"))
+        XCTAssertTrue(migration.contains("public.has_investment_permission(owner_id, 'edit')"))
+        XCTAssertTrue(migration.contains("'wallet', wallet_id_value, 'use'"))
+        XCTAssertTrue(migration.contains("Move investment cash and unlink this wallet"))
+        XCTAssertTrue(migration.contains("role_raw_value = 'realizedProfit'"))
     }
 
     func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {

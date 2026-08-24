@@ -179,6 +179,7 @@ enum MistiaSchemaV6: VersionedSchema {
 enum MistiaSchemaV7: VersionedSchema {
     typealias InvestmentAsset = MistiaSchemaV7InvestmentModels.InvestmentAsset
     typealias InvestmentTrade = MistiaSchemaV7InvestmentModels.InvestmentTrade
+    typealias InvestmentWalletPosting = MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting
 
     static var versionIdentifier: Schema.Version {
         Schema.Version(7, 0, 0)
@@ -215,6 +216,7 @@ enum MistiaSchemaV7: VersionedSchema {
 enum MistiaSchemaV8: VersionedSchema {
     typealias InvestmentAsset = MistiaSchemaV8InvestmentModels.InvestmentAsset
     typealias InvestmentTrade = MistiaSchemaV9InvestmentTradeModels.InvestmentTrade
+    typealias InvestmentWalletPosting = MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting
 
     static var versionIdentifier: Schema.Version {
         Schema.Version(8, 0, 0)
@@ -251,6 +253,7 @@ enum MistiaSchemaV8: VersionedSchema {
 enum MistiaSchemaV9: VersionedSchema {
     typealias InvestmentAsset = MistiaSchemaV9InvestmentModels.InvestmentAsset
     typealias InvestmentTrade = MistiaSchemaV9InvestmentTradeModels.InvestmentTrade
+    typealias InvestmentWalletPosting = MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting
 
     static var versionIdentifier: Schema.Version {
         Schema.Version(9, 0, 0)
@@ -284,6 +287,7 @@ enum MistiaSchemaV9: VersionedSchema {
 }
 
 enum MistiaSchemaV10: VersionedSchema {
+    typealias InvestmentWalletPosting = MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting
     static var versionIdentifier: Schema.Version {
         Schema.Version(10, 0, 0)
     }
@@ -311,6 +315,40 @@ enum MistiaSchemaV10: VersionedSchema {
             InvestmentAsset.self,
             InvestmentTrade.self,
             InvestmentWalletPosting.self
+        ]
+    }
+}
+
+enum MistiaSchemaV11: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(11, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            SettlementGroup.self,
+            SettlementParticipant.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self,
+            InvestmentChannel.self,
+            InvestmentAsset.self,
+            InvestmentTrade.self,
+            InvestmentWalletPosting.self,
+            InvestmentCashPostingMetadata.self,
+            InvestmentWalletConfiguration.self
         ]
     }
 }
@@ -359,7 +397,8 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
             MistiaSchemaV7.self,
             MistiaSchemaV8.self,
             MistiaSchemaV9.self,
-            MistiaSchemaV10.self
+            MistiaSchemaV10.self,
+            MistiaSchemaV11.self
         ]
     }
 
@@ -415,6 +454,17 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
                 willMigrate: nil,
                 didMigrate: { context in
                     try InvestmentPersistenceService.rebuildDerivedAccountingForFIFO(
+                        context: context
+                    )
+                }
+            ),
+            MigrationStage.custom(
+                fromVersion: MistiaSchemaV10.self,
+                toVersion: MistiaSchemaV11.self,
+                willMigrate: nil,
+                didMigrate: { context in
+                    try InvestmentPersistenceService.rebuildCashAllocations(
+                        origin: .inferred,
                         context: context
                     )
                 }

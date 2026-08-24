@@ -287,9 +287,22 @@ nonisolated enum MistiaSyncLocalStore {
         let investmentAssets = try fetchInvestmentAssets(context).filter { $0.ownerUserID == userID }
         let investmentTrades = try fetchInvestmentTrades(context).filter { $0.ownerUserID == userID }
         let investmentPostings = try fetchInvestmentPostings(context).filter { $0.ownerUserID == userID }
+        let investmentCashMetadataByPostingID = Dictionary(
+            uniqueKeysWithValues: try context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>())
+                .filter { $0.ownerUserID == userID }
+                .map { ($0.id, $0) }
+        )
+        let linkedInvestmentWalletID = try context.fetch(FetchDescriptor<InvestmentWalletConfiguration>())
+            .first { $0.ownerUserID == userID }?.linkedWalletID
 
         return MistiaRemoteSnapshot(
-            wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
+            wallets: wallets.map {
+                RemoteLedgerWallet(
+                    local: $0,
+                    userID: userID,
+                    investmentLinkedWalletID: linkedInvestmentWalletID
+                )
+            },
             creditCardProfiles: creditCardProfiles.map { RemoteCreditCardProfile(local: $0, userID: userID) },
             categories: categories.map { RemoteTransactionCategory(local: $0, userID: userID) },
             settlementGroups: settlementGroups.map { RemoteSettlementGroup(local: $0, userID: userID) },
@@ -315,7 +328,12 @@ nonisolated enum MistiaSyncLocalStore {
             investmentChannels: investmentChannels.map(RemoteInvestmentChannel.init(local:)),
             investmentAssets: investmentAssets.map(RemoteInvestmentAsset.init(local:)),
             investmentTrades: investmentTrades.map(RemoteInvestmentTrade.init(local:)),
-            investmentPostings: investmentPostings.map(RemoteInvestmentWalletPosting.init(local:))
+            investmentPostings: investmentPostings.map {
+                RemoteInvestmentWalletPosting(
+                    local: $0,
+                    cashMetadata: investmentCashMetadataByPostingID[$0.id]
+                )
+            }
         )
     }
 
@@ -338,7 +356,15 @@ nonisolated enum MistiaSyncLocalStore {
             guard let wallet = try fetchWallet(id: mutation.recordID, context) else {
                 return nil
             }
-            return .wallet(RemoteLedgerWallet(local: wallet, userID: subjectUserID))
+            let linkedWalletID = try context.fetch(FetchDescriptor<InvestmentWalletConfiguration>())
+                .first { $0.ownerUserID == subjectUserID }?.linkedWalletID
+            return .wallet(
+                RemoteLedgerWallet(
+                    local: wallet,
+                    userID: subjectUserID,
+                    investmentLinkedWalletID: linkedWalletID
+                )
+            )
         case .creditCardProfile:
             guard let profile = try fetchCreditCardProfile(id: mutation.recordID, context) else {
                 return nil
@@ -1458,13 +1484,24 @@ nonisolated enum MistiaSyncLocalStore {
         let investmentAssets = try fetchInvestmentAssets(context).filter { $0.deletedAt == nil }
         let investmentTrades = try fetchInvestmentTrades(context).filter { $0.deletedAt == nil }
         let investmentPostings = try fetchInvestmentPostings(context).filter { $0.deletedAt == nil }
+        let investmentCashMetadataByPostingID = Dictionary(
+            uniqueKeysWithValues: try context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>())
+                .map { ($0.id, $0) }
+        )
+        let investmentConfigurationByOwner = Dictionary(
+            uniqueKeysWithValues: try context.fetch(FetchDescriptor<InvestmentWalletConfiguration>())
+                .map { ($0.ownerUserID, $0) }
+        )
         let userProfiles = try context.fetch(FetchDescriptor<UserAccountProfile>())
 
         let snapshot = MistiaRemoteSnapshot(
             wallets: wallets.map { wallet in
                 var row = RemoteLedgerWallet(
                     local: wallet,
-                    userID: walletOwnerMap[wallet.id] ?? fallbackOwnerUserID
+                    userID: walletOwnerMap[wallet.id] ?? fallbackOwnerUserID,
+                    investmentLinkedWalletID: investmentConfigurationByOwner[
+                        walletOwnerMap[wallet.id] ?? fallbackOwnerUserID
+                    ]?.linkedWalletID
                 )
                 row.syncVersion = wallet.remoteVersion
                 return row
@@ -1558,7 +1595,12 @@ nonisolated enum MistiaSyncLocalStore {
             investmentChannels: investmentChannels.map(RemoteInvestmentChannel.init(local:)),
             investmentAssets: investmentAssets.map(RemoteInvestmentAsset.init(local:)),
             investmentTrades: investmentTrades.map(RemoteInvestmentTrade.init(local:)),
-            investmentPostings: investmentPostings.map(RemoteInvestmentWalletPosting.init(local:))
+            investmentPostings: investmentPostings.map {
+                RemoteInvestmentWalletPosting(
+                    local: $0,
+                    cashMetadata: investmentCashMetadataByPostingID[$0.id]
+                )
+            }
         )
 
         let activeIDsByEntity: [MistiaSyncEntity: Set<UUID>] = [
@@ -1916,6 +1958,28 @@ nonisolated enum MistiaSyncLocalStore {
         wallet.updatedAt = row.updatedAt
         wallet.deletedAt = isInvestmentSystemWallet ? nil : row.deletedAt
         wallet.remoteVersion = row.syncVersion
+        if isInvestmentSystemWallet {
+            let configurationID = row.id
+            let descriptor = FetchDescriptor<InvestmentWalletConfiguration>(
+                predicate: #Predicate<InvestmentWalletConfiguration> { configuration in
+                    configuration.id == configurationID
+                }
+            )
+            let configuration = try context.fetch(descriptor).first ?? InvestmentWalletConfiguration(
+                id: configurationID,
+                ownerUserID: row.userID,
+                systemWalletID: row.id,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt
+            )
+            if configuration.modelContext == nil {
+                context.insert(configuration)
+            }
+            configuration.ownerUserID = row.userID
+            configuration.systemWalletID = row.id
+            configuration.linkedWalletID = row.investmentLinkedWalletID
+            configuration.updatedAt = row.updatedAt
+        }
         try MistiaRecordOwnershipStore.upsert(
             entity: .wallet,
             recordID: row.id,
@@ -3054,6 +3118,29 @@ nonisolated enum MistiaSyncLocalStore {
         posting.updatedAt = row.updatedAt
         posting.deletedAt = row.deletedAt
         posting.remoteVersion = row.syncVersion
+        if let bucketRawValue = row.cashBucketRawValue,
+           let originRawValue = row.cashOriginRawValue,
+           let bucket = InvestmentCashBucket(rawValue: bucketRawValue),
+           let origin = InvestmentCashPostingOrigin(rawValue: originRawValue) {
+            let descriptor = FetchDescriptor<InvestmentCashPostingMetadata>(
+                predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in metadata.id == row.id }
+            )
+            let metadata = (try? context.fetch(descriptor).first) ?? InvestmentCashPostingMetadata(
+                id: row.id,
+                ownerUserID: row.userID,
+                cashBucket: bucket,
+                cashOrigin: origin,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt
+            )
+            if metadata.modelContext == nil {
+                context.insert(metadata)
+            }
+            metadata.ownerUserID = row.userID
+            metadata.cashBucket = bucket
+            metadata.cashOrigin = origin
+            metadata.updatedAt = row.updatedAt
+        }
     }
 
     private static func fetchFirst<Model: PersistentModel>(
@@ -3509,7 +3596,7 @@ nonisolated private func mistiaCloudCategoryID(
 }
 
 private extension RemoteLedgerWallet {
-    init(local wallet: LedgerWallet, userID: UUID) {
+    init(local wallet: LedgerWallet, userID: UUID, investmentLinkedWalletID: UUID? = nil) {
         self.init(
             userID: userID,
             id: wallet.id,
@@ -3531,6 +3618,9 @@ private extension RemoteLedgerWallet {
             lastModifiedByDeviceID: nil,
             systemPurposeRawValue: wallet.id == InvestmentSystemWalletIdentity.walletID(ownerUserID: userID)
                 ? LedgerWalletSystemPurpose.investmentProfit.rawValue
+                : nil,
+            investmentLinkedWalletID: wallet.id == InvestmentSystemWalletIdentity.walletID(ownerUserID: userID)
+                ? investmentLinkedWalletID
                 : nil
         )
     }

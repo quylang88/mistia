@@ -260,6 +260,18 @@ private struct TransactionEditorContextRowData: Identifiable {
     let tint: Color
 }
 
+private struct InvestmentFundUsagePrompt: Identifiable {
+    enum Continuation {
+        case saveFullTransaction
+        case confirmFamilyTransfer
+    }
+
+    let id = UUID()
+    let preview: InvestmentFundUsagePreview
+    let currencyCode: String
+    let continuation: Continuation
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -293,6 +305,8 @@ struct TransactionEditorSheet: View {
     @State private var draft: TransactionFormDraft
     private let initialDraftSnapshot: TransactionFormDraftDismissalSnapshot
     @State private var alertMessage: String?
+    @State private var investmentFundUsagePrompt: InvestmentFundUsagePrompt?
+    @State private var confirmedInvestmentFundUsagePreview: InvestmentFundUsagePreview?
     private var isAdjustment: Bool {
         if let transaction = target.transaction {
             return TransactionLogic.isAdjustment(transaction)
@@ -702,6 +716,33 @@ struct TransactionEditorSheet: View {
             }
         } message: { prompt in
             Text(transferPermissionMessage(for: prompt))
+        }
+        .alert(
+            L10n.investment.wallet.useFundsTitle,
+            isPresented: Binding(
+                get: { investmentFundUsagePrompt != nil },
+                set: { if !$0 { investmentFundUsagePrompt = nil } }
+            ),
+            presenting: investmentFundUsagePrompt
+        ) { prompt in
+            Button(L10n.common.cancel, role: .cancel) { }
+            Button(L10n.investment.wallet.useFundsAction) {
+                confirmedInvestmentFundUsagePreview = prompt.preview
+                investmentFundUsagePrompt = nil
+                switch prompt.continuation {
+                case .saveFullTransaction:
+                    saveFullTransaction()
+                case .confirmFamilyTransfer:
+                    showsFamilyTransferConfirmation = true
+                }
+            }
+        } message: { prompt in
+            Text(
+                L10n.investment.wallet.useFundsMessage(
+                    prompt.preview.investmentToUseMinor.formattedCurrency(code: prompt.currencyCode),
+                    prompt.preview.remainingInvestmentMinor.formattedCurrency(code: prompt.currencyCode)
+                )
+            )
         }
         .alert(
             L10n.transactions.transactioneditor.canTSaveYet,
@@ -2504,7 +2545,37 @@ struct TransactionEditorSheet: View {
     }
 
     private func requestFamilyTransferConfirmation() {
-        guard validateFamilyTransferDraft() != nil else { return }
+        guard let payload = validateFamilyTransferDraft(),
+              let sourceWallet = storedWallets.first(where: { $0.id == payload.sourceWalletID }) else {
+            return
+        }
+        let validationRecordSnapshots = postedTransactions
+            .lazy
+            .filter { $0.id != target.transaction?.id }
+            .map(\.snapshot)
+        let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: storedWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: validationRecordSnapshots
+        )
+        let sourceSnapshot = TransactionWalletSnapshot(
+            id: sourceWallet.id,
+            kind: sourceWallet.kind,
+            openingBalanceMinor: sourceWallet.openingBalanceMinor
+        )
+        guard validateCashOutflow(
+            wallet: sourceWallet,
+            amountMinor: payload.amountMinor,
+            visibleBalanceMinor: validationBalanceIndex.balance(for: sourceSnapshot),
+            continuation: .confirmFamilyTransfer
+        ) else {
+            return
+        }
         showsFamilyTransferConfirmation = true
     }
 
@@ -2542,30 +2613,6 @@ struct TransactionEditorSheet: View {
             return nil
         }
 
-        let validationRecordSnapshots = postedTransactions
-            .lazy
-            .filter { $0.id != target.transaction?.id }
-            .map(\.snapshot)
-        let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: storedWallets.map {
-                TransactionWalletSnapshot(
-                    id: $0.id,
-                    kind: $0.kind,
-                    openingBalanceMinor: $0.openingBalanceMinor
-                )
-            },
-            records: validationRecordSnapshots
-        )
-        let sourceSnapshot = TransactionWalletSnapshot(
-            id: sourceWallet.id,
-            kind: sourceWallet.kind,
-            openingBalanceMinor: sourceWallet.openingBalanceMinor
-        )
-        if validationBalanceIndex.balance(for: sourceSnapshot) - amountMinor < 0 {
-            alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
-            return nil
-        }
-
         let destinationAmount = resolvedDestinationAmount(
             amountMinor: amountMinor,
             sourceCurrencyCode: sourceWallet.currencyCode,
@@ -2592,7 +2639,7 @@ struct TransactionEditorSheet: View {
         guard let payload = validateFamilyTransferDraft() else { return }
         isSaving = true
         Task { @MainActor in
-            let didCreate = await familyContextStore.createFamilyTransfer(
+            let senderTransactionID = await familyContextStore.createFamilyTransfer(
                 recipientUserID: payload.recipientUserID,
                 sourceWalletID: payload.sourceWalletID,
                 destinationWalletID: payload.destinationWalletID,
@@ -2607,7 +2654,7 @@ struct TransactionEditorSheet: View {
                 sessionStore: sessionStore
             )
             isSaving = false
-            guard didCreate else {
+            guard let senderTransactionID else {
                 let detail = familyContextStore.lastErrorMessage?.nilIfBlank
                 alertMessage = [
                     L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer,
@@ -2616,6 +2663,44 @@ struct TransactionEditorSheet: View {
                 .compactMap { $0 }
                 .joined(separator: " ")
                 return
+            }
+            if let preview = confirmedInvestmentFundUsagePreview,
+               let ownerUserID = walletOwnerUserID(for: payload.sourceWalletID),
+               let senderTransaction = try? modelContext.fetch(
+                    FetchDescriptor<LedgerTransaction>(
+                        predicate: #Predicate<LedgerTransaction> { transaction in
+                            transaction.id == senderTransactionID
+                        }
+                    )
+               ).first {
+                do {
+                    let usageResult = try InvestmentPersistenceService.recordFundUsage(
+                        ownerUserID: ownerUserID,
+                        transaction: senderTransaction,
+                        preview: preview,
+                        context: modelContext
+                    )
+                    try modelContext.save()
+                    for transactionID in usageResult.ledgerTransactionIDs {
+                        sessionStore.recordUpsert(
+                            entity: .transaction,
+                            recordID: transactionID,
+                            modifiedAt: .now,
+                            subjectUserIDOverride: ownerUserID
+                        )
+                    }
+                    for postingID in usageResult.postingIDs {
+                        sessionStore.recordUpsert(
+                            entity: .investmentPosting,
+                            recordID: postingID,
+                            modifiedAt: .now,
+                            subjectUserIDOverride: ownerUserID
+                        )
+                    }
+                } catch {
+                    alertMessage = error.localizedDescription
+                    return
+                }
             }
             onComplete(.savedTransaction)
             dismiss()
@@ -3040,6 +3125,50 @@ struct TransactionEditorSheet: View {
         }
     }
 
+    private func validateCashOutflow(
+        wallet: LedgerWallet,
+        amountMinor: Int64,
+        visibleBalanceMinor: Int64,
+        continuation: InvestmentFundUsagePrompt.Continuation = .saveFullTransaction
+    ) -> Bool {
+        guard let ownerUserID = walletOwnerUserID(for: wallet) else {
+            if visibleBalanceMinor >= amountMinor { return true }
+            alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+            return false
+        }
+        do {
+            let preview = try InvestmentPersistenceService.fundUsagePreview(
+                ownerUserID: ownerUserID,
+                wallet: wallet,
+                requestedMinor: amountMinor,
+                visibleWalletBalanceMinor: visibleBalanceMinor,
+                context: modelContext
+            )
+            switch preview.outcome {
+            case .ordinaryFundsOnly:
+                confirmedInvestmentFundUsagePreview = nil
+                return true
+            case .insufficientFunds:
+                alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+                return false
+            case .requiresConfirmation:
+                if confirmedInvestmentFundUsagePreview == preview {
+                    return true
+                }
+                confirmedInvestmentFundUsagePreview = nil
+                investmentFundUsagePrompt = InvestmentFundUsagePrompt(
+                    preview: preview,
+                    currencyCode: wallet.currencyCode,
+                    continuation: continuation
+                )
+                return false
+            }
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
+    }
+
     private func saveFullTransaction() {
         guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
             alertMessage = L10n.transactions.transactioneditor.enterAnAmountGreaterThan
@@ -3131,8 +3260,11 @@ struct TransactionEditorSheet: View {
                     alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                     return
                 }
-            } else if currentBalance - amountMinor < 0 {
-                alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+            } else if !validateCashOutflow(
+                wallet: sourceWallet,
+                amountMinor: amountMinor,
+                visibleBalanceMinor: currentBalance
+            ) {
                 return
             }
 
@@ -3152,8 +3284,11 @@ struct TransactionEditorSheet: View {
                 
                 let currentBalance = validationBalanceIndex.balance(for: snapshot)
                 
-                if currentBalance - amountMinor < 0 {
-                    alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+                if !validateCashOutflow(
+                    wallet: sourceWallet,
+                    amountMinor: amountMinor,
+                    visibleBalanceMinor: currentBalance
+                ) {
                     return
                 }
 
@@ -3226,8 +3361,11 @@ struct TransactionEditorSheet: View {
                             alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                             return
                         }
-                    } else if currentBalance - purchaseCostMinor < 0 {
-                        alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+                    } else if !validateCashOutflow(
+                        wallet: sourceWallet,
+                        amountMinor: purchaseCostMinor,
+                        visibleBalanceMinor: currentBalance
+                    ) {
                         return
                     }
                 } else if isPaidForBorrowDraft {
@@ -3267,8 +3405,11 @@ struct TransactionEditorSheet: View {
                             alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                             return
                         }
-                    } else if currentBalance - amountMinor < 0 {
-                        alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+                    } else if !validateCashOutflow(
+                        wallet: sourceWallet,
+                        amountMinor: amountMinor,
+                        visibleBalanceMinor: currentBalance
+                    ) {
                         return
                     }
                 }
@@ -3482,6 +3623,45 @@ struct TransactionEditorSheet: View {
         }
 
         let canonicalOwnerUserID = persistenceOwnerUserID(for: transaction)
+        if let canonicalOwnerUserID {
+            do {
+                var usageResult = try InvestmentPersistenceService.clearFundUsage(
+                    ownerUserID: canonicalOwnerUserID,
+                    transactionID: transaction.id,
+                    context: modelContext
+                )
+                if let preview = confirmedInvestmentFundUsagePreview {
+                    let recorded = try InvestmentPersistenceService.recordFundUsage(
+                        ownerUserID: canonicalOwnerUserID,
+                        transaction: transaction,
+                        preview: preview,
+                        context: modelContext
+                    )
+                    usageResult.walletIDs.formUnion(recorded.walletIDs)
+                    usageResult.postingIDs.formUnion(recorded.postingIDs)
+                    usageResult.ledgerTransactionIDs.formUnion(recorded.ledgerTransactionIDs)
+                }
+                for transactionID in usageResult.ledgerTransactionIDs {
+                    sessionStore.recordUpsert(
+                        entity: .transaction,
+                        recordID: transactionID,
+                        modifiedAt: .now,
+                        subjectUserIDOverride: canonicalOwnerUserID
+                    )
+                }
+                for postingID in usageResult.postingIDs {
+                    sessionStore.recordUpsert(
+                        entity: .investmentPosting,
+                        recordID: postingID,
+                        modifiedAt: .now,
+                        subjectUserIDOverride: canonicalOwnerUserID
+                    )
+                }
+            } catch {
+                alertMessage = error.localizedDescription
+                return
+            }
+        }
         persist(
             transaction: transaction,
             completion: .savedTransaction,

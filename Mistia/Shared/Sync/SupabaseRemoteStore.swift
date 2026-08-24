@@ -186,8 +186,14 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
                 throw SupabaseServiceError.invalidResponse
             }
             return .investmentTrade(trade)
-        case .investmentPosting:
-            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
+        case .investmentPosting(let row):
+            guard let posting = try await mutateInvestmentCashPosting(
+                row,
+                expectedVersion: nil,
+                force: false,
+                session: session
+            ) else { throw SupabaseServiceError.invalidResponse }
+            return .investmentPosting(posting)
         }
     }
 
@@ -244,8 +250,13 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .investmentTrade(let row):
             return try await mutateInvestmentTrade(row, expectedVersion: expectedVersion, force: false, session: session)
                 .map(MistiaSyncUploadRecord.investmentTrade)
-        case .investmentPosting:
-            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
+        case .investmentPosting(let row):
+            return try await mutateInvestmentCashPosting(
+                row,
+                expectedVersion: expectedVersion,
+                force: false,
+                session: session
+            ).map(MistiaSyncUploadRecord.investmentPosting)
         }
     }
 
@@ -356,7 +367,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
                 session: session
             ).map(MistiaSyncUploadRecord.investmentTrade)
         case .investmentPosting:
-            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
+            throw SupabaseServiceError.serverMessage("Investment cash posting deletion requires an accounting rebuild.")
         }
     }
 
@@ -407,8 +418,14 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
                 throw SupabaseServiceError.invalidResponse
             }
             return .investmentTrade(trade)
-        case .investmentPosting:
-            throw SupabaseServiceError.serverMessage("Investment postings can only be written by the accounting RPC.")
+        case .investmentPosting(let row):
+            guard let posting = try await mutateInvestmentCashPosting(
+                row,
+                expectedVersion: nil,
+                force: true,
+                session: session
+            ) else { throw SupabaseServiceError.invalidResponse }
+            return .investmentPosting(posting)
         }
     }
 
@@ -422,6 +439,27 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             functionName: "mutate_investment_trade",
             body: InvestmentTradeMutationRPCBody(
                 trade: row,
+                expectedVersion: expectedVersion,
+                force: force
+            ),
+            session: session
+        )
+        return rows.first { $0.id == row.id }
+    }
+
+    private func mutateInvestmentCashPosting(
+        _ row: RemoteInvestmentWalletPosting,
+        expectedVersion: Int64?,
+        force: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteInvestmentWalletPosting? {
+        guard row.cashBucketRawValue != nil, row.cashOriginRawValue != nil else {
+            throw SupabaseServiceError.serverMessage("Only cash-allocation postings can be written by the cash RPC.")
+        }
+        let rows: [RemoteInvestmentWalletPosting] = try await callRPC(
+            functionName: "mutate_investment_cash_posting",
+            body: InvestmentCashPostingMutationRPCBody(
+                row: row,
                 expectedVersion: expectedVersion,
                 force: force
             ),
@@ -859,6 +897,18 @@ private struct InvestmentTradeMutationRPCBody: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case trade = "p_trade"
+        case expectedVersion = "p_expected_version"
+        case force = "p_force"
+    }
+}
+
+private struct InvestmentCashPostingMutationRPCBody: Encodable {
+    let row: RemoteInvestmentWalletPosting
+    let expectedVersion: Int64?
+    let force: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case row = "p_row"
         case expectedVersion = "p_expected_version"
         case force = "p_force"
     }

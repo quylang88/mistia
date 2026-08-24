@@ -54,6 +54,7 @@ struct DuePaymentSheet: View {
     @State private var alertMessage: String?
     @State private var showingUndoSkipAlert = false
     @State private var showingUndoPaymentAlert = false
+    @State private var investmentFundUsageConfirmation: PlanningInvestmentFundUsageConfirmation?
 
     // MARK: - Init
 
@@ -251,6 +252,22 @@ struct DuePaymentSheet: View {
         }
         .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .alert(
+            L10n.investment.wallet.useFundsTitle,
+            isPresented: Binding(
+                get: { investmentFundUsageConfirmation != nil },
+                set: { if !$0 { investmentFundUsageConfirmation = nil } }
+            ),
+            presenting: investmentFundUsageConfirmation
+        ) { confirmation in
+            Button(L10n.common.cancel, role: .cancel) {}
+            Button(L10n.investment.wallet.useFundsAction) {
+                investmentFundUsageConfirmation = nil
+                pay(dueItem: dueItem, confirmedPreview: confirmation.preview)
+            }
+        } message: { confirmation in
+            Text(verbatim: confirmation.errorDescription ?? "")
+        }
+        .alert(
             L10n.planning.duepayment.paymentFailed,
             isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
         ) {
@@ -351,7 +368,10 @@ struct DuePaymentSheet: View {
 
     // MARK: - Pay
 
-    private func pay(dueItem: PlanningRecurringDueSnapshot?) {
+    private func pay(
+        dueItem: PlanningRecurringDueSnapshot?,
+        confirmedPreview: InvestmentFundUsagePreview? = nil
+    ) {
         guard let dueItem else {
             alertMessage = L10n.planning.duepayment.couldNotFindTheDueItem
             return
@@ -382,6 +402,7 @@ struct DuePaymentSheet: View {
                 occurrences: Array(occurrences),
                 modelContext: modelContext,
                 actorUserID: sessionStore.activeLocalProfileUserID,
+                confirmedInvestmentFundUsagePreview: confirmedPreview,
                 calendar: calendar
             )
             sessionStore.recordUpsert(
@@ -395,8 +416,26 @@ struct DuePaymentSheet: View {
                 recordID: saved.occurrenceID,
                 modifiedAt: saved.transaction.updatedAt
             )
+            for transactionID in saved.additionalTransactionIDs {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transactionID,
+                    modifiedAt: saved.transaction.updatedAt,
+                    subjectUserIDOverride: saved.subjectUserID
+                )
+            }
+            for postingID in saved.investmentPostingIDs {
+                sessionStore.recordUpsert(
+                    entity: .investmentPosting,
+                    recordID: postingID,
+                    modifiedAt: saved.transaction.updatedAt,
+                    subjectUserIDOverride: saved.subjectUserID
+                )
+            }
             onPaid?()
             dismiss()
+        } catch let confirmation as PlanningInvestmentFundUsageConfirmation {
+            investmentFundUsageConfirmation = confirmation
         } catch let error as LocalizedError {
             alertMessage = error.errorDescription ?? error.localizedDescription
         } catch {

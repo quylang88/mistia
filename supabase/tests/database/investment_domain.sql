@@ -163,6 +163,10 @@ select hasnt_column('public', 'investment_trades', 'accounting_fee_minor', 'acco
 select has_column('public', 'investment_assets', 'image_path', 'product image object path is stored on the asset');
 select has_column('public', 'investment_assets', 'default_unit_label', 'asset stores an optional default inventory unit');
 select has_column('public', 'investment_trades', 'unit_label', 'trade stores an optional inventory unit');
+select has_column('public', 'ledger_wallets', 'investment_linked_wallet_id', 'Investment Wallet stores one linked real wallet');
+select has_column('public', 'investment_wallet_postings', 'cash_bucket_raw_value', 'posting stores booked or unreconciled cash bucket');
+select has_column('public', 'investment_wallet_postings', 'cash_origin_raw_value', 'posting records whether cash allocation is derived, inferred or manual');
+select has_function('public', 'mutate_investment_cash_postings', array['jsonb', 'boolean'], 'batch cash mutation RPC is installed');
 select hasnt_table('public', 'investment_valuations', 'manual investment valuations are removed');
 select is(
     (
@@ -1822,6 +1826,216 @@ select is(
     ),
     5,
     'soft-deleting a settled product keeps its transaction history'
+);
+
+insert into public.ledger_wallets(
+    id, user_id, name, kind_raw_value, icon_symbol_name, icon_color_hex,
+    currency_code, opening_balance_minor
+)
+values
+    (
+        '30000000-0000-4000-8000-000000000108',
+        '30000000-0000-4000-8000-000000000001',
+        'Investment card', 'creditCard', 'creditcard.fill', '#888888', 'JPY', 0
+    ),
+    (
+        '30000000-0000-4000-8000-000000000109',
+        '30000000-0000-4000-8000-000000000001',
+        'USD wallet', 'cash', 'banknote.fill', '#999999', 'USD', 0
+    );
+
+select lives_ok(
+    $$
+    update public.ledger_wallets
+    set investment_linked_wallet_id = '30000000-0000-4000-8000-000000000101'
+    where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    $$,
+    'owner can link an active same-currency non-card wallet'
+);
+select throws_ok(
+    $$
+    update public.ledger_wallets
+    set investment_linked_wallet_id = '30000000-0000-4000-8000-000000000108'
+    where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    $$,
+    'P0001',
+    'Invalid linked investment wallet',
+    'credit cards cannot become the linked investment wallet'
+);
+select throws_ok(
+    $$
+    update public.ledger_wallets
+    set investment_linked_wallet_id = '30000000-0000-4000-8000-000000000109'
+    where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    $$,
+    'P0001',
+    'Invalid linked investment wallet',
+    'linked investment wallet must use the Investment Wallet currency'
+);
+
+insert into public.family_permission_grants(
+    id, family_id, grantee_user_id, owner_user_id, resource_type,
+    resource_id, permission_scope, granted_by_user_id
+)
+values
+    (
+        '30000000-0000-4000-8000-000000000951',
+        '30000000-0000-4000-8000-000000000010',
+        '30000000-0000-4000-8000-000000000002',
+        '30000000-0000-4000-8000-000000000001',
+        'investment', null, 'view',
+        '30000000-0000-4000-8000-000000000001'
+    ),
+    (
+        '30000000-0000-4000-8000-000000000952',
+        '30000000-0000-4000-8000-000000000010',
+        '30000000-0000-4000-8000-000000000002',
+        '30000000-0000-4000-8000-000000000001',
+        'wallet', '30000000-0000-4000-8000-000000000103', 'use',
+        '30000000-0000-4000-8000-000000000001'
+    );
+select pg_temp.set_actor('30000000-0000-4000-8000-000000000002');
+select throws_ok(
+    $$
+    update public.ledger_wallets
+    set investment_linked_wallet_id = '30000000-0000-4000-8000-000000000103'
+    where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    $$,
+    'P0001',
+    'Investment edit permission is required',
+    'Investment View and wallet Use do not allow changing the linked wallet without Investment Edit'
+);
+
+select pg_temp.set_actor('30000000-0000-4000-8000-000000000001');
+insert into public.family_permission_grants(
+    id, family_id, grantee_user_id, owner_user_id, resource_type,
+    resource_id, permission_scope, granted_by_user_id
+)
+values (
+    '30000000-0000-4000-8000-000000000953',
+    '30000000-0000-4000-8000-000000000010',
+    '30000000-0000-4000-8000-000000000002',
+    '30000000-0000-4000-8000-000000000001',
+    'investment', null, 'edit',
+    '30000000-0000-4000-8000-000000000001'
+);
+select pg_temp.set_actor('30000000-0000-4000-8000-000000000002');
+select lives_ok(
+    $$
+    update public.ledger_wallets
+    set investment_linked_wallet_id = '30000000-0000-4000-8000-000000000103'
+    where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    $$,
+    'Investment Edit plus wallet Use allows changing the linked wallet'
+);
+select throws_ok(
+    $$
+    update public.ledger_wallets
+    set investment_linked_wallet_id = '30000000-0000-4000-8000-000000000101'
+    where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
+    $$,
+    'P0001',
+    'Wallet use permission is required',
+    'Investment Edit cannot link a wallet without wallet Use'
+);
+
+select pg_temp.set_actor('30000000-0000-4000-8000-000000000001');
+select throws_ok(
+    $$
+    update public.ledger_wallets
+    set is_archived = true
+    where id = '30000000-0000-4000-8000-000000000103'
+    $$,
+    'P0001',
+    'Move investment cash and unlink this wallet before changing or archiving it',
+    'a linked wallet cannot be archived before unlinking it'
+);
+
+select lives_ok(
+    $$
+    select * from public.mutate_investment_cash_posting(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000961',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'event_id', '30000000-0000-4000-8000-000000000971',
+            'wallet_id', '30000000-0000-4000-8000-000000000101',
+            'ledger_transaction_id', (
+                select id from public.ledger_transactions
+                where user_id = '30000000-0000-4000-8000-000000000001'
+                  and deleted_at is null limit 1
+            ),
+            'role_raw_value', 'cashAccrual',
+            'cash_bucket_raw_value', 'booked',
+            'cash_origin_raw_value', 'manual',
+            'amount_minor', 10,
+            'currency_code', 'JPY',
+            'accounting_amount_minor', 10,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-24T00:00:00Z',
+            'created_at', '2026-08-24T00:00:00Z',
+            'updated_at', '2026-08-24T00:00:00Z'
+        ), null, false
+    )
+    $$,
+    'cash mutation RPC can create an allocation under the owner advisory lock'
+);
+select lives_ok(
+    $$
+    select * from public.mutate_investment_cash_posting(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000962',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'event_id', '30000000-0000-4000-8000-000000000972',
+            'wallet_id', '30000000-0000-4000-8000-000000000101',
+            'ledger_transaction_id', (
+                select id from public.ledger_transactions
+                where user_id = '30000000-0000-4000-8000-000000000001'
+                  and deleted_at is null limit 1
+            ),
+            'role_raw_value', 'cashConsumption',
+            'cash_bucket_raw_value', 'booked',
+            'cash_origin_raw_value', 'manual',
+            'amount_minor', -10,
+            'currency_code', 'JPY',
+            'accounting_amount_minor', -10,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-24T00:01:00Z',
+            'created_at', '2026-08-24T00:01:00Z',
+            'updated_at', '2026-08-24T00:01:00Z'
+        ), null, false
+    )
+    $$,
+    'first device can consume the available investment cash'
+);
+select throws_ok(
+    $$
+    select * from public.mutate_investment_cash_posting(
+        jsonb_build_object(
+            'id', '30000000-0000-4000-8000-000000000963',
+            'user_id', '30000000-0000-4000-8000-000000000001',
+            'event_id', '30000000-0000-4000-8000-000000000973',
+            'wallet_id', '30000000-0000-4000-8000-000000000101',
+            'ledger_transaction_id', (
+                select id from public.ledger_transactions
+                where user_id = '30000000-0000-4000-8000-000000000001'
+                  and deleted_at is null limit 1
+            ),
+            'role_raw_value', 'cashConsumption',
+            'cash_bucket_raw_value', 'booked',
+            'cash_origin_raw_value', 'manual',
+            'amount_minor', -1,
+            'currency_code', 'JPY',
+            'accounting_amount_minor', -1,
+            'accounting_currency_code', 'JPY',
+            'occurred_at', '2026-08-24T00:02:00Z',
+            'created_at', '2026-08-24T00:02:00Z',
+            'updated_at', '2026-08-24T00:02:00Z'
+        ), null, false
+    )
+    $$,
+    'P0001',
+    'Investment cash was already used on another device',
+    'a second device cannot consume the same booked allocation'
 );
 
 select * from finish();

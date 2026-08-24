@@ -23,6 +23,22 @@ nonisolated enum InvestmentPostingRole: String, Codable, CaseIterable {
     case realizedProfit
     case transferOut
     case transferIn
+    case cashAccrual
+    case cashReconciliation
+    case cashConsumption
+    case cashTransfer
+    case cashCorrection
+}
+
+nonisolated enum InvestmentCashBucket: String, Codable, CaseIterable {
+    case booked
+    case unreconciled
+}
+
+nonisolated enum InvestmentCashPostingOrigin: String, Codable, CaseIterable {
+    case derived
+    case inferred
+    case manual
 }
 
 nonisolated enum InvestmentLedgerLegRole: String, Codable, CaseIterable {
@@ -30,6 +46,8 @@ nonisolated enum InvestmentLedgerLegRole: String, Codable, CaseIterable {
     case investmentCapitalReturn
     case investmentRealizedProfit
     case investmentTransfer
+    case investmentReconciliation
+    case investmentReserveUse
 
     static func isInvestmentRawValue(_ value: String?) -> Bool {
         guard let value else { return false }
@@ -44,7 +62,7 @@ nonisolated enum InvestmentLedgerLegRole: String, Codable, CaseIterable {
         switch role {
         case .investmentFunding, .investmentCapitalReturn, .investmentRealizedProfit:
             return true
-        case .investmentTransfer:
+        case .investmentTransfer, .investmentReconciliation, .investmentReserveUse:
             return false
         }
     }
@@ -226,6 +244,7 @@ nonisolated final class InvestmentAsset: Identifiable, Hashable {
         self.deletedAt = deletedAt
         self.remoteVersion = remoteVersion
     }
+
 }
 }
 
@@ -426,6 +445,7 @@ nonisolated final class InvestmentValuation: Identifiable, Hashable {
     }
 }
 
+enum MistiaSchemaV10InvestmentPostingModels {
 @Model
 nonisolated final class InvestmentWalletPosting: Identifiable, Hashable {
     static func == (lhs: InvestmentWalletPosting, rhs: InvestmentWalletPosting) -> Bool {
@@ -496,6 +516,145 @@ nonisolated final class InvestmentWalletPosting: Identifiable, Hashable {
         get { InvestmentPostingRole(rawValue: roleRawValue) ?? .funding }
         set { roleRawValue = newValue.rawValue }
     }
+}
+}
+
+typealias InvestmentWalletPosting = MistiaSchemaV10InvestmentPostingModels.InvestmentWalletPosting
+
+@Model
+nonisolated final class InvestmentCashPostingMetadata: Identifiable, Hashable {
+    static func == (lhs: InvestmentCashPostingMetadata, rhs: InvestmentCashPostingMetadata) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    /// Matches the corresponding `InvestmentWalletPosting.id`.
+    @Attribute(.unique) var id: UUID
+    var ownerUserID: UUID
+    var cashBucketRawValue: String
+    var cashOriginRawValue: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID,
+        ownerUserID: UUID,
+        cashBucket: InvestmentCashBucket,
+        cashOrigin: InvestmentCashPostingOrigin,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id
+        self.ownerUserID = ownerUserID
+        self.cashBucketRawValue = cashBucket.rawValue
+        self.cashOriginRawValue = cashOrigin.rawValue
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var cashBucket: InvestmentCashBucket {
+        get { InvestmentCashBucket(rawValue: cashBucketRawValue) ?? .booked }
+        set { cashBucketRawValue = newValue.rawValue }
+    }
+
+    var cashOrigin: InvestmentCashPostingOrigin {
+        get { InvestmentCashPostingOrigin(rawValue: cashOriginRawValue) ?? .derived }
+        set { cashOriginRawValue = newValue.rawValue }
+    }
+}
+
+@Model
+nonisolated final class InvestmentWalletConfiguration: Identifiable, Hashable {
+    static func == (lhs: InvestmentWalletConfiguration, rhs: InvestmentWalletConfiguration) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    @Attribute(.unique) var id: UUID
+    var ownerUserID: UUID
+    var systemWalletID: UUID
+    var linkedWalletID: UUID?
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID,
+        ownerUserID: UUID,
+        systemWalletID: UUID,
+        linkedWalletID: UUID? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id
+        self.ownerUserID = ownerUserID
+        self.systemWalletID = systemWalletID
+        self.linkedWalletID = linkedWalletID
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+nonisolated struct InvestmentWalletCashLocation: Identifiable, Equatable, Sendable {
+    let walletID: UUID
+    let currencyCode: String
+    let bookedMinor: Int64
+    let unreconciledMinor: Int64
+    let originalBookedMinor: Int64
+    let originalUnreconciledMinor: Int64
+
+    var id: UUID { walletID }
+    var totalMinor: Int64 { bookedMinor + unreconciledMinor }
+    var originalTotalMinor: Int64 { originalBookedMinor + originalUnreconciledMinor }
+}
+
+nonisolated struct InvestmentCashAllocationSnapshot: Equatable, Sendable {
+    let accountingCurrencyCode: String
+    let locations: [InvestmentWalletCashLocation]
+    let unidentifiedMinor: Int64
+
+    var bookedMinor: Int64 { locations.reduce(0) { $0 + $1.bookedMinor } }
+    var unreconciledMinor: Int64 { locations.reduce(0) { $0 + $1.unreconciledMinor } }
+    var totalMinor: Int64 { bookedMinor + unreconciledMinor + unidentifiedMinor }
+}
+
+nonisolated enum InvestmentFundUsageOutcome: Equatable, Sendable {
+    case ordinaryFundsOnly
+    case requiresConfirmation
+    case insufficientFunds
+}
+
+nonisolated struct InvestmentFundUsagePreview: Equatable, Sendable {
+    let requestedMinor: Int64
+    let ordinaryAvailableMinor: Int64
+    let bookedToUseMinor: Int64
+    let unreconciledToUseMinor: Int64
+    let remainingInvestmentMinor: Int64
+    let outcome: InvestmentFundUsageOutcome
+
+    var investmentToUseMinor: Int64 { bookedToUseMinor + unreconciledToUseMinor }
+}
+
+nonisolated struct InvestmentReconciliationRequest: Equatable, Sendable {
+    let walletID: UUID
+    let accountingAmountMinor: Int64
+}
+
+nonisolated struct InvestmentReconciliationInstruction: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let sourceWalletID: UUID
+    let destinationWalletID: UUID
+    let accountingAmountMinor: Int64
+}
+
+nonisolated struct InvestmentReconciliationResult: Equatable, Sendable {
+    let instructions: [InvestmentReconciliationInstruction]
+    let persistence: InvestmentPersistenceResult
 }
 
 nonisolated enum InvestmentDecimalCoding {

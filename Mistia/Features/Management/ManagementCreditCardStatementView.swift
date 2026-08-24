@@ -46,6 +46,7 @@ struct ManagementCreditCardStatementView: View {
     @State private var alertMessage = ""
     @State private var viewID = UUID()
     @State private var renderSnapshotCache: ManagementCreditCardStatementRenderSnapshotCache?
+    @State private var investmentFundUsageConfirmation: PlanningInvestmentFundUsageConfirmation?
 
     init(wallet: LedgerWallet, initialMonth: Date? = nil) {
         self.wallet = wallet
@@ -216,6 +217,28 @@ struct ManagementCreditCardStatementView: View {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .alert(
+            L10n.investment.wallet.useFundsTitle,
+            isPresented: Binding(
+                get: { investmentFundUsageConfirmation != nil },
+                set: { if !$0 { investmentFundUsageConfirmation = nil } }
+            ),
+            presenting: investmentFundUsageConfirmation
+        ) { confirmation in
+            Button(L10n.common.cancel, role: .cancel) {}
+            Button(L10n.investment.wallet.useFundsAction) {
+                investmentFundUsageConfirmation = nil
+                if let statement = renderSnapshot.statement {
+                    performPayment(
+                        for: statement,
+                        walletBalancesByID: renderSnapshot.walletBalancesByID,
+                        confirmedPreview: confirmation.preview
+                    )
+                }
+            }
+        } message: { confirmation in
+            Text(verbatim: confirmation.errorDescription ?? "")
         }
         .onAppear {
             uiState.requestQuickCreateHidden(true, id: viewID)
@@ -474,7 +497,8 @@ struct ManagementCreditCardStatementView: View {
 
     private func performPayment(
         for statement: PlanningCreditCardStatementSnapshot,
-        walletBalancesByID: [UUID: Int64]
+        walletBalancesByID: [UUID: Int64],
+        confirmedPreview: InvestmentFundUsagePreview? = nil
     ) {
         let state = effectiveState(for: statement)
         guard canPay(statement, state: state) else { return }
@@ -513,6 +537,7 @@ struct ManagementCreditCardStatementView: View {
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext,
                 actorUserID: sessionStore.activeLocalProfileUserID,
+                confirmedInvestmentFundUsagePreview: confirmedPreview,
                 calendar: calendar
             )
             sessionStore.recordUpsert(
@@ -526,8 +551,26 @@ struct ManagementCreditCardStatementView: View {
                 recordID: savedPayment.occurrenceID,
                 modifiedAt: savedPayment.transaction.updatedAt
             )
+            for transactionID in savedPayment.additionalTransactionIDs {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transactionID,
+                    modifiedAt: savedPayment.transaction.updatedAt,
+                    subjectUserIDOverride: savedPayment.subjectUserID
+                )
+            }
+            for postingID in savedPayment.investmentPostingIDs {
+                sessionStore.recordUpsert(
+                    entity: .investmentPosting,
+                    recordID: postingID,
+                    modifiedAt: savedPayment.transaction.updatedAt,
+                    subjectUserIDOverride: savedPayment.subjectUserID
+                )
+            }
             alertMessage = L10n.management.managementcreditcardstatement.statementPaid
             showingAlert = true
+        } catch let confirmation as PlanningInvestmentFundUsageConfirmation {
+            investmentFundUsageConfirmation = confirmation
         } catch {
             alertMessage = error.localizedDescription
             showingAlert = true

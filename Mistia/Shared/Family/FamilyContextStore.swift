@@ -759,14 +759,14 @@ final class FamilyContextStore {
         occurredAt: Date,
         note: String?,
         sessionStore: SessionStore
-    ) async -> Bool {
+    ) async -> UUID? {
         guard let familyID = family?.id else {
             lastErrorMessage = L10n.shared.family.familycontext.familyDataHasNotLoadedYetSync
-            return false
+            return nil
         }
         guard let session = await prepareRemoteSession(using: sessionStore) else {
             lastErrorMessage = L10n.shared.family.familycontext.signInAndEnableCloudSyncTo
-            return false
+            return nil
         }
 
         let input = FamilyTransferInput(
@@ -797,10 +797,10 @@ final class FamilyContextStore {
                 in: modelContainer
             )
             lastErrorMessage = nil
-            return true
+            return result.senderTransaction.id
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
-            return false
+            return nil
         }
     }
 

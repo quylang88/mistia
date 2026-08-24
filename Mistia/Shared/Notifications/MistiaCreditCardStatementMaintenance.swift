@@ -541,6 +541,33 @@ enum MistiaCreditCardStatementMaintenance {
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             )
         )
+        let ownerUserID = TransactionAuditStore.resolveOwnerUserID(
+            forWalletID: sourceWallet.id,
+            ownershipScopes: ownershipScopes
+        )
+        if let ownerUserID,
+           let preview = try? InvestmentPersistenceService.fundUsagePreview(
+               ownerUserID: ownerUserID,
+               wallet: sourceWallet,
+               requestedMinor: statement.amountMinor,
+               visibleWalletBalanceMinor: sourceBalanceMinor,
+               context: modelContext
+           ),
+           preview.outcome == .requiresConfirmation {
+            upsertAutoPaymentFailureNotification(
+                statement,
+                reason: L10n.investment.wallet.automaticPausedShort,
+                modelContext: modelContext,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
+                calendar: calendar
+            )
+            markAutoPaymentAttemptFailed(
+                occurrence,
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
+            return
+        }
         guard sourceBalanceMinor >= statement.amountMinor else {
             upsertAutoPaymentFailureNotification(
                 statement,
