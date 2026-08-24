@@ -704,22 +704,30 @@ final class MistiaMigrationPlanTests: XCTestCase {
     }
 
     func testInvestmentCashMigrationLinksWalletsAndSerializesBatchReconciliation() throws {
-        let migrationURL = repositoryRootURL()
+        let baseMigrationURL = repositoryRootURL()
             .appending(path: "supabase/migrations/20260824090000_link_investment_cash_wallet.sql")
-        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+        let baseMigration = try String(contentsOf: baseMigrationURL, encoding: .utf8)
+        let profitLocationMigrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260824213000_track_investment_profit_in_receiving_wallet.sql")
+        let profitLocationMigration = try String(contentsOf: profitLocationMigrationURL, encoding: .utf8)
 
-        XCTAssertTrue(migration.contains("add column if not exists investment_linked_wallet_id uuid"))
-        XCTAssertTrue(migration.contains("add column if not exists cash_bucket_raw_value text"))
-        XCTAssertTrue(migration.contains("'booked', 'unreconciled'"))
-        XCTAssertTrue(migration.contains("'derived', 'inferred', 'manual'"))
-        XCTAssertTrue(migration.contains("create or replace function public.mutate_investment_cash_postings"))
-        XCTAssertTrue(migration.contains("pg_advisory_xact_lock"))
-        XCTAssertTrue(migration.contains("A reconciliation event must contain exactly two postings"))
-        XCTAssertTrue(migration.contains("Reconciliation exceeds the outstanding investment cash"))
-        XCTAssertTrue(migration.contains("public.has_investment_permission(owner_id, 'edit')"))
-        XCTAssertTrue(migration.contains("'wallet', wallet_id_value, 'use'"))
-        XCTAssertTrue(migration.contains("Move investment cash and unlink this wallet"))
-        XCTAssertTrue(migration.contains("role_raw_value = 'realizedProfit'"))
+        XCTAssertTrue(baseMigration.contains("add column if not exists investment_linked_wallet_id uuid"))
+        XCTAssertTrue(baseMigration.contains("add column if not exists cash_bucket_raw_value text"))
+        XCTAssertTrue(baseMigration.contains("'booked', 'unreconciled'"))
+        XCTAssertTrue(baseMigration.contains("'derived', 'inferred', 'manual'"))
+        XCTAssertTrue(baseMigration.contains("Move investment cash and unlink this wallet"))
+
+        XCTAssertTrue(profitLocationMigration.contains("create or replace function public.mutate_investment_cash_postings"))
+        XCTAssertTrue(profitLocationMigration.contains("pg_advisory_xact_lock"))
+        XCTAssertTrue(profitLocationMigration.contains("A reconciliation event must contain exactly two postings"))
+        XCTAssertTrue(profitLocationMigration.contains("Transfer exceeds the investment profit held by this wallet"))
+        XCTAssertTrue(profitLocationMigration.contains("source_wallet_id = target_wallet.id"))
+        XCTAssertTrue(profitLocationMigration.contains("'cashAccrual', 'booked', 'derived'"))
+        XCTAssertTrue(profitLocationMigration.contains("public.has_investment_permission(owner_id, 'edit')"))
+        XCTAssertTrue(profitLocationMigration.contains("'wallet', wallet_id_value, 'use'"))
+        XCTAssertTrue(profitLocationMigration.contains("holder.cash_bucket_raw_value = 'unreconciled'"))
+        XCTAssertTrue(profitLocationMigration.contains("set cash_bucket_raw_value = 'booked'"))
+        XCTAssertTrue(profitLocationMigration.contains("profit.role_raw_value = 'realizedProfit'"))
     }
 
     func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {

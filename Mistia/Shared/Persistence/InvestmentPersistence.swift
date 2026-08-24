@@ -110,8 +110,6 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     case invalidAssetInput
     case assetHistoryLocksAccounting
     case assetHasRemainingInventory
-    case investmentWalletCannotReceiveTransfer
-    case transferExceedsPositiveBalance
 
     var errorDescription: String? {
         switch self {
@@ -133,10 +131,6 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
             return L10n.investment.error.assetHistoryLocksAccounting
         case .assetHasRemainingInventory:
             return L10n.investment.error.closePositionsBeforeDelete
-        case .investmentWalletCannotReceiveTransfer:
-            return L10n.investment.error.cannotTransferIn
-        case .transferExceedsPositiveBalance:
-            return L10n.investment.error.transferExceedsBalance
         }
     }
 }
@@ -408,21 +402,13 @@ enum InvestmentPersistenceService {
             guard let walletID = trade.capitalReturnWalletID,
                   let ledgerID = trade.profitLossLedgerTransactionID else { continue }
             let cashCurrencyCode = trade.capitalReturnWalletCurrencyCode ?? trade.accountingCurrencyCode
-            let localCashAmount = try convertedWithStoredRate(
-                trade.realizedProfitLossMinor,
+            let localGrossAmount = try convertedWithStoredRate(
+                trade.accountingGrossAmountMinor,
                 sourceCurrencyCode: trade.accountingCurrencyCode,
                 destinationCurrencyCode: cashCurrencyCode,
                 rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
             )
-            let configuration = try configuration(
-                ownerUserID: trade.ownerUserID,
-                createIfMissing: true,
-                now: now,
-                context: context
-            )
-            let bucket: InvestmentCashBucket = configuration?.linkedWalletID == walletID
-                ? .booked
-                : .unreconciled
+            let localCashAmount = localGrossAmount - (trade.capitalReturnWalletAmountMinor ?? 0)
             _ = try upsertCashPosting(
                 id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
                 ownerUserID: trade.ownerUserID,
@@ -432,7 +418,7 @@ enum InvestmentPersistenceService {
                 walletID: walletID,
                 ledgerTransactionID: ledgerID,
                 role: .cashAccrual,
-                bucket: bucket,
+                bucket: .booked,
                 origin: origin,
                 amountMinor: localCashAmount,
                 currencyCode: cashCurrencyCode,
@@ -1129,126 +1115,6 @@ enum InvestmentPersistenceService {
         return result
     }
 
-    static func createOutboundTransfer(
-        ownerUserID: UUID,
-        destinationWalletID: UUID,
-        sourceAmountMinor: Int64,
-        destinationAmountMinor: Int64,
-        rates: [MistiaExchangeRate],
-        occurredAt: Date = .now,
-        now: Date = .now,
-        context: ModelContext
-    ) throws -> InvestmentPersistenceResult {
-        let wallets = try context.fetch(FetchDescriptor<LedgerWallet>())
-        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
-        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
-        guard let systemWallet = walletsByID[systemWalletID],
-              let destinationWallet = walletsByID[destinationWalletID] else {
-            throw InvestmentPersistenceError.missingWallet
-        }
-        guard destinationWallet.id != systemWalletID,
-              destinationWallet.kind != .creditCard,
-              !destinationWallet.isArchived,
-              destinationWallet.deletedAt == nil else {
-            throw InvestmentPersistenceError.investmentWalletCannotReceiveTransfer
-        }
-        try validateWalletOwnership(
-            ownerUserID: ownerUserID,
-            walletIDs: [destinationWallet.id],
-            context: context
-        )
-        guard sourceAmountMinor > 0, destinationAmountMinor > 0 else {
-            throw InvestmentPersistenceError.invalidWallet
-        }
-        let expectedDestinationAmount = try convertedAmount(
-            amountMinor: sourceAmountMinor,
-            from: systemWallet.currencyCode,
-            to: destinationWallet.currencyCode,
-            rates: rates
-        )
-        guard expectedDestinationAmount == destinationAmountMinor else {
-            throw InvestmentPersistenceError.invalidTradeInput
-        }
-
-        let balance = try currentBalance(wallet: systemWallet, excludingTransactionIDs: [], context: context)
-        guard balance > 0, sourceAmountMinor <= balance else {
-            throw InvestmentPersistenceError.transferExceedsPositiveBalance
-        }
-
-        let eventID = UUID()
-        let ledgerID = InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "transfer")
-        let transaction = LedgerTransaction(
-            id: ledgerID,
-            primaryKind: .transfer,
-            transferSubtype: .internalTransfer,
-            title: L10n.investment.wallet.transferTitle,
-            amountMinor: sourceAmountMinor,
-            reportingExpenseMinor: 0,
-            reportingIncomeMinor: 0,
-            sourceCurrencyCode: systemWallet.currencyCode,
-            destinationCurrencyCode: destinationWallet.currencyCode,
-            destinationAmountMinor: destinationAmountMinor,
-            reportingCurrencyCode: systemWallet.currencyCode,
-            reportingAmountMinor: sourceAmountMinor,
-            conversionModeRawValue: systemWallet.currencyCode == destinationWallet.currencyCode
-                ? nil
-                : MistiaCurrencyConversionMode.appRate.rawValue,
-            exchangeRateDecimalString: rateString(
-                from: systemWallet.currencyCode,
-                to: destinationWallet.currencyCode,
-                rates: rates
-            ),
-            occurredAt: occurredAt,
-            createdAt: now,
-            updatedAt: now,
-            sourceWallet: systemWallet,
-            destinationWallet: destinationWallet
-        )
-        transaction.settlementRoleRawValue = InvestmentLedgerLegRole.investmentTransfer.rawValue
-        context.insert(transaction)
-        try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
-
-        let sourcePosting = InvestmentWalletPosting(
-            id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "transfer-source-posting"),
-            ownerUserID: ownerUserID,
-            eventID: eventID,
-            walletID: systemWallet.id,
-            ledgerTransactionID: ledgerID,
-            role: .transferOut,
-            amountMinor: -sourceAmountMinor,
-            currencyCode: systemWallet.currencyCode,
-            accountingAmountMinor: -sourceAmountMinor,
-            accountingCurrencyCode: systemWallet.currencyCode,
-            occurredAt: occurredAt,
-            createdAt: now,
-            updatedAt: now
-        )
-        let destinationPosting = InvestmentWalletPosting(
-            id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "transfer-destination-posting"),
-            ownerUserID: ownerUserID,
-            eventID: eventID,
-            walletID: destinationWallet.id,
-            ledgerTransactionID: ledgerID,
-            role: .transferIn,
-            amountMinor: destinationAmountMinor,
-            currencyCode: destinationWallet.currencyCode,
-            accountingAmountMinor: sourceAmountMinor,
-            accountingCurrencyCode: systemWallet.currencyCode,
-            occurredAt: occurredAt,
-            createdAt: now,
-            updatedAt: now
-        )
-        context.insert(sourcePosting)
-        context.insert(destinationPosting)
-        try context.save()
-
-        return InvestmentPersistenceResult(
-            walletIDs: [systemWallet.id, destinationWallet.id],
-            postingIDs: [sourcePosting.id, destinationPosting.id],
-            ledgerTransactionIDs: [ledgerID]
-        )
-    }
-
     static func reconcileCash(
         ownerUserID: UUID,
         requests: [InvestmentReconciliationRequest],
@@ -1288,23 +1154,20 @@ enum InvestmentPersistenceService {
             guard request.walletID != linkedWalletID,
                   let holderWallet = walletsByID[request.walletID],
                   let location = snapshot.locations.first(where: { $0.walletID == request.walletID }),
-                  location.unreconciledMinor != 0,
-                  request.accountingAmountMinor <= absWithoutOverflow(location.unreconciledMinor) else {
+                  location.bookedMinor > 0,
+                  request.accountingAmountMinor <= location.bookedMinor else {
                 throw InvestmentPersistenceError.invalidTradeInput
             }
-            let isPositive = location.unreconciledMinor > 0
             let eventID = UUID()
             let ledgerID = InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "cash-reconciliation")
-            let ledgerSource = isPositive ? systemWallet : linkedWallet
-            let ledgerDestination = isPositive ? linkedWallet : systemWallet
             let transaction = try upsertLedgerTransaction(
                 id: ledgerID,
                 primaryKind: .transfer,
                 role: .investmentReconciliation,
                 title: L10n.investment.cash.reconciliationTitle,
                 amountMinor: request.accountingAmountMinor,
-                sourceWallet: ledgerSource,
-                destinationWallet: ledgerDestination,
+                sourceWallet: holderWallet,
+                destinationWallet: linkedWallet,
                 destinationAmountMinor: request.accountingAmountMinor,
                 reportingAmountMinor: request.accountingAmountMinor,
                 reportingCurrencyCode: systemWallet.currencyCode,
@@ -1314,12 +1177,11 @@ enum InvestmentPersistenceService {
             )
             try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
 
-            let holderAccountingDelta = isPositive
-                ? -request.accountingAmountMinor
-                : request.accountingAmountMinor
+            let holderAccountingDelta = -request.accountingAmountMinor
             let holderLocalDelta = try proportionalLocalCashDelta(
                 accountingDeltaMinor: holderAccountingDelta,
                 location: location,
+                bucket: .booked,
                 ownerUserID: ownerUserID,
                 context: context
             )
@@ -1330,7 +1192,7 @@ enum InvestmentPersistenceService {
                 walletID: holderWallet.id,
                 ledgerTransactionID: ledgerID,
                 role: .cashReconciliation,
-                bucket: .unreconciled,
+                bucket: .booked,
                 origin: .manual,
                 amountMinor: holderLocalDelta,
                 currencyCode: holderWallet.currencyCode,
@@ -1340,9 +1202,7 @@ enum InvestmentPersistenceService {
                 now: now,
                 context: context
             )
-            let linkedAccountingDelta = isPositive
-                ? request.accountingAmountMinor
-                : -request.accountingAmountMinor
+            let linkedAccountingDelta = request.accountingAmountMinor
             let linkedPosting = try upsertCashPosting(
                 id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "linked-cash-posting"),
                 ownerUserID: ownerUserID,
@@ -1366,8 +1226,8 @@ enum InvestmentPersistenceService {
             instructions.append(
                 InvestmentReconciliationInstruction(
                     id: eventID,
-                    sourceWalletID: isPositive ? holderWallet.id : linkedWallet.id,
-                    destinationWalletID: isPositive ? linkedWallet.id : holderWallet.id,
+                    sourceWalletID: holderWallet.id,
+                    destinationWalletID: linkedWallet.id,
                     accountingAmountMinor: request.accountingAmountMinor
                 )
             )
@@ -1840,13 +1700,6 @@ enum InvestmentPersistenceService {
         case .sell:
             var keepingLedgerIDs: Set<UUID> = []
             var keepingPostingIDs: Set<UUID> = []
-            let linkedWalletID = try configuration(
-                ownerUserID: ownerUserID,
-                createIfMissing: true,
-                now: now,
-                context: context
-            )?.linkedWalletID
-
             if trade.grossAmountMinor > 0 {
                 guard let capitalWalletID = trade.capitalReturnWalletID,
                       let capitalWallet = walletsByID[capitalWalletID] else {
@@ -1906,15 +1759,26 @@ enum InvestmentPersistenceService {
 
             if trade.realizedProfitLossMinor != 0 {
                 let cashWallet = trade.capitalReturnWalletID.flatMap { walletsByID[$0] }
-                let booksDirectlyToLinkedWallet = cashWallet?.id == linkedWalletID
-                let profitWallet = booksDirectlyToLinkedWallet ? cashWallet ?? systemWallet : systemWallet
+                let profitWallet = cashWallet ?? systemWallet
+                let cashAmount: Int64
+                if let cashWallet, trade.grossAmountMinor > 0 {
+                    let localGrossAmount = try convertedWithStoredRate(
+                        trade.accountingGrossAmountMinor,
+                        sourceCurrencyCode: trade.accountingCurrencyCode,
+                        destinationCurrencyCode: cashWallet.currencyCode,
+                        rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
+                    )
+                    cashAmount = localGrossAmount - (trade.capitalReturnWalletAmountMinor ?? 0)
+                } else {
+                    cashAmount = trade.realizedProfitLossMinor
+                }
                 let profitLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "profit-loss")
                 let profitTransaction = try upsertLedgerTransaction(
                     id: profitLedgerID,
                     primaryKind: trade.realizedProfitLossMinor > 0 ? .income : .expense,
                     role: .investmentRealizedProfit,
                     title: assetName,
-                    amountMinor: absWithoutOverflow(trade.realizedProfitLossMinor),
+                    amountMinor: absWithoutOverflow(cashAmount),
                     sourceWallet: profitWallet,
                     destinationWallet: nil,
                     destinationAmountMinor: nil,
@@ -1933,7 +1797,7 @@ enum InvestmentPersistenceService {
                     walletID: profitWallet.id,
                     ledgerTransactionID: profitTransaction.id,
                     role: .realizedProfit,
-                    amountMinor: trade.realizedProfitLossMinor,
+                    amountMinor: cashAmount,
                     currencyCode: profitWallet.currencyCode,
                     accountingAmountMinor: trade.realizedProfitLossMinor,
                     now: now,
@@ -1946,12 +1810,6 @@ enum InvestmentPersistenceService {
                 try recordTransactionOwnership(profitTransaction, ownerUserID: ownerUserID, now: now, context: context)
 
                 if let cashWallet {
-                    let cashAmount = try convertedWithStoredRate(
-                        trade.realizedProfitLossMinor,
-                        sourceCurrencyCode: trade.accountingCurrencyCode,
-                        destinationCurrencyCode: cashWallet.currencyCode,
-                        rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
-                    )
                     let cashPosting = try upsertCashPosting(
                         id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
                         ownerUserID: ownerUserID,
@@ -1961,7 +1819,7 @@ enum InvestmentPersistenceService {
                         walletID: cashWallet.id,
                         ledgerTransactionID: profitTransaction.id,
                         role: .cashAccrual,
-                        bucket: booksDirectlyToLinkedWallet ? .booked : .unreconciled,
+                        bucket: .booked,
                         origin: .derived,
                         amountMinor: cashAmount,
                         currencyCode: cashWallet.currencyCode,
@@ -2188,6 +2046,7 @@ enum InvestmentPersistenceService {
     private static func proportionalLocalCashDelta(
         accountingDeltaMinor: Int64,
         location: InvestmentWalletCashLocation,
+        bucket: InvestmentCashBucket,
         ownerUserID: UUID,
         context: ModelContext
     ) throws -> Int64 {
@@ -2202,14 +2061,14 @@ enum InvestmentPersistenceService {
             )
         )
         let postingIDs = Set(postings.map(\.id))
-        let unreconciledIDs = Set(
+        let bucketIDs = Set(
             try context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>())
-                .filter { postingIDs.contains($0.id) && $0.cashBucket == .unreconciled }
+                .filter { postingIDs.contains($0.id) && $0.cashBucket == bucket }
                 .map(\.id)
         )
-        let unreconciledPostings = postings.filter { unreconciledIDs.contains($0.id) }
-        let localOutstanding = unreconciledPostings.reduce(Int64.zero) { $0 + $1.amountMinor }
-        let accountingOutstanding = location.unreconciledMinor
+        let bucketPostings = postings.filter { bucketIDs.contains($0.id) }
+        let localOutstanding = bucketPostings.reduce(Int64.zero) { $0 + $1.amountMinor }
+        let accountingOutstanding = bucket == .booked ? location.bookedMinor : location.unreconciledMinor
         guard accountingOutstanding != 0 else { return accountingDeltaMinor }
         var value = Decimal(localOutstanding) * Decimal(accountingDeltaMinor)
             / Decimal(accountingOutstanding)

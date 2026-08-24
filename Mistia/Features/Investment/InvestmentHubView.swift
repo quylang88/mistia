@@ -2634,6 +2634,7 @@ struct InvestmentWalletDetailView: View {
     @Query private var cashPostingMetadata: [InvestmentCashPostingMetadata]
     @Query private var configurations: [InvestmentWalletConfiguration]
     @Query private var trades: [InvestmentTrade]
+    @Query private var assets: [InvestmentAsset]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let ownerUserID: UUID
@@ -2686,7 +2687,10 @@ struct InvestmentWalletDetailView: View {
     }
     private func canReconcile(_ location: InvestmentWalletCashLocation) -> Bool {
         guard canEdit, let linkedWallet else { return false }
-        return canUseWallet(linkedWallet.id) && canUseWallet(location.walletID)
+        return location.walletID != linkedWallet.id
+            && location.bookedMinor > 0
+            && canUseWallet(linkedWallet.id)
+            && canUseWallet(location.walletID)
     }
     private var cashMetadataByPostingID: [UUID: InvestmentCashPostingMetadata] {
         Dictionary(uniqueKeysWithValues: cashPostingMetadata.map { ($0.id, $0) })
@@ -2710,7 +2714,13 @@ struct InvestmentWalletDetailView: View {
         )
     }
     private var ownerLocations: [InvestmentWalletCashLocation] {
-        cashSnapshot.locations.filter { $0.totalMinor != 0 || $0.unreconciledMinor != 0 }
+        cashSnapshot.locations.filter { $0.totalMinor > 0 }
+    }
+    private var locationsAwaitingTransfer: [InvestmentWalletCashLocation] {
+        guard let linkedWallet else { return [] }
+        return ownerLocations.filter {
+            $0.walletID != linkedWallet.id && $0.bookedMinor > 0
+        }
     }
     private var realizedProfitLossMinor: Int64 {
         trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
@@ -2724,13 +2734,13 @@ struct InvestmentWalletDetailView: View {
             records: transactions.map(\.snapshot)
         )
     }
-    private var timelinePostings: [InvestmentWalletPosting] {
-        postings.filter {
-            $0.ownerUserID == ownerUserID
-                && $0.deletedAt == nil
-                && cashMetadataByPostingID[$0.id] != nil
-        }
-        .sorted { $0.occurredAt > $1.occurredAt }
+    private var saleTimelineTrades: [InvestmentTrade] {
+        trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && $0.kind == .sell }
+            .sorted { $0.occurredAt > $1.occurredAt }
+    }
+    private var linkedInvestmentMinor: Int64 {
+        guard let linkedWallet else { return 0 }
+        return cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0
     }
 
     var body: some View {
@@ -2756,8 +2766,8 @@ struct InvestmentWalletDetailView: View {
                 }
                 .disabled(
                     linkedWallet == nil
-                        || ownerLocations.filter { $0.unreconciledMinor != 0 }.isEmpty
-                        || ownerLocations.contains { $0.unreconciledMinor != 0 && !canReconcile($0) }
+                        || locationsAwaitingTransfer.isEmpty
+                        || locationsAwaitingTransfer.contains { !canReconcile($0) }
                 )
                 .accessibilityLabel(L10n.investment.wallet.reconcile)
             }
@@ -2807,9 +2817,9 @@ struct InvestmentWalletDetailView: View {
                 .font(.system(size: 32, weight: .bold, design: .rounded))
             HStack {
                 metric(
-                    title: L10n.investment.wallet.unreconciled,
-                    amount: cashSnapshot.unreconciledMinor,
-                    color: cashSnapshot.unreconciledMinor == 0 ? .secondary : .orange
+                    title: L10n.investment.wallet.inLinkedWallet,
+                    amount: linkedInvestmentMinor,
+                    color: MistiaAccent.purple.color
                 )
                 Divider().frame(height: 40)
                 metric(
@@ -2870,8 +2880,8 @@ struct InvestmentWalletDetailView: View {
                     }
                     Spacer()
                 }
-                let booked = cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.bookedMinor ?? 0
-                Text(L10n.investment.wallet.investmentPortion(booked.formattedCurrency(code: accountingCurrencyCode)))
+                let heldInvestment = cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0
+                Text(L10n.investment.wallet.investmentPortion(heldInvestment.formattedCurrency(code: accountingCurrencyCode)))
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MistiaAccent.purple.color)
             } else {
@@ -2898,14 +2908,14 @@ struct InvestmentWalletDetailView: View {
             } else {
                 ForEach(ownerLocations) { location in
                     Button {
-                        guard canReconcile(location), location.unreconciledMinor != 0 else { return }
+                        guard canReconcile(location) else { return }
                         reconciliationWalletID = location.walletID
                         showsReconciliation = true
                     } label: {
                         locationRow(location)
                     }
                     .buttonStyle(.plain)
-                    .disabled(!canReconcile(location) || location.unreconciledMinor == 0)
+                    .disabled(!canReconcile(location))
                 }
             }
         }
@@ -2922,11 +2932,7 @@ struct InvestmentWalletDetailView: View {
                 Text(location.totalMinor.formattedCurrency(code: accountingCurrencyCode))
                     .font(.subheadline.weight(.bold))
             }
-            HStack {
-                Text(L10n.investment.wallet.bookedAmount(location.bookedMinor.formattedCurrency(code: accountingCurrencyCode)))
-                Spacer()
-                Text(L10n.investment.wallet.unreconciledAmount(location.unreconciledMinor.formattedCurrency(code: accountingCurrencyCode)))
-            }
+            Text(L10n.investment.wallet.heldProfit)
             .font(.caption)
             .foregroundStyle(.secondary)
             if MistiaCurrencyLogic.normalizedCode(location.currencyCode)
@@ -2939,19 +2945,6 @@ struct InvestmentWalletDetailView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-            if location.unreconciledMinor > 0 {
-                Label(
-                    L10n.investment.wallet.actualHigher(location.unreconciledMinor.formattedCurrency(code: accountingCurrencyCode)),
-                    systemImage: "arrow.up.circle.fill"
-                )
-                .foregroundStyle(.orange)
-            } else if location.unreconciledMinor < 0 {
-                Label(
-                    L10n.investment.wallet.needsTopUp(abs(location.unreconciledMinor).formattedCurrency(code: accountingCurrencyCode)),
-                    systemImage: "arrow.down.circle.fill"
-                )
-                .foregroundStyle(.red)
-            }
         }
         .font(.caption)
         .padding(15)
@@ -2961,26 +2954,42 @@ struct InvestmentWalletDetailView: View {
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.wallet.cashFlow).font(.headline)
-            if timelinePostings.isEmpty {
+            if saleTimelineTrades.isEmpty {
                 Text(L10n.investment.wallet.noCashFlow)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(timelinePostings.prefix(40)) { posting in
+                ForEach(saleTimelineTrades.prefix(40)) { trade in
                     HStack(spacing: 12) {
-                        Image(systemName: timelineIcon(for: posting.role))
-                            .foregroundStyle(timelineColor(for: posting.accountingAmountMinor))
+                        Image(systemName: "arrow.up.right.circle.fill")
+                            .foregroundStyle(trade.realizedProfitLossMinor >= 0 ? Color.green : Color.red)
                             .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(timelineTitle(for: posting.role)).font(.subheadline.weight(.medium))
-                            Text(MistiaDateFormatting.fullDateString(for: posting.occurredAt))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(assets.first { $0.id == trade.assetID }?.name ?? L10n.investment.hub.sell)
+                                .font(.subheadline.weight(.medium))
+                            Text(saleDestinationText(for: trade))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(MistiaDateFormatting.fullDateString(for: trade.occurredAt))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(posting.accountingAmountMinor.formattedCurrency(code: accountingCurrencyCode))
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(
+                                L10n.investment.wallet.saleAmount(
+                                    trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)
+                                )
+                            )
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(timelineColor(for: posting.accountingAmountMinor))
+                            Text(
+                                L10n.investment.wallet.saleProfitLoss(
+                                    trade.realizedProfitLossMinor.formattedCurrency(code: trade.accountingCurrencyCode)
+                                )
+                            )
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(trade.realizedProfitLossMinor >= 0 ? Color.green : Color.red)
+                        }
                     }
                     .padding(.vertical, 6)
                 }
@@ -2988,27 +2997,13 @@ struct InvestmentWalletDetailView: View {
         }
     }
 
-    private func timelineTitle(for role: InvestmentPostingRole) -> String {
-        switch role {
-        case .cashAccrual: L10n.investment.wallet.timelineAccrual
-        case .cashReconciliation: L10n.investment.wallet.timelineReconciliation
-        case .cashConsumption: L10n.investment.wallet.timelineConsumption
-        case .cashTransfer: L10n.investment.wallet.timelineTransfer
-        case .cashCorrection: L10n.investment.wallet.timelineCorrection
-        default: L10n.investment.wallet.cashFlow
+    private func saleDestinationText(for trade: InvestmentTrade) -> String {
+        guard let walletID = trade.capitalReturnWalletID,
+              let wallet = wallets.first(where: { $0.id == walletID }) else {
+            return L10n.investment.wallet.saleNoDestination
         }
+        return L10n.investment.wallet.saleReceivedBy(wallet.name)
     }
-    private func timelineIcon(for role: InvestmentPostingRole) -> String {
-        switch role {
-        case .cashAccrual: "chart.line.uptrend.xyaxis"
-        case .cashReconciliation: "arrow.left.arrow.right"
-        case .cashConsumption: "cart.fill"
-        case .cashTransfer: "arrow.right"
-        case .cashCorrection: "slider.horizontal.3"
-        default: "circle.fill"
-        }
-    }
-    private func timelineColor(for amount: Int64) -> Color { amount >= 0 ? .green : .red }
 
     private func selectLinkedWallet(_ walletID: UUID) {
         showsLinkedWalletPicker = false
@@ -3134,7 +3129,7 @@ private struct InvestmentCashReconciliationSheet: View {
         )
     }
     private var locations: [InvestmentWalletCashLocation] {
-        snapshot.locations.filter { $0.walletID != linkedWalletID && $0.unreconciledMinor != 0 }
+        snapshot.locations.filter { $0.walletID != linkedWalletID && $0.bookedMinor > 0 }
     }
     private var selectedLocation: InvestmentWalletCashLocation? {
         initialWalletID.flatMap { id in locations.first { $0.walletID == id } }
@@ -3142,11 +3137,11 @@ private struct InvestmentCashReconciliationSheet: View {
     private var requests: [InvestmentReconciliationRequest] {
         if let selectedLocation {
             let entered = amountText.currencyInputToMinorUnits(currencyCode: currencyCode)
-            guard entered > 0, entered <= abs(selectedLocation.unreconciledMinor) else { return [] }
+            guard entered > 0, entered <= selectedLocation.bookedMinor else { return [] }
             return [InvestmentReconciliationRequest(walletID: selectedLocation.walletID, accountingAmountMinor: entered)]
         }
         return locations.map {
-            InvestmentReconciliationRequest(walletID: $0.walletID, accountingAmountMinor: abs($0.unreconciledMinor))
+            InvestmentReconciliationRequest(walletID: $0.walletID, accountingAmountMinor: $0.bookedMinor)
         }
     }
 
@@ -3168,7 +3163,7 @@ private struct InvestmentCashReconciliationSheet: View {
                     Section {
                         MistiaCurrencyInputField(L10n.investment.wallet.amountToReconcile, text: $amountText)
                     } footer: {
-                        Text(L10n.investment.wallet.unreconciledAmount(abs(selectedLocation.unreconciledMinor).formattedCurrency(code: currencyCode)))
+                        Text(L10n.investment.wallet.profitAvailable(selectedLocation.bookedMinor.formattedCurrency(code: currencyCode)))
                     }
                 }
                 Section {
@@ -3179,7 +3174,7 @@ private struct InvestmentCashReconciliationSheet: View {
             }
             .onAppear {
                 if let selectedLocation {
-                    amountText = MistiaCurrencyInputFormatting.groupedInput(String(abs(selectedLocation.unreconciledMinor)))
+                    amountText = MistiaCurrencyInputFormatting.groupedInput(String(selectedLocation.bookedMinor))
                 }
             }
         }
@@ -3188,14 +3183,12 @@ private struct InvestmentCashReconciliationSheet: View {
     private func instructionRow(_ location: InvestmentWalletCashLocation) -> some View {
         let holder = wallets.first { $0.id == location.walletID }?.name ?? L10n.investment.wallet.unidentified
         let linked = wallets.first { $0.id == linkedWalletID }?.name ?? L10n.investment.wallet.linkedWallet
-        let source = location.unreconciledMinor > 0 ? holder : linked
-        let destination = location.unreconciledMinor > 0 ? linked : holder
         return VStack(alignment: .leading, spacing: 5) {
-            Text(L10n.investment.wallet.realTransferInstruction(source, destination))
+            Text(L10n.investment.wallet.realTransferInstruction(holder, linked))
                 .font(.subheadline.weight(.medium))
-            Text(abs(location.unreconciledMinor).formattedCurrency(code: currencyCode))
+            Text(location.bookedMinor.formattedCurrency(code: currencyCode))
                 .font(.headline)
-                .foregroundStyle(location.unreconciledMinor > 0 ? .orange : .red)
+                .foregroundStyle(MistiaAccent.purple.color)
         }
     }
 
@@ -3223,134 +3216,6 @@ private struct InvestmentCashReconciliationSheet: View {
                 )
             }
             dismiss()
-        } catch {
-            onError(error.localizedDescription)
-        }
-    }
-}
-
-struct InvestmentWalletTransferSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SessionStore.self) private var sessionStore
-    @Environment(FamilyContextStore.self) private var familyContextStore
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
-    private var ledgerTransactions: [LedgerTransaction]
-    @Query private var ownershipScopes: [OwnedRecordScope]
-
-    let ownerUserID: UUID
-    let onError: (String) -> Void
-    @State private var destinationWalletID: UUID?
-    @State private var sourceAmount = ""
-
-    private var systemWallet: LedgerWallet? {
-        let id = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
-        return wallets.first { $0.id == id }
-    }
-    private var investmentBalanceMinor: Int64 {
-        guard let systemWallet else { return 0 }
-        let snapshot = TransactionWalletSnapshot(
-            id: systemWallet.id,
-            kind: systemWallet.kind,
-            openingBalanceMinor: systemWallet.openingBalanceMinor
-        )
-        return TransactionLogic.walletBalanceIndex(
-            wallets: [snapshot],
-            records: ledgerTransactions.map(\.snapshot)
-        ).balance(for: snapshot)
-    }
-    private var walletOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-    }
-    private var destinationWallets: [LedgerWallet] {
-        let systemID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
-        let currentID = sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
-        return wallets.filter { wallet in
-            guard wallet.id != systemID, wallet.deletedAt == nil, !wallet.isArchived, wallet.kind != .creditCard else { return false }
-            guard (walletOwnerMap[wallet.id] ?? currentID) == ownerUserID else { return false }
-            return ownerUserID == currentID || familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
-        }
-    }
-    private var currencyCode: String { systemWallet?.currencyCode ?? "JPY" }
-    private var sourceAmountMinor: Int64 {
-        sourceAmount.currencyInputToMinorUnits(currencyCode: currencyCode)
-    }
-    private var isBalanceEmpty: Bool { investmentBalanceMinor <= 0 }
-    private var isSaveDisabled: Bool {
-        isBalanceEmpty || destinationWalletID == nil || sourceAmountMinor <= 0 || sourceAmountMinor > investmentBalanceMinor
-    }
-
-    var body: some View {
-        MistiaModalScaffold(
-            title: L10n.investment.wallet.transferTitle,
-            accent: MistiaAccent.purple.color,
-            contentStyle: .form,
-            saveDisabled: isSaveDisabled,
-            onSave: save
-        ) {
-            Form {
-                Picker(L10n.investment.transfer.destination, selection: $destinationWalletID) {
-                    ForEach(destinationWallets) { wallet in Text(wallet.name).tag(Optional(wallet.id)) }
-                }
-                Section {
-                    MistiaCurrencyInputField(L10n.investment.transfer.sourceAmount, text: $sourceAmount)
-                        .disabled(isBalanceEmpty)
-                    if isBalanceEmpty {
-                        Text(L10n.investment.wallet.insufficientBalance)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    } else {
-                        Text(
-                            L10n.investment.wallet.availableBalance(
-                                investmentBalanceMinor.formattedCurrency(code: currencyCode)
-                            )
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .onAppear { destinationWalletID = destinationWalletID ?? destinationWallets.first?.id }
-            .onChange(of: sourceAmount) { _, newValue in
-                guard !isBalanceEmpty else { return }
-                let entered = newValue.currencyInputToMinorUnits(currencyCode: currencyCode)
-                if entered > investmentBalanceMinor {
-                    sourceAmount = MistiaCurrencyInputFormatting.groupedInput(String(investmentBalanceMinor))
-                }
-            }
-        }
-    }
-
-    private func save() {
-        guard let systemWallet, let destinationWallet = destinationWallets.first(where: { $0.id == destinationWalletID }) else { return }
-        let rates = MistiaCurrencySettings.rates()
-        guard let destinationAmount = MistiaCurrencyLogic.convertedMinorAmount(
-            sourceAmountMinor,
-            from: systemWallet.currencyCode,
-            to: destinationWallet.currencyCode,
-            rates: rates
-        ) else {
-            onError(L10n.investment.error.missingExchangeRate)
-            return
-        }
-        do {
-            let result = try InvestmentPersistenceService.createOutboundTransfer(
-                ownerUserID: ownerUserID,
-                destinationWalletID: destinationWallet.id,
-                sourceAmountMinor: sourceAmountMinor,
-                destinationAmountMinor: destinationAmount,
-                rates: rates,
-                context: modelContext
-            )
-            for transactionID in result.ledgerTransactionIDs {
-                sessionStore.recordUpsert(
-                    entity: .transaction,
-                    recordID: transactionID,
-                    modifiedAt: .now,
-                    subjectUserIDOverride: ownerUserID
-                )
-            }
         } catch {
             onError(error.localizedDescription)
         }

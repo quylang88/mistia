@@ -286,8 +286,8 @@ select is(
 
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000102'),
-    120::bigint,
-    'sale returns exactly the released cost basis to the ordinary wallet'
+    150::bigint,
+    'sale credits the full proceeds to the receiving wallet'
 );
 
 select is(
@@ -295,8 +295,8 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    30::bigint,
-    'sale profit is isolated in the Investment Wallet'
+    0::bigint,
+    'sale profit does not create a separate virtual wallet balance'
 );
 
 select is(
@@ -584,16 +584,16 @@ select is(
 );
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000107'),
-    100::bigint,
-    'sale of promotional inventory does not invent capital returned to the ordinary wallet'
+    240::bigint,
+    'sale of promotional inventory adds its full proceeds to the receiving wallet'
 );
 select is(
     (
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    -80::bigint,
-    'Investment Wallet includes the exact promotional sale profit'
+    -250::bigint,
+    'promotional sale leaves the prior total-loss balance unchanged'
 );
 
 select lives_ok(
@@ -613,8 +613,8 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    -160::bigint,
-    'deleting the promotional sale restores the Investment Wallet exactly'
+    -250::bigint,
+    'deleting the promotional sale leaves the prior total-loss balance unchanged'
 );
 
 select lives_ok(
@@ -1064,21 +1064,21 @@ select is(
 );
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000102'),
-    120::bigint,
+    150::bigint,
     'old capital-return wallet is restored after moving the sale'
 );
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000105'),
-    150::bigint,
-    'new capital-return wallet receives the released cost basis'
+    260::bigint,
+    'new capital-return wallet receives the full sale proceeds'
 );
 select is(
     (
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    -50::bigint,
-    'Investment Wallet reflects profit after moving the sale'
+    -250::bigint,
+    'moving the sale does not create a virtual Investment Wallet profit balance'
 );
 select is(
     (
@@ -1155,7 +1155,7 @@ select is(
 );
 select is(
     (select current_balance_minor from public.ledger_wallets where id = '30000000-0000-4000-8000-000000000105'),
-    150::bigint,
+    260::bigint,
     'failed oversell leaves the capital-return wallet unchanged'
 );
 
@@ -1209,8 +1209,8 @@ select is(
         select current_balance_minor from public.ledger_wallets
         where id = public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001')
     ),
-    -160::bigint,
-    'deleting the sale restores Investment Wallet profit'
+    -250::bigint,
+    'deleting the sale leaves unrelated Investment Wallet loss unchanged'
 );
 select is(
     (
