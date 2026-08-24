@@ -315,6 +315,7 @@ struct InvestmentHubView: View {
             }
             .onAppear {
                 uiState?.requestQuickCreateHidden(true, id: viewID)
+                try? InvestmentPersistenceService.reconcileAllTrades(ownerUserID: ownerUserID, context: modelContext)
             }
             .onDisappear {
                 uiState?.requestQuickCreateHidden(false, id: viewID)
@@ -2833,6 +2834,7 @@ struct InvestmentWalletDetailView: View {
         }
         .onAppear {
             uiState?.requestQuickCreateHidden(true, id: viewID)
+            try? InvestmentPersistenceService.reconcileAllTrades(ownerUserID: ownerUserID, context: modelContext)
         }
         .onDisappear {
             uiState?.requestQuickCreateHidden(false, id: viewID)

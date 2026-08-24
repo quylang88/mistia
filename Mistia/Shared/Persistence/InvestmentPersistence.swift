@@ -1040,6 +1040,74 @@ enum InvestmentPersistenceService {
         return asset
     }
 
+    @discardableResult
+    static func reconcileAllTrades(
+        ownerUserID: UUID? = nil,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        let allTrades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+            .filter { trade in
+                trade.deletedAt == nil && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
+            }
+        guard !allTrades.isEmpty else {
+            return InvestmentPersistenceResult()
+        }
+
+        let allAssets = try context.fetch(FetchDescriptor<InvestmentAsset>())
+            .filter { $0.deletedAt == nil }
+        let assetsByID = Dictionary(uniqueKeysWithValues: allAssets.map { ($0.id, $0) })
+        let allWallets = try context.fetch(FetchDescriptor<LedgerWallet>())
+            .filter { $0.deletedAt == nil }
+        let walletsByID = Dictionary(uniqueKeysWithValues: allWallets.map { ($0.id, $0) })
+
+        let tradesByAsset = Dictionary(grouping: allTrades, by: \.assetID)
+        var result = InvestmentPersistenceResult()
+
+        for (assetID, trades) in tradesByAsset {
+            guard let asset = assetsByID[assetID] else { continue }
+            let ownerID = asset.ownerUserID
+            let systemWallet = try ensureSystemWallet(
+                ownerUserID: ownerID,
+                currencyCode: asset.currencyCode,
+                now: now,
+                context: context
+            )
+            let reconciledWallets = walletsByID.merging([systemWallet.id: systemWallet]) { current, _ in current }
+            let sortedTrades = trades.sorted {
+                if $0.occurredAt != $1.occurredAt { return $0.occurredAt < $1.occurredAt }
+                return $0.createdAt < $1.createdAt
+            }
+            let calculations = try InvestmentAccountingEngine.calculationMap(
+                trades: sortedTrades.map(InvestmentTradeInput.init)
+            )
+
+            for trade in sortedTrades {
+                if let calculation = calculations[trade.id] {
+                    trade.releasedCostBasisMinor = calculation.releasedCostBasisMinor
+                    trade.realizedProfitLossMinor = calculation.realizedProfitLossMinor
+                    trade.positionQuantityAfter = calculation.positionQuantityAfter
+                    trade.positionCostBasisAfterMinor = calculation.positionCostBasisAfterMinor
+                }
+
+                try reconcileLedgerLegs(
+                    ownerUserID: trade.ownerUserID,
+                    trade: trade,
+                    assetName: asset.name,
+                    systemWallet: systemWallet,
+                    walletsByID: reconciledWallets,
+                    now: now,
+                    context: context,
+                    result: &result
+                )
+                result.tradeIDs.insert(trade.id)
+            }
+        }
+
+        try context.save()
+        return result
+    }
+
     static func deleteTrade(
         ownerUserID: UUID,
         tradeID: UUID,

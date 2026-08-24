@@ -881,6 +881,10 @@ nonisolated enum MistiaSyncLocalStore {
             upsertInvestmentTrade(row, context: context, tradeByID: &investmentTradeByID)
         }
 
+        if !snapshot.investmentTrades.isEmpty {
+            try? InvestmentPersistenceService.reconcileAllTrades(now: .now, context: context)
+        }
+
         for row in snapshot.investmentPostings {
             guard shouldApplyRemoteRow(
                 row,
@@ -1117,6 +1121,7 @@ nonisolated enum MistiaSyncLocalStore {
                 uniquingKeysWith: latestInvestmentTrade
             )
             upsertInvestmentTrade(row, context: context, tradeByID: &recordsByID)
+            try? InvestmentPersistenceService.reconcileAllTrades(ownerUserID: row.userID, now: .now, context: context)
         case .investmentPosting(let row):
             var recordsByID = Dictionary(
                 try fetchInvestmentPostings(context).map { ($0.id, $0) },
