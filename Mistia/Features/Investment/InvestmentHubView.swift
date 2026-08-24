@@ -2874,11 +2874,11 @@ struct InvestmentWalletDetailView: View {
             }
             if let linkedWallet {
                 HStack(spacing: 12) {
-                    Image(systemName: linkedWallet.iconSymbolName)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color(hex: linkedWallet.iconColorHex))
-                        .frame(width: 40, height: 40)
-                        .background(Color(hex: linkedWallet.iconColorHex).opacity(0.12), in: Circle())
+                    MistiaFinanceIconView(
+                        icon: linkedWallet.iconSymbolName,
+                        fallbackColor: Color(hex: linkedWallet.iconColorHex),
+                        size: 38
+                    )
                     VStack(alignment: .leading, spacing: 3) {
                         Text(linkedWallet.name).font(.subheadline.weight(.semibold))
                         Text(
@@ -2944,9 +2944,17 @@ struct InvestmentWalletDetailView: View {
     private func locationRow(_ location: InvestmentWalletCashLocation) -> some View {
         let wallet = wallets.first { $0.id == location.walletID }
         return VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Image(systemName: wallet?.iconSymbolName ?? "questionmark.circle")
-                    .foregroundStyle(wallet.map { Color(hex: $0.iconColorHex) } ?? .secondary)
+            HStack(spacing: 10) {
+                if let wallet {
+                    MistiaFinanceIconView(
+                        icon: wallet.iconSymbolName,
+                        fallbackColor: Color(hex: wallet.iconColorHex),
+                        size: 28
+                    )
+                } else {
+                    Image(systemName: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                }
                 Text(wallet?.name ?? L10n.investment.wallet.unidentified).font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(location.totalMinor.formattedCurrency(code: accountingCurrencyCode))
@@ -3106,8 +3114,13 @@ private struct InvestmentLinkedWalletPickerSheet: View {
                         Button {
                             onSelect(wallet.id)
                         } label: {
-                            HStack {
-                                Label(wallet.name, systemImage: wallet.iconSymbolName)
+                            HStack(spacing: 12) {
+                                MistiaFinanceIconView(
+                                    icon: wallet.iconSymbolName,
+                                    fallbackColor: Color(hex: wallet.iconColorHex),
+                                    size: 30
+                                )
+                                Text(wallet.name)
                                 Spacer()
                                 if selectedWalletID == wallet.id { Image(systemName: "checkmark") }
                             }
