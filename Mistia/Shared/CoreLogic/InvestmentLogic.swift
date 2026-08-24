@@ -366,16 +366,13 @@ nonisolated enum InvestmentSummaryLogic {
         let remainingInventoryCostMinor = positions
             .filter { $0.quantity > 0 }
             .reduce(into: Int64.zero) {
-            $0 = saturatingAdd($0, max($1.remainingCostBasisMinor, 0))
-        }
-        let realizedProfitLossMinor = trades.reduce(into: Int64.zero) { partial, trade in
-            guard trade.realizedProfitLossMinor != 0,
-                  let date = tradeDates[trade.id],
-                  period?.contains(date) ?? true else {
-                return
+                $0 = saturatingAdd($0, max($1.remainingCostBasisMinor, 0))
             }
-            partial = saturatingAdd(partial, trade.realizedProfitLossMinor)
-        }
+        let realizedProfitLossMinor = realizedProfitLoss(
+            trades: trades,
+            tradeDates: tradeDates,
+            period: period
+        )
 
         return InvestmentPortfolioSummary(
             remainingInventoryCostMinor: remainingInventoryCostMinor,
@@ -384,12 +381,25 @@ nonisolated enum InvestmentSummaryLogic {
         )
     }
 
+    static func realizedProfitLoss(
+        trades: [InvestmentTradeCalculation],
+        tradeDates: [UUID: Date] = [:],
+        period: DateInterval? = nil
+    ) -> Int64 {
+        trades.reduce(into: Int64.zero) { partial, trade in
+            guard trade.realizedProfitLossMinor != 0 else { return }
+            if let period {
+                guard let date = tradeDates[trade.id], period.contains(date) else { return }
+            }
+            partial = saturatingAdd(partial, trade.realizedProfitLossMinor)
+        }
+    }
+
     private static func saturatingAdd(_ lhs: Int64, _ rhs: Int64) -> Int64 {
         let (value, overflow) = lhs.addingReportingOverflow(rhs)
         guard overflow else { return value }
         return rhs >= 0 ? .max : .min
     }
-
 }
 
 nonisolated enum InvestmentPeriodLogic {

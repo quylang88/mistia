@@ -239,19 +239,9 @@ struct InvestmentHubView: View {
                 openLotCount: position.openLotCount
             )
         }
-        let calculations = ownerTrades.map {
-            InvestmentTradeCalculation(
-                id: $0.id,
-                releasedCostBasisMinor: $0.releasedCostBasisMinor,
-                realizedProfitLossMinor: $0.realizedProfitLossMinor,
-                positionQuantityAfter: $0.positionQuantityAfter,
-                positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor,
-                openLotCountAfter: 0
-            )
-        }
         return InvestmentSummaryLogic.summary(
             positions: positionSnapshots,
-            trades: calculations,
+            trades: ownerTrades.map(\.calculation),
             tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
             period: selectedDateInterval,
             investmentWalletBalanceMinor: systemWalletBalanceMinor
@@ -2765,12 +2755,17 @@ struct InvestmentWalletDetailView: View {
             records: transactions.map(\.snapshot)
         )
     }
+    private var ownerTrades: [InvestmentTrade] {
+        trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
+    }
     private var saleTimelineTrades: [InvestmentTrade] {
-        trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && $0.kind == .sell }
+        ownerTrades.filter { $0.kind == .sell }
             .sorted { $0.occurredAt > $1.occurredAt }
     }
-    private var availableProfitMinor: Int64 {
-        max(cashSnapshot.totalMinor, 0)
+    private var totalRealizedProfitLossMinor: Int64 {
+        InvestmentSummaryLogic.realizedProfitLoss(
+            trades: ownerTrades.map(\.calculation)
+        )
     }
 
     var body: some View {
@@ -2849,9 +2844,16 @@ struct InvestmentWalletDetailView: View {
             Text(L10n.investment.hub.realizedProfitLoss)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Text(availableProfitMinor.formattedCurrency(code: accountingCurrencyCode))
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundStyle(availableProfitMinor > 0 ? Color.green : Color.primary)
+            Text(
+                verbatim: (totalRealizedProfitLossMinor > 0 ? "+" : "")
+                    + totalRealizedProfitLossMinor.formattedCurrency(code: accountingCurrencyCode)
+            )
+            .font(.system(size: 32, weight: .bold, design: .rounded))
+            .foregroundStyle(
+                totalRealizedProfitLossMinor > 0
+                    ? Color.green
+                    : (totalRealizedProfitLossMinor < 0 ? Color.red : Color.primary)
+            )
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)

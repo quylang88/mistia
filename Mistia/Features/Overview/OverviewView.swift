@@ -663,16 +663,7 @@ struct OverviewView: View {
         let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? .now
         let summary = InvestmentSummaryLogic.summary(
             positions: positions,
-            trades: ownerTrades.map {
-                InvestmentTradeCalculation(
-                    id: $0.id,
-                    releasedCostBasisMinor: $0.releasedCostBasisMinor,
-                    realizedProfitLossMinor: $0.realizedProfitLossMinor,
-                    positionQuantityAfter: $0.positionQuantityAfter,
-                    positionCostBasisAfterMinor: $0.positionCostBasisAfterMinor,
-                    openLotCountAfter: 0
-                )
-            },
+            trades: ownerTrades.map(\.calculation),
             tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
             period: DateInterval(start: monthStart, end: monthEnd),
             investmentWalletBalanceMinor: walletBalance

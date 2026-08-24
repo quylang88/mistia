@@ -384,6 +384,17 @@ nonisolated final class InvestmentTrade: Identifiable, Hashable {
         get { InvestmentDecimalCoding.decimal(from: positionQuantityAfterDecimalString) ?? 0 }
         set { positionQuantityAfterDecimalString = InvestmentDecimalCoding.string(from: newValue) }
     }
+
+    var calculation: InvestmentTradeCalculation {
+        InvestmentTradeCalculation(
+            id: id,
+            releasedCostBasisMinor: releasedCostBasisMinor,
+            realizedProfitLossMinor: realizedProfitLossMinor,
+            positionQuantityAfter: positionQuantityAfter,
+            positionCostBasisAfterMinor: positionCostBasisAfterMinor,
+            openLotCountAfter: 0
+        )
+    }
 }
 
 // Kept only so V7/V8 stores can migrate into V9. It is not part of the current schema.
