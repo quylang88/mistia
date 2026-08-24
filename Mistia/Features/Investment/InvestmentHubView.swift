@@ -2659,6 +2659,7 @@ struct InvestmentWalletDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaUIState.self) private var uiState: MistiaUIState?
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var transactions: [LedgerTransaction]
@@ -2671,6 +2672,7 @@ struct InvestmentWalletDetailView: View {
 
     let ownerUserID: UUID
 
+    @State private var viewID = UUID()
     @State private var showsReconciliation = false
     @State private var reconciliationWalletID: UUID?
     @State private var showsLinkedWalletPicker = false
@@ -2833,6 +2835,12 @@ struct InvestmentWalletDetailView: View {
             Button(L10n.common.ok, role: .cancel) { }
         } message: {
             Text(verbatim: alertMessage ?? "")
+        }
+        .onAppear {
+            uiState?.requestQuickCreateHidden(true, id: viewID)
+        }
+        .onDisappear {
+            uiState?.requestQuickCreateHidden(false, id: viewID)
         }
     }
 
