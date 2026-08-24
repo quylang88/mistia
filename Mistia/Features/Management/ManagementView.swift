@@ -567,11 +567,7 @@ struct ManagementView: View {
                 }
             }
             .navigationDestination(item: $investmentWalletTarget) { target in
-                InvestmentHubView(
-                    ownerUserIDOverride: target.ownerUserID,
-                    embedsInNavigationStack: false,
-                    opensWalletDetailInitially: true
-                )
+                InvestmentWalletDetailView(ownerUserID: target.ownerUserID)
             }
         }
         .familyMemberViewingExitAlert(

@@ -2,11 +2,10 @@ import Charts
 import SwiftData
 import SwiftUI
 
-private enum OverviewNavigationDestination: String, Identifiable {
+private enum OverviewNavigationDestination: Hashable {
     case profile
     case investment
-
-    var id: String { rawValue }
+    case investmentWallet(UUID)
 }
 
 private struct OverviewExpenseDaySelection: Identifiable, Equatable {
@@ -199,7 +198,7 @@ struct OverviewView: View {
 
     @State private var editorTarget: TransactionEditorTarget?
     @State private var selectedExpenseDay: OverviewExpenseDaySelection?
-    @State private var destination: OverviewNavigationDestination?
+    @State private var navigationPath = NavigationPath()
     @State private var statementTarget: StatementTarget?
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var settlementEditorTarget: SettlementEditorTarget?
@@ -733,7 +732,7 @@ struct OverviewView: View {
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
         let preparingEvents = renderSnapshot.preparingSettlementEvents
 
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
                 title: L10n.overview.overview.overview,
@@ -747,7 +746,7 @@ struct OverviewView: View {
                     if let memberToolbar {
                         memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
                     } else {
-                        destination = .profile
+                        navigationPath.append(OverviewNavigationDestination.profile)
                     }
                 },
                 contentSpacing: 18,
@@ -788,7 +787,7 @@ struct OverviewView: View {
                             snapshot: investmentOverviewSnapshot(),
                             canView: ownerUserIDForInvestment.map(canViewInvestment(ownerUserID:)) ?? false
                         ) {
-                            destination = .investment
+                            navigationPath.append(OverviewNavigationDestination.investment)
                         }
                     case .preparingSettlements:
                         if !preparingEvents.isEmpty {
@@ -817,12 +816,23 @@ struct OverviewView: View {
                     }
                 }
             }
-            .navigationDestination(item: $destination) { route in
+            .navigationDestination(for: OverviewNavigationDestination.self) { route in
                 switch route {
                 case .profile:
                     ManagementAccountView()
                 case .investment:
-                    InvestmentHubView(ownerUserIDOverride: ownerUserIDForInvestment, isModalPresentation: false)
+                    InvestmentHubView(
+                        ownerUserIDOverride: ownerUserIDForInvestment,
+                        isModalPresentation: false,
+                        embedsInNavigationStack: false,
+                        onOpenInvestmentWallet: { ownerUserID in
+                            navigationPath.append(
+                                OverviewNavigationDestination.investmentWallet(ownerUserID)
+                            )
+                        }
+                    )
+                case .investmentWallet(let ownerUserID):
+                    InvestmentWalletDetailView(ownerUserID: ownerUserID)
                 }
             }
             .navigationDestination(item: $statementTarget) { target in

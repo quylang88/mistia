@@ -106,6 +106,7 @@ struct InvestmentHubView: View {
     let ownerUserIDOverride: UUID?
     let isModalPresentation: Bool
     let embedsInNavigationStack: Bool
+    let onOpenInvestmentWallet: ((UUID) -> Void)?
 
     @State private var viewID = UUID()
     @State private var selectedChannelID: UUID?
@@ -123,12 +124,12 @@ struct InvestmentHubView: View {
         ownerUserIDOverride: UUID? = nil,
         isModalPresentation: Bool = false,
         embedsInNavigationStack: Bool = true,
-        opensWalletDetailInitially: Bool = false
+        onOpenInvestmentWallet: ((UUID) -> Void)? = nil
     ) {
         self.ownerUserIDOverride = ownerUserIDOverride
         self.isModalPresentation = isModalPresentation
         self.embedsInNavigationStack = embedsInNavigationStack
-        _showsInvestmentWalletDetail = State(initialValue: opensWalletDetailInitially)
+        self.onOpenInvestmentWallet = onOpenInvestmentWallet
     }
 
     private var ownerUserID: UUID? {
@@ -336,7 +337,9 @@ struct InvestmentHubView: View {
     private var presentedHub: some View {
         Group {
             if embedsInNavigationStack {
-                NavigationStack { hubNavigationContent }
+                NavigationStack {
+                    hubNavigationContent
+                }
             } else {
                 hubNavigationContent
             }
@@ -925,7 +928,15 @@ struct InvestmentHubView: View {
     }
 
     private func openInvestmentWallet() {
-        showsInvestmentWalletDetail = true
+        guard let ownerUserID else { return }
+        Task { @MainActor in
+            await Task.yield()
+            if let onOpenInvestmentWallet {
+                onOpenInvestmentWallet(ownerUserID)
+            } else {
+                showsInvestmentWalletDetail = true
+            }
+        }
     }
 
     private func presentPermissionPrompt(
