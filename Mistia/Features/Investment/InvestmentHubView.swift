@@ -105,6 +105,7 @@ struct InvestmentHubView: View {
 
     let ownerUserIDOverride: UUID?
     let isModalPresentation: Bool
+    let embedsInNavigationStack: Bool
 
     @State private var viewID = UUID()
     @State private var selectedChannelID: UUID?
@@ -118,9 +119,16 @@ struct InvestmentHubView: View {
     @State private var activeAlert: InvestmentHubAlert?
     @State private var isRequestingPermission = false
 
-    init(ownerUserIDOverride: UUID? = nil, isModalPresentation: Bool = false) {
+    init(
+        ownerUserIDOverride: UUID? = nil,
+        isModalPresentation: Bool = false,
+        embedsInNavigationStack: Bool = true,
+        opensWalletDetailInitially: Bool = false
+    ) {
         self.ownerUserIDOverride = ownerUserIDOverride
         self.isModalPresentation = isModalPresentation
+        self.embedsInNavigationStack = embedsInNavigationStack
+        _showsInvestmentWalletDetail = State(initialValue: opensWalletDetailInitially)
     }
 
     private var ownerUserID: UUID? {
@@ -326,53 +334,61 @@ struct InvestmentHubView: View {
     }
 
     private var presentedHub: some View {
-        NavigationStack {
-            Group {
-                if canView {
-                    hubContent
-                } else {
-                    privateContent
+        Group {
+            if embedsInNavigationStack {
+                NavigationStack { hubNavigationContent }
+            } else {
+                hubNavigationContent
+            }
+        }
+    }
+
+    private var hubNavigationContent: some View {
+        Group {
+            if canView {
+                hubContent
+            } else {
+                privateContent
+            }
+        }
+        .navigationTitle(L10n.investment.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            isPresented: $isSearchPresented,
+            prompt: searchPrompt
+        )
+        .searchToolbarBehavior(.minimize)
+        .toolbar {
+            if isModalPresentation {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel(L10n.common.close)
                 }
             }
-            .navigationTitle(L10n.investment.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(
-                text: $searchText,
-                isPresented: $isSearchPresented,
-                prompt: searchPrompt
-            )
-            .searchToolbarBehavior(.minimize)
-            .toolbar {
-                if isModalPresentation {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .accessibilityLabel(L10n.common.close)
-                    }
-                }
-                if canView {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        managementMenu
-                    }
+            if canView {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    managementMenu
                 }
             }
-            .onChange(of: selectedTab) { _, _ in
+        }
+        .onChange(of: selectedTab) { _, _ in
+            searchText = ""
+        }
+        .onChange(of: isSearchPresented) { _, presented in
+            if !presented {
                 searchText = ""
             }
-            .onChange(of: isSearchPresented) { _, presented in
-                if !presented {
-                    searchText = ""
-                }
-            }
-            .navigationDestination(isPresented: $showsInvestmentWalletDetail) {
-                if let ownerUserID {
-                    InvestmentWalletDetailView(ownerUserID: ownerUserID)
-                }
+        }
+        .navigationDestination(isPresented: $showsInvestmentWalletDetail) {
+            if let ownerUserID {
+                InvestmentWalletDetailView(ownerUserID: ownerUserID)
             }
         }
     }
@@ -2135,9 +2151,9 @@ private struct InvestmentTradeEditorSheet: View {
                     )
                     TextField(L10n.investment.trade.note, text: $note)
                 }
-                if !isZeroAmountMode {
+                if kind == .sell || !isPromotionalFreeBuy {
                     Section {
-                        Picker(kind == .buy ? L10n.investment.trade.fundingWallet : L10n.investment.trade.capitalWallet, selection: $walletID) {
+                        Picker(walletPickerTitle, selection: $walletID) {
                             ForEach(availableWallets) { wallet in
                                 Text(wallet.name).tag(Optional(wallet.id))
                             }
@@ -2246,7 +2262,7 @@ private struct InvestmentTradeEditorSheet: View {
         if kind == .sell {
             guard parsedDecimal(quantity) <= availableQuantity else { return false }
             if isTotalLoss {
-                return trade == nil || canEditExisting
+                return walletID != nil && (trade == nil || canEditExisting)
             }
         }
         if kind == .buy && isPromotionalFreeBuy {
@@ -2548,7 +2564,7 @@ private struct InvestmentTradeEditorSheet: View {
                     exchangeRateProvider: exchangeRateProvider,
                     exchangeRateDate: exchangeRateDate,
                     fundingWalletID: isPromotional ? nil : (kind == .buy ? walletID : nil),
-                    capitalReturnWalletID: isLoss ? nil : (kind == .sell ? walletID : nil),
+                    capitalReturnWalletID: kind == .sell ? walletID : nil,
                     note: effectiveNote,
                     occurredAt: occurredAt,
                     createdAt: trade?.createdAt ?? .now
@@ -2620,6 +2636,11 @@ private struct InvestmentTradeEditorSheet: View {
 
     private var isZeroAmountMode: Bool {
         (kind == .sell && isTotalLoss) || (kind == .buy && isPromotionalFreeBuy)
+    }
+
+    private var walletPickerTitle: String {
+        if kind == .buy { return L10n.investment.trade.fundingWallet }
+        return isTotalLoss ? L10n.investment.trade.lossWallet : L10n.investment.trade.capitalWallet
     }
 }
 
@@ -2716,15 +2737,12 @@ struct InvestmentWalletDetailView: View {
     private var ownerLocations: [InvestmentWalletCashLocation] {
         cashSnapshot.locations.filter { $0.totalMinor > 0 }
     }
-    private var locationsAwaitingTransfer: [InvestmentWalletCashLocation] {
-        guard let linkedWallet else { return [] }
-        return ownerLocations.filter {
-            $0.walletID != linkedWallet.id && $0.bookedMinor > 0
-        }
+    private var ordinaryWalletLocations: [InvestmentWalletCashLocation] {
+        guard let linkedWallet else { return ownerLocations }
+        return ownerLocations.filter { $0.walletID != linkedWallet.id }
     }
-    private var realizedProfitLossMinor: Int64 {
-        trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
-            .reduce(0) { $0 + $1.realizedProfitLossMinor }
+    private var locationsAwaitingTransfer: [InvestmentWalletCashLocation] {
+        ordinaryWalletLocations.filter { $0.bookedMinor > 0 }
     }
     private var balanceIndex: TransactionWalletBalanceIndex {
         TransactionLogic.walletBalanceIndex(
@@ -2738,9 +2756,8 @@ struct InvestmentWalletDetailView: View {
         trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && $0.kind == .sell }
             .sorted { $0.occurredAt > $1.occurredAt }
     }
-    private var linkedInvestmentMinor: Int64 {
-        guard let linkedWallet else { return 0 }
-        return cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0
+    private var availableProfitMinor: Int64 {
+        max(cashSnapshot.totalMinor, 0)
     }
 
     var body: some View {
@@ -2809,39 +2826,17 @@ struct InvestmentWalletDetailView: View {
     }
 
     private var overviewCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(L10n.investment.wallet.remainingCash)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.investment.hub.realizedProfitLoss)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Text(cashSnapshot.totalMinor.formattedCurrency(code: accountingCurrencyCode))
+            Text(availableProfitMinor.formattedCurrency(code: accountingCurrencyCode))
                 .font(.system(size: 32, weight: .bold, design: .rounded))
-            HStack {
-                metric(
-                    title: L10n.investment.wallet.inLinkedWallet,
-                    amount: linkedInvestmentMinor,
-                    color: MistiaAccent.purple.color
-                )
-                Divider().frame(height: 40)
-                metric(
-                    title: L10n.investment.wallet.realizedProfitLoss,
-                    amount: realizedProfitLossMinor,
-                    color: realizedProfitLossMinor >= 0 ? .green : .red
-                )
-            }
+                .foregroundStyle(availableProfitMinor > 0 ? Color.green : Color.primary)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(MistiaAccent.purple.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private func metric(title: String, amount: Int64, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(amount.formattedCurrency(code: accountingCurrencyCode))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(color)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var linkedWalletCard: some View {
@@ -2859,8 +2854,9 @@ struct InvestmentWalletDetailView: View {
             if let linkedWallet {
                 HStack(spacing: 12) {
                     Image(systemName: linkedWallet.iconSymbolName)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Color(hex: linkedWallet.iconColorHex))
-                        .frame(width: 38, height: 38)
+                        .frame(width: 40, height: 40)
                         .background(Color(hex: linkedWallet.iconColorHex).opacity(0.12), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text(linkedWallet.name).font(.subheadline.weight(.semibold))
@@ -2880,10 +2876,13 @@ struct InvestmentWalletDetailView: View {
                     }
                     Spacer()
                 }
-                let heldInvestment = cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0
+                let heldInvestment = max(
+                    cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0,
+                    0
+                )
                 Text(L10n.investment.wallet.investmentPortion(heldInvestment.formattedCurrency(code: accountingCurrencyCode)))
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(MistiaAccent.purple.color)
+                    .foregroundStyle(MistiaAccent.lightPurple.color)
             } else {
                 ContentUnavailableView(
                     L10n.investment.wallet.notSet,
@@ -2900,13 +2899,13 @@ struct InvestmentWalletDetailView: View {
     private var locationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.wallet.locations).font(.headline)
-            if ownerLocations.isEmpty {
+            if ordinaryWalletLocations.isEmpty {
                 Text(L10n.investment.wallet.noLocations)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 12)
             } else {
-                ForEach(ownerLocations) { location in
+                ForEach(ordinaryWalletLocations) { location in
                     Button {
                         guard canReconcile(location) else { return }
                         reconciliationWalletID = location.walletID
@@ -2961,12 +2960,19 @@ struct InvestmentWalletDetailView: View {
             } else {
                 ForEach(saleTimelineTrades.prefix(40)) { trade in
                     HStack(spacing: 12) {
-                        Image(systemName: "arrow.up.right.circle.fill")
-                            .foregroundStyle(trade.realizedProfitLossMinor >= 0 ? Color.green : Color.red)
-                            .frame(width: 28)
+                        ZStack(alignment: .bottomTrailing) {
+                            InvestmentProductThumbnail(
+                                imagePath: assets.first(where: { $0.id == trade.assetID })?.imagePath,
+                                size: 44
+                            )
+                            Image(systemName: trade.grossAmountMinor == 0 ? "minus.circle.fill" : "arrow.up.circle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(trade.grossAmountMinor == 0 ? Color.red : Color.green)
+                                .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                        }
                         VStack(alignment: .leading, spacing: 3) {
                             Text(assets.first { $0.id == trade.assetID }?.name ?? L10n.investment.hub.sell)
-                                .font(.subheadline.weight(.medium))
+                                .font(.subheadline.weight(.semibold))
                             Text(saleDestinationText(for: trade))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -2976,28 +2982,39 @@ struct InvestmentWalletDetailView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 3) {
-                            Text(
-                                L10n.investment.wallet.saleAmount(
-                                    trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)
+                            if trade.grossAmountMinor == 0 {
+                                Text(
+                                    L10n.investment.trade.totalLossBadge(
+                                        trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)
+                                    )
                                 )
-                            )
-                            .font(.subheadline.weight(.semibold))
-                            Text(
-                                L10n.investment.wallet.saleProfitLoss(
-                                    trade.realizedProfitLossMinor.formattedCurrency(code: trade.accountingCurrencyCode)
-                                )
-                            )
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.red)
+                            } else {
+                                Text(verbatim: trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode))
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            Text(verbatim: trade.realizedProfitLossMinor.formattedCurrency(code: trade.accountingCurrencyCode))
                             .font(.caption.weight(.medium))
                             .foregroundStyle(trade.realizedProfitLossMinor >= 0 ? Color.green : Color.red)
                         }
                     }
-                    .padding(.vertical, 6)
+                    .padding(14)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
             }
         }
     }
 
     private func saleDestinationText(for trade: InvestmentTrade) -> String {
+        if trade.grossAmountMinor == 0 {
+            guard let walletID = trade.capitalReturnWalletID,
+                  let wallet = wallets.first(where: { $0.id == walletID }) else {
+                return L10n.investment.wallet.liquidationWalletUnknown
+            }
+            return L10n.investment.wallet.liquidationDeductedFrom(wallet.name)
+        }
         guard let walletID = trade.capitalReturnWalletID,
               let wallet = wallets.first(where: { $0.id == walletID }) else {
             return L10n.investment.wallet.saleNoDestination
@@ -3137,7 +3154,7 @@ private struct InvestmentCashReconciliationSheet: View {
     private var requests: [InvestmentReconciliationRequest] {
         if let selectedLocation {
             let entered = amountText.currencyInputToMinorUnits(currencyCode: currencyCode)
-            guard entered > 0, entered <= selectedLocation.bookedMinor else { return [] }
+            guard entered > 0 else { return [] }
             return [InvestmentReconciliationRequest(walletID: selectedLocation.walletID, accountingAmountMinor: entered)]
         }
         return locations.map {
@@ -3183,10 +3200,13 @@ private struct InvestmentCashReconciliationSheet: View {
     private func instructionRow(_ location: InvestmentWalletCashLocation) -> some View {
         let holder = wallets.first { $0.id == location.walletID }?.name ?? L10n.investment.wallet.unidentified
         let linked = wallets.first { $0.id == linkedWalletID }?.name ?? L10n.investment.wallet.linkedWallet
+        let transferAmount = selectedLocation?.walletID == location.walletID
+            ? amountText.currencyInputToMinorUnits(currencyCode: currencyCode)
+            : location.bookedMinor
         return VStack(alignment: .leading, spacing: 5) {
             Text(L10n.investment.wallet.realTransferInstruction(holder, linked))
                 .font(.subheadline.weight(.medium))
-            Text(location.bookedMinor.formattedCurrency(code: currencyCode))
+            Text(transferAmount.formattedCurrency(code: currencyCode))
                 .font(.headline)
                 .foregroundStyle(MistiaAccent.purple.color)
         }

@@ -122,6 +122,9 @@ private struct ManagementRenderSnapshotCacheKey: Hashable {
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
     let investmentChannelSignature: MistiaCollectionChangeSignature
+    let investmentPostingSignature: MistiaCollectionChangeSignature
+    let investmentCashMetadataSignature: MistiaCollectionChangeSignature
+    let investmentConfigurationSignature: MistiaCollectionChangeSignature
 }
 
 private struct ManagementInvestmentWalletTarget: Identifiable, Hashable {
@@ -163,6 +166,9 @@ struct ManagementView: View {
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
     @Query private var investmentChannels: [InvestmentChannel]
+    @Query private var investmentWalletPostings: [InvestmentWalletPosting]
+    @Query private var investmentCashPostingMetadata: [InvestmentCashPostingMetadata]
+    @Query private var investmentWalletConfigurations: [InvestmentWalletConfiguration]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
@@ -250,10 +256,23 @@ struct ManagementView: View {
             wallets: candidateWalletSnapshots,
             records: transactionSnapshots
         )
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
 
         var balancesByID: [UUID: Int64] = [:]
         for (wallet, walletSnapshot) in zip(candidateWallets, candidateWalletSnapshots) {
-            if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
+            let ownerUserID = walletOwnerMap[wallet.id]
+                ?? familyContextStore.selectedSubjectUserID
+                ?? sessionStore.activeLocalProfileUserID
+            if let ownerUserID,
+               InvestmentSystemWalletIdentity.isInvestmentWallet(
+                   walletID: wallet.id,
+                   ownerUserID: ownerUserID
+               ) {
+                balancesByID[wallet.id] = linkedInvestmentProfitMinor(
+                    ownerUserID: ownerUserID,
+                    accountingCurrencyCode: wallet.currencyCode
+                )
+            } else if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
                 balancesByID[wallet.id] = TransactionLogic.creditCardBalance(
                     creditLimitMinor: profile.creditLimitMinor,
                     wallet: walletSnapshot,
@@ -263,7 +282,6 @@ struct ManagementView: View {
                 balancesByID[wallet.id] = balanceIndex.balance(for: walletSnapshot)
             }
         }
-        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
         let activeWallets = candidateWallets.filter { wallet in
             let ownerUserID = walletOwnerMap[wallet.id]
                 ?? familyContextStore.selectedSubjectUserID
@@ -294,6 +312,42 @@ struct ManagementView: View {
                 includeEmptyParents: true
             )
         )
+    }
+
+    private func linkedInvestmentProfitMinor(
+        ownerUserID: UUID,
+        accountingCurrencyCode: String
+    ) -> Int64 {
+        guard let linkedWalletID = investmentWalletConfigurations.first(where: {
+            $0.ownerUserID == ownerUserID
+        })?.linkedWalletID else {
+            return 0
+        }
+        let metadataByPostingID = Dictionary(
+            uniqueKeysWithValues: investmentCashPostingMetadata
+                .filter { $0.ownerUserID == ownerUserID }
+                .map { ($0.id, $0) }
+        )
+        let snapshot = InvestmentCashAllocationLogic.snapshot(
+            postings: investmentWalletPostings.compactMap { posting in
+                guard posting.ownerUserID == ownerUserID,
+                      posting.deletedAt == nil,
+                      let bucket = metadataByPostingID[posting.id]?.cashBucket else {
+                    return nil
+                }
+                return InvestmentCashPostingSnapshot(
+                    walletID: posting.walletID,
+                    currencyCode: posting.currencyCode,
+                    amountMinor: posting.amountMinor,
+                    accountingAmountMinor: posting.accountingAmountMinor,
+                    accountingCurrencyCode: posting.accountingCurrencyCode,
+                    bucket: bucket
+                )
+            },
+            accountingCurrencyCode: accountingCurrencyCode
+        )
+        let linkedProfit = snapshot.locations.first { $0.walletID == linkedWalletID }?.totalMinor ?? 0
+        return max(linkedProfit, 0)
     }
 
     private func cachedRenderSnapshot(for key: ManagementRenderSnapshotCacheKey) -> ManagementRenderSnapshot {
@@ -368,6 +422,22 @@ struct ManagementView: View {
                 deletedAt: \.deletedAt,
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
+            ),
+            investmentPostingSignature: MistiaCollectionChangeSignature.make(
+                investmentWalletPostings,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            investmentCashMetadataSignature: MistiaCollectionChangeSignature.make(
+                investmentCashPostingMetadata,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            investmentConfigurationSignature: MistiaCollectionChangeSignature.make(
+                investmentWalletConfigurations,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
             )
         )
     }
@@ -497,7 +567,11 @@ struct ManagementView: View {
                 }
             }
             .navigationDestination(item: $investmentWalletTarget) { target in
-                InvestmentWalletDetailView(ownerUserID: target.ownerUserID)
+                InvestmentHubView(
+                    ownerUserIDOverride: target.ownerUserID,
+                    embedsInNavigationStack: false,
+                    opensWalletDetailInitially: true
+                )
             }
         }
         .familyMemberViewingExitAlert(
@@ -1735,6 +1809,9 @@ private struct ManagementWalletRow: View {
     }
 
     private var balanceColor: Color {
+        if wallet.kind == .investment {
+            return currentBalanceMinor > 0 ? MistiaAccent.income.color : .primary
+        }
         if wallet.kind == .creditCard {
             // For credit cards, available credit is always positive (good)
             return MistiaAccent.income.color

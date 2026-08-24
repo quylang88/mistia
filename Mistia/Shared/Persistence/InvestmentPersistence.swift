@@ -1154,10 +1154,14 @@ enum InvestmentPersistenceService {
             guard request.walletID != linkedWalletID,
                   let holderWallet = walletsByID[request.walletID],
                   let location = snapshot.locations.first(where: { $0.walletID == request.walletID }),
-                  location.bookedMinor > 0,
-                  request.accountingAmountMinor <= location.bookedMinor else {
+                  location.bookedMinor > 0 else {
                 throw InvestmentPersistenceError.invalidTradeInput
             }
+            let holderBalance = try currentBalance(wallet: holderWallet, context: context)
+            guard holderBalance >= request.accountingAmountMinor else {
+                throw InvestmentPersistenceError.insufficientFunds
+            }
+            let profitAmountMinor = min(request.accountingAmountMinor, location.bookedMinor)
             let eventID = UUID()
             let ledgerID = InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "cash-reconciliation")
             let transaction = try upsertLedgerTransaction(
@@ -1177,7 +1181,7 @@ enum InvestmentPersistenceService {
             )
             try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
 
-            let holderAccountingDelta = -request.accountingAmountMinor
+            let holderAccountingDelta = -profitAmountMinor
             let holderLocalDelta = try proportionalLocalCashDelta(
                 accountingDeltaMinor: holderAccountingDelta,
                 location: location,
@@ -1202,7 +1206,7 @@ enum InvestmentPersistenceService {
                 now: now,
                 context: context
             )
-            let linkedAccountingDelta = request.accountingAmountMinor
+            let linkedAccountingDelta = profitAmountMinor
             let linkedPosting = try upsertCashPosting(
                 id: InvestmentLedgerIdentity.derivedID(eventID: eventID, component: "linked-cash-posting"),
                 ownerUserID: ownerUserID,

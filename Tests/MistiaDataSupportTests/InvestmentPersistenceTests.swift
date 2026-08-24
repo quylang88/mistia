@@ -265,7 +265,7 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(systemWallet, fixture), 0)
     }
 
-    func testSellWithZeroAmountRecordsTotalLossAndDoesNotCreditCapitalWallet() throws {
+    func testSellWithZeroAmountDeductsTotalLossFromSelectedWallet() throws {
         let fixture = try makeFixture()
         let buy = try saveTrade(
             fixture: fixture,
@@ -280,17 +280,16 @@ final class InvestmentPersistenceTests: XCTestCase {
             kind: .sell,
             quantity: 2,
             gross: 0,
-            capitalWalletID: nil,
+            capitalWalletID: fixture.fundingWallet.id,
             occurredAt: fixture.start.addingTimeInterval(1)
         )
 
         let systemWallet = try XCTUnwrap(fetchSystemWallet(fixture))
-        // Funding wallet was debited 200 from initial 1000 balance -> 800
-        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 800)
+        // The selected wallet pays both the original purchase and the liquidation loss.
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 600)
         // Capital wallet was untouched (0 balance)
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 0)
-        // System investment wallet absorbed the full loss of 200
-        XCTAssertEqual(try balance(systemWallet, fixture), -200)
+        XCTAssertEqual(try balance(systemWallet, fixture), 0)
 
         let storedBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
         let storedLoss = try XCTUnwrap(fetchTrade(id: lossSale.id, fixture))
@@ -299,6 +298,7 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(storedLoss.realizedProfitLossMinor, -200)
         XCTAssertEqual(storedLoss.positionQuantityAfter, 0)
         XCTAssertEqual(storedLoss.positionCostBasisAfterMinor, 0)
+        XCTAssertEqual(storedLoss.capitalReturnWalletID, fixture.fundingWallet.id)
         XCTAssertNil(storedLoss.capitalReturnLedgerTransactionID)
         XCTAssertNotNil(storedLoss.profitLossLedgerTransactionID)
     }
@@ -1494,6 +1494,75 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(activePostings.count, 1)
         XCTAssertEqual(activePostings.first?.amountMinor, -90)
         XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 910)
+    }
+
+    func testProfitTransferCanIncludeOrdinaryMoneyAboveHeldProfit() throws {
+        let fixture = try makeFixture()
+        let linkedWallet = LedgerWallet(
+            name: "Investment Cash",
+            kind: .cash,
+            iconSymbolName: "banknote.fill",
+            iconColorHex: "#9A67FF",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0
+        )
+        fixture.context.insert(linkedWallet)
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .wallet,
+            recordID: linkedWallet.id,
+            ownerUserID: fixture.ownerID,
+            context: fixture.context
+        )
+        _ = try InvestmentPersistenceService.setLinkedWallet(
+            ownerUserID: fixture.ownerID,
+            linkedWalletID: linkedWallet.id,
+            context: fixture.context
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 150,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        let reconciliation = try InvestmentPersistenceService.reconcileCash(
+            ownerUserID: fixture.ownerID,
+            requests: [
+                InvestmentReconciliationRequest(
+                    walletID: fixture.capitalWallet.id,
+                    accountingAmountMinor: 80
+                )
+            ],
+            context: fixture.context
+        )
+
+        let snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(reconciliation.instructions.first?.accountingAmountMinor, 80)
+        XCTAssertEqual(snapshot.totalMinor, 50)
+        XCTAssertEqual(snapshot.locations.first { $0.walletID == fixture.capitalWallet.id }?.bookedMinor ?? 0, 0)
+        XCTAssertEqual(snapshot.locations.first { $0.walletID == linkedWallet.id }?.bookedMinor, 50)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 70)
+        XCTAssertEqual(try balance(linkedWallet, fixture), 80)
+
+        let reconciliationEventID = try XCTUnwrap(reconciliation.instructions.first?.id)
+        let transferPostings = try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+            .filter { $0.eventID == reconciliationEventID && $0.role == .cashReconciliation }
+        XCTAssertEqual(transferPostings.reduce(0) { $0 + $1.accountingAmountMinor }, 0)
+        XCTAssertEqual(transferPostings.map(\.accountingAmountMinor).sorted(), [-50, 50])
     }
 
     func testInvestmentCashSaleReconciliationAndConsumptionScenario() throws {
