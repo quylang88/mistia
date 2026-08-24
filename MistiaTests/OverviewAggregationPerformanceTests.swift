@@ -255,8 +255,7 @@ final class OverviewAggregationPerformanceTests: XCTestCase {
             ownershipSignature: .empty,
             investmentChannelSignature: .empty,
             investmentAssetSignature: .empty,
-            investmentTradeSignature: .empty,
-            investmentValuationSignature: .empty
+            investmentTradeSignature: .empty
         )
     }
 
