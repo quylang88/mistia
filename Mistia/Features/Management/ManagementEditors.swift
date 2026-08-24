@@ -5,20 +5,6 @@ struct ManagementWalletEditorTarget: Identifiable {
     let id = UUID()
     let wallet: LedgerWallet?
     let defaultKind: LedgerWalletKind
-    let suggestedName: String?
-    let onSaved: ((LedgerWallet) -> Void)?
-
-    init(
-        wallet: LedgerWallet?,
-        defaultKind: LedgerWalletKind,
-        suggestedName: String? = nil,
-        onSaved: ((LedgerWallet) -> Void)? = nil
-    ) {
-        self.wallet = wallet
-        self.defaultKind = defaultKind
-        self.suggestedName = suggestedName
-        self.onSaved = onSaved
-    }
 }
 
 struct ManagementCategoryEditorTarget: Identifiable {
@@ -78,13 +64,9 @@ struct ManagementWalletEditorSheet: View {
     init(target: ManagementWalletEditorTarget) {
         self.target = target
         let initialDraft = WalletDraft(wallet: target.wallet, defaultKind: target.defaultKind)
-        var resolvedInitialDraft = initialDraft
-        if target.wallet == nil, let suggestedName = target.suggestedName {
-            resolvedInitialDraft.name = suggestedName
-        }
-        self.initialDraft = resolvedInitialDraft
-        _draft = State(initialValue: resolvedInitialDraft)
-        _dismissBaselineDraft = State(initialValue: resolvedInitialDraft)
+        self.initialDraft = initialDraft
+        _draft = State(initialValue: initialDraft)
+        _dismissBaselineDraft = State(initialValue: initialDraft)
     }
 
     private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
@@ -548,7 +530,6 @@ struct ManagementWalletEditorSheet: View {
                     modifiedAt: now
                 )
             }
-            target.onSaved?(walletForSync)
             dismiss()
         } catch {
             alertMessage = L10n.management.management.couldnTSaveThisWalletRightNow + " \(error.localizedDescription)"

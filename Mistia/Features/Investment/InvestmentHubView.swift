@@ -2161,7 +2161,6 @@ private struct InvestmentTradeEditorSheet: View {
                 InvestmentLinkedWalletPickerSheet(
                     wallets: eligibleLinkedWallets,
                     selectedWalletID: linkedWalletID,
-                    onCreateDedicatedWallet: nil,
                     onSelect: { walletID in
                         do {
                             _ = try InvestmentPersistenceService.setLinkedWallet(
@@ -2642,7 +2641,6 @@ struct InvestmentWalletDetailView: View {
     @State private var showsReconciliation = false
     @State private var reconciliationWalletID: UUID?
     @State private var showsLinkedWalletPicker = false
-    @State private var walletEditorTarget: ManagementWalletEditorTarget?
     @State private var pendingLinkedWalletID: UUID?
     @State private var showsLinkChangeOptions = false
     @State private var alertMessage: String?
@@ -2775,22 +2773,9 @@ struct InvestmentWalletDetailView: View {
             InvestmentLinkedWalletPickerSheet(
                 wallets: eligibleWallets,
                 selectedWalletID: configuration?.linkedWalletID,
-                onCreateDedicatedWallet: isOwner ? {
-                    showsLinkedWalletPicker = false
-                    walletEditorTarget = ManagementWalletEditorTarget(
-                        wallet: nil,
-                        defaultKind: .cash,
-                        suggestedName: L10n.investment.wallet.dedicatedCashName,
-                        onSaved: linkNewDedicatedWallet
-                    )
-                } : nil,
                 onSelect: selectLinkedWallet
             )
             .presentationDragIndicator(.hidden)
-        }
-        .sheet(item: $walletEditorTarget) { target in
-            ManagementWalletEditorSheet(target: target)
-                .presentationDragIndicator(.hidden)
         }
         .confirmationDialog(
             L10n.investment.wallet.changeChoiceTitle,
@@ -2896,17 +2881,6 @@ struct InvestmentWalletDetailView: View {
                     description: Text(L10n.investment.wallet.notSetMessage)
                 )
                 .frame(maxWidth: .infinity)
-                if canEdit {
-                    Button(L10n.investment.wallet.createDedicatedCash) {
-                        walletEditorTarget = ManagementWalletEditorTarget(
-                            wallet: nil,
-                            defaultKind: .cash,
-                            suggestedName: L10n.investment.wallet.dedicatedCashName,
-                            onSaved: linkNewDedicatedWallet
-                        )
-                    }
-                    .buttonStyle(.bordered)
-                }
             }
         }
         .padding(18)
@@ -3047,11 +3021,6 @@ struct InvestmentWalletDetailView: View {
         }
     }
 
-    private func linkNewDedicatedWallet(_ wallet: LedgerWallet) {
-        pendingLinkedWalletID = wallet.id
-        applyPendingLink(moveAll: false)
-    }
-
     private func applyPendingLink(moveAll: Bool) {
         guard let walletID = pendingLinkedWalletID else { return }
         do {
@@ -3094,7 +3063,6 @@ private struct InvestmentLinkedWalletPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     let wallets: [LedgerWallet]
     let selectedWalletID: UUID?
-    let onCreateDedicatedWallet: (() -> Void)?
     let onSelect: (UUID) -> Void
 
     var body: some View {
@@ -3112,13 +3080,6 @@ private struct InvestmentLinkedWalletPickerSheet: View {
                             }
                         }
                         .foregroundStyle(.primary)
-                    }
-                }
-                if let onCreateDedicatedWallet {
-                    Section {
-                        Button(action: onCreateDedicatedWallet) {
-                            Label(L10n.investment.wallet.createDedicatedCash, systemImage: "plus.circle.fill")
-                        }
                     }
                 }
             }
