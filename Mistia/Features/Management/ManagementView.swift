@@ -638,9 +638,6 @@ struct ManagementView: View {
         .onChange(of: uiState.managementNavigationRequest?.id, initial: true) { _, _ in
             handleManagementNavigationRequest()
         }
-        .onAppear {
-            try? InvestmentPersistenceService.reconcileAllTrades(context: modelContext)
-        }
         .onDisappear {
             uiState.requestQuickCreateHidden(false, id: quickCreateHideRequestID)
         }
