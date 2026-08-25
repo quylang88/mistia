@@ -2873,6 +2873,18 @@ struct InvestmentWalletDetailView: View {
                 }
             }
             if let linkedWallet {
+                let heldInvestment = max(
+                    cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0,
+                    0
+                )
+                let appBalance = balanceIndex.balance(
+                    for: TransactionWalletSnapshot(
+                        id: linkedWallet.id,
+                        kind: linkedWallet.kind,
+                        openingBalanceMinor: linkedWallet.openingBalanceMinor
+                    )
+                )
+                let actualBalance = appBalance + heldInvestment
                 HStack(spacing: 12) {
                     MistiaFinanceIconView(
                         icon: linkedWallet.iconSymbolName,
@@ -2882,14 +2894,8 @@ struct InvestmentWalletDetailView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(linkedWallet.name).font(.subheadline.weight(.semibold))
                         Text(
-                            L10n.investment.wallet.appBalance(
-                                balanceIndex.balance(
-                                    for: TransactionWalletSnapshot(
-                                        id: linkedWallet.id,
-                                        kind: linkedWallet.kind,
-                                        openingBalanceMinor: linkedWallet.openingBalanceMinor
-                                    )
-                                ).formattedCurrency(code: linkedWallet.currencyCode)
+                            L10n.investment.wallet.actualBalance(
+                                actualBalance.formattedCurrency(code: linkedWallet.currencyCode)
                             )
                         )
                         .font(.caption)
@@ -2897,10 +2903,6 @@ struct InvestmentWalletDetailView: View {
                     }
                     Spacer()
                 }
-                let heldInvestment = max(
-                    cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0,
-                    0
-                )
                 Text(L10n.investment.wallet.investmentPortion(heldInvestment.formattedCurrency(code: accountingCurrencyCode)))
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MistiaAccent.lightPurple.color)

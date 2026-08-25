@@ -987,14 +987,14 @@ nonisolated enum L10n {
         }
 
         nonisolated enum wallet {
+            static func actualBalance(_ value: String) -> String {
+                L10n.format("investment.wallet.actualBalance", vi: "Số dư thực tế: %@", en: "Actual balance: %@", ja: "実際の残高：%@", value)
+            }
+            static func actualBalance(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.wallet.actualBalance", vi: "Số dư thực tế: %@", en: "Actual balance: %@", ja: "実際の残高：%@", language: language, value)
+            }
             static var amountToReconcile: String { L10n.tr("investment.wallet.amountToReconcile", vi: "Số tiền chuyển", en: "Amount to move", ja: "移動する金額") }
             static func amountToReconcile(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.amountToReconcile", vi: "Số tiền chuyển", en: "Amount to move", ja: "移動する金額", language: language) }
-            static func appBalance(_ value: String) -> String {
-                L10n.format("investment.wallet.appBalance", vi: "Số dư app: %@", en: "App balance: %@", ja: "アプリ残高：%@", value)
-            }
-            static func appBalance(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.wallet.appBalance", vi: "Số dư app: %@", en: "App balance: %@", ja: "アプリ残高：%@", language: language, value)
-            }
             static func automaticPausedMessage(_ value: String) -> String {
                 L10n.format("investment.wallet.automaticPausedMessage", vi: "Thanh toán tự động cho %@ đã tạm dừng vì sẽ dùng tiền đầu tư. Hãy mở khoản thanh toán để xem và xác nhận.", en: "Automatic payment for %@ was paused because it would use investment cash. Open the payment to review and confirm it.", ja: "投資資金を使用するため、%@の自動支払いを一時停止しました。支払いを開いて確認してください。", value)
             }
