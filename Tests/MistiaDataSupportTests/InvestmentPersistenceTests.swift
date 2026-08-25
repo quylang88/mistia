@@ -1741,6 +1741,141 @@ final class InvestmentPersistenceTests: XCTestCase {
         )
     }
 
+    func testTargetedReconciliationRepairsOnlyRequestedAssetHistory() throws {
+        let fixture = try makeFixture()
+        let secondAsset = try InvestmentPersistenceService.createAsset(
+            ownerUserID: fixture.ownerID,
+            channelID: fixture.channel.id,
+            name: "Item B",
+            currencyCode: "JPY",
+            context: fixture.context
+        )
+        let firstBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let secondBuy = try saveTrade(
+            fixture: fixture,
+            asset: secondAsset,
+            kind: .buy,
+            quantity: 3,
+            gross: 300,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let first = try XCTUnwrap(fetchTrade(id: firstBuy.id, fixture))
+        let second = try XCTUnwrap(fetchTrade(id: secondBuy.id, fixture))
+        let secondUpdatedAt = second.updatedAt
+        let secondCostBasis = second.positionCostBasisAfterMinor
+
+        first.positionCostBasisAfterMinor = -1
+        try fixture.context.save()
+
+        let result = try InvestmentPersistenceService.reconcileTrades(
+            assetIDs: [fixture.asset.id],
+            ownerUserID: fixture.ownerID,
+            now: fixture.start.addingTimeInterval(100),
+            context: fixture.context
+        )
+
+        XCTAssertEqual(try fetchTrade(id: firstBuy.id, fixture)?.positionCostBasisAfterMinor, 100)
+        XCTAssertEqual(try fetchTrade(id: secondBuy.id, fixture)?.positionCostBasisAfterMinor, secondCostBasis)
+        XCTAssertEqual(try fetchTrade(id: secondBuy.id, fixture)?.updatedAt, secondUpdatedAt)
+        XCTAssertTrue(result.tradeIDs.contains(firstBuy.id))
+        XCTAssertFalse(result.tradeIDs.contains(secondBuy.id))
+    }
+
+    func testTargetedReconciliationWithNoAssetIDsDoesNoWork() throws {
+        let fixture = try makeFixture()
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+
+        let result = try InvestmentPersistenceService.reconcileTrades(
+            assetIDs: [],
+            ownerUserID: fixture.ownerID,
+            context: fixture.context
+        )
+
+        XCTAssertEqual(result, InvestmentPersistenceResult())
+    }
+
+    func testRepeatedTargetedReconciliationIsANoOpAndPreservesDerivedTimestamps() throws {
+        let fixture = try makeFixture()
+        let buy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 100,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sell = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 80,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let ledgerBefore = Dictionary(
+            uniqueKeysWithValues: try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
+                .map { ($0.id, $0.updatedAt) }
+        )
+        let postingBefore = Dictionary(
+            uniqueKeysWithValues: try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+                .map { ($0.id, $0.updatedAt) }
+        )
+        let tradeBefore = Dictionary(
+            uniqueKeysWithValues: try fixture.context.fetch(FetchDescriptor<InvestmentTrade>())
+                .map { ($0.id, $0.updatedAt) }
+        )
+
+        let result = try InvestmentPersistenceService.reconcileTrades(
+            assetIDs: [fixture.asset.id],
+            ownerUserID: fixture.ownerID,
+            now: fixture.start.addingTimeInterval(1_000),
+            context: fixture.context
+        )
+
+        XCTAssertEqual(result, InvestmentPersistenceResult())
+        XCTAssertFalse(fixture.context.hasChanges)
+        XCTAssertEqual(
+            Dictionary(
+                uniqueKeysWithValues: try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
+                    .map { ($0.id, $0.updatedAt) }
+            ),
+            ledgerBefore
+        )
+        XCTAssertEqual(
+            Dictionary(
+                uniqueKeysWithValues: try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+                    .map { ($0.id, $0.updatedAt) }
+            ),
+            postingBefore
+        )
+        XCTAssertEqual(
+            Dictionary(
+                uniqueKeysWithValues: try fixture.context.fetch(FetchDescriptor<InvestmentTrade>())
+                    .map { ($0.id, $0.updatedAt) }
+            ),
+            tradeBefore
+        )
+        XCTAssertEqual(try fetchTrade(id: buy.id, fixture)?.positionCostBasisAfterMinor, 100)
+        XCTAssertEqual(try fetchTrade(id: sell.id, fixture)?.realizedProfitLossMinor, 30)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 900)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 80)
+    }
+
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext

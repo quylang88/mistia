@@ -142,6 +142,71 @@ enum InvestmentPersistenceService {
         let name: String
     }
 
+    private enum InvestmentDerivedWritePolicy {
+        case always
+        case ifChanged
+    }
+
+    private struct InvestmentUpsertOutcome<Model> {
+        let model: Model
+        let didMutate: Bool
+    }
+
+    @discardableResult
+    private static func assignIfChanged<Root: AnyObject, Value: Equatable>(
+        _ value: Value,
+        to keyPath: ReferenceWritableKeyPath<Root, Value>,
+        on root: Root
+    ) -> Bool {
+        guard root[keyPath: keyPath] != value else { return false }
+        root[keyPath: keyPath] = value
+        return true
+    }
+
+    @discardableResult
+    private static func assignDerivedValue<Root: AnyObject, Value: Equatable>(
+        _ value: Value,
+        to keyPath: ReferenceWritableKeyPath<Root, Value>,
+        on root: Root,
+        writePolicy: InvestmentDerivedWritePolicy
+    ) -> Bool {
+        switch writePolicy {
+        case .always:
+            root[keyPath: keyPath] = value
+            return true
+        case .ifChanged:
+            return assignIfChanged(value, to: keyPath, on: root)
+        }
+    }
+
+    private static func applyCalculationIfNeeded(
+        _ calculation: InvestmentTradeCalculation,
+        to trade: InvestmentTrade
+    ) -> Bool {
+        var didMutate = false
+        didMutate = assignIfChanged(
+            calculation.releasedCostBasisMinor,
+            to: \.releasedCostBasisMinor,
+            on: trade
+        ) || didMutate
+        didMutate = assignIfChanged(
+            calculation.realizedProfitLossMinor,
+            to: \.realizedProfitLossMinor,
+            on: trade
+        ) || didMutate
+        didMutate = assignIfChanged(
+            InvestmentDecimalCoding.string(from: calculation.positionQuantityAfter),
+            to: \.positionQuantityAfterDecimalString,
+            on: trade
+        ) || didMutate
+        didMutate = assignIfChanged(
+            calculation.positionCostBasisAfterMinor,
+            to: \.positionCostBasisAfterMinor,
+            on: trade
+        ) || didMutate
+        return didMutate
+    }
+
     static func rebuildDerivedAccountingForV8(
         now: Date = .now,
         context: ModelContext
@@ -1041,39 +1106,75 @@ enum InvestmentPersistenceService {
     }
 
     @discardableResult
+    static func reconcileTrades(
+        assetIDs: Set<UUID>,
+        ownerUserID: UUID? = nil,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        guard !assetIDs.isEmpty else {
+            return InvestmentPersistenceResult()
+        }
+
+        let trades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+            .filter { trade in
+                trade.deletedAt == nil
+                    && assetIDs.contains(trade.assetID)
+                    && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
+            }
+        return try reconcile(trades: trades, now: now, context: context)
+    }
+
+    @discardableResult
     static func reconcileAllTrades(
         ownerUserID: UUID? = nil,
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
-        let allTrades = try context.fetch(FetchDescriptor<InvestmentTrade>())
+        let trades = try context.fetch(FetchDescriptor<InvestmentTrade>())
             .filter { trade in
                 trade.deletedAt == nil && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
             }
-        guard !allTrades.isEmpty else {
+        return try reconcile(trades: trades, now: now, context: context)
+    }
+
+    private static func reconcile(
+        trades: [InvestmentTrade],
+        now: Date,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        guard !trades.isEmpty else {
             return InvestmentPersistenceResult()
         }
 
-        let allAssets = try context.fetch(FetchDescriptor<InvestmentAsset>())
-            .filter { $0.deletedAt == nil }
-        let assetsByID = Dictionary(uniqueKeysWithValues: allAssets.map { ($0.id, $0) })
+        let requestedAssetIDs = Set(trades.map(\.assetID))
+        let assets = try context.fetch(FetchDescriptor<InvestmentAsset>())
+            .filter { $0.deletedAt == nil && requestedAssetIDs.contains($0.id) }
+        let assetsByID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
         let allWallets = try context.fetch(FetchDescriptor<LedgerWallet>())
             .filter { $0.deletedAt == nil }
-        let walletsByID = Dictionary(uniqueKeysWithValues: allWallets.map { ($0.id, $0) })
+        var walletsByID = Dictionary(uniqueKeysWithValues: allWallets.map { ($0.id, $0) })
+        var systemWalletByOwnerID: [UUID: LedgerWallet] = [:]
 
-        let tradesByAsset = Dictionary(grouping: allTrades, by: \.assetID)
+        let tradesByAsset = Dictionary(grouping: trades, by: \.assetID)
         var result = InvestmentPersistenceResult()
 
         for (assetID, trades) in tradesByAsset {
             guard let asset = assetsByID[assetID] else { continue }
             let ownerID = asset.ownerUserID
-            let systemWallet = try ensureSystemWallet(
-                ownerUserID: ownerID,
-                currencyCode: asset.currencyCode,
-                now: now,
-                context: context
-            )
-            let reconciledWallets = walletsByID.merging([systemWallet.id: systemWallet]) { current, _ in current }
+            let systemWallet: LedgerWallet
+            if let cached = systemWalletByOwnerID[ownerID] {
+                systemWallet = cached
+            } else {
+                systemWallet = try ensureSystemWallet(
+                    ownerUserID: ownerID,
+                    currencyCode: asset.currencyCode,
+                    now: now,
+                    context: context
+                )
+                systemWalletByOwnerID[ownerID] = systemWallet
+                walletsByID[systemWallet.id] = systemWallet
+            }
             let sortedTrades = trades.sorted {
                 if $0.occurredAt != $1.occurredAt { return $0.occurredAt < $1.occurredAt }
                 return $0.createdAt < $1.createdAt
@@ -1083,11 +1184,9 @@ enum InvestmentPersistenceService {
             )
 
             for trade in sortedTrades {
-                if let calculation = calculations[trade.id] {
-                    trade.releasedCostBasisMinor = calculation.releasedCostBasisMinor
-                    trade.realizedProfitLossMinor = calculation.realizedProfitLossMinor
-                    trade.positionQuantityAfter = calculation.positionQuantityAfter
-                    trade.positionCostBasisAfterMinor = calculation.positionCostBasisAfterMinor
+                if let calculation = calculations[trade.id],
+                   applyCalculationIfNeeded(calculation, to: trade) {
+                    result.tradeIDs.insert(trade.id)
                 }
 
                 try reconcileLedgerLegs(
@@ -1095,16 +1194,18 @@ enum InvestmentPersistenceService {
                     trade: trade,
                     assetName: asset.name,
                     systemWallet: systemWallet,
-                    walletsByID: reconciledWallets,
+                    walletsByID: walletsByID,
                     now: now,
                     context: context,
-                    result: &result
+                    result: &result,
+                    writePolicy: .ifChanged
                 )
-                result.tradeIDs.insert(trade.id)
             }
         }
 
-        try context.save()
+        if context.hasChanges {
+            try context.save()
+        }
         return result
     }
 
@@ -1700,15 +1801,40 @@ enum InvestmentPersistenceService {
         walletsByID: [UUID: LedgerWallet],
         now: Date,
         context: ModelContext,
-        result: inout InvestmentPersistenceResult
+        result: inout InvestmentPersistenceResult,
+        writePolicy: InvestmentDerivedWritePolicy = .always
     ) throws {
         switch trade.kind {
         case .buy:
             if trade.grossAmountMinor == 0 {
-                trade.fundingWalletAmountMinor = nil
-                trade.fundingLedgerTransactionID = nil
-                trade.capitalReturnLedgerTransactionID = nil
-                trade.profitLossLedgerTransactionID = nil
+                var tradeDidMutate = false
+                tradeDidMutate = assignDerivedValue(
+                    Optional<Int64>.none,
+                    to: \.fundingWalletAmountMinor,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.fundingLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.capitalReturnLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.profitLossLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                if tradeDidMutate {
+                    result.tradeIDs.insert(trade.id)
+                }
                 try deleteUnexpectedLedgerLegs(
                     for: trade,
                     keeping: [],
@@ -1731,7 +1857,7 @@ enum InvestmentPersistenceService {
                 throw InvestmentPersistenceError.missingWallet
             }
             let ledgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "funding")
-            let transaction = try upsertLedgerTransaction(
+            let transactionOutcome = try upsertLedgerTransactionOutcome(
                 id: ledgerID,
                 primaryKind: .expense,
                 role: .investmentFunding,
@@ -1744,13 +1870,34 @@ enum InvestmentPersistenceService {
                 reportingCurrencyCode: trade.accountingCurrencyCode,
                 occurredAt: trade.occurredAt,
                 now: now,
-                context: context
+                context: context,
+                writePolicy: writePolicy
             )
-            trade.fundingLedgerTransactionID = transaction.id
-            trade.capitalReturnLedgerTransactionID = nil
-            trade.profitLossLedgerTransactionID = nil
+            let transaction = transactionOutcome.model
+            var tradeDidMutate = false
+            tradeDidMutate = assignDerivedValue(
+                Optional(transaction.id),
+                to: \.fundingLedgerTransactionID,
+                on: trade,
+                writePolicy: writePolicy
+            ) || tradeDidMutate
+            tradeDidMutate = assignDerivedValue(
+                Optional<UUID>.none,
+                to: \.capitalReturnLedgerTransactionID,
+                on: trade,
+                writePolicy: writePolicy
+            ) || tradeDidMutate
+            tradeDidMutate = assignDerivedValue(
+                Optional<UUID>.none,
+                to: \.profitLossLedgerTransactionID,
+                on: trade,
+                writePolicy: writePolicy
+            ) || tradeDidMutate
+            if tradeDidMutate {
+                result.tradeIDs.insert(trade.id)
+            }
             try deleteUnexpectedLedgerLegs(for: trade, keeping: [transaction.id], now: now, context: context, result: &result)
-            let posting = try upsertPosting(
+            let postingOutcome = try upsertPostingOutcome(
                 id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "funding-posting"),
                 ownerUserID: ownerUserID,
                 trade: trade,
@@ -1761,13 +1908,27 @@ enum InvestmentPersistenceService {
                 currencyCode: wallet.currencyCode,
                 accountingAmountMinor: -trade.accountingGrossAmountMinor,
                 now: now,
-                context: context
+                context: context,
+                writePolicy: writePolicy
             )
+            let posting = postingOutcome.model
             try deleteUnexpectedPostings(for: trade, keeping: [posting.id], now: now, context: context, result: &result)
-            try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
-            result.ledgerTransactionIDs.insert(transaction.id)
-            result.postingIDs.insert(posting.id)
-            result.walletIDs.insert(wallet.id)
+            let metadataDidMutate = try recordTransactionOwnershipIfNeeded(
+                transaction,
+                ownerUserID: ownerUserID,
+                transactionDidMutate: transactionOutcome.didMutate,
+                now: now,
+                context: context,
+                writePolicy: writePolicy
+            )
+            if transactionOutcome.didMutate || metadataDidMutate {
+                result.ledgerTransactionIDs.insert(transaction.id)
+                result.walletIDs.insert(wallet.id)
+            }
+            if postingOutcome.didMutate {
+                result.postingIDs.insert(posting.id)
+                result.walletIDs.insert(wallet.id)
+            }
 
         case .sell:
             var keepingLedgerIDs: Set<UUID> = []
@@ -1783,10 +1944,17 @@ enum InvestmentPersistenceService {
                     destinationCurrencyCode: capitalWallet.currencyCode,
                     rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
                 )
-                trade.capitalReturnWalletAmountMinor = capitalAmount
+                if assignDerivedValue(
+                    Optional(capitalAmount),
+                    to: \.capitalReturnWalletAmountMinor,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) {
+                    result.tradeIDs.insert(trade.id)
+                }
 
                 let capitalLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "capital-return")
-                let capitalTransaction = try upsertLedgerTransaction(
+                let capitalTransactionOutcome = try upsertLedgerTransactionOutcome(
                     id: capitalLedgerID,
                     primaryKind: .income,
                     role: .investmentCapitalReturn,
@@ -1799,13 +1967,29 @@ enum InvestmentPersistenceService {
                     reportingCurrencyCode: trade.accountingCurrencyCode,
                     occurredAt: trade.occurredAt,
                     now: now,
-                    context: context
+                    context: context,
+                    writePolicy: writePolicy
                 )
-                trade.capitalReturnLedgerTransactionID = capitalTransaction.id
-                trade.fundingLedgerTransactionID = nil
+                let capitalTransaction = capitalTransactionOutcome.model
+                var tradeDidMutate = false
+                tradeDidMutate = assignDerivedValue(
+                    Optional(capitalTransaction.id),
+                    to: \.capitalReturnLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.fundingLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                if tradeDidMutate {
+                    result.tradeIDs.insert(trade.id)
+                }
 
                 keepingLedgerIDs.insert(capitalTransaction.id)
-                let capitalPosting = try upsertPosting(
+                let capitalPostingOutcome = try upsertPostingOutcome(
                     id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "capital-return-posting"),
                     ownerUserID: ownerUserID,
                     trade: trade,
@@ -1816,17 +2000,50 @@ enum InvestmentPersistenceService {
                     currencyCode: capitalWallet.currencyCode,
                     accountingAmountMinor: trade.releasedCostBasisMinor,
                     now: now,
-                    context: context
+                    context: context,
+                    writePolicy: writePolicy
                 )
+                let capitalPosting = capitalPostingOutcome.model
                 keepingPostingIDs.insert(capitalPosting.id)
-                result.ledgerTransactionIDs.insert(capitalTransaction.id)
-                result.postingIDs.insert(capitalPosting.id)
-                result.walletIDs.insert(capitalWallet.id)
-                try recordTransactionOwnership(capitalTransaction, ownerUserID: ownerUserID, now: now, context: context)
+                let metadataDidMutate = try recordTransactionOwnershipIfNeeded(
+                    capitalTransaction,
+                    ownerUserID: ownerUserID,
+                    transactionDidMutate: capitalTransactionOutcome.didMutate,
+                    now: now,
+                    context: context,
+                    writePolicy: writePolicy
+                )
+                if capitalTransactionOutcome.didMutate || metadataDidMutate {
+                    result.ledgerTransactionIDs.insert(capitalTransaction.id)
+                    result.walletIDs.insert(capitalWallet.id)
+                }
+                if capitalPostingOutcome.didMutate {
+                    result.postingIDs.insert(capitalPosting.id)
+                    result.walletIDs.insert(capitalWallet.id)
+                }
             } else {
-                trade.capitalReturnLedgerTransactionID = nil
-                trade.capitalReturnWalletAmountMinor = nil
-                trade.fundingLedgerTransactionID = nil
+                var tradeDidMutate = false
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.capitalReturnLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<Int64>.none,
+                    to: \.capitalReturnWalletAmountMinor,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.fundingLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                if tradeDidMutate {
+                    result.tradeIDs.insert(trade.id)
+                }
             }
 
             if trade.realizedProfitLossMinor != 0 {
@@ -1845,7 +2062,7 @@ enum InvestmentPersistenceService {
                     cashAmount = trade.realizedProfitLossMinor
                 }
                 let profitLedgerID = InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "profit-loss")
-                let profitTransaction = try upsertLedgerTransaction(
+                let profitTransactionOutcome = try upsertLedgerTransactionOutcome(
                     id: profitLedgerID,
                     primaryKind: trade.realizedProfitLossMinor > 0 ? .income : .expense,
                     role: .investmentRealizedProfit,
@@ -1858,11 +2075,20 @@ enum InvestmentPersistenceService {
                     reportingCurrencyCode: systemWallet.currencyCode,
                     occurredAt: trade.occurredAt,
                     now: now,
-                    context: context
+                    context: context,
+                    writePolicy: writePolicy
                 )
-                trade.profitLossLedgerTransactionID = profitTransaction.id
+                let profitTransaction = profitTransactionOutcome.model
+                if assignDerivedValue(
+                    Optional(profitTransaction.id),
+                    to: \.profitLossLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) {
+                    result.tradeIDs.insert(trade.id)
+                }
                 keepingLedgerIDs.insert(profitTransaction.id)
-                let profitPosting = try upsertPosting(
+                let profitPostingOutcome = try upsertPostingOutcome(
                     id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "profit-loss-posting"),
                     ownerUserID: ownerUserID,
                     trade: trade,
@@ -1873,16 +2099,30 @@ enum InvestmentPersistenceService {
                     currencyCode: profitWallet.currencyCode,
                     accountingAmountMinor: trade.realizedProfitLossMinor,
                     now: now,
-                    context: context
+                    context: context,
+                    writePolicy: writePolicy
                 )
+                let profitPosting = profitPostingOutcome.model
                 keepingPostingIDs.insert(profitPosting.id)
-                result.ledgerTransactionIDs.insert(profitTransaction.id)
-                result.postingIDs.insert(profitPosting.id)
-                result.walletIDs.insert(profitWallet.id)
-                try recordTransactionOwnership(profitTransaction, ownerUserID: ownerUserID, now: now, context: context)
+                let metadataDidMutate = try recordTransactionOwnershipIfNeeded(
+                    profitTransaction,
+                    ownerUserID: ownerUserID,
+                    transactionDidMutate: profitTransactionOutcome.didMutate,
+                    now: now,
+                    context: context,
+                    writePolicy: writePolicy
+                )
+                if profitTransactionOutcome.didMutate || metadataDidMutate {
+                    result.ledgerTransactionIDs.insert(profitTransaction.id)
+                    result.walletIDs.insert(profitWallet.id)
+                }
+                if profitPostingOutcome.didMutate {
+                    result.postingIDs.insert(profitPosting.id)
+                    result.walletIDs.insert(profitWallet.id)
+                }
 
                 if let cashWallet {
-                    let cashPosting = try upsertCashPosting(
+                    let cashPostingOutcome = try upsertCashPostingOutcome(
                         id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
                         ownerUserID: ownerUserID,
                         eventID: trade.id,
@@ -1899,18 +2139,70 @@ enum InvestmentPersistenceService {
                         accountingCurrencyCode: trade.accountingCurrencyCode,
                         occurredAt: trade.occurredAt,
                         now: now,
-                        context: context
+                        context: context,
+                        writePolicy: writePolicy
                     )
+                    let cashPosting = cashPostingOutcome.model
                     keepingPostingIDs.insert(cashPosting.id)
-                    result.postingIDs.insert(cashPosting.id)
+                    if cashPostingOutcome.didMutate {
+                        result.postingIDs.insert(cashPosting.id)
+                        result.walletIDs.insert(cashWallet.id)
+                    }
                 }
             } else {
-                trade.profitLossLedgerTransactionID = nil
+                if assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.profitLossLedgerTransactionID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) {
+                    result.tradeIDs.insert(trade.id)
+                }
             }
 
             try deleteUnexpectedLedgerLegs(for: trade, keeping: keepingLedgerIDs, now: now, context: context, result: &result)
             try deleteUnexpectedPostings(for: trade, keeping: keepingPostingIDs, now: now, context: context, result: &result)
         }
+    }
+
+    private static func ledgerTransactionMatches(
+        _ transaction: LedgerTransaction,
+        primaryKind: TransactionPrimaryKind,
+        role: InvestmentLedgerLegRole,
+        title: String,
+        amountMinor: Int64,
+        sourceWallet: LedgerWallet,
+        destinationWallet: LedgerWallet?,
+        destinationAmountMinor: Int64?,
+        reportingAmountMinor: Int64,
+        reportingCurrencyCode: String,
+        occurredAt: Date
+    ) -> Bool {
+        transaction.primaryKindRawValue == primaryKind.rawValue
+            && transaction.transferSubtypeRawValue
+                == (primaryKind == .transfer ? TransactionTransferSubtype.internalTransfer.rawValue : nil)
+            && transaction.debtIntentRawValue == nil
+            && transaction.entryStatusRawValue == TransactionEntryStatus.posted.rawValue
+            && transaction.title == title
+            && transaction.note == nil
+            && transaction.amountMinor == max(amountMinor, 0)
+            && transaction.reportingExpenseMinor == 0
+            && transaction.reportingIncomeMinor == 0
+            && transaction.sourceCurrencyCode == sourceWallet.currencyCode
+            && transaction.destinationCurrencyCode == destinationWallet?.currencyCode
+            && transaction.destinationAmountMinor == destinationAmountMinor
+            && transaction.reportingCurrencyCode == reportingCurrencyCode
+            && transaction.reportingAmountMinor == reportingAmountMinor
+            && transaction.category == nil
+            && transaction.sourceWallet?.id == sourceWallet.id
+            && transaction.destinationWallet?.id == destinationWallet?.id
+            && transaction.settlementGroupID == nil
+            && transaction.settlementObligationID == nil
+            && transaction.settlementRoleRawValue == role.rawValue
+            && transaction.occurredAt == occurredAt
+            && transaction.deletedAt == nil
+            && !transaction.isArchived
+            && transaction.archivedAt == nil
     }
 
     private static func upsertLedgerTransaction(
@@ -1928,12 +2220,64 @@ enum InvestmentPersistenceService {
         now: Date,
         context: ModelContext
     ) throws -> LedgerTransaction {
+        try upsertLedgerTransactionOutcome(
+            id: id,
+            primaryKind: primaryKind,
+            role: role,
+            title: title,
+            amountMinor: amountMinor,
+            sourceWallet: sourceWallet,
+            destinationWallet: destinationWallet,
+            destinationAmountMinor: destinationAmountMinor,
+            reportingAmountMinor: reportingAmountMinor,
+            reportingCurrencyCode: reportingCurrencyCode,
+            occurredAt: occurredAt,
+            now: now,
+            context: context,
+            writePolicy: .always
+        ).model
+    }
+
+    private static func upsertLedgerTransactionOutcome(
+        id: UUID,
+        primaryKind: TransactionPrimaryKind,
+        role: InvestmentLedgerLegRole,
+        title: String,
+        amountMinor: Int64,
+        sourceWallet: LedgerWallet,
+        destinationWallet: LedgerWallet?,
+        destinationAmountMinor: Int64?,
+        reportingAmountMinor: Int64,
+        reportingCurrencyCode: String,
+        occurredAt: Date,
+        now: Date,
+        context: ModelContext,
+        writePolicy: InvestmentDerivedWritePolicy
+    ) throws -> InvestmentUpsertOutcome<LedgerTransaction> {
         let descriptor = FetchDescriptor<LedgerTransaction>(
             predicate: #Predicate<LedgerTransaction> { transaction in
                 transaction.id == id
             }
         )
-        let transaction = try context.fetch(descriptor).first ?? LedgerTransaction(
+        let existing = try context.fetch(descriptor).first
+        if let existing,
+           writePolicy == .ifChanged,
+           ledgerTransactionMatches(
+               existing,
+               primaryKind: primaryKind,
+               role: role,
+               title: title,
+               amountMinor: amountMinor,
+               sourceWallet: sourceWallet,
+               destinationWallet: destinationWallet,
+               destinationAmountMinor: destinationAmountMinor,
+               reportingAmountMinor: reportingAmountMinor,
+               reportingCurrencyCode: reportingCurrencyCode,
+               occurredAt: occurredAt
+           ) {
+            return InvestmentUpsertOutcome(model: existing, didMutate: false)
+        }
+        let transaction = existing ?? LedgerTransaction(
             id: id,
             primaryKind: primaryKind,
             entryStatus: .posted,
@@ -1980,7 +2324,37 @@ enum InvestmentPersistenceService {
         transaction.deletedAt = nil
         transaction.isArchived = false
         transaction.archivedAt = nil
-        return transaction
+        return InvestmentUpsertOutcome(model: transaction, didMutate: true)
+    }
+
+    private static func postingMatches(
+        _ posting: InvestmentWalletPosting,
+        ownerUserID: UUID,
+        eventID: UUID,
+        tradeID: UUID?,
+        assetID: UUID?,
+        walletID: UUID,
+        ledgerTransactionID: UUID,
+        role: InvestmentPostingRole,
+        amountMinor: Int64,
+        currencyCode: String,
+        accountingAmountMinor: Int64,
+        accountingCurrencyCode: String,
+        occurredAt: Date
+    ) -> Bool {
+        posting.ownerUserID == ownerUserID
+            && posting.eventID == eventID
+            && posting.tradeID == tradeID
+            && posting.assetID == assetID
+            && posting.walletID == walletID
+            && posting.ledgerTransactionID == ledgerTransactionID
+            && posting.role == role
+            && posting.amountMinor == amountMinor
+            && posting.currencyCode == currencyCode
+            && posting.accountingAmountMinor == accountingAmountMinor
+            && posting.accountingCurrencyCode == accountingCurrencyCode
+            && posting.occurredAt == occurredAt
+            && posting.deletedAt == nil
     }
 
     private static func upsertPosting(
@@ -1996,12 +2370,62 @@ enum InvestmentPersistenceService {
         now: Date,
         context: ModelContext
     ) throws -> InvestmentWalletPosting {
+        try upsertPostingOutcome(
+            id: id,
+            ownerUserID: ownerUserID,
+            trade: trade,
+            walletID: walletID,
+            ledgerTransactionID: ledgerTransactionID,
+            role: role,
+            amountMinor: amountMinor,
+            currencyCode: currencyCode,
+            accountingAmountMinor: accountingAmountMinor,
+            now: now,
+            context: context,
+            writePolicy: .always
+        ).model
+    }
+
+    private static func upsertPostingOutcome(
+        id: UUID,
+        ownerUserID: UUID,
+        trade: InvestmentTrade,
+        walletID: UUID,
+        ledgerTransactionID: UUID,
+        role: InvestmentPostingRole,
+        amountMinor: Int64,
+        currencyCode: String,
+        accountingAmountMinor: Int64,
+        now: Date,
+        context: ModelContext,
+        writePolicy: InvestmentDerivedWritePolicy
+    ) throws -> InvestmentUpsertOutcome<InvestmentWalletPosting> {
         let descriptor = FetchDescriptor<InvestmentWalletPosting>(
             predicate: #Predicate<InvestmentWalletPosting> { posting in
                 posting.id == id
             }
         )
-        let posting = try context.fetch(descriptor).first ?? InvestmentWalletPosting(
+        let existing = try context.fetch(descriptor).first
+        if let existing,
+           writePolicy == .ifChanged,
+           postingMatches(
+               existing,
+               ownerUserID: ownerUserID,
+               eventID: trade.id,
+               tradeID: trade.id,
+               assetID: trade.assetID,
+               walletID: walletID,
+               ledgerTransactionID: ledgerTransactionID,
+               role: role,
+               amountMinor: amountMinor,
+               currencyCode: currencyCode,
+               accountingAmountMinor: accountingAmountMinor,
+               accountingCurrencyCode: trade.accountingCurrencyCode,
+               occurredAt: trade.occurredAt
+           ) {
+            return InvestmentUpsertOutcome(model: existing, didMutate: false)
+        }
+        let posting = existing ?? InvestmentWalletPosting(
             id: id,
             ownerUserID: ownerUserID,
             eventID: trade.id,
@@ -2035,7 +2459,18 @@ enum InvestmentPersistenceService {
         posting.occurredAt = trade.occurredAt
         posting.updatedAt = now
         posting.deletedAt = nil
-        return posting
+        return InvestmentUpsertOutcome(model: posting, didMutate: true)
+    }
+
+    private static func cashMetadataMatches(
+        _ metadata: InvestmentCashPostingMetadata,
+        ownerUserID: UUID,
+        bucket: InvestmentCashBucket,
+        origin: InvestmentCashPostingOrigin
+    ) -> Bool {
+        metadata.ownerUserID == ownerUserID
+            && metadata.cashBucket == bucket
+            && metadata.cashOrigin == origin
     }
 
     private static func upsertCashPosting(
@@ -2057,10 +2492,83 @@ enum InvestmentPersistenceService {
         now: Date,
         context: ModelContext
     ) throws -> InvestmentWalletPosting {
+        try upsertCashPostingOutcome(
+            id: id,
+            ownerUserID: ownerUserID,
+            eventID: eventID,
+            tradeID: tradeID,
+            assetID: assetID,
+            walletID: walletID,
+            ledgerTransactionID: ledgerTransactionID,
+            role: role,
+            bucket: bucket,
+            origin: origin,
+            amountMinor: amountMinor,
+            currencyCode: currencyCode,
+            accountingAmountMinor: accountingAmountMinor,
+            accountingCurrencyCode: accountingCurrencyCode,
+            occurredAt: occurredAt,
+            now: now,
+            context: context,
+            writePolicy: .always
+        ).model
+    }
+
+    private static func upsertCashPostingOutcome(
+        id: UUID,
+        ownerUserID: UUID,
+        eventID: UUID,
+        tradeID: UUID?,
+        assetID: UUID?,
+        walletID: UUID,
+        ledgerTransactionID: UUID,
+        role: InvestmentPostingRole,
+        bucket: InvestmentCashBucket,
+        origin: InvestmentCashPostingOrigin,
+        amountMinor: Int64,
+        currencyCode: String,
+        accountingAmountMinor: Int64,
+        accountingCurrencyCode: String,
+        occurredAt: Date,
+        now: Date,
+        context: ModelContext,
+        writePolicy: InvestmentDerivedWritePolicy
+    ) throws -> InvestmentUpsertOutcome<InvestmentWalletPosting> {
         let descriptor = FetchDescriptor<InvestmentWalletPosting>(
             predicate: #Predicate<InvestmentWalletPosting> { posting in posting.id == id }
         )
-        let posting = try context.fetch(descriptor).first ?? InvestmentWalletPosting(
+        let metadataDescriptor = FetchDescriptor<InvestmentCashPostingMetadata>(
+            predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in metadata.id == id }
+        )
+        let existingPosting = try context.fetch(descriptor).first
+        let existingMetadata = try context.fetch(metadataDescriptor).first
+        if let existingPosting,
+           let existingMetadata,
+           writePolicy == .ifChanged,
+           postingMatches(
+               existingPosting,
+               ownerUserID: ownerUserID,
+               eventID: eventID,
+               tradeID: tradeID,
+               assetID: assetID,
+               walletID: walletID,
+               ledgerTransactionID: ledgerTransactionID,
+               role: role,
+               amountMinor: amountMinor,
+               currencyCode: MistiaCurrencyLogic.normalizedCode(currencyCode),
+               accountingAmountMinor: accountingAmountMinor,
+               accountingCurrencyCode: MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode),
+               occurredAt: occurredAt
+           ),
+           cashMetadataMatches(
+               existingMetadata,
+               ownerUserID: ownerUserID,
+               bucket: bucket,
+               origin: origin
+           ) {
+            return InvestmentUpsertOutcome(model: existingPosting, didMutate: false)
+        }
+        let posting = existingPosting ?? InvestmentWalletPosting(
             id: id,
             ownerUserID: ownerUserID,
             eventID: eventID,
@@ -2094,10 +2602,7 @@ enum InvestmentPersistenceService {
         posting.occurredAt = occurredAt
         posting.updatedAt = now
         posting.deletedAt = nil
-        let metadataDescriptor = FetchDescriptor<InvestmentCashPostingMetadata>(
-            predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in metadata.id == id }
-        )
-        let metadata = try context.fetch(metadataDescriptor).first ?? InvestmentCashPostingMetadata(
+        let metadata = existingMetadata ?? InvestmentCashPostingMetadata(
             id: id,
             ownerUserID: ownerUserID,
             cashBucket: bucket,
@@ -2112,7 +2617,7 @@ enum InvestmentPersistenceService {
         metadata.cashBucket = bucket
         metadata.cashOrigin = origin
         metadata.updatedAt = now
-        return posting
+        return InvestmentUpsertOutcome(model: posting, didMutate: true)
     }
 
     private static func proportionalLocalCashDelta(
@@ -2204,6 +2709,65 @@ enum InvestmentPersistenceService {
     ) throws {
         try deleteUnexpectedLedgerLegs(for: trade, keeping: [], now: now, context: context, result: &result)
         try deleteUnexpectedPostings(for: trade, keeping: [], now: now, context: context, result: &result)
+    }
+
+    private static func transactionMetadataNeedsRepair(
+        transactionID: UUID,
+        ownerUserID: UUID,
+        context: ModelContext
+    ) throws -> Bool {
+        let scopeID = OwnedRecordScope.scopeID(entity: .transaction, recordID: transactionID)
+        let scope = try context.fetch(
+            FetchDescriptor<OwnedRecordScope>(
+                predicate: #Predicate<OwnedRecordScope> { record in record.id == scopeID }
+            )
+        ).first
+        let audit = try TransactionAuditStore.fetch(
+            transactionID: transactionID,
+            context: context
+        )
+        return scope?.ownerUserID != ownerUserID
+            || audit?.createdByUserID != ownerUserID
+            || audit?.lastModifiedByUserID != ownerUserID
+    }
+
+    private static func recordTransactionOwnershipIfNeeded(
+        _ transaction: LedgerTransaction,
+        ownerUserID: UUID,
+        transactionDidMutate: Bool,
+        now: Date,
+        context: ModelContext,
+        writePolicy: InvestmentDerivedWritePolicy
+    ) throws -> Bool {
+        switch writePolicy {
+        case .always:
+            try recordTransactionOwnership(
+                transaction,
+                ownerUserID: ownerUserID,
+                now: now,
+                context: context
+            )
+            return true
+        case .ifChanged:
+            let needsRepair: Bool
+            if transactionDidMutate {
+                needsRepair = true
+            } else {
+                needsRepair = try transactionMetadataNeedsRepair(
+                    transactionID: transaction.id,
+                    ownerUserID: ownerUserID,
+                    context: context
+                )
+            }
+            guard needsRepair else { return false }
+            try recordTransactionOwnership(
+                transaction,
+                ownerUserID: ownerUserID,
+                now: now,
+                context: context
+            )
+            return true
+        }
     }
 
     private static func recordTransactionOwnership(
