@@ -1682,7 +1682,12 @@ enum InvestmentPersistenceService {
                 throw InvestmentPersistenceError.missingWallet
             }
         case .sell:
-            if draft.grossAmountMinor == 0 && draft.capitalReturnWalletID == nil {
+            if draft.grossAmountMinor == 0 {
+                guard draft.accountingGrossAmountMinor == 0,
+                      draft.fundingWalletID == nil,
+                      draft.capitalReturnWalletID == nil else {
+                    throw InvestmentPersistenceError.invalidWallet
+                }
                 return
             }
             guard let walletID = draft.capitalReturnWalletID,
@@ -1829,10 +1834,10 @@ enum InvestmentPersistenceService {
         trade.exchangeRateDecimalString = draft.exchangeRateDecimalString
         trade.exchangeRateProvider = draft.exchangeRateProvider
         trade.exchangeRateDate = draft.exchangeRateDate
-        trade.fundingWalletID = draft.kind == .buy ? draft.fundingWalletID : nil
-        trade.capitalReturnWalletID = draft.kind == .sell ? draft.capitalReturnWalletID : nil
-        trade.fundingWalletCurrencyCode = fundingWallet?.currencyCode
-        trade.capitalReturnWalletCurrencyCode = capitalWallet?.currencyCode
+        trade.fundingWalletID = (draft.kind == .buy && draft.grossAmountMinor > 0) ? draft.fundingWalletID : nil
+        trade.capitalReturnWalletID = (draft.kind == .sell && draft.grossAmountMinor > 0) ? draft.capitalReturnWalletID : nil
+        trade.fundingWalletCurrencyCode = (draft.kind == .buy && draft.grossAmountMinor > 0) ? fundingWallet?.currencyCode : nil
+        trade.capitalReturnWalletCurrencyCode = (draft.kind == .sell && draft.grossAmountMinor > 0) ? capitalWallet?.currencyCode : nil
         trade.note = normalizedOptionalText(draft.note)
         trade.occurredAt = draft.occurredAt
         trade.deletedAt = nil
@@ -1853,6 +1858,18 @@ enum InvestmentPersistenceService {
         case .buy:
             if trade.grossAmountMinor == 0 {
                 var tradeDidMutate = false
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.fundingWalletID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<String>.none,
+                    to: \.fundingWalletCurrencyCode,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
                 tradeDidMutate = assignDerivedValue(
                     Optional<Int64>.none,
                     to: \.fundingWalletAmountMinor,
@@ -2068,6 +2085,18 @@ enum InvestmentPersistenceService {
                 }
             } else {
                 var tradeDidMutate = false
+                tradeDidMutate = assignDerivedValue(
+                    Optional<UUID>.none,
+                    to: \.capitalReturnWalletID,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
+                tradeDidMutate = assignDerivedValue(
+                    Optional<String>.none,
+                    to: \.capitalReturnWalletCurrencyCode,
+                    on: trade,
+                    writePolicy: writePolicy
+                ) || tradeDidMutate
                 tradeDidMutate = assignDerivedValue(
                     Optional<UUID>.none,
                     to: \.capitalReturnLedgerTransactionID,

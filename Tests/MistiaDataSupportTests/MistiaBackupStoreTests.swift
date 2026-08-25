@@ -286,6 +286,31 @@ final class MistiaBackupStoreTests: XCTestCase {
             imagePath: "\(ownerUserID.uuidString.lowercased())/asset/product.jpg",
             defaultUnitLabel: "pack"
         )
+        let wallet = LedgerWallet(
+            name: "Main Wallet",
+            kind: .cash,
+            iconSymbolName: LedgerWalletKind.cash.defaultIconSymbolName,
+            iconColorHex: LedgerWalletKind.cash.defaultColorHex,
+            currencyCode: "JPY",
+            openingBalanceMinor: 10_000
+        )
+        let buyTrade = InvestmentTrade(
+            ownerUserID: ownerUserID,
+            channelID: channel.id,
+            assetID: asset.id,
+            kind: .buy,
+            quantity: 2,
+            unitLabel: "box",
+            grossAmountMinor: 100,
+            currencyCode: "JPY",
+            accountingGrossAmountMinor: 100,
+            accountingCurrencyCode: "JPY",
+            fundingWalletID: wallet.id,
+            fundingWalletAmountMinor: 100,
+            positionQuantityAfter: 2,
+            positionCostBasisAfterMinor: 100,
+            occurredAt: Date(timeIntervalSince1970: 1000)
+        )
         let trade = InvestmentTrade(
             ownerUserID: ownerUserID,
             channelID: channel.id,
@@ -297,11 +322,13 @@ final class MistiaBackupStoreTests: XCTestCase {
             currencyCode: "JPY",
             accountingGrossAmountMinor: 80,
             accountingCurrencyCode: "JPY",
-            capitalReturnWalletID: UUID(),
+            capitalReturnWalletID: wallet.id,
+            capitalReturnWalletAmountMinor: 80,
             releasedCostBasisMinor: 50,
             realizedProfitLossMinor: 30,
             positionQuantityAfter: 1,
-            positionCostBasisAfterMinor: 50
+            positionCostBasisAfterMinor: 50,
+            occurredAt: Date(timeIntervalSince1970: 2000)
         )
         let posting = InvestmentWalletPosting(
             ownerUserID: ownerUserID,
@@ -316,8 +343,10 @@ final class MistiaBackupStoreTests: XCTestCase {
             accountingAmountMinor: 30,
             accountingCurrencyCode: "JPY"
         )
+        sourceContext.insert(wallet)
         sourceContext.insert(channel)
         sourceContext.insert(asset)
+        sourceContext.insert(buyTrade)
         sourceContext.insert(trade)
         sourceContext.insert(posting)
         try sourceContext.save()
@@ -329,9 +358,10 @@ final class MistiaBackupStoreTests: XCTestCase {
             appBuild: "100"
         )
         let validation = try MistiaBackupStore.validateBackup(exported.data)
+        XCTAssertEqual(validation.walletCount, 1)
         XCTAssertEqual(validation.investmentChannelCount, 1)
         XCTAssertEqual(validation.investmentAssetCount, 1)
-        XCTAssertEqual(validation.investmentTradeCount, 1)
+        XCTAssertEqual(validation.investmentTradeCount, 2)
         XCTAssertEqual(validation.investmentPostingCount, 1)
 
         let targetContainer = try makeV7Container()
@@ -349,8 +379,8 @@ final class MistiaBackupStoreTests: XCTestCase {
             "\(ownerUserID.uuidString.lowercased())/asset/product.jpg"
         )
         XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.defaultUnitLabel, "pack")
-        XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.unitLabel, "box")
-        XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first?.realizedProfitLossMinor, 30)
+        XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first { $0.kind == .sell }?.unitLabel, "box")
+        XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first { $0.kind == .sell }?.realizedProfitLossMinor, 30)
         XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first?.amountMinor, 30)
     }
 

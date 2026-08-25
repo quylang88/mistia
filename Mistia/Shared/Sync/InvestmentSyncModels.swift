@@ -353,6 +353,7 @@ nonisolated extension RemoteInvestmentTrade {
     }
 
     init(local: InvestmentTrade) {
+        let isZeroAmount = local.grossAmountMinor == 0 && local.accountingGrossAmountMinor == 0
         self.init(
             userID: local.ownerUserID, id: local.id, channelID: local.channelID, assetID: local.assetID,
             kindRawValue: local.kindRawValue, quantityDecimalString: local.quantityDecimalString,
@@ -362,13 +363,14 @@ nonisolated extension RemoteInvestmentTrade {
             accountingCurrencyCode: local.accountingCurrencyCode,
             exchangeRateDecimalString: local.exchangeRateDecimalString,
             exchangeRateProvider: local.exchangeRateProvider, exchangeRateDate: local.exchangeRateDate,
-            fundingWalletID: local.fundingWalletID, capitalReturnWalletID: local.capitalReturnWalletID,
-            fundingWalletCurrencyCode: local.fundingWalletCurrencyCode,
-            capitalReturnWalletCurrencyCode: local.capitalReturnWalletCurrencyCode,
-            fundingWalletAmountMinor: local.fundingWalletAmountMinor,
-            capitalReturnWalletAmountMinor: local.capitalReturnWalletAmountMinor,
-            fundingToAccountingRateDecimalString: local.fundingToAccountingRateDecimalString,
-            accountingToCapitalReturnRateDecimalString: local.accountingToCapitalReturnRateDecimalString,
+            fundingWalletID: isZeroAmount ? nil : local.fundingWalletID,
+            capitalReturnWalletID: isZeroAmount ? nil : local.capitalReturnWalletID,
+            fundingWalletCurrencyCode: isZeroAmount ? nil : local.fundingWalletCurrencyCode,
+            capitalReturnWalletCurrencyCode: isZeroAmount ? nil : local.capitalReturnWalletCurrencyCode,
+            fundingWalletAmountMinor: isZeroAmount ? nil : local.fundingWalletAmountMinor,
+            capitalReturnWalletAmountMinor: isZeroAmount ? nil : local.capitalReturnWalletAmountMinor,
+            fundingToAccountingRateDecimalString: isZeroAmount ? nil : local.fundingToAccountingRateDecimalString,
+            accountingToCapitalReturnRateDecimalString: isZeroAmount ? nil : local.accountingToCapitalReturnRateDecimalString,
             fundingLedgerTransactionID: local.fundingLedgerTransactionID,
             capitalReturnLedgerTransactionID: local.capitalReturnLedgerTransactionID,
             profitLossLedgerTransactionID: local.profitLossLedgerTransactionID,

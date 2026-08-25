@@ -2152,7 +2152,7 @@ private struct InvestmentTradeEditorSheet: View {
                     )
                     TextField(L10n.investment.trade.note, text: $note)
                 }
-                if kind == .sell || !isPromotionalFreeBuy {
+                if !isZeroAmountMode {
                     Section {
                         Picker(walletPickerTitle, selection: $walletID) {
                             ForEach(availableWallets) { wallet in
@@ -2263,7 +2263,7 @@ private struct InvestmentTradeEditorSheet: View {
         if kind == .sell {
             guard parsedDecimal(quantity) <= availableQuantity else { return false }
             if isTotalLoss {
-                return walletID != nil && (trade == nil || canEditExisting)
+                return trade == nil || canEditExisting
             }
         }
         if kind == .buy && isPromotionalFreeBuy {
@@ -2564,8 +2564,8 @@ private struct InvestmentTradeEditorSheet: View {
                     exchangeRateDecimalString: exchangeRateDecimalString,
                     exchangeRateProvider: exchangeRateProvider,
                     exchangeRateDate: exchangeRateDate,
-                    fundingWalletID: isPromotional ? nil : (kind == .buy ? walletID : nil),
-                    capitalReturnWalletID: kind == .sell ? walletID : nil,
+                    fundingWalletID: (kind == .buy && !isPromotional) ? walletID : nil,
+                    capitalReturnWalletID: (kind == .sell && !isLoss) ? walletID : nil,
                     note: effectiveNote,
                     occurredAt: occurredAt,
                     createdAt: trade?.createdAt ?? .now
@@ -2640,8 +2640,7 @@ private struct InvestmentTradeEditorSheet: View {
     }
 
     private var walletPickerTitle: String {
-        if kind == .buy { return L10n.investment.trade.fundingWallet }
-        return isTotalLoss ? L10n.investment.trade.lossWallet : L10n.investment.trade.capitalWallet
+        kind == .buy ? L10n.investment.trade.fundingWallet : L10n.investment.trade.capitalWallet
     }
 }
 

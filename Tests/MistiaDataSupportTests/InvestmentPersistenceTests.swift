@@ -265,7 +265,7 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(systemWallet, fixture), 0)
     }
 
-    func testSellWithZeroAmountDeductsTotalLossFromSelectedWallet() throws {
+    func testSellWithZeroAmountRecordsLossOnSystemWalletWithoutTouchingRealWallets() throws {
         let fixture = try makeFixture()
         let buy = try saveTrade(
             fixture: fixture,
@@ -280,16 +280,17 @@ final class InvestmentPersistenceTests: XCTestCase {
             kind: .sell,
             quantity: 2,
             gross: 0,
-            capitalWalletID: fixture.fundingWallet.id,
+            capitalWalletID: nil,
             occurredAt: fixture.start.addingTimeInterval(1)
         )
 
         let systemWallet = try XCTUnwrap(fetchSystemWallet(fixture))
-        // The selected wallet pays both the original purchase and the liquidation loss.
-        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 600)
+        // Real funding wallet pays only the original purchase (1000 - 200 = 800)
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 800)
         // Capital wallet was untouched (0 balance)
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 0)
-        XCTAssertEqual(try balance(systemWallet, fixture), 0)
+        // System investment profit wallet reflects the realized loss (-200)
+        XCTAssertEqual(try balance(systemWallet, fixture), -200)
 
         let storedBuy = try XCTUnwrap(fetchTrade(id: buy.id, fixture))
         let storedLoss = try XCTUnwrap(fetchTrade(id: lossSale.id, fixture))
@@ -298,9 +299,45 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(storedLoss.realizedProfitLossMinor, -200)
         XCTAssertEqual(storedLoss.positionQuantityAfter, 0)
         XCTAssertEqual(storedLoss.positionCostBasisAfterMinor, 0)
-        XCTAssertEqual(storedLoss.capitalReturnWalletID, fixture.fundingWallet.id)
+        XCTAssertNil(storedLoss.capitalReturnWalletID)
         XCTAssertNil(storedLoss.capitalReturnLedgerTransactionID)
         XCTAssertNotNil(storedLoss.profitLossLedgerTransactionID)
+    }
+
+    func testPromotionalFreeBuyLiquidatedAtZeroLeavesBalancesUntouched() throws {
+        let fixture = try makeFixture()
+        let freeBuy = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 2,
+            gross: 0,
+            fundingWalletID: nil,
+            occurredAt: fixture.start
+        )
+        let freeLossSale = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 2,
+            gross: 0,
+            capitalWalletID: nil,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+
+        let systemWallet = try XCTUnwrap(fetchSystemWallet(fixture))
+        XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 1_000)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 0)
+        XCTAssertEqual(try balance(systemWallet, fixture), 0)
+
+        let storedBuy = try XCTUnwrap(fetchTrade(id: freeBuy.id, fixture))
+        let storedLoss = try XCTUnwrap(fetchTrade(id: freeLossSale.id, fixture))
+        XCTAssertEqual(storedBuy.realizedProfitLossMinor, 0)
+        XCTAssertEqual(storedLoss.releasedCostBasisMinor, 0)
+        XCTAssertEqual(storedLoss.realizedProfitLossMinor, 0)
+        XCTAssertEqual(storedLoss.positionQuantityAfter, 0)
+        XCTAssertEqual(storedLoss.positionCostBasisAfterMinor, 0)
+        XCTAssertNil(storedLoss.capitalReturnWalletID)
+        XCTAssertNil(storedLoss.capitalReturnLedgerTransactionID)
+        XCTAssertNil(storedLoss.profitLossLedgerTransactionID)
     }
 
     func testPromotionalFreeBuyCanBeAddedEditedAndDeletedWithoutWalletDrift() throws {
