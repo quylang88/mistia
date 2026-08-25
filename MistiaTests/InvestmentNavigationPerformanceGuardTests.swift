@@ -14,6 +14,24 @@ final class InvestmentNavigationPerformanceGuardTests: XCTestCase {
         }
     }
 
+    func testSyncReconcilesOnlyTradeRowsAcceptedByConflictChecks() throws {
+        let source = try sharedSource(relativePath: "Sync/MistiaSyncLocalStore.swift")
+        let loopStart = try XCTUnwrap(source.range(of: "for row in snapshot.investmentTrades"))
+        let postingStart = try XCTUnwrap(
+            source[loopStart.lowerBound...].range(of: "for row in snapshot.investmentPostings")
+        )
+        let block = String(source[loopStart.lowerBound..<postingStart.lowerBound])
+        let guardRange = try XCTUnwrap(block.range(of: "guard shouldApplyRemoteRow("))
+        let insertRange = try XCTUnwrap(
+            block.range(of: "appliedInvestmentAssetIDs.insert(row.assetID)")
+        )
+
+        XCTAssertLessThan(guardRange.lowerBound, insertRange.lowerBound)
+        XCTAssertFalse(block.contains("snapshot.investmentTrades.isEmpty"))
+        XCTAssertFalse(block.contains("reconcileAllTrades"))
+        XCTAssertTrue(source.contains("assetIDs: [row.assetID]"))
+    }
+
     private func featureSource(relativePath: String) throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let repoRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
@@ -21,6 +39,18 @@ final class InvestmentNavigationPerformanceGuardTests: XCTestCase {
             contentsOf: repoRoot
                 .appendingPathComponent("Mistia")
                 .appendingPathComponent("Features")
+                .appendingPathComponent(relativePath),
+            encoding: .utf8
+        )
+    }
+
+    private func sharedSource(relativePath: String) throws -> String {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
+        return try String(
+            contentsOf: repoRoot
+                .appendingPathComponent("Mistia")
+                .appendingPathComponent("Shared")
                 .appendingPathComponent(relativePath),
             encoding: .utf8
         )

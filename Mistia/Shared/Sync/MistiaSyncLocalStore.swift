@@ -870,6 +870,7 @@ nonisolated enum MistiaSyncLocalStore {
             upsertInvestmentAsset(row, context: context, assetByID: &investmentAssetByID)
         }
 
+        var appliedInvestmentAssetIDs: Set<UUID> = []
         for row in snapshot.investmentTrades {
             guard shouldApplyRemoteRow(
                 row,
@@ -879,10 +880,7 @@ nonisolated enum MistiaSyncLocalStore {
                 preserveLocalNewerRows: preserveLocalNewerRows
             ) else { continue }
             upsertInvestmentTrade(row, context: context, tradeByID: &investmentTradeByID)
-        }
-
-        if !snapshot.investmentTrades.isEmpty {
-            try? InvestmentPersistenceService.reconcileAllTrades(now: .now, context: context)
+            appliedInvestmentAssetIDs.insert(row.assetID)
         }
 
         for row in snapshot.investmentPostings {
@@ -894,6 +892,14 @@ nonisolated enum MistiaSyncLocalStore {
                 preserveLocalNewerRows: preserveLocalNewerRows
             ) else { continue }
             upsertInvestmentPosting(row, context: context, postingByID: &investmentPostingByID)
+        }
+
+        if !appliedInvestmentAssetIDs.isEmpty {
+            try InvestmentPersistenceService.reconcileTrades(
+                assetIDs: appliedInvestmentAssetIDs,
+                now: .now,
+                context: context
+            )
         }
 
         if shouldPruneMissing {
@@ -1121,7 +1127,12 @@ nonisolated enum MistiaSyncLocalStore {
                 uniquingKeysWith: latestInvestmentTrade
             )
             upsertInvestmentTrade(row, context: context, tradeByID: &recordsByID)
-            try? InvestmentPersistenceService.reconcileAllTrades(ownerUserID: row.userID, now: .now, context: context)
+            try InvestmentPersistenceService.reconcileTrades(
+                assetIDs: [row.assetID],
+                ownerUserID: row.userID,
+                now: .now,
+                context: context
+            )
         case .investmentPosting(let row):
             var recordsByID = Dictionary(
                 try fetchInvestmentPostings(context).map { ($0.id, $0) },
