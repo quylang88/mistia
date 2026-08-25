@@ -1876,6 +1876,76 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 80)
     }
 
+    func testTargetedReconciliationSyntheticScaleTouchesOnlyOneAsset() throws {
+        let fixture = try makeFixture()
+        var assets: [InvestmentAsset] = [fixture.asset]
+        for index in 1..<40 {
+            assets.append(
+                try InvestmentPersistenceService.createAsset(
+                    ownerUserID: fixture.ownerID,
+                    channelID: fixture.channel.id,
+                    name: "Item \(index)",
+                    currencyCode: "JPY",
+                    context: fixture.context
+                )
+            )
+        }
+
+        var tradeIDsByAsset: [UUID: [UUID]] = [:]
+        for (assetIndex, asset) in assets.enumerated() {
+            for tradeIndex in 0..<10 {
+                let trade = try saveTrade(
+                    fixture: fixture,
+                    asset: asset,
+                    kind: .buy,
+                    quantity: 1,
+                    gross: 1,
+                    fundingWalletID: fixture.fundingWallet.id,
+                    occurredAt: fixture.start.addingTimeInterval(
+                        Double(assetIndex * 10 + tradeIndex)
+                    )
+                )
+                tradeIDsByAsset[asset.id, default: []].append(trade.id)
+            }
+        }
+
+        let targetAssetID = assets[0].id
+        let targetTradeID = try XCTUnwrap(tradeIDsByAsset[targetAssetID]?.last)
+        let targetTrade = try XCTUnwrap(fetchTrade(id: targetTradeID, fixture))
+        targetTrade.positionCostBasisAfterMinor = -1
+        try fixture.context.save()
+
+        let unrelatedTrades = try fixture.context.fetch(FetchDescriptor<InvestmentTrade>())
+            .filter { $0.assetID != targetAssetID }
+        let timestampsBefore = Dictionary(
+            uniqueKeysWithValues: unrelatedTrades.map { ($0.id, $0.updatedAt) }
+        )
+
+        let clock = ContinuousClock()
+        var result = InvestmentPersistenceResult()
+        let elapsed = try clock.measure {
+            result = try InvestmentPersistenceService.reconcileTrades(
+                assetIDs: [targetAssetID],
+                ownerUserID: fixture.ownerID,
+                context: fixture.context
+            )
+        }
+
+        XCTAssertEqual(result.tradeIDs, Set([targetTradeID]))
+        XCTAssertEqual(result.ledgerTransactionIDs, Set<UUID>())
+        XCTAssertEqual(result.postingIDs, Set<UUID>())
+        XCTAssertTrue(
+            unrelatedTrades.allSatisfy { $0.updatedAt == timestampsBefore[$0.id] }
+        )
+        XCTContext.runActivity(named: "Synthetic targeted reconciliation") { activity in
+            activity.add(
+                XCTAttachment(
+                    string: "elapsed=\(elapsed) assets=40 trades=400 targetAssets=1"
+                )
+            )
+        }
+    }
+
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext

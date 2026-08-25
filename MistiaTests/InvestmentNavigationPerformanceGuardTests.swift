@@ -32,6 +32,15 @@ final class InvestmentNavigationPerformanceGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("assetIDs: [row.assetID]"))
     }
 
+    func testReconciliationUsesFixedPrivacySafePerformanceSignposts() throws {
+        let source = try sharedSource(relativePath: "Persistence/InvestmentPersistence.swift")
+
+        XCTAssertTrue(source.contains("category: \"InvestmentPerformance\""))
+        XCTAssertTrue(source.contains("\"Investment Targeted Reconciliation\""))
+        XCTAssertTrue(source.contains("\"Investment Full Reconciliation\""))
+        XCTAssertTrue(source.contains("assets=%{public}d trades=%{public}d"))
+    }
+
     private func featureSource(relativePath: String) throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let repoRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()

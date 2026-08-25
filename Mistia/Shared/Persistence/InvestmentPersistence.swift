@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SwiftData
 
 nonisolated struct InvestmentAssetDraft: Equatable {
@@ -132,6 +133,31 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
         case .assetHasRemainingInventory:
             return L10n.investment.error.closePositionsBeforeDelete
         }
+    }
+}
+
+private enum InvestmentReconciliationSignpost {
+    private static let log = OSLog(
+        subsystem: Bundle.main.bundleIdentifier ?? "Mistia",
+        category: "InvestmentPerformance"
+    )
+
+    static func begin(_ name: StaticString, assetCount: Int, tradeCount: Int) -> OSSignpostID {
+        let id = OSSignpostID(log: log)
+        os_signpost(
+            .begin,
+            log: log,
+            name: name,
+            signpostID: id,
+            "assets=%{public}d trades=%{public}d",
+            assetCount,
+            tradeCount
+        )
+        return id
+    }
+
+    static func end(_ name: StaticString, id: OSSignpostID) {
+        os_signpost(.end, log: log, name: name, signpostID: id)
     }
 }
 
@@ -1122,7 +1148,12 @@ enum InvestmentPersistenceService {
                     && assetIDs.contains(trade.assetID)
                     && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
             }
-        return try reconcile(trades: trades, now: now, context: context)
+        return try reconcile(
+            trades: trades,
+            signpostName: "Investment Targeted Reconciliation",
+            now: now,
+            context: context
+        )
     }
 
     @discardableResult
@@ -1135,19 +1166,33 @@ enum InvestmentPersistenceService {
             .filter { trade in
                 trade.deletedAt == nil && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
             }
-        return try reconcile(trades: trades, now: now, context: context)
+        return try reconcile(
+            trades: trades,
+            signpostName: "Investment Full Reconciliation",
+            now: now,
+            context: context
+        )
     }
 
     private static func reconcile(
         trades: [InvestmentTrade],
+        signpostName: StaticString,
         now: Date,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
+        let requestedAssetIDs = Set(trades.map(\.assetID))
+        let signpostID = InvestmentReconciliationSignpost.begin(
+            signpostName,
+            assetCount: requestedAssetIDs.count,
+            tradeCount: trades.count
+        )
+        defer {
+            InvestmentReconciliationSignpost.end(signpostName, id: signpostID)
+        }
         guard !trades.isEmpty else {
             return InvestmentPersistenceResult()
         }
 
-        let requestedAssetIDs = Set(trades.map(\.assetID))
         let assets = try context.fetch(FetchDescriptor<InvestmentAsset>())
             .filter { $0.deletedAt == nil && requestedAssetIDs.contains($0.id) }
         let assetsByID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
