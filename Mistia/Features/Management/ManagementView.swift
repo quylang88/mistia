@@ -165,8 +165,8 @@ struct ManagementView: View {
     private var storedSettlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
-    @Query private var investmentChannels: [InvestmentChannel]
-    @Query private var investmentWalletPostings: [InvestmentWalletPosting]
+    @Query(filter: #Predicate<InvestmentChannel> { $0.deletedAt == nil }) private var investmentChannels: [InvestmentChannel]
+    @Query(filter: #Predicate<InvestmentWalletPosting> { $0.deletedAt == nil }) private var investmentWalletPostings: [InvestmentWalletPosting]
     @Query private var investmentCashPostingMetadata: [InvestmentCashPostingMetadata]
     @Query private var investmentWalletConfigurations: [InvestmentWalletConfiguration]
 

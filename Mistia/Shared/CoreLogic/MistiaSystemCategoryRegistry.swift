@@ -37,6 +37,7 @@ final class MistiaSystemCategoryRegistry: Sendable {
 
     nonisolated let allParents: [ParsedSystemCategory]
     nonisolated private let categoryMap: [String: ParsedSystemCategory]
+    nonisolated private let categoryByIconMap: [String: ParsedSystemCategory]
     nonisolated private let parentChildMap: [String: String] // childId -> parentId
 
     private init() {
@@ -62,15 +63,19 @@ final class MistiaSystemCategoryRegistry: Sendable {
             self.allParents = parsed
             
             var map: [String: ParsedSystemCategory] = [:]
+            var byIcon: [String: ParsedSystemCategory] = [:]
             var parentChild: [String: String] = [:]
             for parent in parsed {
                 map[parent.id] = parent
+                byIcon[parent.icon] = parent
                 for child in parent.children ?? [] {
                     map[child.id] = child
+                    byIcon[child.icon] = child
                     parentChild[child.id] = parent.id
                 }
             }
             self.categoryMap = map
+            self.categoryByIconMap = byIcon
             self.parentChildMap = parentChild
         } catch {
             fatalError("Failed to load or parse \(jsonName).\(jsonExtension): \(error)")
@@ -79,6 +84,10 @@ final class MistiaSystemCategoryRegistry: Sendable {
 
     nonisolated func category(for id: String) -> ParsedSystemCategory? {
         categoryMap[id]
+    }
+
+    nonisolated func category(forIcon icon: String) -> ParsedSystemCategory? {
+        categoryByIconMap[icon]
     }
 
     nonisolated func parentId(for childId: String) -> String? {

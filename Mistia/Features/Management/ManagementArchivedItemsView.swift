@@ -186,19 +186,19 @@ struct ManagementArchivedItemsView: View {
     @Query(filter: #Predicate<SettlementGroup> { $0.isArchived == true && $0.deletedAt == nil }, sort: \SettlementGroup.occurredAt, order: .reverse)
     private var archivedSettlementGroups: [SettlementGroup]
 
-    @Query
+    @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil })
     private var allSettlementParticipants: [SettlementParticipant]
 
-    @Query
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var allCategories: [TransactionCategory]
 
-    @Query
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
     private var allTransactions: [LedgerTransaction]
 
-    @Query
+    @Query(filter: #Predicate<RecurringBillPlan> { $0.deletedAt == nil })
     private var allBills: [RecurringBillPlan]
 
-    @Query
+    @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var allBudgets: [BudgetPlan]
 
     @Query

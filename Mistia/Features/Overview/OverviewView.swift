@@ -185,9 +185,12 @@ struct OverviewView: View {
     private var storedSettlementGroups: [SettlementGroup]
     @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)
     private var storedSettlementParticipants: [SettlementParticipant]
-    @Query private var storedInvestmentChannels: [InvestmentChannel]
-    @Query private var storedInvestmentAssets: [InvestmentAsset]
-    @Query private var storedInvestmentTrades: [InvestmentTrade]
+    @Query(filter: #Predicate<InvestmentChannel> { $0.deletedAt == nil })
+    private var storedInvestmentChannels: [InvestmentChannel]
+    @Query(filter: #Predicate<InvestmentAsset> { $0.deletedAt == nil })
+    private var storedInvestmentAssets: [InvestmentAsset]
+    @Query(filter: #Predicate<InvestmentTrade> { $0.deletedAt == nil })
+    private var storedInvestmentTrades: [InvestmentTrade]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     private struct StatementTarget: Identifiable, Hashable {

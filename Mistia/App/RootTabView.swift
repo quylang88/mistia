@@ -671,7 +671,8 @@ private struct RootQuickCreateAccessAlert: Identifiable {
 private struct NotificationBadgeObserver: View {
   @Environment(SessionStore.self) private var sessionStore
   @Environment(\.modelContext) private var modelContext
-  @Query private var rows: [AppNotificationRecord]
+  @Query(filter: #Predicate<AppNotificationRecord> { !$0.isRead })
+  private var rows: [AppNotificationRecord]
 
   var body: some View {
     Color.clear

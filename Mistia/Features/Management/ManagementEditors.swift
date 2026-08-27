@@ -37,13 +37,13 @@ struct ManagementWalletEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
-    @Query
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var storedTransactions: [LedgerTransaction]
     @Query
     private var ownershipScopes: [OwnedRecordScope]
-    @Query private var investmentPostings: [InvestmentWalletPosting]
+    @Query(filter: #Predicate<InvestmentWalletPosting> { $0.deletedAt == nil }) private var investmentPostings: [InvestmentWalletPosting]
     @Query private var investmentCashPostingMetadata: [InvestmentCashPostingMetadata]
     @Query private var investmentWalletConfigurations: [InvestmentWalletConfiguration]
 
@@ -1706,9 +1706,12 @@ struct ManagementBalanceAdjustmentSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
-    @Query private var storedCategories: [TransactionCategory]
-    @Query private var storedWallets: [LedgerWallet]
-    @Query private var storedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    private var storedWallets: [LedgerWallet]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
+    private var storedTransactions: [LedgerTransaction]
 
     let wallet: LedgerWallet
     let currentBalance: Int64

@@ -77,9 +77,17 @@ enum FamilyOverviewCalculator {
             os_signpost(.end, log: log, name: "FamilyOverviewCalculator.compute", signpostID: signpostID)
         }
 
-        let transactionRecords = input.transactions.map(\.record)
-        let overviewTransactions = input.transactions.map(\.overview)
-        let aggregateTransactions = input.transactions.map(\.aggregate)
+        var transactionRecords = [TransactionRecordSnapshot]()
+        var overviewTransactions = [OverviewTransactionSnapshot]()
+        var aggregateTransactions = [FamilyAggregateTransactionSnapshot]()
+        transactionRecords.reserveCapacity(input.transactions.count)
+        overviewTransactions.reserveCapacity(input.transactions.count)
+        aggregateTransactions.reserveCapacity(input.transactions.count)
+        for item in input.transactions {
+            transactionRecords.append(item.record)
+            overviewTransactions.append(item.overview)
+            aggregateTransactions.append(item.aggregate)
+        }
         let walletBalanceIndex = TransactionLogic.walletBalanceIndex(
             wallets: input.wallets.map {
                 TransactionWalletSnapshot(

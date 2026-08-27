@@ -7,12 +7,15 @@ nonisolated struct MistiaArchiveCleanupProtectionIndex: Sendable {
         queuedRecordIDs: Set<String>,
         conflictedRecordIDs: Set<String>
     ) {
-        protectedRecordIDs = Set(
-            queuedRecordIDs
-                .union(conflictedRecordIDs)
-                .lazy
-                .map { $0.lowercased() }
-        )
+        var protected = Set<String>()
+        protected.reserveCapacity(queuedRecordIDs.count + conflictedRecordIDs.count)
+        for id in queuedRecordIDs {
+            protected.insert(id.lowercased())
+        }
+        for id in conflictedRecordIDs {
+            protected.insert(id.lowercased())
+        }
+        self.protectedRecordIDs = protected
     }
 
     func canHardPurge(

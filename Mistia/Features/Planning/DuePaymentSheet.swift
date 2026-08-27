@@ -34,7 +34,7 @@ struct DuePaymentSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
-    @Query
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var wallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var occurrences: [DueOccurrenceRecord]

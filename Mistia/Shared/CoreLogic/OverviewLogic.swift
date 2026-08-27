@@ -908,16 +908,19 @@ nonisolated enum OverviewLogic {
     private static func isCreditCardPayment(
         _ transaction: OverviewTransactionSnapshot
     ) -> Bool {
-        let titleLooksLikeCardPayment = TransactionLogic.isCreditCardPaymentTitle(transaction.title)
         if transaction.primaryKind == .transfer {
             guard transaction.transferSubtype == .internalTransfer else { return false }
-            return transaction.destinationWalletKind == .creditCard
-                || (transaction.destinationWalletID != nil && titleLooksLikeCardPayment)
+            if transaction.destinationWalletKind == .creditCard {
+                return true
+            }
+            return transaction.destinationWalletID != nil && TransactionLogic.isCreditCardPaymentTitle(transaction.title)
         }
 
-        return transaction.primaryKind == .expense
-            && transaction.sourceWalletKind != .creditCard
-            && titleLooksLikeCardPayment
+        guard transaction.primaryKind == .expense, transaction.sourceWalletKind != .creditCard else {
+            return false
+        }
+
+        return TransactionLogic.isCreditCardPaymentTitle(transaction.title)
     }
 
     private static func normalizedCategoryName(_ name: String) -> String {

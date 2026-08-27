@@ -1942,7 +1942,8 @@ private enum MistiaNotificationDebugFixtures {
 struct MistiaNotificationBellLink: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
-    @Query private var rows: [AppNotificationRecord]
+    @Query(filter: #Predicate<AppNotificationRecord> { !$0.isRead })
+    private var rows: [AppNotificationRecord]
 
     private var unreadCount: Int {
         MistiaNotificationStore.unreadCount(

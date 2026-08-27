@@ -98,8 +98,10 @@ struct SettlementEditorSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
-    @Query private var wallets: [LedgerWallet]
-    @Query private var categories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    private var wallets: [LedgerWallet]
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var categories: [TransactionCategory]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil }, sort: \LedgerTransaction.occurredAt, order: .reverse)
     private var transactions: [LedgerTransaction]
     @Query

@@ -1318,16 +1318,19 @@ nonisolated enum TransactionLogic {
     }
 
     static func isCreditCardPayment(_ record: TransactionRecordSnapshot) -> Bool {
-        let titleLooksLikeCardPayment = isCreditCardPaymentTitle(record.title)
         if record.primaryKind == .transfer {
             guard record.transferSubtype == .internalTransfer else { return false }
-            return record.destinationWalletKind == .creditCard
-                || (record.destinationWalletID != nil && titleLooksLikeCardPayment)
+            if record.destinationWalletKind == .creditCard {
+                return true
+            }
+            return record.destinationWalletID != nil && isCreditCardPaymentTitle(record.title)
         }
 
-        return record.primaryKind == .expense
-            && record.sourceWalletKind != .creditCard
-            && titleLooksLikeCardPayment
+        guard record.primaryKind == .expense, record.sourceWalletKind != .creditCard else {
+            return false
+        }
+
+        return isCreditCardPaymentTitle(record.title)
     }
 
     static func isExpenseSpending(_ record: TransactionRecordSnapshot) -> Bool {
@@ -1451,7 +1454,12 @@ nonisolated enum TransactionLogic {
     }
 
     static func isCreditCardPaymentTitle(_ title: String) -> Bool {
-        title.localizedStandardContains("thanh toán thẻ") ||
+        guard !title.isEmpty else { return false }
+        let lower = title.lowercased()
+        if lower.contains("card payment") || lower.contains("thanh toan the") || lower.contains("thanh toán thẻ") || lower.contains("カード支払い") {
+            return true
+        }
+        return title.localizedStandardContains("thanh toán thẻ") ||
             title.localizedStandardContains("thanh toan the") ||
             title.localizedStandardContains("card payment") ||
             title.localizedStandardContains("カード支払い")

@@ -891,30 +891,35 @@ private extension KeyedDecodingContainer {
 nonisolated private final class BillItemFallbackDateParser: @unchecked Sendable {
     static let shared = BillItemFallbackDateParser()
 
-    private let formatter: DateFormatter
-    private let formats = [
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm",
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd HH:mm",
-        "yyyy-MM-dd"
-    ]
+    private let formatters: [DateFormatter]
     private let lock = NSLock()
 
     private init() {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .autoupdatingCurrent
-        self.formatter = formatter
+        let calendar = Calendar(identifier: .gregorian)
+        let locale = Locale(identifier: "en_US_POSIX")
+        let timeZone = TimeZone.autoupdatingCurrent
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd"
+        ]
+        self.formatters = formats.map { format in
+            let formatter = DateFormatter()
+            formatter.calendar = calendar
+            formatter.locale = locale
+            formatter.timeZone = timeZone
+            formatter.dateFormat = format
+            return formatter
+        }
     }
 
     func date(from value: String) -> Date? {
         lock.lock()
         defer { lock.unlock() }
 
-        for format in formats {
-            formatter.dateFormat = format
+        for formatter in formatters {
             if let date = formatter.date(from: value) {
                 return date
             }

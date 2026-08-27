@@ -192,9 +192,9 @@ struct InvestmentHubView: View {
     @Environment(MistiaUIState.self) private var uiState: MistiaUIState?
     @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
 
-    @Query private var channels: [InvestmentChannel]
-    @Query private var assets: [InvestmentAsset]
-    @Query private var trades: [InvestmentTrade]
+    @Query(filter: #Predicate<InvestmentChannel> { $0.deletedAt == nil }) private var channels: [InvestmentChannel]
+    @Query(filter: #Predicate<InvestmentAsset> { $0.deletedAt == nil }) private var assets: [InvestmentAsset]
+    @Query(filter: #Predicate<InvestmentTrade> { $0.deletedAt == nil }) private var trades: [InvestmentTrade]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
@@ -2897,11 +2897,11 @@ struct InvestmentWalletDetailView: View {
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var transactions: [LedgerTransaction]
-    @Query private var postings: [InvestmentWalletPosting]
+    @Query(filter: #Predicate<InvestmentWalletPosting> { $0.deletedAt == nil }) private var postings: [InvestmentWalletPosting]
     @Query private var cashPostingMetadata: [InvestmentCashPostingMetadata]
     @Query private var configurations: [InvestmentWalletConfiguration]
-    @Query private var trades: [InvestmentTrade]
-    @Query private var assets: [InvestmentAsset]
+    @Query(filter: #Predicate<InvestmentTrade> { $0.deletedAt == nil }) private var trades: [InvestmentTrade]
+    @Query(filter: #Predicate<InvestmentAsset> { $0.deletedAt == nil }) private var assets: [InvestmentAsset]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let ownerUserID: UUID
@@ -3391,7 +3391,7 @@ private struct InvestmentCashReconciliationSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
-    @Query private var postings: [InvestmentWalletPosting]
+    @Query(filter: #Predicate<InvestmentWalletPosting> { $0.deletedAt == nil }) private var postings: [InvestmentWalletPosting]
     @Query private var cashPostingMetadata: [InvestmentCashPostingMetadata]
     @Query private var configurations: [InvestmentWalletConfiguration]
 

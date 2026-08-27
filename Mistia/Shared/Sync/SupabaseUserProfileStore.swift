@@ -168,7 +168,7 @@ struct RemoteUserProfile: Decodable {
 
         if let birthdayRaw = try container.decodeIfPresent(String.self, forKey: .birthday),
            !birthdayRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            birthday = Self.birthdayFormatter.date(from: birthdayRaw)
+            birthday = DateFormatter.mistiaBirthdayFormatter.date(from: birthdayRaw)
         } else {
             birthday = nil
         }
@@ -185,15 +185,6 @@ struct RemoteUserProfile: Decodable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
-
-    private static let birthdayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }
 
 struct SupabaseUserProfileStore: UserProfileRemoteStoring {
@@ -463,17 +454,8 @@ private struct UserProfileUpsertPayload: Encodable {
         self.userID = userID
         self.displayName = displayName
         self.avatarURL = avatarURL?.absoluteString
-        self.birthday = birthday.map(Self.birthdayFormatter.string(from:))
+        self.birthday = birthday.map(DateFormatter.mistiaBirthdayFormatter.string(from:))
     }
-
-    private static let birthdayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }
 
 private struct UserOverviewSectionConfigUpsertPayload: Encodable {
@@ -495,5 +477,26 @@ private struct UserOverviewSectionConfigUpsertPayload: Encodable {
         self.userID = userID
         self.items = items
         self.modifiedAt = MistiaISO8601DateCoding.stringWithFractionalSeconds(from: modifiedAt)
+    }
+}
+
+extension DateFormatter {
+    fileprivate static func threadCached(key: String, configure: () -> DateFormatter) -> DateFormatter {
+        let threadDict = Thread.current.threadDictionary
+        if let cached = threadDict[key] as? DateFormatter { return cached }
+        let formatter = configure()
+        threadDict[key] = formatter
+        return formatter
+    }
+
+    static var mistiaBirthdayFormatter: DateFormatter {
+        threadCached(key: "MistiaDateFormatter.birthday") {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd"
+            return formatter
+        }
     }
 }

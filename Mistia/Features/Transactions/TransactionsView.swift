@@ -2681,9 +2681,10 @@ struct DebtSettlementSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
-    @Query
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var wallets: [LedgerWallet]
-    @Query private var settlementGroups: [SettlementGroup]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var settlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: DebtSettlementSheetTarget

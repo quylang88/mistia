@@ -80,12 +80,7 @@ enum MistiaCategoryHierarchy {
         )) { $0.parentCategory?.id }
 
         return parents.compactMap { parent in
-            let children = childrenByParentID[parent.id]?.sorted { lhs, rhs in
-                if lhs.sortOrder != rhs.sortOrder {
-                    return lhs.sortOrder < rhs.sortOrder
-                }
-                return lhs.createdAt < rhs.createdAt
-            } ?? []
+            let children = childrenByParentID[parent.id] ?? []
             let parentSystemKey = parent.systemKey.flatMap(MistiaSystemCategoryParentKey.init(rawValue:))
             let hidesWhenEmpty = parentSystemKey?.showsOnlyWhenHasChildren == true
             if children.isEmpty && (!includeEmptyParents || hidesWhenEmpty) {

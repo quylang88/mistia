@@ -2226,17 +2226,9 @@ private extension MistiaSyncEntity {
 
 private struct ManagementSyncConflictCard: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Query private var storedWallets: [LedgerWallet]
-    @Query private var storedCreditCardProfiles: [CreditCardProfile]
-    @Query private var storedCategories: [TransactionCategory]
-    @Query private var storedTransactions: [LedgerTransaction]
-    @Query private var storedBudgetPlans: [BudgetPlan]
-    @Query private var storedSavingsGoals: [SavingsGoal]
-    @Query private var storedRecurringBillPlans: [RecurringBillPlan]
-    @Query private var storedInstallmentPlans: [InstallmentPlan]
-    @Query private var storedDueOccurrences: [DueOccurrenceRecord]
 
     let conflict: SyncConflict
+    let referenceResolver: ManagementConflictReferenceResolver
     let accent: Color
     let isDisabled: Bool
     let onResolve: (MistiaSyncConflictResolution) -> Void
@@ -2269,20 +2261,6 @@ private struct ManagementSyncConflictCard: View {
 
     private var recordSubtitle: String {
         conflict.entity.displayTitle
-    }
-
-    private var referenceResolver: ManagementConflictReferenceResolver {
-        ManagementConflictReferenceResolver(
-            wallets: storedWallets,
-            creditCardProfiles: storedCreditCardProfiles,
-            categories: storedCategories,
-            transactions: storedTransactions,
-            budgetPlans: storedBudgetPlans,
-            savingsGoals: storedSavingsGoals,
-            recurringBillPlans: storedRecurringBillPlans,
-            installmentPlans: storedInstallmentPlans,
-            dueOccurrences: storedDueOccurrences
-        )
     }
 
     var body: some View {
@@ -2797,11 +2775,43 @@ private struct ManagementDataConflictsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
     @Query private var storedConflicts: [SyncConflict]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    private var storedWallets: [LedgerWallet]
+    @Query(filter: #Predicate<CreditCardProfile> { $0.deletedAt == nil })
+    private var storedCreditCardProfiles: [CreditCardProfile]
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
+    private var storedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
+    private var storedBudgetPlans: [BudgetPlan]
+    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
+    private var storedSavingsGoals: [SavingsGoal]
+    @Query(filter: #Predicate<RecurringBillPlan> { $0.deletedAt == nil })
+    private var storedRecurringBillPlans: [RecurringBillPlan]
+    @Query(filter: #Predicate<InstallmentPlan> { $0.deletedAt == nil })
+    private var storedInstallmentPlans: [InstallmentPlan]
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
+    private var storedDueOccurrences: [DueOccurrenceRecord]
 
     let accent: Color
 
     private var activeConflicts: [SyncConflict] {
         storedConflicts
+    }
+
+    private var referenceResolver: ManagementConflictReferenceResolver {
+        ManagementConflictReferenceResolver(
+            wallets: storedWallets,
+            creditCardProfiles: storedCreditCardProfiles,
+            categories: storedCategories,
+            transactions: storedTransactions,
+            budgetPlans: storedBudgetPlans,
+            savingsGoals: storedSavingsGoals,
+            recurringBillPlans: storedRecurringBillPlans,
+            installmentPlans: storedInstallmentPlans,
+            dueOccurrences: storedDueOccurrences
+        )
     }
 
     private var conflictSections: [ManagementSyncConflictSection] {
@@ -2840,6 +2850,7 @@ private struct ManagementDataConflictsView: View {
                     accent: accent
                 )
             } else {
+                let resolver = referenceResolver
                 VStack(spacing: 20) {
                     ManagementConflictReviewSummaryCard(
                         count: activeConflicts.count,
@@ -2857,6 +2868,7 @@ private struct ManagementDataConflictsView: View {
                                 ForEach(section.conflicts) { conflict in
                                     ManagementSyncConflictCard(
                                         conflict: conflict,
+                                        referenceResolver: resolver,
                                         accent: accent,
                                         isDisabled: !sessionStore.canPerformRemoteActions
                                     ) { resolution in
