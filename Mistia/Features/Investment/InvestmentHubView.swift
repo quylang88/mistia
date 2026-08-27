@@ -2960,24 +2960,11 @@ struct InvestmentWalletDetailView: View {
             && canUseWallet(linkedWallet.id)
             && canUseWallet(location.walletID)
     }
-    private var cashMetadataByPostingID: [UUID: InvestmentCashPostingMetadata] {
-        Dictionary(uniqueKeysWithValues: cashPostingMetadata.map { ($0.id, $0) })
-    }
     private var cashSnapshot: InvestmentCashAllocationSnapshot {
         InvestmentCashAllocationLogic.snapshot(
-            postings: postings.compactMap { posting in
-                guard posting.ownerUserID == ownerUserID,
-                      posting.deletedAt == nil,
-                      let bucket = cashMetadataByPostingID[posting.id]?.cashBucket else { return nil }
-                return InvestmentCashPostingSnapshot(
-                    walletID: posting.walletID,
-                    currencyCode: posting.currencyCode,
-                    amountMinor: posting.amountMinor,
-                    accountingAmountMinor: posting.accountingAmountMinor,
-                    accountingCurrencyCode: posting.accountingCurrencyCode,
-                    bucket: bucket
-                )
-            },
+            postings: postings,
+            cashPostingMetadata: cashPostingMetadata,
+            ownerUserID: ownerUserID,
             accountingCurrencyCode: accountingCurrencyCode
         )
     }
@@ -3117,18 +3104,18 @@ struct InvestmentWalletDetailView: View {
                 }
             }
             if let linkedWallet {
-                let heldInvestment = max(
-                    cashSnapshot.locations.first { $0.walletID == linkedWallet.id }?.totalMinor ?? 0,
-                    0
+                let balances = InvestmentCashAllocationLogic.linkedWalletBalances(
+                    ledgerBalanceMinor: balanceIndex.balance(
+                        for: TransactionWalletSnapshot(
+                            id: linkedWallet.id,
+                            kind: linkedWallet.kind,
+                            openingBalanceMinor: linkedWallet.openingBalanceMinor
+                        )
+                    ),
+                    allocatedInvestmentMinor: cashSnapshot.locations.first {
+                        $0.walletID == linkedWallet.id
+                    }?.totalMinor ?? 0
                 )
-                let appBalance = balanceIndex.balance(
-                    for: TransactionWalletSnapshot(
-                        id: linkedWallet.id,
-                        kind: linkedWallet.kind,
-                        openingBalanceMinor: linkedWallet.openingBalanceMinor
-                    )
-                )
-                let actualBalance = appBalance + heldInvestment
                 HStack(spacing: 12) {
                     MistiaFinanceIconView(
                         icon: linkedWallet.iconSymbolName,
@@ -3139,7 +3126,7 @@ struct InvestmentWalletDetailView: View {
                         Text(linkedWallet.name).font(.subheadline.weight(.semibold))
                         Text(
                             L10n.investment.wallet.actualBalance(
-                                actualBalance.formattedCurrency(code: linkedWallet.currencyCode)
+                                balances.actualMinor.formattedCurrency(code: linkedWallet.currencyCode)
                             )
                         )
                         .font(.caption)
@@ -3147,7 +3134,11 @@ struct InvestmentWalletDetailView: View {
                     }
                     Spacer()
                 }
-                Text(L10n.investment.wallet.investmentPortion(heldInvestment.formattedCurrency(code: accountingCurrencyCode)))
+                Text(
+                    L10n.investment.wallet.investmentPortion(
+                        balances.investmentMinor.formattedCurrency(code: accountingCurrencyCode)
+                    )
+                )
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MistiaAccent.lightPurple.color)
             } else {
@@ -3405,23 +3396,11 @@ private struct InvestmentCashReconciliationSheet: View {
     private var systemWalletID: UUID { InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID) }
     private var currencyCode: String { wallets.first { $0.id == systemWalletID }?.currencyCode ?? "JPY" }
     private var linkedWalletID: UUID? { configurations.first { $0.ownerUserID == ownerUserID }?.linkedWalletID }
-    private var cashMetadataByPostingID: [UUID: InvestmentCashPostingMetadata] {
-        Dictionary(uniqueKeysWithValues: cashPostingMetadata.map { ($0.id, $0) })
-    }
     private var snapshot: InvestmentCashAllocationSnapshot {
         InvestmentCashAllocationLogic.snapshot(
-            postings: postings.compactMap { posting in
-                guard posting.ownerUserID == ownerUserID, posting.deletedAt == nil,
-                      let bucket = cashMetadataByPostingID[posting.id]?.cashBucket else { return nil }
-                return InvestmentCashPostingSnapshot(
-                    walletID: posting.walletID,
-                    currencyCode: posting.currencyCode,
-                    amountMinor: posting.amountMinor,
-                    accountingAmountMinor: posting.accountingAmountMinor,
-                    accountingCurrencyCode: posting.accountingCurrencyCode,
-                    bucket: bucket
-                )
-            },
+            postings: postings,
+            cashPostingMetadata: cashPostingMetadata,
+            ownerUserID: ownerUserID,
             accountingCurrencyCode: currencyCode
         )
     }

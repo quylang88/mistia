@@ -136,6 +136,69 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     }
 }
 
+nonisolated extension InvestmentCashAllocationLogic {
+    static func linkedWalletAllocation(
+        configurations: [InvestmentWalletConfiguration],
+        postings: [InvestmentWalletPosting],
+        cashPostingMetadata: [InvestmentCashPostingMetadata],
+        ownerUserID: UUID,
+        accountingCurrencyCode: String
+    ) -> InvestmentLinkedWalletAllocationSnapshot {
+        guard let linkedWalletID = configurations.first(where: {
+            $0.ownerUserID == ownerUserID
+        })?.linkedWalletID else {
+            return InvestmentLinkedWalletAllocationSnapshot(
+                linkedWalletID: nil,
+                profitMinor: 0
+            )
+        }
+        let allocation = snapshot(
+            postings: postings,
+            cashPostingMetadata: cashPostingMetadata,
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: accountingCurrencyCode
+        )
+        let profitMinor = allocation.locations.first {
+            $0.walletID == linkedWalletID
+        }?.totalMinor ?? 0
+        return InvestmentLinkedWalletAllocationSnapshot(
+            linkedWalletID: linkedWalletID,
+            profitMinor: max(profitMinor, 0)
+        )
+    }
+
+    static func snapshot(
+        postings: [InvestmentWalletPosting],
+        cashPostingMetadata: [InvestmentCashPostingMetadata],
+        ownerUserID: UUID,
+        accountingCurrencyCode: String
+    ) -> InvestmentCashAllocationSnapshot {
+        let cashBucketByPostingID = Dictionary(
+            uniqueKeysWithValues: cashPostingMetadata.lazy
+                .filter { $0.ownerUserID == ownerUserID }
+                .map { ($0.id, $0.cashBucket) }
+        )
+        return snapshot(
+            postings: postings.compactMap { posting in
+                guard posting.ownerUserID == ownerUserID,
+                      posting.deletedAt == nil,
+                      let bucket = cashBucketByPostingID[posting.id] else {
+                    return nil
+                }
+                return InvestmentCashPostingSnapshot(
+                    walletID: posting.walletID,
+                    currencyCode: posting.currencyCode,
+                    amountMinor: posting.amountMinor,
+                    accountingAmountMinor: posting.accountingAmountMinor,
+                    accountingCurrencyCode: posting.accountingCurrencyCode,
+                    bucket: bucket
+                )
+            },
+            accountingCurrencyCode: accountingCurrencyCode
+        )
+    }
+}
+
 private enum InvestmentReconciliationSignpost {
     private static let log = OSLog(
         subsystem: Bundle.main.bundleIdentifier ?? "Mistia",
@@ -274,27 +337,17 @@ enum InvestmentPersistenceService {
                 }
             )
         )
-        let cashMetadataByPostingID = Dictionary(
-            uniqueKeysWithValues: try context.fetch(
-                FetchDescriptor<InvestmentCashPostingMetadata>(
-                    predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
-                        metadata.ownerUserID == ownerUserID
-                    }
-                )
-            ).map { ($0.id, $0) }
+        let cashPostingMetadata = try context.fetch(
+            FetchDescriptor<InvestmentCashPostingMetadata>(
+                predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                    metadata.ownerUserID == ownerUserID
+                }
+            )
         )
         return InvestmentCashAllocationLogic.snapshot(
-            postings: postings.compactMap { posting in
-                guard let bucket = cashMetadataByPostingID[posting.id]?.cashBucket else { return nil }
-                return InvestmentCashPostingSnapshot(
-                    walletID: posting.walletID,
-                    currencyCode: posting.currencyCode,
-                    amountMinor: posting.amountMinor,
-                    accountingAmountMinor: posting.accountingAmountMinor,
-                    accountingCurrencyCode: posting.accountingCurrencyCode,
-                    bucket: bucket
-                )
-            },
+            postings: postings,
+            cashPostingMetadata: cashPostingMetadata,
+            ownerUserID: ownerUserID,
             accountingCurrencyCode: accountingCurrencyCode
         )
     }

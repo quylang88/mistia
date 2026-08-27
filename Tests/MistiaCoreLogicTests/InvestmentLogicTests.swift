@@ -474,6 +474,42 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(snapshot.locations.first { $0.walletID == bankID }?.unreconciledMinor, 20)
     }
 
+    func testLinkedWalletActualBalanceIncludesAllocatedInvestmentWithoutCountingItTwice() {
+        let linkedWalletID = UUID()
+        let allocation = InvestmentLinkedWalletAllocationSnapshot(
+            linkedWalletID: linkedWalletID,
+            profitMinor: 50
+        )
+        let balances = InvestmentCashAllocationLogic.linkedWalletBalances(
+            ledgerBalanceMinor: 150,
+            walletID: linkedWalletID,
+            allocation: allocation
+        )
+
+        XCTAssertEqual(balances.actualMinor, 150)
+        XCTAssertEqual(balances.ordinaryMinor, 100)
+        XCTAssertEqual(balances.investmentMinor, 50)
+
+        let otherWalletBalances = InvestmentCashAllocationLogic.linkedWalletBalances(
+            ledgerBalanceMinor: 150,
+            walletID: UUID(),
+            allocation: allocation
+        )
+        XCTAssertEqual(otherWalletBalances.ordinaryMinor, 150)
+        XCTAssertEqual(otherWalletBalances.investmentMinor, 0)
+    }
+
+    func testLinkedWalletBalancesIgnoreNegativeInvestmentAllocation() {
+        let balances = InvestmentCashAllocationLogic.linkedWalletBalances(
+            ledgerBalanceMinor: 150,
+            allocatedInvestmentMinor: -20
+        )
+
+        XCTAssertEqual(balances.actualMinor, 150)
+        XCTAssertEqual(balances.ordinaryMinor, 150)
+        XCTAssertEqual(balances.investmentMinor, 0)
+    }
+
     func testFundUsageConsumesOrdinaryThenBookedThenUnreconciled() {
         let preview = InvestmentCashAllocationLogic.usagePreview(
             requestedMinor: 120,

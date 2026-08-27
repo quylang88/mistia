@@ -16,10 +16,14 @@ struct ManagementCategoryEditorTarget: Identifiable {
 
 private struct ManagementWalletBalanceSnapshotCacheKey: Hashable {
     let walletID: UUID
+    let ownerUserID: UUID?
     let walletKindRawValue: String
     let openingBalanceMinor: Int64
     let creditLimitMinor: Int64?
     let transactionSignature: MistiaCollectionChangeSignature
+    let investmentPostingSignature: MistiaCollectionChangeSignature
+    let investmentCashMetadataSignature: MistiaCollectionChangeSignature
+    let investmentConfigurationSignature: MistiaCollectionChangeSignature
 }
 
 private struct ManagementWalletBalanceSnapshot {
@@ -547,6 +551,7 @@ struct ManagementWalletEditorSheet: View {
         guard let wallet = target.wallet else { return nil }
         return ManagementWalletBalanceSnapshotCacheKey(
             walletID: wallet.id,
+            ownerUserID: targetWalletOwnerUserID,
             walletKindRawValue: wallet.kind.rawValue,
             openingBalanceMinor: wallet.openingBalanceMinor,
             creditLimitMinor: wallet.creditCardProfile?.creditLimitMinor,
@@ -556,6 +561,22 @@ struct ManagementWalletEditorSheet: View {
                 deletedAt: \.deletedAt,
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
+            ),
+            investmentPostingSignature: MistiaCollectionChangeSignature.make(
+                investmentPostings,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            investmentCashMetadataSignature: MistiaCollectionChangeSignature.make(
+                investmentCashPostingMetadata,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            investmentConfigurationSignature: MistiaCollectionChangeSignature.make(
+                investmentWalletConfigurations,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
             )
         )
     }
@@ -621,11 +642,33 @@ struct ManagementWalletEditorSheet: View {
             displayBalance = result.available
         } else {
             debt = currentDebtBalance(for: wallet)
-            displayBalance = debt
+            displayBalance = InvestmentCashAllocationLogic.linkedWalletBalances(
+                ledgerBalanceMinor: debt,
+                walletID: wallet.id,
+                allocation: linkedInvestmentAllocation(for: wallet)
+            ).ordinaryMinor
         }
         return ManagementWalletBalanceSnapshot(
             debtBalanceMinor: debt,
             displayBalanceMinor: displayBalance
+        )
+    }
+
+    private func linkedInvestmentAllocation(
+        for wallet: LedgerWallet
+    ) -> InvestmentLinkedWalletAllocationSnapshot {
+        guard let ownerUserID = targetWalletOwnerUserID else {
+            return InvestmentLinkedWalletAllocationSnapshot(
+                linkedWalletID: nil,
+                profitMinor: 0
+            )
+        }
+        return InvestmentCashAllocationLogic.linkedWalletAllocation(
+            configurations: investmentWalletConfigurations,
+            postings: investmentPostings,
+            cashPostingMetadata: investmentCashPostingMetadata,
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: wallet.currencyCode
         )
     }
 

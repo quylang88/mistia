@@ -1595,6 +1595,22 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 70)
         XCTAssertEqual(try balance(linkedWallet, fixture), 80)
 
+        let linkedAllocation = InvestmentCashAllocationLogic.linkedWalletAllocation(
+            configurations: try fixture.context.fetch(FetchDescriptor<InvestmentWalletConfiguration>()),
+            postings: try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()),
+            cashPostingMetadata: try fixture.context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()),
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: linkedWallet.currencyCode
+        )
+        let linkedBalances = InvestmentCashAllocationLogic.linkedWalletBalances(
+            ledgerBalanceMinor: try balance(linkedWallet, fixture),
+            walletID: linkedWallet.id,
+            allocation: linkedAllocation
+        )
+        XCTAssertEqual(linkedBalances.actualMinor, 80)
+        XCTAssertEqual(linkedBalances.ordinaryMinor, 30)
+        XCTAssertEqual(linkedBalances.investmentMinor, 50)
+
         let reconciliationEventID = try XCTUnwrap(reconciliation.instructions.first?.id)
         let transferPostings = try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>())
             .filter { $0.eventID == reconciliationEventID && $0.role == .cashReconciliation }

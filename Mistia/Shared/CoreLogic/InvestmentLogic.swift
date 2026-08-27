@@ -485,7 +485,44 @@ nonisolated struct InvestmentCashPostingSnapshot: Equatable, Sendable {
     let bucket: InvestmentCashBucket
 }
 
+nonisolated struct InvestmentLinkedWalletBalanceSnapshot: Equatable, Sendable {
+    let actualMinor: Int64
+    let ordinaryMinor: Int64
+    let investmentMinor: Int64
+}
+
+nonisolated struct InvestmentLinkedWalletAllocationSnapshot: Equatable, Sendable {
+    let linkedWalletID: UUID?
+    let profitMinor: Int64
+}
+
 nonisolated enum InvestmentCashAllocationLogic {
+    static func linkedWalletBalances(
+        ledgerBalanceMinor: Int64,
+        walletID: UUID,
+        allocation: InvestmentLinkedWalletAllocationSnapshot
+    ) -> InvestmentLinkedWalletBalanceSnapshot {
+        linkedWalletBalances(
+            ledgerBalanceMinor: ledgerBalanceMinor,
+            allocatedInvestmentMinor: allocation.linkedWalletID == walletID
+                ? allocation.profitMinor
+                : 0
+        )
+    }
+
+    static func linkedWalletBalances(
+        ledgerBalanceMinor: Int64,
+        allocatedInvestmentMinor: Int64
+    ) -> InvestmentLinkedWalletBalanceSnapshot {
+        let investmentMinor = max(allocatedInvestmentMinor, 0)
+        let (ordinaryMinor, overflow) = ledgerBalanceMinor.subtractingReportingOverflow(investmentMinor)
+        return InvestmentLinkedWalletBalanceSnapshot(
+            actualMinor: ledgerBalanceMinor,
+            ordinaryMinor: overflow ? .min : ordinaryMinor,
+            investmentMinor: investmentMinor
+        )
+    }
+
     static func snapshot(
         postings: [InvestmentCashPostingSnapshot],
         accountingCurrencyCode: String,

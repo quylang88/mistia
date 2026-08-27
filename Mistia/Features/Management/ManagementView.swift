@@ -101,6 +101,11 @@ private struct ManagementRenderSnapshot {
     let visibleCategorySections: [TransactionCategoryGroupSection]
 }
 
+private struct ManagementInvestmentAllocationCacheKey: Hashable {
+    let ownerUserID: UUID
+    let accountingCurrencyCode: String
+}
+
 private struct ManagementRenderSnapshotCache {
     let key: ManagementRenderSnapshotCacheKey
     let snapshot: ManagementRenderSnapshot
@@ -259,19 +264,40 @@ struct ManagementView: View {
         let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
 
         var balancesByID: [UUID: Int64] = [:]
+        var investmentAllocationByKey: [ManagementInvestmentAllocationCacheKey: InvestmentLinkedWalletAllocationSnapshot] = [:]
+        func investmentAllocation(
+            ownerUserID: UUID,
+            accountingCurrencyCode: String
+        ) -> InvestmentLinkedWalletAllocationSnapshot {
+            let key = ManagementInvestmentAllocationCacheKey(
+                ownerUserID: ownerUserID,
+                accountingCurrencyCode: MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
+            )
+            if let cached = investmentAllocationByKey[key] {
+                return cached
+            }
+            let allocation = InvestmentCashAllocationLogic.linkedWalletAllocation(
+                configurations: investmentWalletConfigurations,
+                postings: investmentWalletPostings,
+                cashPostingMetadata: investmentCashPostingMetadata,
+                ownerUserID: ownerUserID,
+                accountingCurrencyCode: accountingCurrencyCode
+            )
+            investmentAllocationByKey[key] = allocation
+            return allocation
+        }
+
         for (wallet, walletSnapshot) in zip(candidateWallets, candidateWalletSnapshots) {
-            let ownerUserID = walletOwnerMap[wallet.id]
-                ?? familyContextStore.selectedSubjectUserID
-                ?? sessionStore.activeLocalProfileUserID
+            let ownerUserID = walletOwnerUserID(for: wallet, ownerMap: walletOwnerMap)
             if let ownerUserID,
                InvestmentSystemWalletIdentity.isInvestmentWallet(
                    walletID: wallet.id,
                    ownerUserID: ownerUserID
                ) {
-                balancesByID[wallet.id] = linkedInvestmentProfitMinor(
+                balancesByID[wallet.id] = investmentAllocation(
                     ownerUserID: ownerUserID,
                     accountingCurrencyCode: wallet.currencyCode
-                )
+                ).profitMinor
             } else if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
                 balancesByID[wallet.id] = TransactionLogic.creditCardBalance(
                     creditLimitMinor: profile.creditLimitMinor,
@@ -279,13 +305,24 @@ struct ManagementView: View {
                     balanceIndex: balanceIndex
                 ).currentDebtMinor
             } else {
-                balancesByID[wallet.id] = balanceIndex.balance(for: walletSnapshot)
+                let ledgerBalance = balanceIndex.balance(for: walletSnapshot)
+                if let ownerUserID {
+                    let allocation = investmentAllocation(
+                        ownerUserID: ownerUserID,
+                        accountingCurrencyCode: wallet.currencyCode
+                    )
+                    balancesByID[wallet.id] = InvestmentCashAllocationLogic.linkedWalletBalances(
+                        ledgerBalanceMinor: ledgerBalance,
+                        walletID: wallet.id,
+                        allocation: allocation
+                    ).ordinaryMinor
+                } else {
+                    balancesByID[wallet.id] = ledgerBalance
+                }
             }
         }
         let activeWallets = candidateWallets.filter { wallet in
-            let ownerUserID = walletOwnerMap[wallet.id]
-                ?? familyContextStore.selectedSubjectUserID
-                ?? sessionStore.activeLocalProfileUserID
+            let ownerUserID = walletOwnerUserID(for: wallet, ownerMap: walletOwnerMap)
             guard let ownerUserID,
                   InvestmentSystemWalletIdentity.isInvestmentWallet(
                       walletID: wallet.id,
@@ -312,42 +349,6 @@ struct ManagementView: View {
                 includeEmptyParents: true
             )
         )
-    }
-
-    private func linkedInvestmentProfitMinor(
-        ownerUserID: UUID,
-        accountingCurrencyCode: String
-    ) -> Int64 {
-        guard let linkedWalletID = investmentWalletConfigurations.first(where: {
-            $0.ownerUserID == ownerUserID
-        })?.linkedWalletID else {
-            return 0
-        }
-        let metadataByPostingID = Dictionary(
-            uniqueKeysWithValues: investmentCashPostingMetadata
-                .filter { $0.ownerUserID == ownerUserID }
-                .map { ($0.id, $0) }
-        )
-        let snapshot = InvestmentCashAllocationLogic.snapshot(
-            postings: investmentWalletPostings.compactMap { posting in
-                guard posting.ownerUserID == ownerUserID,
-                      posting.deletedAt == nil,
-                      let bucket = metadataByPostingID[posting.id]?.cashBucket else {
-                    return nil
-                }
-                return InvestmentCashPostingSnapshot(
-                    walletID: posting.walletID,
-                    currencyCode: posting.currencyCode,
-                    amountMinor: posting.amountMinor,
-                    accountingAmountMinor: posting.accountingAmountMinor,
-                    accountingCurrencyCode: posting.accountingCurrencyCode,
-                    bucket: bucket
-                )
-            },
-            accountingCurrencyCode: accountingCurrencyCode
-        )
-        let linkedProfit = snapshot.locations.first { $0.walletID == linkedWalletID }?.totalMinor ?? 0
-        return max(linkedProfit, 0)
     }
 
     private func cachedRenderSnapshot(for key: ManagementRenderSnapshotCacheKey) -> ManagementRenderSnapshot {
@@ -886,10 +887,7 @@ struct ManagementView: View {
     }
 
     private func investmentWalletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        let ownerUserID = walletOwnerMap[wallet.id]
-            ?? familyContextStore.selectedSubjectUserID
-            ?? sessionStore.activeLocalProfileUserID
+        let ownerUserID = walletOwnerUserID(for: wallet)
         guard let ownerUserID,
               InvestmentSystemWalletIdentity.isInvestmentWallet(
                   walletID: wallet.id,
@@ -982,7 +980,18 @@ struct ManagementView: View {
     }
 
     private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
-        walletOwnerMap[wallet.id] ?? selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
+        walletOwnerUserID(for: wallet, ownerMap: walletOwnerMap)
+    }
+
+    private func walletOwnerUserID(
+        for wallet: LedgerWallet,
+        ownerMap: [UUID: UUID]
+    ) -> UUID? {
+        ownerMap[wallet.id]
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
+            ?? familyContextStore.currentUserID
+            ?? sessionStore.signedInUserID
     }
 
     private func canOpenWalletEditor(_ wallet: LedgerWallet) -> Bool {
