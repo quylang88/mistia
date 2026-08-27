@@ -204,21 +204,6 @@ struct MistiaApp: App {
             print("Failed to populate budget category snapshots: \(error)")
         }
 
-        do {
-            let signpostID = MistiaPerformanceSignpost.begin("Orphaned Bill Transactions Cleanup")
-            defer { MistiaPerformanceSignpost.end("Orphaned Bill Transactions Cleanup", id: signpostID) }
-            let deleteMutations = try await worker.cleanupOrphanedBillTransactions()
-            for mutation in deleteMutations {
-                sessionStore.recordDelete(
-                    entity: mutation.entity,
-                    recordID: mutation.recordID,
-                    modifiedAt: mutation.modifiedAt
-                )
-            }
-        } catch {
-            print("Failed to clean up orphaned bill transactions: \(error)")
-        }
-
         _ = await sessionStore.runDeferredStartupSyncIfNeeded()
         // Heavy network/persistence maintenance now runs after manual, initial,
         // or background sync. Active startup only validates the restored session.

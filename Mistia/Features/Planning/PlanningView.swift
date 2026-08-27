@@ -1045,10 +1045,6 @@ struct PlanningView: View {
                 for: activeSnapshotKey,
                 snapshot: activeSnapshot
             )
-            try? MistiaBootstrap.cleanupOrphanedBillTransactions(
-                modelContext: modelContext,
-                sessionStore: sessionStore
-            )
         }
     }
 
