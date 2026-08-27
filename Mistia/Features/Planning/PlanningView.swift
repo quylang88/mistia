@@ -1045,6 +1045,10 @@ struct PlanningView: View {
                 for: activeSnapshotKey,
                 snapshot: activeSnapshot
             )
+            try? MistiaBootstrap.cleanupOrphanedBillTransactions(
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
         }
     }
 
@@ -1356,36 +1360,51 @@ struct PlanningView: View {
 
     private func performUndoSkip(_ item: PlanningRecurringDueSnapshot) {
         do {
-            let selectedMonthDate = item.paymentStartDate
             if let deletedID = try PlanningPersistenceSupport.undoDueSkip(
                 sourceKind: item.sourceKind,
                 sourceID: item.sourceID,
-                selectedMonth: selectedMonthDate,
+                selectedMonth: selectedMonth,
                 occurrences: storedOccurrences,
                 modelContext: modelContext,
                 calendar: calendar
             ) {
-                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedID, modifiedAt: .now)
+                sessionStore.recordDelete(
+                    entity: .dueOccurrenceRecord,
+                    recordID: deletedID,
+                    modifiedAt: .now,
+                    subjectUserIDOverride: dueOwnerUserID(for: item)
+                )
             }
         } catch {}
     }
 
     private func performUndoPayment(_ item: PlanningRecurringDueSnapshot) {
         do {
-            let selectedMonthDate = item.paymentStartDate
             let undone = try PlanningPersistenceSupport.undoDuePayment(
                 sourceKind: item.sourceKind,
                 sourceID: item.sourceID,
-                selectedMonth: selectedMonthDate,
+                selectedMonth: selectedMonth,
                 occurrences: storedOccurrences,
                 modelContext: modelContext,
+                targetTransactionID: item.linkedTransactionID,
                 calendar: calendar
             )
-            if let deletedTxID = undone.deletedTransactionID {
-                sessionStore.recordDelete(entity: .transaction, recordID: deletedTxID, modifiedAt: .now)
+            let overrideUserID = undone.subjectUserID ?? dueOwnerUserID(for: item)
+            for deletedTxID in undone.deletedTransactionIDs {
+                sessionStore.recordDelete(
+                    entity: .transaction,
+                    recordID: deletedTxID,
+                    modifiedAt: .now,
+                    subjectUserIDOverride: overrideUserID
+                )
             }
             if let deletedOccID = undone.deletedOccurrenceID {
-                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedOccID, modifiedAt: .now)
+                sessionStore.recordDelete(
+                    entity: .dueOccurrenceRecord,
+                    recordID: deletedOccID,
+                    modifiedAt: .now,
+                    subjectUserIDOverride: overrideUserID
+                )
             }
         } catch {}
     }

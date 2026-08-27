@@ -497,7 +497,12 @@ struct DuePaymentSheet: View {
                 modelContext: modelContext,
                 calendar: calendar
             ) {
-                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedID, modifiedAt: .now)
+                sessionStore.recordDelete(
+                    entity: .dueOccurrenceRecord,
+                    recordID: deletedID,
+                    modifiedAt: .now,
+                    subjectUserIDOverride: target.ownerUserID
+                )
             }
             onPaid?()
             dismiss()
@@ -518,13 +523,25 @@ struct DuePaymentSheet: View {
                 selectedMonth: selectedMonthDate,
                 occurrences: Array(occurrences),
                 modelContext: modelContext,
+                targetTransactionID: dueItem?.linkedTransactionID,
                 calendar: calendar
             )
-            if let deletedTxID = undone.deletedTransactionID {
-                sessionStore.recordDelete(entity: .transaction, recordID: deletedTxID, modifiedAt: .now)
+            let overrideUserID = undone.subjectUserID ?? target.ownerUserID
+            for deletedTxID in undone.deletedTransactionIDs {
+                sessionStore.recordDelete(
+                    entity: .transaction,
+                    recordID: deletedTxID,
+                    modifiedAt: .now,
+                    subjectUserIDOverride: overrideUserID
+                )
             }
             if let deletedOccID = undone.deletedOccurrenceID {
-                sessionStore.recordDelete(entity: .dueOccurrenceRecord, recordID: deletedOccID, modifiedAt: .now)
+                sessionStore.recordDelete(
+                    entity: .dueOccurrenceRecord,
+                    recordID: deletedOccID,
+                    modifiedAt: .now,
+                    subjectUserIDOverride: overrideUserID
+                )
             }
             onPaid?()
             dismiss()

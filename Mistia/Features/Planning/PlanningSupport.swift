@@ -198,6 +198,22 @@ struct PlanningSavedDuePayment {
 struct PlanningUndoneDuePayment {
     let deletedTransactionID: UUID?
     let deletedOccurrenceID: UUID?
+    let subjectUserID: UUID?
+    let deletedTransactionIDs: Set<UUID>
+
+    init(
+        deletedTransactionID: UUID?,
+        deletedOccurrenceID: UUID?,
+        subjectUserID: UUID? = nil,
+        deletedTransactionIDs: Set<UUID> = []
+    ) {
+        self.deletedTransactionID = deletedTransactionID
+        self.deletedOccurrenceID = deletedOccurrenceID
+        self.subjectUserID = subjectUserID
+        self.deletedTransactionIDs = deletedTransactionIDs.isEmpty
+            ? (deletedTransactionID.map { Set([$0]) } ?? [])
+            : deletedTransactionIDs
+    }
 }
 
 enum PlanningPersistenceSupport {
@@ -440,15 +456,17 @@ enum PlanningPersistenceSupport {
     ) throws -> UUID? {
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
         let matchingOccurrences = occurrences.filter {
-            $0.sourceKind == sourceKind
+            $0.deletedAt == nil
+                && $0.sourceKind == sourceKind
                 && $0.sourceID == sourceID
                 && $0.selectedMonthKey == monthKey
                 && $0.status == .skipped
         }
         guard let targetRecord = matchingOccurrences.first else { return nil }
         let recordID = targetRecord.id
+        let now = Date()
         for occurrence in matchingOccurrences {
-            modelContext.delete(occurrence)
+            occurrence.markDeleted(at: now)
         }
         try modelContext.save()
         return recordID
@@ -461,39 +479,83 @@ enum PlanningPersistenceSupport {
         selectedMonth: Date,
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
+        targetTransactionID: UUID? = nil,
         calendar: Calendar = MistiaCalendar.current
     ) throws -> PlanningUndoneDuePayment {
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
-        let matchingOccurrences = occurrences.filter {
-            $0.sourceKind == sourceKind
-                && $0.sourceID == sourceID
-                && $0.selectedMonthKey == monthKey
-                && $0.status == .paid
+        let matchingOccurrences = occurrences.filter { occurrence in
+            guard occurrence.deletedAt == nil else { return false }
+            if let targetTransactionID, occurrence.linkedTransactionID == targetTransactionID {
+                return true
+            }
+            return occurrence.sourceKind == sourceKind
+                && occurrence.sourceID == sourceID
+                && occurrence.selectedMonthKey == monthKey
+                && occurrence.status == .paid
         }
 
+        let now = Date()
         var deletedTransactionID: UUID?
         var deletedOccurrenceID: UUID?
+        var deletedTransactionIDs = Set<UUID>()
+        var subjectUserID: UUID?
+
+        let ownershipScopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
 
         for occurrence in matchingOccurrences {
             deletedOccurrenceID = occurrence.id
             if let txID = occurrence.linkedTransactionID {
                 deletedTransactionID = txID
+                deletedTransactionIDs.insert(txID)
                 let txs = try modelContext.fetch(
                     FetchDescriptor<LedgerTransaction>(
                         predicate: #Predicate<LedgerTransaction> { $0.id == txID }
                     )
                 )
                 for tx in txs {
-                    modelContext.delete(tx)
+                    if subjectUserID == nil {
+                        subjectUserID = TransactionAuditStore.resolveOwnerUserID(
+                            forWalletID: tx.sourceWallet?.id,
+                            ownershipScopes: ownershipScopes
+                        )
+                    }
+                    tx.markDeleted(at: now)
                 }
             }
-            modelContext.delete(occurrence)
+            if subjectUserID == nil {
+                subjectUserID = ownershipScopes.first(where: {
+                    $0.entityRawValue == MistiaSyncEntity.dueOccurrenceRecord.rawValue
+                        && $0.recordID == occurrence.id
+                })?.ownerUserID
+            }
+            occurrence.markDeleted(at: now)
+        }
+
+        if let targetTransactionID, !deletedTransactionIDs.contains(targetTransactionID) {
+            let txs = try modelContext.fetch(
+                FetchDescriptor<LedgerTransaction>(
+                    predicate: #Predicate<LedgerTransaction> { $0.id == targetTransactionID }
+                )
+            )
+            for tx in txs {
+                if subjectUserID == nil {
+                    subjectUserID = TransactionAuditStore.resolveOwnerUserID(
+                        forWalletID: tx.sourceWallet?.id,
+                        ownershipScopes: ownershipScopes
+                    )
+                }
+                tx.markDeleted(at: now)
+                deletedTransactionID = targetTransactionID
+                deletedTransactionIDs.insert(targetTransactionID)
+            }
         }
 
         try modelContext.save()
         return PlanningUndoneDuePayment(
             deletedTransactionID: deletedTransactionID,
-            deletedOccurrenceID: deletedOccurrenceID
+            deletedOccurrenceID: deletedOccurrenceID,
+            subjectUserID: subjectUserID,
+            deletedTransactionIDs: deletedTransactionIDs
         )
     }
 
