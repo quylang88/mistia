@@ -85,6 +85,103 @@ private struct InvestmentAssetPositionState {
     let unitPositions: [InvestmentUnitPosition]
 }
 
+private enum InvestmentThumbnailMemoryCache {
+    private static let cache = NSCache<NSString, UIImage>()
+
+    static func image(for path: String) -> UIImage? {
+        cache.object(forKey: path as NSString)
+    }
+
+    static func setImage(_ image: UIImage, for path: String) {
+        cache.setObject(image, forKey: path as NSString)
+    }
+}
+
+private struct InvestmentHubRenderSnapshot {
+    let ownerChannels: [InvestmentChannel]
+    let archivedOwnerChannels: [InvestmentChannel]
+    let ownerAssets: [InvestmentAsset]
+    let archivedOwnerAssets: [InvestmentAsset]
+    let filteredOwnerAssets: [InvestmentAsset]
+    let ownerTrades: [InvestmentTrade]
+    let visibleTrades: [InvestmentTrade]
+    let filteredVisibleTrades: [InvestmentTrade]
+    let positionsByAssetID: [UUID: InvestmentAssetPositionState]
+    let hasTradesByAssetID: [UUID: Bool]
+    let channelsByID: [UUID: InvestmentChannel]
+    let assetsByID: [UUID: InvestmentAsset]
+    let portfolioSummary: InvestmentPortfolioSummary
+    let monthSelectionBounds: MistiaMonthSelectionBounds
+    let canStartBuyTrade: Bool
+    let canStartSellTrade: Bool
+    let accountingCurrencyCode: String
+    let isEmpty: Bool
+    let canView: Bool
+    let canCreate: Bool
+    let canEdit: Bool
+
+    static func empty(
+        canView: Bool,
+        canCreate: Bool,
+        canEdit: Bool,
+        currencyCode: String
+    ) -> InvestmentHubRenderSnapshot {
+        InvestmentHubRenderSnapshot(
+            ownerChannels: [],
+            archivedOwnerChannels: [],
+            ownerAssets: [],
+            archivedOwnerAssets: [],
+            filteredOwnerAssets: [],
+            ownerTrades: [],
+            visibleTrades: [],
+            filteredVisibleTrades: [],
+            positionsByAssetID: [:],
+            hasTradesByAssetID: [:],
+            channelsByID: [:],
+            assetsByID: [:],
+            portfolioSummary: InvestmentPortfolioSummary(
+                remainingInventoryCostMinor: 0,
+                realizedProfitLossMinor: 0,
+                investmentWalletBalanceMinor: 0
+            ),
+            monthSelectionBounds: MistiaMonthSelectionBounds(
+                minimumMonth: .now,
+                maximumMonth: .now,
+                calendar: .current
+            ),
+            canStartBuyTrade: false,
+            canStartSellTrade: false,
+            accountingCurrencyCode: currencyCode,
+            isEmpty: true,
+            canView: canView,
+            canCreate: canCreate,
+            canEdit: canEdit
+        )
+    }
+}
+
+private struct InvestmentHubRenderSnapshotCache {
+    let key: InvestmentHubRenderSnapshotCacheKey
+    let snapshot: InvestmentHubRenderSnapshot
+}
+
+private struct InvestmentHubRenderSnapshotCacheKey: Hashable {
+    let ownerUserID: UUID?
+    let selectedChannelID: UUID?
+    let period: InvestmentHubPeriod
+    let selectedMonthStart: TimeInterval
+    let selectedTab: InvestmentHubTab
+    let searchText: String
+    let isSearchPresented: Bool
+    let primaryCurrencyCode: String
+    let channelSignature: MistiaCollectionChangeSignature
+    let assetSignature: MistiaCollectionChangeSignature
+    let tradeSignature: MistiaCollectionChangeSignature
+    let walletSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+    let familyAccessSignature: Int
+}
+
 struct InvestmentHubView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
@@ -100,8 +197,6 @@ struct InvestmentHubView: View {
     @Query private var trades: [InvestmentTrade]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
     @Query private var ownershipScopes: [OwnedRecordScope]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
-    private var ledgerTransactions: [LedgerTransaction]
 
     let ownerUserIDOverride: UUID?
     let isModalPresentation: Bool
@@ -119,6 +214,7 @@ struct InvestmentHubView: View {
     @State private var showsInvestmentWalletDetail = false
     @State private var activeAlert: InvestmentHubAlert?
     @State private var isRequestingPermission = false
+    @State private var renderSnapshotCache: InvestmentHubRenderSnapshotCache?
 
     init(
         ownerUserIDOverride: UUID? = nil,
@@ -158,134 +254,23 @@ struct InvestmentHubView: View {
     }
 
     private var ownerChannels: [InvestmentChannel] {
-        guard let ownerUserID else { return [] }
-        return channels
-            .filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
-                return $0.createdAt < $1.createdAt
-            }
-    }
-
-    private var ownerAssets: [InvestmentAsset] {
-        guard let ownerUserID else { return [] }
-        return assets.filter {
-            $0.ownerUserID == ownerUserID
-                && $0.deletedAt == nil
-                && !$0.isArchived
-                && (selectedChannelID == nil || $0.channelID == selectedChannelID)
-        }
-        .sorted(by: newestAssetFirst)
+        renderSnapshot.ownerChannels
     }
 
     private var archivedOwnerChannels: [InvestmentChannel] {
-        guard let ownerUserID else { return [] }
-        return channels.filter {
-            $0.ownerUserID == ownerUserID
-                && $0.deletedAt == nil
-                && $0.isArchived
-        }
+        renderSnapshot.archivedOwnerChannels
     }
 
     private var archivedOwnerAssets: [InvestmentAsset] {
-        guard let ownerUserID else { return [] }
-        return assets.filter {
-            $0.ownerUserID == ownerUserID
-                && $0.deletedAt == nil
-                && $0.isArchived
-        }
-    }
-
-    private var ownerTrades: [InvestmentTrade] {
-        guard let ownerUserID else { return [] }
-        return trades.filter {
-            $0.ownerUserID == ownerUserID
-                && $0.deletedAt == nil
-                && (selectedChannelID == nil || $0.channelID == selectedChannelID)
-        }
-    }
-
-    private var systemWallet: LedgerWallet? {
-        guard let ownerUserID else { return nil }
-        let id = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
-        return wallets.first { $0.id == id }
-    }
-
-    private var systemWalletBalanceMinor: Int64 {
-        guard let systemWallet else { return 0 }
-        let walletSnapshot = TransactionWalletSnapshot(
-            id: systemWallet.id,
-            kind: systemWallet.kind,
-            openingBalanceMinor: systemWallet.openingBalanceMinor
-        )
-        return TransactionLogic.walletBalanceIndex(
-            wallets: [walletSnapshot],
-            records: ledgerTransactions.map(\.snapshot)
-        ).balance(for: walletSnapshot)
+        renderSnapshot.archivedOwnerAssets
     }
 
     private var accountingCurrencyCode: String {
-        systemWallet?.currencyCode ?? MistiaCurrencyLogic.normalizedCode(primaryCurrencyCode)
+        renderSnapshot.accountingCurrencyCode
     }
 
     private var portfolioSummary: InvestmentPortfolioSummary {
-        let positionSnapshots = ownerAssets.map { asset in
-            let position = position(for: asset)
-            return InvestmentAssetPositionSnapshot(
-                id: asset.id,
-                channelID: asset.channelID,
-                quantity: position.quantity,
-                remainingCostBasisMinor: position.costBasisMinor,
-                openLotCount: position.openLotCount
-            )
-        }
-        return InvestmentSummaryLogic.summary(
-            positions: positionSnapshots,
-            trades: ownerTrades.map(\.calculation),
-            tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
-            period: selectedDateInterval,
-            investmentWalletBalanceMinor: systemWalletBalanceMinor
-        )
-    }
-
-    private var selectedDateInterval: DateInterval? {
-        switch period {
-        case .month:
-            InvestmentPeriodLogic.monthInterval(
-                containing: selectedMonth,
-                calendar: calendar
-            )
-        case .allTime:
-            nil
-        }
-    }
-
-    private var visibleTrades: [InvestmentTrade] {
-        ownerTrades.filter { selectedDateInterval?.contains($0.occurredAt) ?? true }
-    }
-
-    private var filteredOwnerAssets: [InvestmentAsset] {
-        ownerAssets.filter { asset in
-            InvestmentAssetSearchLogic.matches(
-                productName: asset.name,
-                channelName: channelName(for: asset.channelID),
-                query: searchText
-            )
-        }
-    }
-
-    private var filteredVisibleTrades: [InvestmentTrade] {
-        let searchableTrades = isSearchPresented ? ownerTrades : visibleTrades
-        return searchableTrades.filter { trade in
-            InvestmentAssetSearchLogic.matches(
-                values: [
-                    assetName(for: trade.assetID),
-                    channelName(for: trade.channelID),
-                    trade.note ?? ""
-                ],
-                query: searchText
-            )
-        }
+        renderSnapshot.portfolioSummary
     }
 
     private var searchPrompt: String {
@@ -296,11 +281,294 @@ struct InvestmentHubView: View {
     }
 
     private var monthSelectionBounds: MistiaMonthSelectionBounds {
+        renderSnapshot.monthSelectionBounds
+    }
+
+    private var canStartBuyTrade: Bool {
+        renderSnapshot.canStartBuyTrade
+    }
+
+    private var canStartSellTrade: Bool {
+        renderSnapshot.canStartSellTrade
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+        }
+        return hasher.finalize()
+    }
+
+    private var renderSnapshotCacheKey: InvestmentHubRenderSnapshotCacheKey {
+        let selectedMonthComponents = calendar.dateComponents([.year, .month], from: selectedMonth)
+        let startTimestamp = (calendar.date(from: selectedMonthComponents) ?? selectedMonth).timeIntervalSince1970
+        return InvestmentHubRenderSnapshotCacheKey(
+            ownerUserID: ownerUserID,
+            selectedChannelID: selectedChannelID,
+            period: period,
+            selectedMonthStart: startTimestamp,
+            selectedTab: selectedTab,
+            searchText: searchText,
+            isSearchPresented: isSearchPresented,
+            primaryCurrencyCode: primaryCurrencyCode,
+            channelSignature: MistiaCollectionChangeSignature.make(
+                channels,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            assetSignature: MistiaCollectionChangeSignature.make(
+                assets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            tradeSignature: MistiaCollectionChangeSignature.make(
+                trades,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            walletSignature: MistiaCollectionChangeSignature.make(
+                wallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            familyAccessSignature: familyAccessSignature
+        )
+    }
+
+    private func cachedRenderSnapshot(for key: InvestmentHubRenderSnapshotCacheKey) -> InvestmentHubRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+        return makeRenderSnapshot()
+    }
+
+    private var renderSnapshot: InvestmentHubRenderSnapshot {
+        cachedRenderSnapshot(for: renderSnapshotCacheKey)
+    }
+
+    private func makeRenderSnapshot() -> InvestmentHubRenderSnapshot {
+        guard let ownerUserID else {
+            return InvestmentHubRenderSnapshot.empty(
+                canView: canView,
+                canCreate: canCreate,
+                canEdit: canEdit,
+                currencyCode: MistiaCurrencyLogic.normalizedCode(primaryCurrencyCode)
+            )
+        }
+
+        let ownerChannels = channels
+            .filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                return $0.createdAt < $1.createdAt
+            }
+        let archivedOwnerChannels = channels.filter {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil && $0.isArchived
+        }
+        let channelsByID = Dictionary(uniqueKeysWithValues: channels.map { ($0.id, $0) })
+
+        let rawOwnerAssets = assets.filter {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        }
+        let archivedOwnerAssets = rawOwnerAssets.filter { $0.isArchived }
+        let nonArchivedOwnerAssets = rawOwnerAssets.filter { !$0.isArchived }
+        let ownerAssets = nonArchivedOwnerAssets
+            .filter { selectedChannelID == nil || $0.channelID == selectedChannelID }
+            .sorted(by: newestAssetFirst)
+        let assetsByID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+
+        let rawOwnerTrades = trades.filter {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        }
+        let ownerTrades = rawOwnerTrades.filter {
+            selectedChannelID == nil || $0.channelID == selectedChannelID
+        }
+
+        var tradesByAssetID: [UUID: [InvestmentTrade]] = [:]
+        for trade in rawOwnerTrades {
+            tradesByAssetID[trade.assetID, default: []].append(trade)
+        }
+
+        var positionsByAssetID: [UUID: InvestmentAssetPositionState] = [:]
+        var hasTradesByAssetID: [UUID: Bool] = [:]
+        var hasAnyOpenPosition = false
+
+        for asset in ownerAssets {
+            let assetTrades = tradesByAssetID[asset.id]?.sorted(by: oldestTradeFirst) ?? []
+            let hasTrades = !assetTrades.isEmpty
+            hasTradesByAssetID[asset.id] = hasTrades
+
+            if !hasTrades {
+                positionsByAssetID[asset.id] = InvestmentAssetPositionState(
+                    quantity: 0,
+                    costBasisMinor: 0,
+                    openLotCount: 0,
+                    unitPositions: []
+                )
+            } else {
+                let inputs = assetTrades.map {
+                    InvestmentTradeInput(
+                        id: $0.id,
+                        kind: $0.kind,
+                        quantity: $0.quantity,
+                        unitLabel: $0.unitLabel ?? asset.defaultUnitLabel,
+                        accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
+                        occurredAt: $0.occurredAt,
+                        createdAt: $0.createdAt
+                    )
+                }
+                let positionState: InvestmentAssetPositionState
+                if let calculations = try? InvestmentAccountingEngine.recalculate(trades: inputs),
+                   let unitPositions = try? InvestmentAccountingEngine.unitPositions(trades: inputs),
+                   let last = calculations.last {
+                    positionState = InvestmentAssetPositionState(
+                        quantity: last.positionQuantityAfter,
+                        costBasisMinor: last.positionCostBasisAfterMinor,
+                        openLotCount: last.openLotCountAfter,
+                        unitPositions: unitPositions
+                    )
+                } else {
+                    let persisted = assetTrades.last
+                    positionState = InvestmentAssetPositionState(
+                        quantity: persisted?.positionQuantityAfter ?? 0,
+                        costBasisMinor: persisted?.positionCostBasisAfterMinor ?? 0,
+                        openLotCount: 0,
+                        unitPositions: []
+                    )
+                }
+                positionsByAssetID[asset.id] = positionState
+                if positionState.quantity > 0 {
+                    hasAnyOpenPosition = true
+                }
+            }
+        }
+
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        let systemWallet = wallets.first { $0.id == systemWalletID }
+        let accountingCurrencyCode = systemWallet?.currencyCode ?? MistiaCurrencyLogic.normalizedCode(primaryCurrencyCode)
+
+        let selectedDateInterval: DateInterval?
+        switch period {
+        case .month:
+            selectedDateInterval = InvestmentPeriodLogic.monthInterval(containing: selectedMonth, calendar: calendar)
+        case .allTime:
+            selectedDateInterval = nil
+        }
+
+        let positionSnapshots = ownerAssets.map { asset in
+            let position = positionsByAssetID[asset.id] ?? InvestmentAssetPositionState(quantity: 0, costBasisMinor: 0, openLotCount: 0, unitPositions: [])
+            return InvestmentAssetPositionSnapshot(
+                id: asset.id,
+                channelID: asset.channelID,
+                quantity: position.quantity,
+                remainingCostBasisMinor: position.costBasisMinor,
+                openLotCount: position.openLotCount
+            )
+        }
+
+        let portfolioSummary = InvestmentSummaryLogic.summary(
+            positions: positionSnapshots,
+            trades: ownerTrades.map(\.calculation),
+            tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
+            period: selectedDateInterval,
+            investmentWalletBalanceMinor: 0
+        )
+
+        let visibleTrades = ownerTrades.filter { selectedDateInterval?.contains($0.occurredAt) ?? true }
+
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredOwnerAssets: [InvestmentAsset]
+        if trimmedSearch.isEmpty {
+            filteredOwnerAssets = ownerAssets
+        } else {
+            filteredOwnerAssets = ownerAssets.filter { asset in
+                InvestmentAssetSearchLogic.matches(
+                    productName: asset.name,
+                    channelName: channelsByID[asset.channelID]?.name ?? "",
+                    query: searchText
+                )
+            }
+        }
+
+        let searchableTrades = isSearchPresented ? ownerTrades : visibleTrades
+        let sortedSearchableTrades = searchableTrades.sorted(by: newestTradeFirst)
+        let filteredVisibleTrades: [InvestmentTrade]
+        if trimmedSearch.isEmpty && !isSearchPresented {
+            filteredVisibleTrades = visibleTrades.sorted(by: newestTradeFirst)
+        } else if trimmedSearch.isEmpty {
+            filteredVisibleTrades = sortedSearchableTrades
+        } else {
+            filteredVisibleTrades = sortedSearchableTrades.filter { trade in
+                InvestmentAssetSearchLogic.matches(
+                    values: [
+                        assetsByID[trade.assetID]?.name ?? L10n.investment.trade.asset,
+                        channelsByID[trade.channelID]?.name ?? "",
+                        trade.note ?? ""
+                    ],
+                    query: searchText
+                )
+            }
+        }
+
         let relevantDates = ownerTrades.map(\.occurredAt) + [Date()]
-        return MistiaMonthSelectionBounds(
+        let monthBounds = MistiaMonthSelectionBounds(
             minimumMonth: relevantDates.min() ?? selectedMonth,
             maximumMonth: relevantDates.max() ?? selectedMonth,
             calendar: calendar
+        )
+
+        let isEmpty = ownerChannels.isEmpty && ownerTrades.isEmpty && ownerAssets.isEmpty
+
+        return InvestmentHubRenderSnapshot(
+            ownerChannels: ownerChannels,
+            archivedOwnerChannels: archivedOwnerChannels,
+            ownerAssets: ownerAssets,
+            archivedOwnerAssets: archivedOwnerAssets,
+            filteredOwnerAssets: filteredOwnerAssets,
+            ownerTrades: ownerTrades,
+            visibleTrades: visibleTrades,
+            filteredVisibleTrades: filteredVisibleTrades,
+            positionsByAssetID: positionsByAssetID,
+            hasTradesByAssetID: hasTradesByAssetID,
+            channelsByID: channelsByID,
+            assetsByID: assetsByID,
+            portfolioSummary: portfolioSummary,
+            monthSelectionBounds: monthBounds,
+            canStartBuyTrade: !ownerAssets.isEmpty,
+            canStartSellTrade: hasAnyOpenPosition,
+            accountingCurrencyCode: accountingCurrencyCode,
+            isEmpty: isEmpty,
+            canView: canView,
+            canCreate: canCreate,
+            canEdit: canEdit
         )
     }
 
@@ -321,6 +589,14 @@ struct InvestmentHubView: View {
             }
             .task(id: ownerUserID) {
                 await refreshInvestmentAccessAndData()
+            }
+            .task(id: renderSnapshotCacheKey) {
+                if renderSnapshotCache?.key != renderSnapshotCacheKey {
+                    renderSnapshotCache = InvestmentHubRenderSnapshotCache(
+                        key: renderSnapshotCacheKey,
+                        snapshot: makeRenderSnapshot()
+                    )
+                }
             }
     }
 
@@ -420,7 +696,8 @@ struct InvestmentHubView: View {
 
     @ViewBuilder
     private var hubContent: some View {
-        if ownerChannels.isEmpty && ownerTrades.isEmpty && ownerAssets.isEmpty {
+        let snapshot = renderSnapshot
+        if snapshot.isEmpty {
             ContentUnavailableView {
                 Label(L10n.investment.hub.emptyTitle, systemImage: "chart.line.uptrend.xyaxis")
             } description: {
@@ -511,14 +788,6 @@ struct InvestmentHubView: View {
         .accessibilityLabel(L10n.investment.hub.contentMode)
     }
 
-    private var canStartBuyTrade: Bool {
-        !ownerAssets.isEmpty
-    }
-
-    private var canStartSellTrade: Bool {
-        ownerAssets.contains { position(for: $0).quantity > 0 }
-    }
-
     private var managementMenu: some View {
         Menu {
             if canCreate {
@@ -594,18 +863,19 @@ struct InvestmentHubView: View {
     }
 
     private var positionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let snapshot = renderSnapshot
+        return VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.hub.positions)
                 .font(.headline)
 
-            if filteredOwnerAssets.isEmpty, !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if snapshot.filteredOwnerAssets.isEmpty, !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView.search(text: searchText)
                     .frame(maxWidth: .infinity)
             }
 
-            ForEach(filteredOwnerAssets) { asset in
-                let position = position(for: asset)
-                let hasTrades = trades.contains { $0.assetID == asset.id && $0.deletedAt == nil }
+            ForEach(snapshot.filteredOwnerAssets) { asset in
+                let position = snapshot.positionsByAssetID[asset.id] ?? InvestmentAssetPositionState(quantity: 0, costBasisMinor: 0, openLotCount: 0, unitPositions: [])
+                let hasTrades = snapshot.hasTradesByAssetID[asset.id] ?? false
                 let isSettled = hasTrades && position.quantity <= 0
                 let detail = positionDetail(for: position, asset: asset, hasTrades: hasTrades)
                 let showsCostBasis = hasTrades && position.quantity > 0
@@ -617,7 +887,7 @@ struct InvestmentHubView: View {
                         assetName: asset.name,
                         detail: detail,
                         remainingCapitalMinor: position.costBasisMinor,
-                        currencyCode: accountingCurrencyCode,
+                        currencyCode: snapshot.accountingCurrencyCode,
                         isSettled: isSettled,
                         showsCostBasis: showsCostBasis
                     )
@@ -687,10 +957,11 @@ struct InvestmentHubView: View {
     }
 
     private var activitySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let snapshot = renderSnapshot
+        return VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.hub.activity)
                 .font(.headline)
-            if filteredVisibleTrades.isEmpty {
+            if snapshot.filteredVisibleTrades.isEmpty {
                 if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(L10n.investment.hub.noActivityForPeriod)
                         .font(.subheadline)
@@ -704,14 +975,14 @@ struct InvestmentHubView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            ForEach(filteredVisibleTrades.sorted(by: newestTradeFirst)) { trade in
+            ForEach(snapshot.filteredVisibleTrades) { trade in
                 Button {
                     openTrade(trade)
                 } label: {
                     HStack(spacing: 12) {
                         ZStack(alignment: .bottomTrailing) {
                             InvestmentProductThumbnail(
-                                imagePath: assets.first(where: { $0.id == trade.assetID })?.imagePath,
+                                imagePath: snapshot.assetsByID[trade.assetID]?.imagePath,
                                 size: 44
                             )
                             Image(
@@ -732,14 +1003,14 @@ struct InvestmentHubView: View {
                                 .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
                         }
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(assetName(for: trade.assetID))
+                            Text(snapshot.assetsByID[trade.assetID]?.name ?? L10n.investment.trade.asset)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
                             Text(
                                 L10n.investment.hub.activityDetails(
                                     formattedInvestmentQuantity(
                                         trade.quantity,
-                                        unitLabel: effectiveUnitLabel(for: trade)
+                                        unitLabel: trade.unitLabel ?? snapshot.assetsByID[trade.assetID]?.defaultUnitLabel
                                     ),
                                     MistiaDateFormatting.fullDateString(for: trade.occurredAt)
                                 )
@@ -800,6 +1071,7 @@ struct InvestmentHubView: View {
 
     @ViewBuilder
     private func sheetView(_ sheet: InvestmentHubSheet) -> some View {
+        let snapshot = renderSnapshot
         if let ownerUserID {
             switch sheet {
             case .channel(let channelID):
@@ -812,7 +1084,7 @@ struct InvestmentHubView: View {
             case .asset(let assetID):
                 InvestmentAssetEditorSheet(
                     ownerUserID: ownerUserID,
-                    channels: ownerChannels,
+                    channels: snapshot.ownerChannels,
                     asset: assets.first { $0.id == assetID },
                     selectedChannelID: selectedChannelID,
                     hasHistory: assetID.map { id in
@@ -823,13 +1095,12 @@ struct InvestmentHubView: View {
             case .trade(let kind, let tradeID):
                 InvestmentTradeEditorSheet(
                     ownerUserID: ownerUserID,
-                    channels: ownerChannels,
+                    channels: snapshot.ownerChannels,
                     assets: assets.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil && !$0.isArchived },
                     trades: trades.filter { $0.deletedAt == nil },
                     trade: trades.first { $0.id == tradeID },
                     initialKind: kind,
                     wallets: wallets,
-                    ledgerTransactions: ledgerTransactions,
                     canUseOrdinaryWallet: canUseOrdinaryWallet,
                     canEditExisting: canEdit,
                     onDelete: { trade in
@@ -1117,60 +1388,6 @@ struct InvestmentHubView: View {
         )
     }
 
-    private func position(for asset: InvestmentAsset) -> InvestmentAssetPositionState {
-        let assetTrades = trades
-            .filter { $0.assetID == asset.id && $0.deletedAt == nil }
-            .sorted(by: oldestTradeFirst)
-        guard !assetTrades.isEmpty else {
-            return InvestmentAssetPositionState(
-                quantity: 0,
-                costBasisMinor: 0,
-                openLotCount: 0,
-                unitPositions: []
-            )
-        }
-        let inputs = assetTrades.map {
-            InvestmentTradeInput(
-                id: $0.id,
-                kind: $0.kind,
-                quantity: $0.quantity,
-                unitLabel: $0.unitLabel ?? asset.defaultUnitLabel,
-                accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
-                occurredAt: $0.occurredAt,
-                createdAt: $0.createdAt
-            )
-        }
-        guard let calculations = try? InvestmentAccountingEngine.recalculate(trades: inputs),
-              let unitPositions = try? InvestmentAccountingEngine.unitPositions(trades: inputs),
-              let last = calculations.last else {
-            let persisted = assetTrades.last
-            return InvestmentAssetPositionState(
-                quantity: persisted?.positionQuantityAfter ?? 0,
-                costBasisMinor: persisted?.positionCostBasisAfterMinor ?? 0,
-                openLotCount: 0,
-                unitPositions: []
-            )
-        }
-        return InvestmentAssetPositionState(
-            quantity: last.positionQuantityAfter,
-            costBasisMinor: last.positionCostBasisAfterMinor,
-            openLotCount: last.openLotCountAfter,
-            unitPositions: unitPositions
-        )
-    }
-
-    private func effectiveUnitLabel(for trade: InvestmentTrade) -> String? {
-        trade.unitLabel ?? assets.first(where: { $0.id == trade.assetID })?.defaultUnitLabel
-    }
-
-    private func assetName(for assetID: UUID) -> String {
-        assets.first(where: { $0.id == assetID })?.name ?? L10n.investment.trade.asset
-    }
-
-    private func channelName(for channelID: UUID) -> String {
-        channels.first(where: { $0.id == channelID })?.name ?? ""
-    }
-
     private func canUseOrdinaryWallet(_ wallet: LedgerWallet) -> Bool {
         guard let ownerUserID else { return false }
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(
@@ -1187,10 +1404,10 @@ struct InvestmentHubView: View {
     }
 
     private func archive(_ channel: InvestmentChannel) {
-        let hasOpenPosition = assets.contains { asset in
+        let snapshot = renderSnapshot
+        let hasOpenPosition = snapshot.ownerAssets.contains { asset in
             asset.channelID == channel.id
-                && asset.deletedAt == nil
-                && position(for: asset).quantity > 0
+                && (snapshot.positionsByAssetID[asset.id]?.quantity ?? 0) > 0
         }
         guard !hasOpenPosition else {
             showError(L10n.investment.error.closePositionsBeforeArchive)
@@ -1211,7 +1428,8 @@ struct InvestmentHubView: View {
     }
 
     private func archive(_ asset: InvestmentAsset) {
-        guard position(for: asset).quantity <= 0 else {
+        let snapshot = renderSnapshot
+        guard (snapshot.positionsByAssetID[asset.id]?.quantity ?? 0) <= 0 else {
             showError(L10n.investment.error.closePositionsBeforeArchive)
             return
         }
@@ -1487,6 +1705,16 @@ private struct InvestmentProductThumbnail: View {
     let size: CGFloat
     @State private var image: UIImage?
 
+    init(imagePath: String?, size: CGFloat) {
+        self.imagePath = imagePath
+        self.size = size
+        if let imagePath, let cached = InvestmentThumbnailMemoryCache.image(for: imagePath) {
+            _image = State(initialValue: cached)
+        } else {
+            _image = State(initialValue: nil)
+        }
+    }
+
     var body: some View {
         Group {
             if let image {
@@ -1505,14 +1733,27 @@ private struct InvestmentProductThumbnail: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: max(10, size * 0.22), style: .continuous))
         .task(id: imagePath) {
-            image = nil
-            guard let imagePath else { return }
+            guard let imagePath else {
+                image = nil
+                return
+            }
+            if let cached = InvestmentThumbnailMemoryCache.image(for: imagePath) {
+                if image !== cached {
+                    image = cached
+                }
+                return
+            }
             let session = try? await sessionStore.refreshedSession()
-            guard let data = try? await InvestmentProductImageRemoteService().jpegData(
-                path: imagePath,
-                session: session
-            ) else { return }
-            image = UIImage(data: data)
+            guard !Task.isCancelled,
+                  let data = try? await InvestmentProductImageRemoteService().jpegData(
+                      path: imagePath,
+                      session: session
+                  ),
+                  let loadedImage = UIImage(data: data) else { return }
+            InvestmentThumbnailMemoryCache.setImage(loadedImage, for: imagePath)
+            if !Task.isCancelled {
+                image = loadedImage
+            }
         }
     }
 }
@@ -1945,7 +2186,6 @@ private struct InvestmentTradeEditorSheet: View {
     let trade: InvestmentTrade?
     let initialKind: InvestmentTradeKind
     let wallets: [LedgerWallet]
-    let ledgerTransactions: [LedgerTransaction]
     let canUseOrdinaryWallet: (LedgerWallet) -> Bool
     let canEditExisting: Bool
     let onDelete: (InvestmentTrade) -> Bool
@@ -2489,6 +2729,11 @@ private struct InvestmentTradeEditorSheet: View {
                 trade?.capitalReturnLedgerTransactionID,
                 trade?.profitLossLedgerTransactionID
             ].compactMap { $0 })
+            let activeLedgerTransactions = (try? modelContext.fetch(
+                FetchDescriptor<LedgerTransaction>(
+                    predicate: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived }
+                )
+            )) ?? []
             let balance = TransactionLogic.walletBalanceIndex(
                 wallets: [
                     TransactionWalletSnapshot(
@@ -2497,7 +2742,7 @@ private struct InvestmentTradeEditorSheet: View {
                         openingBalanceMinor: fundingWallet.openingBalanceMinor
                     )
                 ],
-                records: ledgerTransactions.filter { !excludedIDs.contains($0.id) }.map(\.snapshot)
+                records: activeLedgerTransactions.filter { !excludedIDs.contains($0.id) }.map(\.snapshot)
             ).balance(
                 for: TransactionWalletSnapshot(
                     id: fundingWallet.id,

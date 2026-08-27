@@ -381,7 +381,7 @@ final class MistiaBackupStoreTests: XCTestCase {
         XCTAssertEqual(try fetchAll(InvestmentAsset.self, in: targetContainer).first?.defaultUnitLabel, "pack")
         XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first { $0.kind == .sell }?.unitLabel, "box")
         XCTAssertEqual(try fetchAll(InvestmentTrade.self, in: targetContainer).first { $0.kind == .sell }?.realizedProfitLossMinor, 30)
-        XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first?.amountMinor, 30)
+        XCTAssertEqual(try fetchAll(InvestmentWalletPosting.self, in: targetContainer).first { $0.role == .realizedProfit }?.amountMinor, 30)
     }
 
     func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
