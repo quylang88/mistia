@@ -489,7 +489,7 @@ extension DateFormatter {
         return formatter
     }
 
-    static var mistiaBirthdayFormatter: DateFormatter {
+    fileprivate static var mistiaBirthdayFormatter: DateFormatter {
         threadCached(key: "MistiaDateFormatter.birthday") {
             let formatter = DateFormatter()
             formatter.calendar = Calendar(identifier: .gregorian)
