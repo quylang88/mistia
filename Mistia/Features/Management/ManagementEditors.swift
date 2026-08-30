@@ -660,7 +660,7 @@ struct ManagementWalletEditorSheet: View {
         guard let ownerUserID = targetWalletOwnerUserID else {
             return InvestmentLinkedWalletAllocationSnapshot(
                 linkedWalletID: nil,
-                profitMinor: 0
+                availableInvestmentMinor: 0
             )
         }
         return InvestmentCashAllocationLogic.linkedWalletAllocation(

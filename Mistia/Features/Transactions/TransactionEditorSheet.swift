@@ -740,7 +740,7 @@ struct TransactionEditorSheet: View {
             Text(
                 L10n.investment.wallet.useFundsMessage(
                     prompt.preview.investmentToUseMinor.formattedCurrency(code: prompt.currencyCode),
-                    prompt.preview.remainingInvestmentMinor.formattedCurrency(code: prompt.currencyCode)
+                    prompt.preview.remainingInvestmentInWalletMinor.formattedCurrency(code: prompt.currencyCode)
                 )
             )
         }

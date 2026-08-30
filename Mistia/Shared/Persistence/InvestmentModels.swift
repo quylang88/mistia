@@ -645,7 +645,7 @@ nonisolated struct InvestmentFundUsagePreview: Equatable, Sendable {
     let ordinaryAvailableMinor: Int64
     let bookedToUseMinor: Int64
     let unreconciledToUseMinor: Int64
-    let remainingInvestmentMinor: Int64
+    let remainingInvestmentInWalletMinor: Int64
     let outcome: InvestmentFundUsageOutcome
 
     var investmentToUseMinor: Int64 { bookedToUseMinor + unreconciledToUseMinor }

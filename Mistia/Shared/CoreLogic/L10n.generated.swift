@@ -820,8 +820,8 @@ nonisolated enum L10n {
             static func quantityOnly(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("investment.hub.quantityOnly", vi: "%@ đơn vị", en: "%@ units", ja: "%@ 単位", language: language, value)
             }
-            static var realizedProfitLoss: String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận", en: "Realized P&L", ja: "実現損益") }
-            static func realizedProfitLoss(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận", en: "Realized P&L", ja: "実現損益", language: language) }
+            static var realizedProfitLoss: String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận đã ghi nhận", en: "Realized profit/loss", ja: "実現損益") }
+            static func realizedProfitLoss(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.realizedProfitLoss", vi: "Lợi nhuận đã ghi nhận", en: "Realized profit/loss", ja: "実現損益", language: language) }
             static var searchActivity: String { L10n.tr("investment.hub.searchActivity", vi: "Tìm trong lịch sử giao dịch", en: "Search transaction history", ja: "取引履歴を検索") }
             static func searchActivity(language: MistiaAppLanguage) -> String { L10n.tr("investment.hub.searchActivity", vi: "Tìm trong lịch sử giao dịch", en: "Search transaction history", ja: "取引履歴を検索", language: language) }
             static var searchAssets: String { L10n.tr("investment.hub.searchAssets", vi: "Tìm tài sản hoặc kênh", en: "Search assets or channels", ja: "商品またはチャンネルを検索") }
@@ -1003,6 +1003,14 @@ nonisolated enum L10n {
             }
             static var automaticPausedShort: String { L10n.tr("investment.wallet.automaticPausedShort", vi: "Thanh toán đã tạm dừng vì sẽ dùng tiền đầu tư. Vui lòng kiểm tra và xác nhận thủ công.", en: "Payment was paused because it would use investment cash. Review and confirm it manually.", ja: "投資資金を使用するため支払いを一時停止しました。手動で確認してください。") }
             static func automaticPausedShort(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.automaticPausedShort", vi: "Thanh toán đã tạm dừng vì sẽ dùng tiền đầu tư. Vui lòng kiểm tra và xác nhận thủ công.", en: "Payment was paused because it would use investment cash. Review and confirm it manually.", ja: "投資資金を使用するため支払いを一時停止しました。手動で確認してください。", language: language) }
+            static func availableCashForTransfer(_ value: String) -> String {
+                L10n.format("investment.wallet.availableCashForTransfer", vi: "Ví này có %@ tiền đầu tư khả dụng. Nếu chuyển nhiều hơn, toàn bộ khoản này sẽ vào Ví Đầu tư; phần vượt vẫn là tiền thường trong ví liên kết.", en: "This wallet has %@ of available investment cash. If you move more, all of this amount is assigned to Investment Wallet; the excess remains ordinary money in the linked wallet.", ja: "このウォレットには利用可能な投資資金が%@あります。これを超えて移動した場合、この金額の全額が投資ウォレットに割り当てられ、超過分はリンク済みウォレットの通常資金として残ります。", value)
+            }
+            static func availableCashForTransfer(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.wallet.availableCashForTransfer", vi: "Ví này có %@ tiền đầu tư khả dụng. Nếu chuyển nhiều hơn, toàn bộ khoản này sẽ vào Ví Đầu tư; phần vượt vẫn là tiền thường trong ví liên kết.", en: "This wallet has %@ of available investment cash. If you move more, all of this amount is assigned to Investment Wallet; the excess remains ordinary money in the linked wallet.", ja: "このウォレットには利用可能な投資資金が%@あります。これを超えて移動した場合、この金額の全額が投資ウォレットに割り当てられ、超過分はリンク済みウォレットの通常資金として残ります。", language: language, value)
+            }
+            static var availableCashInWallet: String { L10n.tr("investment.wallet.availableCashInWallet", vi: "Tiền đầu tư khả dụng trong ví này", en: "Available investment cash in this wallet", ja: "このウォレットで利用可能な投資資金") }
+            static func availableCashInWallet(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.availableCashInWallet", vi: "Tiền đầu tư khả dụng trong ví này", en: "Available investment cash in this wallet", ja: "このウォレットで利用可能な投資資金", language: language) }
             static var cashFlow: String { L10n.tr("investment.wallet.cashFlow", vi: "Dòng tiền", en: "Cash flow", ja: "キャッシュフロー") }
             static func cashFlow(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.cashFlow", vi: "Dòng tiền", en: "Cash flow", ja: "キャッシュフロー", language: language) }
             static var change: String { L10n.tr("investment.wallet.change", vi: "Đổi ví", en: "Change", ja: "変更") }
@@ -1023,13 +1031,11 @@ nonisolated enum L10n {
             static func confirmedRealTransferMessage(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.confirmedRealTransferMessage", vi: "Mistia chỉ lưu bút toán sau khi bạn xác nhận tiền đã được chuyển giữa các ví thật.", en: "Mistia only records the entries after you confirm the money was transferred between the real wallets.", ja: "実際のウォレット間で送金したことを確認した後にのみ記録されます。", language: language) }
             static var detailTitle: String { L10n.tr("investment.wallet.detailTitle", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット") }
             static func detailTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.detailTitle", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット", language: language) }
-            static var heldProfit: String { L10n.tr("investment.wallet.heldProfit", vi: "Tiền lời đầu tư đang được giữ trong ví này", en: "Investment profit held in this wallet", ja: "このウォレットが保管している投資利益") }
-            static func heldProfit(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.heldProfit", vi: "Tiền lời đầu tư đang được giữ trong ví này", en: "Investment profit held in this wallet", ja: "このウォレットが保管している投資利益", language: language) }
             static func investmentPortion(_ value: String) -> String {
-                L10n.format("investment.wallet.investmentPortion", vi: "Trong đó %@ là tiền đầu tư", en: "Of which %@ is reserved for investment", ja: "うち%@は投資用", value)
+                L10n.format("investment.wallet.investmentPortion", vi: "Trong đó %@ là tiền đầu tư khả dụng", en: "Of which %@ is available investment cash", ja: "うち%@は利用可能な投資資金", value)
             }
             static func investmentPortion(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.wallet.investmentPortion", vi: "Trong đó %@ là tiền đầu tư", en: "Of which %@ is reserved for investment", ja: "うち%@は投資用", language: language, value)
+                L10n.format("investment.wallet.investmentPortion", vi: "Trong đó %@ là tiền đầu tư khả dụng", en: "Of which %@ is available investment cash", ja: "うち%@は利用可能な投資資金", language: language, value)
             }
             static var linkedWallet: String { L10n.tr("investment.wallet.linkedWallet", vi: "Ví liên kết", en: "Linked wallet", ja: "リンク済みウォレット") }
             static func linkedWallet(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.linkedWallet", vi: "Ví liên kết", en: "Linked wallet", ja: "リンク済みウォレット", language: language) }
@@ -1047,8 +1053,8 @@ nonisolated enum L10n {
             static func name(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.name", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット", language: language) }
             static var noCashFlow: String { L10n.tr("investment.wallet.noCashFlow", vi: "Chưa có dòng tiền đầu tư.", en: "No investment cash entries yet.", ja: "投資資金の履歴はまだありません。") }
             static func noCashFlow(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.noCashFlow", vi: "Chưa có dòng tiền đầu tư.", en: "No investment cash entries yet.", ja: "投資資金の履歴はまだありません。", language: language) }
-            static var noLocations: String { L10n.tr("investment.wallet.noLocations", vi: "Chưa có tiền đầu tư còn lại.", en: "No remaining investment cash.", ja: "残っている投資資金はありません。") }
-            static func noLocations(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.noLocations", vi: "Chưa có tiền đầu tư còn lại.", en: "No remaining investment cash.", ja: "残っている投資資金はありません。", language: language) }
+            static var noLocations: String { L10n.tr("investment.wallet.noLocations", vi: "Không còn tiền đầu tư khả dụng.", en: "No available investment cash remains.", ja: "利用可能な投資資金は残っていません。") }
+            static func noLocations(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.noLocations", vi: "Không còn tiền đầu tư khả dụng.", en: "No available investment cash remains.", ja: "利用可能な投資資金は残っていません。", language: language) }
             static var notSet: String { L10n.tr("investment.wallet.notSet", vi: "Chưa thiết lập ví liên kết", en: "No linked wallet", ja: "リンク済みウォレットなし") }
             static func notSet(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.notSet", vi: "Chưa thiết lập ví liên kết", en: "No linked wallet", ja: "リンク済みウォレットなし", language: language) }
             static var notSetMessage: String { L10n.tr("investment.wallet.notSetMessage", vi: "Chọn một ví để thu về và giữ riêng tiền đầu tư.", en: "Choose one wallet to collect and keep your investment cash.", ja: "投資資金を集約して保管するウォレットを選択してください。") }
@@ -1060,12 +1066,6 @@ nonisolated enum L10n {
             }
             static func originalAmountReference(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("investment.wallet.originalAmountReference", vi: "Số tiền gốc tham khảo: %@", en: "Original amount for reference: %@", ja: "参考元金額：%@", language: language, value)
-            }
-            static func profitAvailable(_ value: String) -> String {
-                L10n.format("investment.wallet.profitAvailable", vi: "Ví này đang giữ %@ lợi nhuận. Nếu chuyển nhiều hơn, toàn bộ lợi nhuận sẽ vào Ví Đầu tư; phần chênh lệch vẫn là tiền thường trong ví liên kết.", en: "This wallet holds %@ of investment profit. If you move more, all of that profit is assigned to Investment Wallet; the excess remains ordinary money in the linked wallet.", ja: "このウォレットには投資利益%@があります。これを超えて移動した場合、利益の全額が投資ウォレットに割り当てられ、超過分はリンク済みウォレットの通常資金として残ります。", value)
-            }
-            static func profitAvailable(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.wallet.profitAvailable", vi: "Ví này đang giữ %@ lợi nhuận. Nếu chuyển nhiều hơn, toàn bộ lợi nhuận sẽ vào Ví Đầu tư; phần chênh lệch vẫn là tiền thường trong ví liên kết.", en: "This wallet holds %@ of investment profit. If you move more, all of that profit is assigned to Investment Wallet; the excess remains ordinary money in the linked wallet.", ja: "このウォレットには投資利益%@があります。これを超えて移動した場合、利益の全額が投資ウォレットに割り当てられ、超過分はリンク済みウォレットの通常資金として残ります。", language: language, value)
             }
             static func realTransferInstruction(_ arg1: String, _ arg2: String) -> String {
                 L10n.format("investment.wallet.realTransferInstruction", vi: "Chuyển từ %@ sang %@", en: "Transfer from %@ to %@", ja: "%@から%@へ振替", arg1, arg2)
@@ -1096,10 +1096,10 @@ nonisolated enum L10n {
             static var useFundsAction: String { L10n.tr("investment.wallet.useFundsAction", vi: "Dùng tiền đầu tư", en: "Use Investment Cash", ja: "投資資金を使用") }
             static func useFundsAction(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.useFundsAction", vi: "Dùng tiền đầu tư", en: "Use Investment Cash", ja: "投資資金を使用", language: language) }
             static func useFundsMessage(_ arg1: String, _ arg2: String) -> String {
-                L10n.format("investment.wallet.useFundsMessage", vi: "Giao dịch này sẽ dùng %@ tiền đầu tư. Sau khi lưu còn lại %@.", en: "This transaction uses %@ of investment cash. %@ will remain after saving.", ja: "この取引では投資資金の%@を使用します。保存後は%@残ります。", arg1, arg2)
+                L10n.format("investment.wallet.useFundsMessage", vi: "Giao dịch này sẽ dùng %@ tiền đầu tư. Sau khi lưu, ví này còn %@ tiền đầu tư khả dụng. Lợi nhuận đã ghi nhận không thay đổi.", en: "This transaction will use %@ of investment cash. After saving, this wallet will have %@ of available investment cash left. Your realized profit/loss will not change.", ja: "この取引では投資資金を%@使用します。保存後、このウォレットで利用可能な投資資金は%@残ります。実現損益は変わりません。", arg1, arg2)
             }
             static func useFundsMessage(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                L10n.format("investment.wallet.useFundsMessage", vi: "Giao dịch này sẽ dùng %@ tiền đầu tư. Sau khi lưu còn lại %@.", en: "This transaction uses %@ of investment cash. %@ will remain after saving.", ja: "この取引では投資資金の%@を使用します。保存後は%@残ります。", language: language, arg1, arg2)
+                L10n.format("investment.wallet.useFundsMessage", vi: "Giao dịch này sẽ dùng %@ tiền đầu tư. Sau khi lưu, ví này còn %@ tiền đầu tư khả dụng. Lợi nhuận đã ghi nhận không thay đổi.", en: "This transaction will use %@ of investment cash. After saving, this wallet will have %@ of available investment cash left. Your realized profit/loss will not change.", ja: "この取引では投資資金を%@使用します。保存後、このウォレットで利用可能な投資資金は%@残ります。実現損益は変わりません。", language: language, arg1, arg2)
             }
             static var useFundsTitle: String { L10n.tr("investment.wallet.useFundsTitle", vi: "Sử dụng tiền đầu tư?", en: "Use investment cash?", ja: "投資資金を使用しますか？") }
             static func useFundsTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.useFundsTitle", vi: "Sử dụng tiền đầu tư?", en: "Use investment cash?", ja: "投資資金を使用しますか？", language: language) }

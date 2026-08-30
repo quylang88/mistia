@@ -159,7 +159,7 @@ struct PlanningInvestmentFundUsageConfirmation: LocalizedError {
     var errorDescription: String? {
         L10n.investment.wallet.useFundsMessage(
             preview.investmentToUseMinor.formattedCurrency(code: currencyCode),
-            preview.remainingInvestmentMinor.formattedCurrency(code: currencyCode)
+            preview.remainingInvestmentInWalletMinor.formattedCurrency(code: currencyCode)
         )
     }
 }

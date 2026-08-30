@@ -478,7 +478,7 @@ final class InvestmentLogicTests: XCTestCase {
         let linkedWalletID = UUID()
         let allocation = InvestmentLinkedWalletAllocationSnapshot(
             linkedWalletID: linkedWalletID,
-            profitMinor: 50
+            availableInvestmentMinor: 50
         )
         let balances = InvestmentCashAllocationLogic.linkedWalletBalances(
             ledgerBalanceMinor: 150,
@@ -516,13 +516,28 @@ final class InvestmentLogicTests: XCTestCase {
             visibleWalletBalanceMinor: 100,
             bookedInvestmentMinor: 40,
             unreconciledInvestmentMinor: 30,
-            totalInvestmentMinor: 70
+            investmentInWalletMinor: 70
         )
 
         XCTAssertEqual(preview.ordinaryAvailableMinor, 60)
         XCTAssertEqual(preview.bookedToUseMinor, 40)
         XCTAssertEqual(preview.unreconciledToUseMinor, 20)
-        XCTAssertEqual(preview.remainingInvestmentMinor, 10)
+        XCTAssertEqual(preview.remainingInvestmentInWalletMinor, 10)
+        XCTAssertEqual(preview.outcome, .requiresConfirmation)
+    }
+
+    func testFundUsagePreviewMatchesWalletSpendingExample() {
+        let preview = InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: 2_500,
+            visibleWalletBalanceMinor: 3_000,
+            bookedInvestmentMinor: 2_000,
+            unreconciledInvestmentMinor: 0,
+            investmentInWalletMinor: 2_000
+        )
+
+        XCTAssertEqual(preview.ordinaryAvailableMinor, 1_000)
+        XCTAssertEqual(preview.investmentToUseMinor, 1_500)
+        XCTAssertEqual(preview.remainingInvestmentInWalletMinor, 500)
         XCTAssertEqual(preview.outcome, .requiresConfirmation)
     }
 
@@ -532,7 +547,7 @@ final class InvestmentLogicTests: XCTestCase {
             visibleWalletBalanceMinor: 80,
             bookedInvestmentMinor: 30,
             unreconciledInvestmentMinor: 20,
-            totalInvestmentMinor: 50
+            investmentInWalletMinor: 50
         )
 
         XCTAssertEqual(preview.outcome, .insufficientFunds)

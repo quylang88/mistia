@@ -297,7 +297,7 @@ struct ManagementView: View {
                 balancesByID[wallet.id] = investmentAllocation(
                     ownerUserID: ownerUserID,
                     accountingCurrencyCode: wallet.currencyCode
-                ).profitMinor
+                ).availableInvestmentMinor
             } else if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
                 balancesByID[wallet.id] = TransactionLogic.creditCardBalance(
                     creditLimitMinor: profile.creditLimitMinor,

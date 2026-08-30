@@ -2489,7 +2489,7 @@ private struct InvestmentTradeEditorSheet: View {
             Text(
                 L10n.investment.wallet.useFundsMessage(
                     prompt.preview.investmentToUseMinor.formattedCurrency(code: prompt.currencyCode),
-                    prompt.preview.remainingInvestmentMinor.formattedCurrency(code: prompt.currencyCode)
+                    prompt.preview.remainingInvestmentInWalletMinor.formattedCurrency(code: prompt.currencyCode)
                 )
             )
         }
@@ -3197,7 +3197,7 @@ struct InvestmentWalletDetailView: View {
                 Text(location.totalMinor.formattedCurrency(code: accountingCurrencyCode))
                     .font(.subheadline.weight(.bold))
             }
-            Text(L10n.investment.wallet.heldProfit)
+            Text(L10n.investment.wallet.availableCashInWallet)
             .font(.caption)
             .foregroundStyle(.secondary)
             if MistiaCurrencyLogic.normalizedCode(location.currencyCode)
@@ -3439,7 +3439,11 @@ private struct InvestmentCashReconciliationSheet: View {
                     Section {
                         MistiaCurrencyInputField(L10n.investment.wallet.amountToReconcile, text: $amountText)
                     } footer: {
-                        Text(L10n.investment.wallet.profitAvailable(selectedLocation.bookedMinor.formattedCurrency(code: currencyCode)))
+                        Text(
+                            L10n.investment.wallet.availableCashForTransfer(
+                                selectedLocation.bookedMinor.formattedCurrency(code: currencyCode)
+                            )
+                        )
                     }
                 }
                 Section {

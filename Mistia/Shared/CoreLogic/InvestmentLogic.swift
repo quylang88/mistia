@@ -493,7 +493,7 @@ nonisolated struct InvestmentLinkedWalletBalanceSnapshot: Equatable, Sendable {
 
 nonisolated struct InvestmentLinkedWalletAllocationSnapshot: Equatable, Sendable {
     let linkedWalletID: UUID?
-    let profitMinor: Int64
+    let availableInvestmentMinor: Int64
 }
 
 nonisolated enum InvestmentCashAllocationLogic {
@@ -505,7 +505,7 @@ nonisolated enum InvestmentCashAllocationLogic {
         linkedWalletBalances(
             ledgerBalanceMinor: ledgerBalanceMinor,
             allocatedInvestmentMinor: allocation.linkedWalletID == walletID
-                ? allocation.profitMinor
+                ? allocation.availableInvestmentMinor
                 : 0
         )
     }
@@ -577,7 +577,7 @@ nonisolated enum InvestmentCashAllocationLogic {
         visibleWalletBalanceMinor: Int64,
         bookedInvestmentMinor: Int64,
         unreconciledInvestmentMinor: Int64,
-        totalInvestmentMinor: Int64
+        investmentInWalletMinor: Int64
     ) -> InvestmentFundUsagePreview {
         let requested = max(requestedMinor, 0)
         let booked = max(bookedInvestmentMinor, 0)
@@ -601,7 +601,10 @@ nonisolated enum InvestmentCashAllocationLogic {
             ordinaryAvailableMinor: ordinaryAvailable,
             bookedToUseMinor: bookedToUse,
             unreconciledToUseMinor: unreconciledToUse,
-            remainingInvestmentMinor: max(totalInvestmentMinor - bookedToUse - unreconciledToUse, 0),
+            remainingInvestmentInWalletMinor: max(
+                investmentInWalletMinor - bookedToUse - unreconciledToUse,
+                0
+            ),
             outcome: outcome
         )
     }

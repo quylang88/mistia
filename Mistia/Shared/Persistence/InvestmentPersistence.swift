@@ -149,7 +149,7 @@ nonisolated extension InvestmentCashAllocationLogic {
         })?.linkedWalletID else {
             return InvestmentLinkedWalletAllocationSnapshot(
                 linkedWalletID: nil,
-                profitMinor: 0
+                availableInvestmentMinor: 0
             )
         }
         let allocation = snapshot(
@@ -158,12 +158,12 @@ nonisolated extension InvestmentCashAllocationLogic {
             ownerUserID: ownerUserID,
             accountingCurrencyCode: accountingCurrencyCode
         )
-        let profitMinor = allocation.locations.first {
+        let availableInvestmentMinor = allocation.locations.first {
             $0.walletID == linkedWalletID
         }?.totalMinor ?? 0
         return InvestmentLinkedWalletAllocationSnapshot(
             linkedWalletID: linkedWalletID,
-            profitMinor: max(profitMinor, 0)
+            availableInvestmentMinor: max(availableInvestmentMinor, 0)
         )
     }
 
@@ -1531,7 +1531,7 @@ enum InvestmentPersistenceService {
                 visibleWalletBalanceMinor: visibleWalletBalanceMinor,
                 bookedInvestmentMinor: 0,
                 unreconciledInvestmentMinor: 0,
-                totalInvestmentMinor: 0
+                investmentInWalletMinor: 0
             )
         }
         let snapshot = try cashAllocationSnapshot(
@@ -1545,7 +1545,7 @@ enum InvestmentPersistenceService {
             visibleWalletBalanceMinor: visibleWalletBalanceMinor,
             bookedInvestmentMinor: location?.bookedMinor ?? 0,
             unreconciledInvestmentMinor: location?.unreconciledMinor ?? 0,
-            totalInvestmentMinor: snapshot.totalMinor
+            investmentInWalletMinor: location?.totalMinor ?? 0
         )
     }
 
