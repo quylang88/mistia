@@ -51,46 +51,46 @@ protocol MistiaRemoteStore {
 
 struct SupabaseRemoteStore: MistiaRemoteStore {
     private let configurationProvider: () -> MistiaSyncConfiguration?
-    private let decoder = JSONDecoder.mistiaRemoteAPIDecoder
-    private let encoder = JSONEncoder.mistiaRemoteAPIEncoder
+    private var decoder: JSONDecoder { JSONDecoder.mistiaRemoteAPIDecoder }
+    private var encoder: JSONEncoder { JSONEncoder.mistiaRemoteAPIEncoder }
 
     init(configurationProvider: @escaping () -> MistiaSyncConfiguration? = { MistiaSyncConfiguration.load() }) {
         self.configurationProvider = configurationProvider
     }
 
     func fetchSnapshot(session: SupabaseAuthSession, subjectUserID: UUID? = nil) async throws -> MistiaRemoteSnapshot {
-        let wallets: [RemoteLedgerWallet] = try await fetchRows(entity: .wallet, subjectUserID: subjectUserID, session: session)
-        let profiles: [RemoteCreditCardProfile] = try await fetchRows(entity: .creditCardProfile, subjectUserID: subjectUserID, session: session)
-        let categories: [RemoteTransactionCategory] = try await fetchRows(entity: .category, subjectUserID: subjectUserID, session: session)
-        let settlementGroups: [RemoteSettlementGroup] = try await fetchRows(entity: .settlementGroup, subjectUserID: subjectUserID, session: session)
-        let settlementParticipants: [RemoteSettlementParticipant] = try await fetchRows(entity: .settlementParticipant, subjectUserID: subjectUserID, session: session)
-        let transactions: [RemoteLedgerTransaction] = try await fetchRows(entity: .transaction, subjectUserID: subjectUserID, session: session)
-        let budgetPlans: [RemoteBudgetPlan] = try await fetchRows(entity: .budgetPlan, subjectUserID: subjectUserID, session: session)
-        let savingsGoals: [RemoteSavingsGoal] = try await fetchRows(entity: .savingsGoal, subjectUserID: subjectUserID, session: session)
-        let recurringBillPlans: [RemoteRecurringBillPlan] = try await fetchRows(entity: .recurringBillPlan, subjectUserID: subjectUserID, session: session)
-        let installmentPlans: [RemoteInstallmentPlan] = try await fetchRows(entity: .installmentPlan, subjectUserID: subjectUserID, session: session)
-        let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchRows(entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session)
-        let investmentChannels: [RemoteInvestmentChannel] = try await fetchRows(entity: .investmentChannel, subjectUserID: subjectUserID, session: session)
-        let investmentAssets: [RemoteInvestmentAsset] = try await fetchRows(entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
-        let investmentTrades: [RemoteInvestmentTrade] = try await fetchRows(entity: .investmentTrade, subjectUserID: subjectUserID, session: session)
-        let investmentPostings: [RemoteInvestmentWalletPosting] = try await fetchRows(entity: .investmentPosting, subjectUserID: subjectUserID, session: session)
+        async let wallets: [RemoteLedgerWallet] = fetchRows(entity: .wallet, subjectUserID: subjectUserID, session: session)
+        async let profiles: [RemoteCreditCardProfile] = fetchRows(entity: .creditCardProfile, subjectUserID: subjectUserID, session: session)
+        async let categories: [RemoteTransactionCategory] = fetchRows(entity: .category, subjectUserID: subjectUserID, session: session)
+        async let settlementGroups: [RemoteSettlementGroup] = fetchRows(entity: .settlementGroup, subjectUserID: subjectUserID, session: session)
+        async let settlementParticipants: [RemoteSettlementParticipant] = fetchRows(entity: .settlementParticipant, subjectUserID: subjectUserID, session: session)
+        async let transactions: [RemoteLedgerTransaction] = fetchRows(entity: .transaction, subjectUserID: subjectUserID, session: session)
+        async let budgetPlans: [RemoteBudgetPlan] = fetchRows(entity: .budgetPlan, subjectUserID: subjectUserID, session: session)
+        async let savingsGoals: [RemoteSavingsGoal] = fetchRows(entity: .savingsGoal, subjectUserID: subjectUserID, session: session)
+        async let recurringBillPlans: [RemoteRecurringBillPlan] = fetchRows(entity: .recurringBillPlan, subjectUserID: subjectUserID, session: session)
+        async let installmentPlans: [RemoteInstallmentPlan] = fetchRows(entity: .installmentPlan, subjectUserID: subjectUserID, session: session)
+        async let dueOccurrences: [RemoteDueOccurrenceRecord] = fetchRows(entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session)
+        async let investmentChannels: [RemoteInvestmentChannel] = fetchRows(entity: .investmentChannel, subjectUserID: subjectUserID, session: session)
+        async let investmentAssets: [RemoteInvestmentAsset] = fetchRows(entity: .investmentAsset, subjectUserID: subjectUserID, session: session)
+        async let investmentTrades: [RemoteInvestmentTrade] = fetchRows(entity: .investmentTrade, subjectUserID: subjectUserID, session: session)
+        async let investmentPostings: [RemoteInvestmentWalletPosting] = fetchRows(entity: .investmentPosting, subjectUserID: subjectUserID, session: session)
 
         return MistiaRemoteSnapshot(
-            wallets: wallets,
-            creditCardProfiles: profiles,
-            categories: categories,
-            settlementGroups: settlementGroups,
-            settlementParticipants: settlementParticipants,
-            transactions: transactions,
-            budgetPlans: budgetPlans,
-            savingsGoals: savingsGoals,
-            recurringBillPlans: recurringBillPlans,
-            installmentPlans: installmentPlans,
-            dueOccurrences: dueOccurrences,
-            investmentChannels: investmentChannels,
-            investmentAssets: investmentAssets,
-            investmentTrades: investmentTrades,
-            investmentPostings: investmentPostings
+            wallets: try await wallets,
+            creditCardProfiles: try await profiles,
+            categories: try await categories,
+            settlementGroups: try await settlementGroups,
+            settlementParticipants: try await settlementParticipants,
+            transactions: try await transactions,
+            budgetPlans: try await budgetPlans,
+            savingsGoals: try await savingsGoals,
+            recurringBillPlans: try await recurringBillPlans,
+            installmentPlans: try await installmentPlans,
+            dueOccurrences: try await dueOccurrences,
+            investmentChannels: try await investmentChannels,
+            investmentAssets: try await investmentAssets,
+            investmentTrades: try await investmentTrades,
+            investmentPostings: try await investmentPostings
         )
     }
 

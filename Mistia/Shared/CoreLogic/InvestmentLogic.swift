@@ -110,6 +110,11 @@ nonisolated struct InvestmentTradeCalculation: Equatable, Identifiable {
     let openLotCountAfter: Int
 }
 
+nonisolated struct InvestmentAccountingProjection: Equatable {
+    let calculations: [InvestmentTradeCalculation]
+    let unitPositions: [InvestmentUnitPosition]
+}
+
 nonisolated enum InvestmentAccountingError: LocalizedError, Equatable {
     case invalidQuantity
     case invalidAmount
@@ -142,26 +147,27 @@ nonisolated enum InvestmentAccountingEngine {
         var quantity: Decimal
     }
 
-    private struct RecalculationResult {
-        let calculations: [InvestmentTradeCalculation]
-        let unitPositions: [InvestmentUnitPosition]
-    }
-
     static func recalculate(
         trades: [InvestmentTradeInput]
     ) throws -> [InvestmentTradeCalculation] {
-        try recalculateState(trades: trades).calculations
+        try projection(trades: trades).calculations
     }
 
     static func unitPositions(
         trades: [InvestmentTradeInput]
     ) throws -> [InvestmentUnitPosition] {
-        try recalculateState(trades: trades).unitPositions
+        try projection(trades: trades).unitPositions
+    }
+
+    static func projection(
+        trades: [InvestmentTradeInput]
+    ) throws -> InvestmentAccountingProjection {
+        try recalculateState(trades: trades)
     }
 
     private static func recalculateState(
         trades: [InvestmentTradeInput]
-    ) throws -> RecalculationResult {
+    ) throws -> InvestmentAccountingProjection {
         var positionQuantity: Decimal = 0
         var positionCostBasisMinor: Int64 = 0
         var openLots: [OpenLot] = []
@@ -302,7 +308,7 @@ nonisolated enum InvestmentAccountingEngine {
         .sorted { lhs, rhs in
             lhs.unitKey.localizedStandardCompare(rhs.unitKey) == .orderedAscending
         }
-        return RecalculationResult(calculations: output, unitPositions: positions)
+        return InvestmentAccountingProjection(calculations: output, unitPositions: positions)
     }
 
     static func calculationMap(

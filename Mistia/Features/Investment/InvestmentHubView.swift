@@ -2,6 +2,11 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
+import os
+
+private enum InvestmentPerformanceSignpost {
+    static let log = OSLog(subsystem: "Mistia", category: "InvestmentPerformance")
+}
 
 private enum InvestmentHubPeriod: String, CaseIterable, Identifiable {
     case month
@@ -253,43 +258,11 @@ struct InvestmentHubView: View {
         isOwner || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .investment)
     }
 
-    private var ownerChannels: [InvestmentChannel] {
-        renderSnapshot.ownerChannels
-    }
-
-    private var archivedOwnerChannels: [InvestmentChannel] {
-        renderSnapshot.archivedOwnerChannels
-    }
-
-    private var archivedOwnerAssets: [InvestmentAsset] {
-        renderSnapshot.archivedOwnerAssets
-    }
-
-    private var accountingCurrencyCode: String {
-        renderSnapshot.accountingCurrencyCode
-    }
-
-    private var portfolioSummary: InvestmentPortfolioSummary {
-        renderSnapshot.portfolioSummary
-    }
-
     private var searchPrompt: String {
         switch selectedTab {
         case .assets: L10n.investment.hub.searchAssets
         case .activity: L10n.investment.hub.searchActivity
         }
-    }
-
-    private var monthSelectionBounds: MistiaMonthSelectionBounds {
-        renderSnapshot.monthSelectionBounds
-    }
-
-    private var canStartBuyTrade: Bool {
-        renderSnapshot.canStartBuyTrade
-    }
-
-    private var canStartSellTrade: Bool {
-        renderSnapshot.canStartSellTrade
     }
 
     private var familyAccessSignature: Int {
@@ -375,6 +348,21 @@ struct InvestmentHubView: View {
     }
 
     private func makeRenderSnapshot() -> InvestmentHubRenderSnapshot {
+        let signpostID = OSSignpostID(log: InvestmentPerformanceSignpost.log)
+        os_signpost(
+            .begin,
+            log: InvestmentPerformanceSignpost.log,
+            name: "Investment Hub Render Snapshot",
+            signpostID: signpostID
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: InvestmentPerformanceSignpost.log,
+                name: "Investment Hub Render Snapshot",
+                signpostID: signpostID
+            )
+        }
         guard let ownerUserID else {
             return InvestmentHubRenderSnapshot.empty(
                 canView: canView,
@@ -446,14 +434,13 @@ struct InvestmentHubView: View {
                     )
                 }
                 let positionState: InvestmentAssetPositionState
-                if let calculations = try? InvestmentAccountingEngine.recalculate(trades: inputs),
-                   let unitPositions = try? InvestmentAccountingEngine.unitPositions(trades: inputs),
-                   let last = calculations.last {
+                if let projection = try? InvestmentAccountingEngine.projection(trades: inputs),
+                   let last = projection.calculations.last {
                     positionState = InvestmentAssetPositionState(
                         quantity: last.positionQuantityAfter,
                         costBasisMinor: last.positionCostBasisAfterMinor,
                         openLotCount: last.openLotCountAfter,
-                        unitPositions: unitPositions
+                        unitPositions: projection.unitPositions
                     )
                 } else {
                     let persisted = assetTrades.last
@@ -573,12 +560,14 @@ struct InvestmentHubView: View {
     }
 
     var body: some View {
-        presentedHub
+        let cacheKey = renderSnapshotCacheKey
+        let snapshot = cachedRenderSnapshot(for: cacheKey)
+        presentedHub(snapshot: snapshot)
             .sheet(item: $activeSheet) { sheet in
                 sheetView(sheet)
             }
             .alert(item: $activeAlert, content: investmentAlert)
-            .onChange(of: ownerChannels.map(\.id)) { oldIDs, ids in
+            .onChange(of: snapshot.ownerChannels.map(\.id)) { oldIDs, ids in
                 handleOwnerChannelIDsChanged(oldIDs, ids)
             }
             .onAppear {
@@ -590,32 +579,32 @@ struct InvestmentHubView: View {
             .task(id: ownerUserID) {
                 await refreshInvestmentAccessAndData()
             }
-            .task(id: renderSnapshotCacheKey) {
-                if renderSnapshotCache?.key != renderSnapshotCacheKey {
+            .task(id: cacheKey) {
+                if renderSnapshotCache?.key != cacheKey {
                     renderSnapshotCache = InvestmentHubRenderSnapshotCache(
-                        key: renderSnapshotCacheKey,
-                        snapshot: makeRenderSnapshot()
+                        key: cacheKey,
+                        snapshot: snapshot
                     )
                 }
             }
     }
 
-    private var presentedHub: some View {
+    private func presentedHub(snapshot: InvestmentHubRenderSnapshot) -> some View {
         Group {
             if embedsInNavigationStack {
                 NavigationStack {
-                    hubNavigationContent
+                    hubNavigationContent(snapshot: snapshot)
                 }
             } else {
-                hubNavigationContent
+                hubNavigationContent(snapshot: snapshot)
             }
         }
     }
 
-    private var hubNavigationContent: some View {
+    private func hubNavigationContent(snapshot: InvestmentHubRenderSnapshot) -> some View {
         Group {
             if canView {
-                hubContent
+                hubContent(snapshot: snapshot)
             } else {
                 privateContent
             }
@@ -643,7 +632,7 @@ struct InvestmentHubView: View {
             }
             if canView {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    managementMenu
+                    managementMenu(snapshot: snapshot)
                 }
             }
         }
@@ -695,8 +684,7 @@ struct InvestmentHubView: View {
     }
 
     @ViewBuilder
-    private var hubContent: some View {
-        let snapshot = renderSnapshot
+    private func hubContent(snapshot: InvestmentHubRenderSnapshot) -> some View {
         if snapshot.isEmpty {
             ContentUnavailableView {
                 Label(L10n.investment.hub.emptyTitle, systemImage: "chart.line.uptrend.xyaxis")
@@ -723,18 +711,18 @@ struct InvestmentHubView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if !isSearchPresented {
-                        summaryCard
-                        primaryActions
+                        summaryCard(snapshot: snapshot)
+                        primaryActions(snapshot: snapshot)
                     }
                     tabControl
                     switch selectedTab {
                     case .assets:
-                        positionsSection
+                        positionsSection(snapshot: snapshot)
                     case .activity:
                         if !isSearchPresented {
-                            periodControl
+                            periodControl(snapshot: snapshot)
                         }
-                        activitySection
+                        activitySection(snapshot: snapshot)
                     }
                 }
                 .padding(16)
@@ -753,26 +741,26 @@ struct InvestmentHubView: View {
         }
     }
 
-    private var periodControl: some View {
+    private func periodControl(snapshot: InvestmentHubRenderSnapshot) -> some View {
         InvestmentPeriodControl(
             period: $period,
             selectedMonth: $selectedMonth,
             calendar: calendar,
-            monthSelectionBounds: monthSelectionBounds
+            monthSelectionBounds: snapshot.monthSelectionBounds
         )
     }
 
-    private var summaryCard: some View {
+    private func summaryCard(snapshot: InvestmentHubRenderSnapshot) -> some View {
         InvestmentPortfolioSummaryCard(
-            summary: portfolioSummary,
-            currencyCode: accountingCurrencyCode
+            summary: snapshot.portfolioSummary,
+            currencyCode: snapshot.accountingCurrencyCode
         )
     }
 
-    private var primaryActions: some View {
+    private func primaryActions(snapshot: InvestmentHubRenderSnapshot) -> some View {
         InvestmentPrimaryActions(
-            canBuy: !canCreate || canStartBuyTrade,
-            canSell: !canCreate || canStartSellTrade,
+            canBuy: !canCreate || snapshot.canStartBuyTrade,
+            canSell: !canCreate || snapshot.canStartSellTrade,
             onBuy: { openNewTrade(kind: .buy) },
             onSell: { openNewTrade(kind: .sell) }
         )
@@ -788,10 +776,10 @@ struct InvestmentHubView: View {
         .accessibilityLabel(L10n.investment.hub.contentMode)
     }
 
-    private var managementMenu: some View {
+    private func managementMenu(snapshot: InvestmentHubRenderSnapshot) -> some View {
         Menu {
             if canCreate {
-                if ownerChannels.isEmpty {
+                if snapshot.ownerChannels.isEmpty {
                     Button(L10n.investment.hub.addChannel, systemImage: "square.stack.3d.up.badge.a") {
                         activeSheet = .channel(nil)
                     }
@@ -805,7 +793,7 @@ struct InvestmentHubView: View {
                 }
             }
 
-            if ownerChannels.count > 1 {
+            if snapshot.ownerChannels.count > 1 {
                 Menu(L10n.investment.hub.channels, systemImage: "line.3.horizontal.decrease.circle") {
                     Button {
                         selectedChannelID = nil
@@ -816,7 +804,7 @@ struct InvestmentHubView: View {
                             Text(L10n.investment.hub.allChannels)
                         }
                     }
-                    ForEach(ownerChannels) { channel in
+                    ForEach(snapshot.ownerChannels) { channel in
                         Button {
                             selectedChannelID = channel.id
                         } label: {
@@ -830,9 +818,9 @@ struct InvestmentHubView: View {
                 }
             }
 
-            if canEdit, !ownerChannels.isEmpty {
+            if canEdit, !snapshot.ownerChannels.isEmpty {
                 Menu(L10n.management.management.manage, systemImage: "slider.horizontal.3") {
-                    ForEach(ownerChannels) { channel in
+                    ForEach(snapshot.ownerChannels) { channel in
                         Button(channel.name) { activeSheet = .channel(channel.id) }
                     }
                 }
@@ -842,17 +830,17 @@ struct InvestmentHubView: View {
                 openInvestmentWallet()
             }
 
-            if canEdit, (!archivedOwnerChannels.isEmpty || !archivedOwnerAssets.isEmpty) {
+            if canEdit, (!snapshot.archivedOwnerChannels.isEmpty || !snapshot.archivedOwnerAssets.isEmpty) {
                 Menu(
                     L10n.management.managementarchiveditems.archivedItems,
                     systemImage: "archivebox"
                 ) {
-                    ForEach(archivedOwnerChannels) { channel in
+                    ForEach(snapshot.archivedOwnerChannels) { channel in
                         Button(channel.name) { restore(channel) }
                     }
-                    ForEach(archivedOwnerAssets) { asset in
+                    ForEach(snapshot.archivedOwnerAssets) { asset in
                         Button(asset.name) { restore(asset) }
-                            .disabled(!ownerChannels.contains { $0.id == asset.channelID })
+                            .disabled(!snapshot.ownerChannels.contains { $0.id == asset.channelID })
                     }
                 }
             }
@@ -862,9 +850,8 @@ struct InvestmentHubView: View {
         .accessibilityLabel(L10n.management.management.manage)
     }
 
-    private var positionsSection: some View {
-        let snapshot = renderSnapshot
-        return VStack(alignment: .leading, spacing: 10) {
+    private func positionsSection(snapshot: InvestmentHubRenderSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.hub.positions)
                 .font(.headline)
 
@@ -956,9 +943,8 @@ struct InvestmentHubView: View {
         return L10n.investment.hub.positionDetails(details)
     }
 
-    private var activitySection: some View {
-        let snapshot = renderSnapshot
-        return VStack(alignment: .leading, spacing: 10) {
+    private func activitySection(snapshot: InvestmentHubRenderSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.hub.activity)
                 .font(.headline)
             if snapshot.filteredVisibleTrades.isEmpty {
@@ -1184,7 +1170,8 @@ struct InvestmentHubView: View {
             }
             return
         }
-        guard kind == .buy ? canStartBuyTrade : canStartSellTrade else { return }
+        let snapshot = renderSnapshot
+        guard kind == .buy ? snapshot.canStartBuyTrade : snapshot.canStartSellTrade else { return }
         activeSheet = .trade(kind: kind, id: nil)
     }
 
@@ -2889,6 +2876,44 @@ private struct InvestmentTradeEditorSheet: View {
     }
 }
 
+private struct InvestmentWalletDetailRenderSnapshot {
+    let configuration: InvestmentWalletConfiguration?
+    let linkedWallet: LedgerWallet?
+    let eligibleWallets: [LedgerWallet]
+    let cashSnapshot: InvestmentCashAllocationSnapshot
+    let ordinaryWalletLocations: [InvestmentWalletCashLocation]
+    let locationsAwaitingTransfer: [InvestmentWalletCashLocation]
+    let balanceIndex: TransactionWalletBalanceIndex
+    let saleTimelineTrades: [InvestmentTrade]
+    let totalRealizedProfitLossMinor: Int64
+    let walletsByID: [UUID: LedgerWallet]
+    let assetsByID: [UUID: InvestmentAsset]
+    let reconcilableLocationIDs: Set<UUID>
+    let accountingCurrencyCode: String
+    let isOwner: Bool
+    let canEdit: Bool
+}
+
+private struct InvestmentWalletDetailRenderSnapshotCache {
+    let key: InvestmentWalletDetailRenderSnapshotCacheKey
+    let snapshot: InvestmentWalletDetailRenderSnapshot
+}
+
+private struct InvestmentWalletDetailRenderSnapshotCacheKey: Hashable {
+    let ownerUserID: UUID
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let walletSignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+    let postingSignature: MistiaCollectionChangeSignature
+    let cashMetadataSignature: MistiaCollectionChangeSignature
+    let configurationSignature: MistiaCollectionChangeSignature
+    let tradeSignature: MistiaCollectionChangeSignature
+    let assetSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+    let familyAccessSignature: Int
+}
+
 struct InvestmentWalletDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
@@ -2913,18 +2938,14 @@ struct InvestmentWalletDetailView: View {
     @State private var pendingLinkedWalletID: UUID?
     @State private var showsLinkChangeOptions = false
     @State private var alertMessage: String?
+    @State private var renderSnapshotCache: InvestmentWalletDetailRenderSnapshotCache?
 
     private var systemWalletID: UUID {
         InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
     }
 
-    private var systemWallet: LedgerWallet? { wallets.first { $0.id == systemWalletID } }
-    private var accountingCurrencyCode: String { systemWallet?.currencyCode ?? "JPY" }
     private var configuration: InvestmentWalletConfiguration? {
         configurations.first { $0.ownerUserID == ownerUserID }
-    }
-    private var linkedWallet: LedgerWallet? {
-        configuration?.linkedWalletID.flatMap { id in wallets.first { $0.id == id } }
     }
     private var isOwner: Bool {
         ownerUserID == sessionStore.activeLocalProfileUserID || ownerUserID == sessionStore.signedInUserID
@@ -2932,12 +2953,117 @@ struct InvestmentWalletDetailView: View {
     private var canEdit: Bool {
         isOwner || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .investment)
     }
-    private var walletOwnerMap: [UUID: UUID] {
-        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    private func canUseWallet(_ walletID: UUID) -> Bool {
+        isOwner || familyContextStore.canUseWallet(walletID: walletID, ownerUserID: ownerUserID)
     }
-    private var eligibleWallets: [LedgerWallet] {
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+        }
+        return hasher.finalize()
+    }
+
+    private var renderSnapshotCacheKey: InvestmentWalletDetailRenderSnapshotCacheKey {
+        InvestmentWalletDetailRenderSnapshotCacheKey(
+            ownerUserID: ownerUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                wallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                transactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            postingSignature: MistiaCollectionChangeSignature.make(
+                postings,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            cashMetadataSignature: MistiaCollectionChangeSignature.make(
+                cashPostingMetadata,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            configurationSignature: MistiaCollectionChangeSignature.make(
+                configurations,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            tradeSignature: MistiaCollectionChangeSignature.make(
+                trades,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            assetSignature: MistiaCollectionChangeSignature.make(
+                assets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            familyAccessSignature: familyAccessSignature
+        )
+    }
+
+    private func cachedRenderSnapshot(
+        for key: InvestmentWalletDetailRenderSnapshotCacheKey
+    ) -> InvestmentWalletDetailRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+        return makeRenderSnapshot()
+    }
+
+    private func makeRenderSnapshot() -> InvestmentWalletDetailRenderSnapshot {
+        let signpostID = OSSignpostID(log: InvestmentPerformanceSignpost.log)
+        os_signpost(
+            .begin,
+            log: InvestmentPerformanceSignpost.log,
+            name: "Investment Wallet Render Snapshot",
+            signpostID: signpostID
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: InvestmentPerformanceSignpost.log,
+                name: "Investment Wallet Render Snapshot",
+                signpostID: signpostID
+            )
+        }
+        let systemWallet = wallets.first { $0.id == systemWalletID }
+        let accountingCurrencyCode = systemWallet?.currencyCode ?? "JPY"
+        let configuration = configurations.first { $0.ownerUserID == ownerUserID }
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        let assetsByID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+        let linkedWallet = configuration?.linkedWalletID.flatMap { walletsByID[$0] }
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
         let fallbackOwner = sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
-        return wallets.filter { wallet in
+        let eligibleWallets = wallets.filter { wallet in
             wallet.id != systemWalletID
                 && wallet.kind != .creditCard
                 && wallet.kind != .investment
@@ -2949,63 +3075,71 @@ struct InvestmentWalletDetailView: View {
                 && canUseWallet(wallet.id)
         }
         .sorted { $0.sortOrder == $1.sortOrder ? $0.createdAt < $1.createdAt : $0.sortOrder < $1.sortOrder }
-    }
-    private func canUseWallet(_ walletID: UUID) -> Bool {
-        isOwner || familyContextStore.canUseWallet(walletID: walletID, ownerUserID: ownerUserID)
-    }
-    private func canReconcile(_ location: InvestmentWalletCashLocation) -> Bool {
-        guard canEdit, let linkedWallet else { return false }
-        return location.walletID != linkedWallet.id
-            && location.bookedMinor > 0
-            && canUseWallet(linkedWallet.id)
-            && canUseWallet(location.walletID)
-    }
-    private var cashSnapshot: InvestmentCashAllocationSnapshot {
-        InvestmentCashAllocationLogic.snapshot(
+        let cashSnapshot = InvestmentCashAllocationLogic.snapshot(
             postings: postings,
             cashPostingMetadata: cashPostingMetadata,
             ownerUserID: ownerUserID,
             accountingCurrencyCode: accountingCurrencyCode
         )
-    }
-    private var ownerLocations: [InvestmentWalletCashLocation] {
-        cashSnapshot.locations.filter { $0.totalMinor > 0 }
-    }
-    private var ordinaryWalletLocations: [InvestmentWalletCashLocation] {
-        guard let linkedWallet else { return ownerLocations }
-        return ownerLocations.filter { $0.walletID != linkedWallet.id }
-    }
-    private var locationsAwaitingTransfer: [InvestmentWalletCashLocation] {
-        ordinaryWalletLocations.filter { $0.bookedMinor > 0 }
-    }
-    private var balanceIndex: TransactionWalletBalanceIndex {
-        TransactionLogic.walletBalanceIndex(
+        let ownerLocations = cashSnapshot.locations.filter { $0.totalMinor > 0 }
+        let ordinaryWalletLocations = linkedWallet.map { linkedWallet in
+            ownerLocations.filter { $0.walletID != linkedWallet.id }
+        } ?? ownerLocations
+        let locationsAwaitingTransfer = ordinaryWalletLocations.filter { $0.bookedMinor > 0 }
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
             wallets: wallets.map {
                 TransactionWalletSnapshot(id: $0.id, kind: $0.kind, openingBalanceMinor: $0.openingBalanceMinor)
             },
             records: transactions.map(\.snapshot)
         )
-    }
-    private var ownerTrades: [InvestmentTrade] {
-        trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
-    }
-    private var saleTimelineTrades: [InvestmentTrade] {
-        ownerTrades.filter { $0.kind == .sell }
-            .sorted { $0.occurredAt > $1.occurredAt }
-    }
-    private var totalRealizedProfitLossMinor: Int64 {
-        InvestmentSummaryLogic.realizedProfitLoss(
+        let ownerTrades = trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
+        let saleTimelineTrades = Array(
+            ownerTrades.lazy.filter { $0.kind == .sell }
+                .sorted { $0.occurredAt > $1.occurredAt }
+                .prefix(40)
+        )
+        let totalRealizedProfitLossMinor = InvestmentSummaryLogic.realizedProfitLoss(
             trades: ownerTrades.map(\.calculation)
+        )
+        let reconcilableLocationIDs: Set<UUID>
+        if canEdit, let linkedWallet, canUseWallet(linkedWallet.id) {
+            reconcilableLocationIDs = Set(
+                locationsAwaitingTransfer.lazy
+                    .filter { canUseWallet($0.walletID) }
+                    .map(\.walletID)
+            )
+        } else {
+            reconcilableLocationIDs = []
+        }
+
+        return InvestmentWalletDetailRenderSnapshot(
+            configuration: configuration,
+            linkedWallet: linkedWallet,
+            eligibleWallets: eligibleWallets,
+            cashSnapshot: cashSnapshot,
+            ordinaryWalletLocations: ordinaryWalletLocations,
+            locationsAwaitingTransfer: locationsAwaitingTransfer,
+            balanceIndex: balanceIndex,
+            saleTimelineTrades: saleTimelineTrades,
+            totalRealizedProfitLossMinor: totalRealizedProfitLossMinor,
+            walletsByID: walletsByID,
+            assetsByID: assetsByID,
+            reconcilableLocationIDs: reconcilableLocationIDs,
+            accountingCurrencyCode: accountingCurrencyCode,
+            isOwner: isOwner,
+            canEdit: canEdit
         )
     }
 
     var body: some View {
+        let cacheKey = renderSnapshotCacheKey
+        let snapshot = cachedRenderSnapshot(for: cacheKey)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                overviewCard
-                linkedWalletCard
-                locationsSection
-                timelineSection
+                overviewCard(snapshot: snapshot)
+                linkedWalletCard(snapshot: snapshot)
+                locationsSection(snapshot: snapshot)
+                timelineSection(snapshot: snapshot)
             }
             .padding(16)
         }
@@ -3021,9 +3155,11 @@ struct InvestmentWalletDetailView: View {
                     Image(systemName: "arrow.left.arrow.right")
                 }
                 .disabled(
-                    linkedWallet == nil
-                        || locationsAwaitingTransfer.isEmpty
-                        || locationsAwaitingTransfer.contains { !canReconcile($0) }
+                    snapshot.linkedWallet == nil
+                        || snapshot.locationsAwaitingTransfer.isEmpty
+                        || snapshot.locationsAwaitingTransfer.contains {
+                            !snapshot.reconcilableLocationIDs.contains($0.walletID)
+                        }
                 )
                 .accessibilityLabel(L10n.investment.wallet.reconcile)
             }
@@ -3037,8 +3173,8 @@ struct InvestmentWalletDetailView: View {
         }
         .sheet(isPresented: $showsLinkedWalletPicker) {
             InvestmentLinkedWalletPickerSheet(
-                wallets: eligibleWallets,
-                selectedWalletID: configuration?.linkedWalletID,
+                wallets: snapshot.eligibleWallets,
+                selectedWalletID: snapshot.configuration?.linkedWalletID,
                 onSelect: selectLinkedWallet
             )
             .presentationDragIndicator(.hidden)
@@ -3068,22 +3204,30 @@ struct InvestmentWalletDetailView: View {
         .onDisappear {
             uiState?.requestQuickCreateHidden(false, id: viewID)
         }
+        .task(id: cacheKey) {
+            if renderSnapshotCache?.key != cacheKey {
+                renderSnapshotCache = InvestmentWalletDetailRenderSnapshotCache(
+                    key: cacheKey,
+                    snapshot: snapshot
+                )
+            }
+        }
     }
 
-    private var overviewCard: some View {
+    private func overviewCard(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.investment.hub.realizedProfitLoss)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(
-                verbatim: (totalRealizedProfitLossMinor > 0 ? "+" : "")
-                    + totalRealizedProfitLossMinor.formattedCurrency(code: accountingCurrencyCode)
+                verbatim: (snapshot.totalRealizedProfitLossMinor > 0 ? "+" : "")
+                    + snapshot.totalRealizedProfitLossMinor.formattedCurrency(code: snapshot.accountingCurrencyCode)
             )
             .font(.system(size: 32, weight: .bold, design: .rounded))
             .foregroundStyle(
-                totalRealizedProfitLossMinor > 0
+                snapshot.totalRealizedProfitLossMinor > 0
                     ? Color.green
-                    : (totalRealizedProfitLossMinor < 0 ? Color.red : Color.primary)
+                    : (snapshot.totalRealizedProfitLossMinor < 0 ? Color.red : Color.primary)
             )
         }
         .padding(18)
@@ -3091,28 +3235,28 @@ struct InvestmentWalletDetailView: View {
         .background(MistiaAccent.purple.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private var linkedWalletCard: some View {
+    private func linkedWalletCard(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(L10n.investment.wallet.linkedWallet).font(.headline)
                 Spacer()
-                if canEdit, isOwner {
-                    Button(linkedWallet == nil ? L10n.investment.wallet.choose : L10n.investment.wallet.change) {
+                if snapshot.canEdit, snapshot.isOwner {
+                    Button(snapshot.linkedWallet == nil ? L10n.investment.wallet.choose : L10n.investment.wallet.change) {
                         showsLinkedWalletPicker = true
                     }
                     .font(.subheadline.weight(.semibold))
                 }
             }
-            if let linkedWallet {
+            if let linkedWallet = snapshot.linkedWallet {
                 let balances = InvestmentCashAllocationLogic.linkedWalletBalances(
-                    ledgerBalanceMinor: balanceIndex.balance(
+                    ledgerBalanceMinor: snapshot.balanceIndex.balance(
                         for: TransactionWalletSnapshot(
                             id: linkedWallet.id,
                             kind: linkedWallet.kind,
                             openingBalanceMinor: linkedWallet.openingBalanceMinor
                         )
                     ),
-                    allocatedInvestmentMinor: cashSnapshot.locations.first {
+                    allocatedInvestmentMinor: snapshot.cashSnapshot.locations.first {
                         $0.walletID == linkedWallet.id
                     }?.totalMinor ?? 0
                 )
@@ -3136,7 +3280,7 @@ struct InvestmentWalletDetailView: View {
                 }
                 Text(
                     L10n.investment.wallet.investmentPortion(
-                        balances.investmentMinor.formattedCurrency(code: accountingCurrencyCode)
+                        balances.investmentMinor.formattedCurrency(code: snapshot.accountingCurrencyCode)
                     )
                 )
                     .font(.footnote.weight(.medium))
@@ -3154,32 +3298,35 @@ struct InvestmentWalletDetailView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private var locationsSection: some View {
+    private func locationsSection(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.wallet.locations).font(.headline)
-            if ordinaryWalletLocations.isEmpty {
+            if snapshot.ordinaryWalletLocations.isEmpty {
                 Text(L10n.investment.wallet.noLocations)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 12)
             } else {
-                ForEach(ordinaryWalletLocations) { location in
+                ForEach(snapshot.ordinaryWalletLocations) { location in
                     Button {
-                        guard canReconcile(location) else { return }
+                        guard snapshot.reconcilableLocationIDs.contains(location.walletID) else { return }
                         reconciliationWalletID = location.walletID
                         showsReconciliation = true
                     } label: {
-                        locationRow(location)
+                        locationRow(location, snapshot: snapshot)
                     }
                     .buttonStyle(.plain)
-                    .disabled(!canReconcile(location))
+                    .disabled(!snapshot.reconcilableLocationIDs.contains(location.walletID))
                 }
             }
         }
     }
 
-    private func locationRow(_ location: InvestmentWalletCashLocation) -> some View {
-        let wallet = wallets.first { $0.id == location.walletID }
+    private func locationRow(
+        _ location: InvestmentWalletCashLocation,
+        snapshot: InvestmentWalletDetailRenderSnapshot
+    ) -> some View {
+        let wallet = snapshot.walletsByID[location.walletID]
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
                 if let wallet {
@@ -3194,14 +3341,14 @@ struct InvestmentWalletDetailView: View {
                 }
                 Text(wallet?.name ?? L10n.investment.wallet.unidentified).font(.subheadline.weight(.semibold))
                 Spacer()
-                Text(location.totalMinor.formattedCurrency(code: accountingCurrencyCode))
+                Text(location.totalMinor.formattedCurrency(code: snapshot.accountingCurrencyCode))
                     .font(.subheadline.weight(.bold))
             }
             Text(L10n.investment.wallet.availableCashInWallet)
             .font(.caption)
             .foregroundStyle(.secondary)
             if MistiaCurrencyLogic.normalizedCode(location.currencyCode)
-                != MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode) {
+                != MistiaCurrencyLogic.normalizedCode(snapshot.accountingCurrencyCode) {
                 Text(
                     L10n.investment.wallet.originalAmountReference(
                         location.originalTotalMinor.formattedCurrency(code: location.currencyCode)
@@ -3216,19 +3363,19 @@ struct InvestmentWalletDetailView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private var timelineSection: some View {
+    private func timelineSection(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.investment.wallet.cashFlow).font(.headline)
-            if saleTimelineTrades.isEmpty {
+            if snapshot.saleTimelineTrades.isEmpty {
                 Text(L10n.investment.wallet.noCashFlow)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(saleTimelineTrades.prefix(40)) { trade in
+                ForEach(snapshot.saleTimelineTrades) { trade in
                     HStack(spacing: 12) {
                         ZStack(alignment: .bottomTrailing) {
                             InvestmentProductThumbnail(
-                                imagePath: assets.first(where: { $0.id == trade.assetID })?.imagePath,
+                                imagePath: snapshot.assetsByID[trade.assetID]?.imagePath,
                                 size: 44
                             )
                             Image(systemName: trade.grossAmountMinor == 0 ? "minus.circle.fill" : "arrow.up.circle.fill")
@@ -3237,9 +3384,9 @@ struct InvestmentWalletDetailView: View {
                                 .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
                         }
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(assets.first { $0.id == trade.assetID }?.name ?? L10n.investment.hub.sell)
+                            Text(snapshot.assetsByID[trade.assetID]?.name ?? L10n.investment.hub.sell)
                                 .font(.subheadline.weight(.semibold))
-                            Text(saleDestinationText(for: trade))
+                            Text(saleDestinationText(for: trade, snapshot: snapshot))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Text(MistiaDateFormatting.fullDateString(for: trade.occurredAt))
@@ -3273,16 +3420,19 @@ struct InvestmentWalletDetailView: View {
         }
     }
 
-    private func saleDestinationText(for trade: InvestmentTrade) -> String {
+    private func saleDestinationText(
+        for trade: InvestmentTrade,
+        snapshot: InvestmentWalletDetailRenderSnapshot
+    ) -> String {
         if trade.grossAmountMinor == 0 {
             guard let walletID = trade.capitalReturnWalletID,
-                  let wallet = wallets.first(where: { $0.id == walletID }) else {
+                  let wallet = snapshot.walletsByID[walletID] else {
                 return L10n.investment.wallet.liquidationWalletUnknown
             }
             return L10n.investment.wallet.liquidationDeductedFrom(wallet.name)
         }
         guard let walletID = trade.capitalReturnWalletID,
-              let wallet = wallets.first(where: { $0.id == walletID }) else {
+              let wallet = snapshot.walletsByID[walletID] else {
             return L10n.investment.wallet.saleNoDestination
         }
         return L10n.investment.wallet.saleReceivedBy(wallet.name)
@@ -3377,6 +3527,28 @@ private struct InvestmentLinkedWalletPickerSheet: View {
     }
 }
 
+private struct InvestmentCashReconciliationRenderSnapshot {
+    let currencyCode: String
+    let linkedWalletID: UUID?
+    let locations: [InvestmentWalletCashLocation]
+    let selectedLocation: InvestmentWalletCashLocation?
+    let walletNamesByID: [UUID: String]
+}
+
+private struct InvestmentCashReconciliationRenderSnapshotCache {
+    let key: InvestmentCashReconciliationRenderSnapshotCacheKey
+    let snapshot: InvestmentCashReconciliationRenderSnapshot
+}
+
+private struct InvestmentCashReconciliationRenderSnapshotCacheKey: Hashable {
+    let ownerUserID: UUID
+    let initialWalletID: UUID?
+    let walletSignature: MistiaCollectionChangeSignature
+    let postingSignature: MistiaCollectionChangeSignature
+    let cashMetadataSignature: MistiaCollectionChangeSignature
+    let configurationSignature: MistiaCollectionChangeSignature
+}
+
 private struct InvestmentCashReconciliationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -3392,56 +3564,124 @@ private struct InvestmentCashReconciliationSheet: View {
 
     @State private var amountText = ""
     @State private var confirmedRealTransfer = false
+    @State private var renderSnapshotCache: InvestmentCashReconciliationRenderSnapshotCache?
 
     private var systemWalletID: UUID { InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID) }
-    private var currencyCode: String { wallets.first { $0.id == systemWalletID }?.currencyCode ?? "JPY" }
-    private var linkedWalletID: UUID? { configurations.first { $0.ownerUserID == ownerUserID }?.linkedWalletID }
-    private var snapshot: InvestmentCashAllocationSnapshot {
-        InvestmentCashAllocationLogic.snapshot(
+
+    private var renderSnapshotCacheKey: InvestmentCashReconciliationRenderSnapshotCacheKey {
+        InvestmentCashReconciliationRenderSnapshotCacheKey(
+            ownerUserID: ownerUserID,
+            initialWalletID: initialWalletID,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                wallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            postingSignature: MistiaCollectionChangeSignature.make(
+                postings,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            cashMetadataSignature: MistiaCollectionChangeSignature.make(
+                cashPostingMetadata,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            configurationSignature: MistiaCollectionChangeSignature.make(
+                configurations,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private func cachedRenderSnapshot(
+        for key: InvestmentCashReconciliationRenderSnapshotCacheKey
+    ) -> InvestmentCashReconciliationRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+        return makeRenderSnapshot()
+    }
+
+    private func makeRenderSnapshot() -> InvestmentCashReconciliationRenderSnapshot {
+        let signpostID = OSSignpostID(log: InvestmentPerformanceSignpost.log)
+        os_signpost(
+            .begin,
+            log: InvestmentPerformanceSignpost.log,
+            name: "Investment Reconciliation Render Snapshot",
+            signpostID: signpostID
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: InvestmentPerformanceSignpost.log,
+                name: "Investment Reconciliation Render Snapshot",
+                signpostID: signpostID
+            )
+        }
+        let currencyCode = wallets.first { $0.id == systemWalletID }?.currencyCode ?? "JPY"
+        let linkedWalletID = configurations.first { $0.ownerUserID == ownerUserID }?.linkedWalletID
+        let cashSnapshot = InvestmentCashAllocationLogic.snapshot(
             postings: postings,
             cashPostingMetadata: cashPostingMetadata,
             ownerUserID: ownerUserID,
             accountingCurrencyCode: currencyCode
         )
+        let locations = cashSnapshot.locations.filter {
+            $0.walletID != linkedWalletID && $0.bookedMinor > 0
+        }
+        return InvestmentCashReconciliationRenderSnapshot(
+            currencyCode: currencyCode,
+            linkedWalletID: linkedWalletID,
+            locations: locations,
+            selectedLocation: initialWalletID.flatMap { id in
+                locations.first { $0.walletID == id }
+            },
+            walletNamesByID: Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0.name) })
+        )
     }
-    private var locations: [InvestmentWalletCashLocation] {
-        snapshot.locations.filter { $0.walletID != linkedWalletID && $0.bookedMinor > 0 }
-    }
-    private var selectedLocation: InvestmentWalletCashLocation? {
-        initialWalletID.flatMap { id in locations.first { $0.walletID == id } }
-    }
-    private var requests: [InvestmentReconciliationRequest] {
-        if let selectedLocation {
-            let entered = amountText.currencyInputToMinorUnits(currencyCode: currencyCode)
+
+    private func requests(
+        snapshot: InvestmentCashReconciliationRenderSnapshot
+    ) -> [InvestmentReconciliationRequest] {
+        if let selectedLocation = snapshot.selectedLocation {
+            let entered = amountText.currencyInputToMinorUnits(currencyCode: snapshot.currencyCode)
             guard entered > 0 else { return [] }
             return [InvestmentReconciliationRequest(walletID: selectedLocation.walletID, accountingAmountMinor: entered)]
         }
-        return locations.map {
+        return snapshot.locations.map {
             InvestmentReconciliationRequest(walletID: $0.walletID, accountingAmountMinor: $0.bookedMinor)
         }
     }
 
     var body: some View {
+        let cacheKey = renderSnapshotCacheKey
+        let snapshot = cachedRenderSnapshot(for: cacheKey)
+        let reconciliationRequests = requests(snapshot: snapshot)
         MistiaModalScaffold(
-            title: selectedLocation == nil ? L10n.investment.wallet.reconcileAll : L10n.investment.wallet.reconcile,
+            title: snapshot.selectedLocation == nil ? L10n.investment.wallet.reconcileAll : L10n.investment.wallet.reconcile,
             accent: MistiaAccent.purple.color,
             contentStyle: .form,
-            saveDisabled: requests.isEmpty || !confirmedRealTransfer,
-            onSave: save
+            saveDisabled: reconciliationRequests.isEmpty || !confirmedRealTransfer,
+            onSave: { save(requests: reconciliationRequests) }
         ) {
             Form {
                 Section(L10n.investment.wallet.realTransfers) {
-                    ForEach(selectedLocation.map { [$0] } ?? locations) { location in
-                        instructionRow(location)
+                    ForEach(snapshot.selectedLocation.map { [$0] } ?? snapshot.locations) { location in
+                        instructionRow(location, snapshot: snapshot)
                     }
                 }
-                if let selectedLocation {
+                if let selectedLocation = snapshot.selectedLocation {
                     Section {
                         MistiaCurrencyInputField(L10n.investment.wallet.amountToReconcile, text: $amountText)
                     } footer: {
                         Text(
                             L10n.investment.wallet.availableCashForTransfer(
-                                selectedLocation.bookedMinor.formattedCurrency(code: currencyCode)
+                                selectedLocation.bookedMinor.formattedCurrency(code: snapshot.currencyCode)
                             )
                         )
                     }
@@ -3453,29 +3693,41 @@ private struct InvestmentCashReconciliationSheet: View {
                 }
             }
             .onAppear {
-                if let selectedLocation {
+                if let selectedLocation = snapshot.selectedLocation {
                     amountText = MistiaCurrencyInputFormatting.groupedInput(String(selectedLocation.bookedMinor))
                 }
             }
         }
+        .task(id: cacheKey) {
+            if renderSnapshotCache?.key != cacheKey {
+                renderSnapshotCache = InvestmentCashReconciliationRenderSnapshotCache(
+                    key: cacheKey,
+                    snapshot: snapshot
+                )
+            }
+        }
     }
 
-    private func instructionRow(_ location: InvestmentWalletCashLocation) -> some View {
-        let holder = wallets.first { $0.id == location.walletID }?.name ?? L10n.investment.wallet.unidentified
-        let linked = wallets.first { $0.id == linkedWalletID }?.name ?? L10n.investment.wallet.linkedWallet
-        let transferAmount = selectedLocation?.walletID == location.walletID
-            ? amountText.currencyInputToMinorUnits(currencyCode: currencyCode)
+    private func instructionRow(
+        _ location: InvestmentWalletCashLocation,
+        snapshot: InvestmentCashReconciliationRenderSnapshot
+    ) -> some View {
+        let holder = snapshot.walletNamesByID[location.walletID] ?? L10n.investment.wallet.unidentified
+        let linked = snapshot.linkedWalletID.flatMap { snapshot.walletNamesByID[$0] }
+            ?? L10n.investment.wallet.linkedWallet
+        let transferAmount = snapshot.selectedLocation?.walletID == location.walletID
+            ? amountText.currencyInputToMinorUnits(currencyCode: snapshot.currencyCode)
             : location.bookedMinor
         return VStack(alignment: .leading, spacing: 5) {
             Text(L10n.investment.wallet.realTransferInstruction(holder, linked))
                 .font(.subheadline.weight(.medium))
-            Text(transferAmount.formattedCurrency(code: currencyCode))
+            Text(transferAmount.formattedCurrency(code: snapshot.currencyCode))
                 .font(.headline)
                 .foregroundStyle(MistiaAccent.purple.color)
         }
     }
 
-    private func save() {
+    private func save(requests: [InvestmentReconciliationRequest]) {
         do {
             let result = try InvestmentPersistenceService.reconcileCash(
                 ownerUserID: ownerUserID,

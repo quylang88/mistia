@@ -154,6 +154,21 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(positions.first(where: { $0.unitKey == "box" })?.quantity, 1)
     }
 
+    func testAccountingProjectionMatchesSeparateCalculationAndUnitPositionAPIs() throws {
+        let start = Date(timeIntervalSince1970: 4_850)
+        let trades = [
+            trade(kind: .buy, quantity: 30, unit: "pack", gross: 3_000, occurredAt: start),
+            trade(kind: .buy, quantity: 2, unit: "box", gross: 800, occurredAt: start.addingTimeInterval(1)),
+            trade(kind: .sell, quantity: 10, unit: "pack", gross: 1_500, occurredAt: start.addingTimeInterval(2)),
+            trade(kind: .sell, quantity: 1, unit: "box", gross: 600, occurredAt: start.addingTimeInterval(3))
+        ]
+
+        let projection = try InvestmentAccountingEngine.projection(trades: trades)
+
+        XCTAssertEqual(projection.calculations, try InvestmentAccountingEngine.recalculate(trades: trades))
+        XCTAssertEqual(projection.unitPositions, try InvestmentAccountingEngine.unitPositions(trades: trades))
+    }
+
     func testSaleRejectsUnitOversellEvenWhenOtherUnitsRemain() {
         let start = Date(timeIntervalSince1970: 4_900)
 

@@ -283,17 +283,24 @@ nonisolated enum MistiaSyncLocalStore {
             .filter { occurrenceOwnerMap[$0.id] == nil || occurrenceOwnerMap[$0.id] == userID }
         let categories = try fetchCategories(context)
             .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
-        let investmentChannels = try fetchInvestmentChannels(context).filter { $0.ownerUserID == userID }
-        let investmentAssets = try fetchInvestmentAssets(context).filter { $0.ownerUserID == userID }
-        let investmentTrades = try fetchInvestmentTrades(context).filter { $0.ownerUserID == userID }
-        let investmentPostings = try fetchInvestmentPostings(context).filter { $0.ownerUserID == userID }
+        let investmentChannels = try fetchInvestmentChannels(ownerUserID: userID, context)
+        let investmentAssets = try fetchInvestmentAssets(ownerUserID: userID, context)
+        let investmentTrades = try fetchInvestmentTrades(ownerUserID: userID, context)
+        let investmentPostings = try fetchInvestmentPostings(ownerUserID: userID, context)
         let investmentCashMetadataByPostingID = Dictionary(
-            uniqueKeysWithValues: try context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>())
-                .filter { $0.ownerUserID == userID }
+            uniqueKeysWithValues: try context.fetch(
+                FetchDescriptor<InvestmentCashPostingMetadata>(
+                    predicate: #Predicate { $0.ownerUserID == userID }
+                )
+            )
                 .map { ($0.id, $0) }
         )
-        let linkedInvestmentWalletID = try context.fetch(FetchDescriptor<InvestmentWalletConfiguration>())
-            .first { $0.ownerUserID == userID }?.linkedWalletID
+        var investmentConfigurationDescriptor = FetchDescriptor<InvestmentWalletConfiguration>(
+            predicate: #Predicate { $0.ownerUserID == userID }
+        )
+        investmentConfigurationDescriptor.fetchLimit = 1
+        let linkedInvestmentWalletID = try context.fetch(investmentConfigurationDescriptor)
+            .first?.linkedWalletID
 
         return MistiaRemoteSnapshot(
             wallets: wallets.map {
@@ -3498,6 +3505,17 @@ nonisolated enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<InvestmentChannel>())
     }
 
+    private static func fetchInvestmentChannels(
+        ownerUserID: UUID,
+        _ context: ModelContext
+    ) throws -> [InvestmentChannel] {
+        try context.fetch(
+            FetchDescriptor<InvestmentChannel>(
+                predicate: #Predicate { $0.ownerUserID == ownerUserID }
+            )
+        )
+    }
+
     private static func fetchInvestmentAsset(id: UUID, _ context: ModelContext) throws -> InvestmentAsset? {
         try fetchFirst(
             FetchDescriptor<InvestmentAsset>(predicate: #Predicate { $0.id == id }),
@@ -3514,6 +3532,17 @@ nonisolated enum MistiaSyncLocalStore {
 
     private static func fetchInvestmentAssets(_ context: ModelContext) throws -> [InvestmentAsset] {
         try context.fetch(FetchDescriptor<InvestmentAsset>())
+    }
+
+    private static func fetchInvestmentAssets(
+        ownerUserID: UUID,
+        _ context: ModelContext
+    ) throws -> [InvestmentAsset] {
+        try context.fetch(
+            FetchDescriptor<InvestmentAsset>(
+                predicate: #Predicate { $0.ownerUserID == ownerUserID }
+            )
+        )
     }
 
     private static func fetchInvestmentTrade(id: UUID, _ context: ModelContext) throws -> InvestmentTrade? {
@@ -3534,6 +3563,17 @@ nonisolated enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<InvestmentTrade>())
     }
 
+    private static func fetchInvestmentTrades(
+        ownerUserID: UUID,
+        _ context: ModelContext
+    ) throws -> [InvestmentTrade] {
+        try context.fetch(
+            FetchDescriptor<InvestmentTrade>(
+                predicate: #Predicate { $0.ownerUserID == ownerUserID }
+            )
+        )
+    }
+
     private static func fetchInvestmentPosting(id: UUID, _ context: ModelContext) throws -> InvestmentWalletPosting? {
         try fetchFirst(
             FetchDescriptor<InvestmentWalletPosting>(predicate: #Predicate { $0.id == id }),
@@ -3550,6 +3590,17 @@ nonisolated enum MistiaSyncLocalStore {
 
     private static func fetchInvestmentPostings(_ context: ModelContext) throws -> [InvestmentWalletPosting] {
         try context.fetch(FetchDescriptor<InvestmentWalletPosting>())
+    }
+
+    private static func fetchInvestmentPostings(
+        ownerUserID: UUID,
+        _ context: ModelContext
+    ) throws -> [InvestmentWalletPosting] {
+        try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate { $0.ownerUserID == ownerUserID }
+            )
+        )
     }
 
     private static func fetchConflicts(_ context: ModelContext) throws -> [SyncConflict] {
