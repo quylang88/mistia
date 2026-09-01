@@ -156,6 +156,17 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .settlementParticipant(let row):
             return .settlementParticipant(try await createRow(row, entity: .settlementParticipant, subjectUserID: subjectUserID, session: session))
         case .transaction(let row):
+            if isInvestmentCashEvent(row) {
+                guard let saved = try await mutateInvestmentCashEvent(
+                    row,
+                    expectedVersion: nil,
+                    force: false,
+                    session: session
+                ) else {
+                    throw SupabaseServiceError.invalidResponse
+                }
+                return .transaction(saved)
+            }
             return .transaction(try await createRow(row, entity: .transaction, subjectUserID: subjectUserID, session: session))
         case .budgetPlan(let row):
             return .budgetPlan(try await createRow(row, entity: .budgetPlan, subjectUserID: subjectUserID, session: session))
@@ -222,6 +233,14 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .settlementParticipant(let row):
             return try await updateRow(row, entity: .settlementParticipant, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementParticipant)
         case .transaction(let row):
+            if isInvestmentCashEvent(row) {
+                return try await mutateInvestmentCashEvent(
+                    row,
+                    expectedVersion: expectedVersion,
+                    force: false,
+                    session: session
+                ).map(MistiaSyncUploadRecord.transaction)
+            }
             return try await updateRow(row, entity: .transaction, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.transaction)
         case .budgetPlan(let row):
             return try await updateRow(row, entity: .budgetPlan, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.budgetPlan)
@@ -269,6 +288,24 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         deviceID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord? {
+        if entity == .transaction {
+            let existing: RemoteLedgerTransaction? = try await fetchSingleRow(
+                entity: entity,
+                recordID: recordID,
+                subjectUserID: subjectUserID,
+                session: session
+            )
+            if let existing, isInvestmentCashEvent(existing) {
+                return try await deleteInvestmentCashEvent(
+                    transactionID: recordID,
+                    ownerUserID: subjectUserID,
+                    expectedVersion: expectedVersion,
+                    modifiedAt: modifiedAt,
+                    deviceID: deviceID,
+                    session: session
+                ).map(MistiaSyncUploadRecord.transaction)
+            }
+        }
         let configuration = try configuration()
         guard var components = URLComponents(
             url: configuration.restBaseURL.appending(path: entity.tableName),
@@ -388,6 +425,17 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .settlementParticipant(let row):
             return .settlementParticipant(try await upsertRow(row, entity: .settlementParticipant, subjectUserID: subjectUserID, session: session))
         case .transaction(let row):
+            if isInvestmentCashEvent(row) {
+                guard let saved = try await mutateInvestmentCashEvent(
+                    row,
+                    expectedVersion: nil,
+                    force: true,
+                    session: session
+                ) else {
+                    throw SupabaseServiceError.invalidResponse
+                }
+                return .transaction(saved)
+            }
             return .transaction(try await upsertRow(row, entity: .transaction, subjectUserID: subjectUserID, session: session))
         case .budgetPlan(let row):
             return .budgetPlan(try await upsertRow(row, entity: .budgetPlan, subjectUserID: subjectUserID, session: session))
@@ -466,6 +514,61 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             session: session
         )
         return rows.first { $0.id == row.id }
+    }
+
+    private func isInvestmentCashEvent(_ row: RemoteLedgerTransaction) -> Bool {
+        row.settlementRoleRawValue == InvestmentLedgerLegRole.investmentCashDeposit.rawValue
+            || row.settlementRoleRawValue == InvestmentLedgerLegRole.investmentCashWithdrawal.rawValue
+    }
+
+    private func mutateInvestmentCashEvent(
+        _ row: RemoteLedgerTransaction,
+        expectedVersion: Int64?,
+        force: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteLedgerTransaction? {
+        let rows: [RemoteLedgerTransaction] = try await callRPC(
+            functionName: "mutate_investment_cash_event",
+            body: InvestmentCashEventMutationRPCBody(
+                transaction: row,
+                postings: [],
+                expectedVersion: expectedVersion,
+                expectedPostingVersions: [:],
+                force: force,
+                transactionID: nil,
+                ownerUserID: nil,
+                deletedAt: nil,
+                deviceID: nil
+            ),
+            session: session
+        )
+        return rows.first { $0.id == row.id }
+    }
+
+    private func deleteInvestmentCashEvent(
+        transactionID: UUID,
+        ownerUserID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteLedgerTransaction? {
+        let rows: [RemoteLedgerTransaction] = try await callRPC(
+            functionName: "mutate_investment_cash_event",
+            body: InvestmentCashEventMutationRPCBody(
+                transaction: nil,
+                postings: [],
+                expectedVersion: expectedVersion,
+                expectedPostingVersions: [:],
+                force: false,
+                transactionID: transactionID,
+                ownerUserID: ownerUserID,
+                deletedAt: modifiedAt,
+                deviceID: deviceID
+            ),
+            session: session
+        )
+        return rows.first { $0.id == transactionID }
     }
 
     private func mutateInvestmentAsset(
@@ -866,6 +969,15 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
         let message = responseMessage ?? "The sync request failed."
         print("🚨 [SupabaseRemoteStore] Error [\(operation) \(request.url?.absoluteString ?? tableName)] HTTP \(statusCode): \(message)")
+        if message.contains("investment_cash_limit_conflict") {
+            return .serverMessage(L10n.investment.cashTransfer.error.conflict)
+        }
+        if message.contains("investment_cash_has_dependent_events") {
+            return .serverMessage(L10n.investment.cashTransfer.error.hasDependents)
+        }
+        if message.contains("investment_cash_direction_locked") {
+            return .serverMessage(L10n.investment.cashTransfer.error.directionLocked)
+        }
         return .serverMessage("[\(operation) \(tableName)] HTTP \(statusCode): \(message)")
     }
 
@@ -911,6 +1023,30 @@ private struct InvestmentCashPostingMutationRPCBody: Encodable {
         case row = "p_row"
         case expectedVersion = "p_expected_version"
         case force = "p_force"
+    }
+}
+
+private struct InvestmentCashEventMutationRPCBody: Encodable {
+    let transaction: RemoteLedgerTransaction?
+    let postings: [RemoteInvestmentWalletPosting]
+    let expectedVersion: Int64?
+    let expectedPostingVersions: [String: Int64]
+    let force: Bool
+    let transactionID: UUID?
+    let ownerUserID: UUID?
+    let deletedAt: Date?
+    let deviceID: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case transaction = "p_transaction"
+        case postings = "p_postings"
+        case expectedVersion = "p_expected_version"
+        case expectedPostingVersions = "p_expected_posting_versions"
+        case force = "p_force"
+        case transactionID = "p_transaction_id"
+        case ownerUserID = "p_owner_user_id"
+        case deletedAt = "p_deleted_at"
+        case deviceID = "p_device_id"
     }
 }
 

@@ -1326,6 +1326,18 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
         }
     }
 
+    /// Cash-allocation events depend on the owner's realized Investment trades.
+    /// Keep ordinary ledger transactions early, while uploading these events only
+    /// after Investment trades and before any standalone Investment postings.
+    var pushPriority: Int {
+        guard case .transaction(let row) = self,
+              row.settlementRoleRawValue == InvestmentLedgerLegRole.investmentCashDeposit.rawValue
+                || row.settlementRoleRawValue == InvestmentLedgerLegRole.investmentCashWithdrawal.rawValue else {
+            return entity.pushPriority
+        }
+        return 130
+    }
+
     var id: UUID {
         switch self {
         case .wallet(let row):

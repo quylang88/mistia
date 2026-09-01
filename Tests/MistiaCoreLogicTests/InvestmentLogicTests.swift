@@ -568,6 +568,49 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(preview.outcome, .insufficientFunds)
     }
 
+    func testCashDepositIsCappedByShortfallAndOrdinarySourceCash() {
+        let shortfallCapped = InvestmentCashAllocationLogic.transferPreview(
+            direction: .deposit,
+            requestedMinor: 1_500,
+            realizedProfitMinor: 2_000,
+            availableInvestmentMinor: 500,
+            linkedInvestmentMinor: 500,
+            sourceActualMinor: 3_000,
+            sourceInvestmentMinor: 0
+        )
+        XCTAssertEqual(shortfallCapped.maximumMinor, 1_500)
+        XCTAssertEqual(shortfallCapped.shortfallMinor, 1_500)
+        XCTAssertTrue(shortfallCapped.isValid)
+
+        let ordinaryCashCapped = InvestmentCashAllocationLogic.transferPreview(
+            direction: .deposit,
+            requestedMinor: 900,
+            realizedProfitMinor: 2_000,
+            availableInvestmentMinor: 500,
+            linkedInvestmentMinor: 500,
+            sourceActualMinor: 1_000,
+            sourceInvestmentMinor: 400
+        )
+        XCTAssertEqual(ordinaryCashCapped.maximumMinor, 600)
+        XCTAssertEqual(ordinaryCashCapped.sourceOrdinaryMinor, 600)
+        XCTAssertFalse(ordinaryCashCapped.isValid)
+    }
+
+    func testCashWithdrawalIsCappedByInvestmentHeldInLinkedWallet() {
+        let preview = InvestmentCashAllocationLogic.transferPreview(
+            direction: .withdrawal,
+            requestedMinor: 501,
+            realizedProfitMinor: 2_000,
+            availableInvestmentMinor: 1_500,
+            linkedInvestmentMinor: 500,
+            sourceActualMinor: 2_000,
+            sourceInvestmentMinor: 500
+        )
+
+        XCTAssertEqual(preview.maximumMinor, 500)
+        XCTAssertFalse(preview.isValid)
+    }
+
     private func trade(
         id: UUID = UUID(),
         kind: InvestmentTradeKind,

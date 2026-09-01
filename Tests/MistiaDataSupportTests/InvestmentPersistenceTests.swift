@@ -302,6 +302,31 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertNil(storedLoss.capitalReturnWalletID)
         XCTAssertNil(storedLoss.capitalReturnLedgerTransactionID)
         XCTAssertNotNil(storedLoss.profitLossLedgerTransactionID)
+
+        let cashSnapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(cashSnapshot.totalMinor, -200)
+        XCTAssertEqual(
+            cashSnapshot.locations.first { $0.walletID == systemWallet.id }?.bookedMinor,
+            -200
+        )
+
+        let history = InvestmentCashHistoryLogic.items(
+            ownerUserID: fixture.ownerID,
+            transactions: try fixture.context.fetch(FetchDescriptor<LedgerTransaction>()),
+            postings: try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()),
+            cashPostingMetadata: try fixture.context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()),
+            trades: try fixture.context.fetch(FetchDescriptor<InvestmentTrade>()),
+            accountingCurrencyCode: "JPY"
+        )
+        let liquidation = try XCTUnwrap(history.first { $0.id == lossSale.id })
+        XCTAssertEqual(liquidation.kind, .liquidation)
+        XCTAssertEqual(liquidation.filter, .outgoing)
+        XCTAssertEqual(liquidation.accountingAmountMinor, -200)
+        XCTAssertEqual(liquidation.assetID, fixture.asset.id)
     }
 
     func testPromotionalFreeBuyLiquidatedAtZeroLeavesBalancesUntouched() throws {
@@ -1862,6 +1887,248 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(realizedProfit, 2_000)
     }
 
+    func testCashDepositRestoresSpentInvestmentWithoutChangingEarnedProfit() throws {
+        let prepared = try prepareSpentProfitFixture()
+        let fixture = prepared.fixture
+
+        let preview = try InvestmentPersistenceService.cashTransferPreview(
+            ownerUserID: fixture.ownerID,
+            direction: .deposit,
+            walletID: prepared.refillWallet.id,
+            requestedMinor: 1_500,
+            context: fixture.context
+        )
+        XCTAssertEqual(preview.maximumMinor, 1_500)
+        XCTAssertEqual(preview.shortfallMinor, 1_500)
+        XCTAssertTrue(preview.isValid)
+
+        let depositID = UUID()
+        _ = try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentCashTransferDraft(
+                id: depositID,
+                direction: .deposit,
+                walletID: prepared.refillWallet.id,
+                amountMinor: 1_500,
+                occurredAt: fixture.start.addingTimeInterval(3)
+            ),
+            context: fixture.context
+        )
+
+        let snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(try balance(prepared.refillWallet, fixture), 0)
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 2_000)
+        XCTAssertEqual(snapshot.totalMinor, 2_000)
+        XCTAssertEqual(
+            snapshot.locations.first { $0.walletID == fixture.capitalWallet.id }?.bookedMinor,
+            2_000
+        )
+
+        let realizedProfit = InvestmentSummaryLogic.realizedProfitLoss(
+            trades: try fixture.context.fetch(FetchDescriptor<InvestmentTrade>())
+                .filter { $0.deletedAt == nil }
+                .map(\.calculation)
+        )
+        XCTAssertEqual(realizedProfit, 2_000)
+
+        let deposit = try XCTUnwrap(
+            try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
+                .first { $0.id == depositID }
+        )
+        XCTAssertEqual(deposit.financialDomain, .investment)
+        XCTAssertEqual(deposit.settlementRoleRawValue, InvestmentLedgerLegRole.investmentCashDeposit.rawValue)
+        XCTAssertEqual(deposit.sourceWallet?.id, prepared.refillWallet.id)
+        XCTAssertEqual(deposit.destinationWallet?.id, fixture.capitalWallet.id)
+        let uploadRecord = try MistiaSyncLocalStore.exportRecord(
+            for: MistiaSyncMutation(
+                entity: .transaction,
+                recordID: depositID,
+                subjectUserID: fixture.ownerID,
+                kind: .upsert,
+                modifiedAt: deposit.updatedAt
+            ),
+            from: fixture.container
+        )
+        XCTAssertEqual(uploadRecord?.pushPriority, 130)
+
+        let history = InvestmentCashHistoryLogic.items(
+            ownerUserID: fixture.ownerID,
+            transactions: try fixture.context.fetch(FetchDescriptor<LedgerTransaction>()),
+            postings: try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()),
+            cashPostingMetadata: try fixture.context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()),
+            trades: try fixture.context.fetch(FetchDescriptor<InvestmentTrade>()),
+            accountingCurrencyCode: "JPY"
+        )
+        XCTAssertEqual(history.filter { $0.id == depositID }.count, 1)
+        XCTAssertEqual(history.first { $0.id == depositID }?.kind, .deposit)
+        XCTAssertEqual(history.first { $0.id == prepared.expense.id }?.kind, .spending)
+        XCTAssertEqual(history.first { $0.id == prepared.saleID }?.kind, .realizedProfit)
+        let historyPreview = InvestmentCashHistoryLogic.items(
+            ownerUserID: fixture.ownerID,
+            transactions: try fixture.context.fetch(FetchDescriptor<LedgerTransaction>()),
+            postings: try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()),
+            cashPostingMetadata: try fixture.context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()),
+            trades: try fixture.context.fetch(FetchDescriptor<InvestmentTrade>()),
+            accountingCurrencyCode: "JPY",
+            limit: 2
+        )
+        XCTAssertEqual(historyPreview.count, 2)
+        XCTAssertEqual(historyPreview.map(\.id), Array(history.prefix(2)).map(\.id))
+    }
+
+    func testCashWithdrawalSupportsExternalAndSameLinkedWalletReclassification() throws {
+        let prepared = try prepareSpentProfitFixture()
+        let fixture = prepared.fixture
+        _ = try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentCashTransferDraft(
+                direction: .deposit,
+                walletID: prepared.refillWallet.id,
+                amountMinor: 1_500,
+                occurredAt: fixture.start.addingTimeInterval(3)
+            ),
+            context: fixture.context
+        )
+
+        let externalWithdrawalID = UUID()
+        _ = try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentCashTransferDraft(
+                id: externalWithdrawalID,
+                direction: .withdrawal,
+                walletID: prepared.refillWallet.id,
+                amountMinor: 600,
+                occurredAt: fixture.start.addingTimeInterval(4)
+            ),
+            context: fixture.context
+        )
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 1_400)
+        XCTAssertEqual(try balance(prepared.refillWallet, fixture), 600)
+
+        let sameWalletWithdrawalID = UUID()
+        _ = try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentCashTransferDraft(
+                id: sameWalletWithdrawalID,
+                direction: .withdrawal,
+                walletID: fixture.capitalWallet.id,
+                amountMinor: 400,
+                occurredAt: fixture.start.addingTimeInterval(5)
+            ),
+            context: fixture.context
+        )
+        var snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 1_400)
+        XCTAssertEqual(snapshot.totalMinor, 1_000)
+        XCTAssertEqual(
+            snapshot.locations.first { $0.walletID == fixture.capitalWallet.id }?.bookedMinor,
+            1_000
+        )
+
+        _ = try InvestmentPersistenceService.deleteCashTransfer(
+            ownerUserID: fixture.ownerID,
+            transactionID: sameWalletWithdrawalID,
+            context: fixture.context
+        )
+        snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 1_400)
+        XCTAssertEqual(snapshot.totalMinor, 1_400)
+
+        _ = try InvestmentPersistenceService.deleteCashTransfer(
+            ownerUserID: fixture.ownerID,
+            transactionID: externalWithdrawalID,
+            context: fixture.context
+        )
+        snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
+            ownerUserID: fixture.ownerID,
+            accountingCurrencyCode: "JPY",
+            context: fixture.context
+        )
+        XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 2_000)
+        XCTAssertEqual(try balance(prepared.refillWallet, fixture), 0)
+        XCTAssertEqual(snapshot.totalMinor, 2_000)
+    }
+
+    func testCashTransferRejectsLimitsDirectionChangesAndDependentDeletion() throws {
+        let prepared = try prepareSpentProfitFixture()
+        let fixture = prepared.fixture
+        let depositID = UUID()
+        _ = try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentCashTransferDraft(
+                id: depositID,
+                direction: .deposit,
+                walletID: prepared.refillWallet.id,
+                amountMinor: 1_500,
+                occurredAt: fixture.start.addingTimeInterval(3)
+            ),
+            context: fixture.context
+        )
+        _ = try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: fixture.ownerID,
+            draft: InvestmentCashTransferDraft(
+                direction: .withdrawal,
+                walletID: prepared.refillWallet.id,
+                amountMinor: 1_000,
+                occurredAt: fixture.start.addingTimeInterval(4)
+            ),
+            context: fixture.context
+        )
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.deleteCashTransfer(
+                ownerUserID: fixture.ownerID,
+                transactionID: depositID,
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .cashTransferHasDependents)
+        }
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveCashTransfer(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentCashTransferDraft(
+                    id: depositID,
+                    direction: .withdrawal,
+                    walletID: prepared.refillWallet.id,
+                    amountMinor: 1,
+                    occurredAt: fixture.start.addingTimeInterval(3)
+                ),
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .cashTransferDirectionLocked)
+        }
+
+        XCTAssertThrowsError(
+            try InvestmentPersistenceService.saveCashTransfer(
+                ownerUserID: fixture.ownerID,
+                draft: InvestmentCashTransferDraft(
+                    direction: .withdrawal,
+                    walletID: prepared.refillWallet.id,
+                    amountMinor: 1_001,
+                    occurredAt: fixture.start.addingTimeInterval(5)
+                ),
+                context: fixture.context
+            )
+        ) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .cashTransferExceedsLimit)
+        }
+    }
+
     func testTargetedReconciliationRepairsOnlyRequestedAssetHistory() throws {
         let fixture = try makeFixture()
         let secondAsset = try InvestmentPersistenceService.createAsset(
@@ -2128,6 +2395,75 @@ final class InvestmentPersistenceTests: XCTestCase {
             capitalWallet: capitalWallet,
             start: start
         )
+    }
+
+    private func prepareSpentProfitFixture() throws -> (
+        fixture: Fixture,
+        refillWallet: LedgerWallet,
+        expense: LedgerTransaction,
+        saleID: UUID
+    ) {
+        let fixture = try makeFixture()
+        let refillWallet = LedgerWallet(
+            name: "Refill",
+            kind: .cash,
+            iconSymbolName: "banknote.fill",
+            iconColorHex: "#334455",
+            currencyCode: "JPY",
+            openingBalanceMinor: 1_500
+        )
+        fixture.context.insert(refillWallet)
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .wallet,
+            recordID: refillWallet.id,
+            ownerUserID: fixture.ownerID,
+            context: fixture.context
+        )
+        _ = try InvestmentPersistenceService.setLinkedWallet(
+            ownerUserID: fixture.ownerID,
+            linkedWalletID: fixture.capitalWallet.id,
+            context: fixture.context
+        )
+        _ = try saveTrade(
+            fixture: fixture,
+            kind: .buy,
+            quantity: 1,
+            gross: 1_000,
+            fundingWalletID: fixture.fundingWallet.id,
+            occurredAt: fixture.start
+        )
+        let sale = try saveTrade(
+            fixture: fixture,
+            kind: .sell,
+            quantity: 1,
+            gross: 3_000,
+            capitalWalletID: fixture.capitalWallet.id,
+            occurredAt: fixture.start.addingTimeInterval(1)
+        )
+        let usagePreview = try InvestmentPersistenceService.fundUsagePreview(
+            ownerUserID: fixture.ownerID,
+            wallet: fixture.capitalWallet,
+            requestedMinor: 2_500,
+            visibleWalletBalanceMinor: 3_000,
+            context: fixture.context
+        )
+        let expense = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Spend from wallet A",
+            amountMinor: 2_500,
+            sourceCurrencyCode: "JPY",
+            occurredAt: fixture.start.addingTimeInterval(2),
+            sourceWallet: fixture.capitalWallet
+        )
+        fixture.context.insert(expense)
+        _ = try InvestmentPersistenceService.recordFundUsage(
+            ownerUserID: fixture.ownerID,
+            transaction: expense,
+            preview: usagePreview,
+            context: fixture.context
+        )
+        try fixture.context.save()
+        return (fixture, refillWallet, expense, sale.id)
     }
 
     @discardableResult

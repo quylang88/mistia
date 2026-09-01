@@ -48,6 +48,8 @@ nonisolated enum InvestmentLedgerLegRole: String, Codable, CaseIterable {
     case investmentTransfer
     case investmentReconciliation
     case investmentReserveUse
+    case investmentCashDeposit
+    case investmentCashWithdrawal
 
     static func isInvestmentRawValue(_ value: String?) -> Bool {
         guard let value else { return false }
@@ -62,7 +64,8 @@ nonisolated enum InvestmentLedgerLegRole: String, Codable, CaseIterable {
         switch role {
         case .investmentFunding, .investmentCapitalReturn, .investmentRealizedProfit:
             return true
-        case .investmentTransfer, .investmentReconciliation, .investmentReserveUse:
+        case .investmentTransfer, .investmentReconciliation, .investmentReserveUse,
+             .investmentCashDeposit, .investmentCashWithdrawal:
             return false
         }
     }
@@ -649,6 +652,124 @@ nonisolated struct InvestmentFundUsagePreview: Equatable, Sendable {
     let outcome: InvestmentFundUsageOutcome
 
     var investmentToUseMinor: Int64 { bookedToUseMinor + unreconciledToUseMinor }
+}
+
+nonisolated enum InvestmentCashTransferDirection: String, Codable, CaseIterable, Sendable {
+    case deposit
+    case withdrawal
+
+    var ledgerRole: InvestmentLedgerLegRole {
+        switch self {
+        case .deposit: .investmentCashDeposit
+        case .withdrawal: .investmentCashWithdrawal
+        }
+    }
+
+    init?(ledgerRole: InvestmentLedgerLegRole) {
+        switch ledgerRole {
+        case .investmentCashDeposit: self = .deposit
+        case .investmentCashWithdrawal: self = .withdrawal
+        default: return nil
+        }
+    }
+}
+
+nonisolated struct InvestmentCashTransferDraft: Equatable, Sendable {
+    let id: UUID
+    var direction: InvestmentCashTransferDirection
+    var walletID: UUID
+    var amountMinor: Int64
+    var note: String?
+    var occurredAt: Date
+    var createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        direction: InvestmentCashTransferDirection,
+        walletID: UUID,
+        amountMinor: Int64,
+        note: String? = nil,
+        occurredAt: Date = .now,
+        createdAt: Date = .now
+    ) {
+        self.id = id
+        self.direction = direction
+        self.walletID = walletID
+        self.amountMinor = amountMinor
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.note = trimmedNote?.isEmpty == false ? trimmedNote : nil
+        self.occurredAt = occurredAt
+        self.createdAt = createdAt
+    }
+}
+
+nonisolated struct InvestmentCashTransferPreview: Equatable, Sendable {
+    let direction: InvestmentCashTransferDirection
+    let requestedMinor: Int64
+    let maximumMinor: Int64
+    let realizedProfitMinor: Int64
+    let availableInvestmentMinor: Int64
+    let linkedInvestmentMinor: Int64
+    let sourceOrdinaryMinor: Int64
+
+    var isValid: Bool {
+        requestedMinor > 0 && requestedMinor <= maximumMinor
+    }
+
+    var shortfallMinor: Int64 {
+        max(max(realizedProfitMinor, 0) - max(availableInvestmentMinor, 0), 0)
+    }
+}
+
+nonisolated enum InvestmentCashHistoryKind: String, CaseIterable, Sendable {
+    case realizedProfit
+    case liquidation
+    case deposit
+    case withdrawal
+    case spending
+    case movement
+    case adjustment
+}
+
+nonisolated enum InvestmentCashHistoryFilter: String, CaseIterable, Identifiable, Sendable {
+    case all
+    case incoming
+    case outgoing
+    case movement
+
+    var id: String { rawValue }
+}
+
+nonisolated struct InvestmentCashHistoryItem: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let kind: InvestmentCashHistoryKind
+    let occurredAt: Date
+    let accountingAmountMinor: Int64
+    let accountingCurrencyCode: String
+    let sourceWalletID: UUID?
+    let destinationWalletID: UUID?
+    let ledgerTransactionID: UUID?
+    let tradeID: UUID?
+    let assetID: UUID?
+    let title: String?
+    let grossAmountMinor: Int64?
+    let grossCurrencyCode: String?
+    let isEditable: Bool
+
+    var filter: InvestmentCashHistoryFilter {
+        switch kind {
+        case .realizedProfit, .deposit:
+            return accountingAmountMinor >= 0 ? .incoming : .outgoing
+        case .liquidation, .withdrawal, .spending:
+            return .outgoing
+        case .movement:
+            return .movement
+        case .adjustment:
+            if accountingAmountMinor > 0 { return .incoming }
+            if accountingAmountMinor < 0 { return .outgoing }
+            return .movement
+        }
+    }
 }
 
 nonisolated struct InvestmentReconciliationRequest: Equatable, Sendable {

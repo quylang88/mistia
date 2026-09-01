@@ -503,6 +503,38 @@ nonisolated struct InvestmentLinkedWalletAllocationSnapshot: Equatable, Sendable
 }
 
 nonisolated enum InvestmentCashAllocationLogic {
+    static func transferPreview(
+        direction: InvestmentCashTransferDirection,
+        requestedMinor: Int64,
+        realizedProfitMinor: Int64,
+        availableInvestmentMinor: Int64,
+        linkedInvestmentMinor: Int64,
+        sourceActualMinor: Int64,
+        sourceInvestmentMinor: Int64
+    ) -> InvestmentCashTransferPreview {
+        let requested = max(requestedMinor, 0)
+        let realized = max(realizedProfitMinor, 0)
+        let available = max(availableInvestmentMinor, 0)
+        let linked = max(linkedInvestmentMinor, 0)
+        let sourceOrdinary = max(sourceActualMinor - max(sourceInvestmentMinor, 0), 0)
+        let maximum: Int64
+        switch direction {
+        case .deposit:
+            maximum = min(max(realized - available, 0), sourceOrdinary)
+        case .withdrawal:
+            maximum = linked
+        }
+        return InvestmentCashTransferPreview(
+            direction: direction,
+            requestedMinor: requested,
+            maximumMinor: maximum,
+            realizedProfitMinor: realizedProfitMinor,
+            availableInvestmentMinor: availableInvestmentMinor,
+            linkedInvestmentMinor: linkedInvestmentMinor,
+            sourceOrdinaryMinor: sourceOrdinary
+        )
+    }
+
     static func linkedWalletBalances(
         ledgerBalanceMinor: Int64,
         walletID: UUID,

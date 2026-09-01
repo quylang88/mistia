@@ -470,10 +470,13 @@ actor SyncCoordinator {
 
     private func sortedMutationsForPush(_ mutations: [MistiaSyncMutation]) async -> [MistiaSyncMutation] {
         let categoryChildRecordIDs = await categoryChildRecordIDsForPushSorting(mutations)
+        let investmentCashEventRecordIDs = await investmentCashEventRecordIDsForPushSorting(mutations)
 
         return mutations.sorted { a, b in
-            if a.entity.pushPriority != b.entity.pushPriority {
-                return a.entity.pushPriority < b.entity.pushPriority
+            let aPriority = investmentCashEventRecordIDs.contains(a.recordID) ? 130 : a.entity.pushPriority
+            let bPriority = investmentCashEventRecordIDs.contains(b.recordID) ? 130 : b.entity.pushPriority
+            if aPriority != bPriority {
+                return aPriority < bPriority
             }
 
             if a.entity == .category && b.entity == .category {
@@ -502,6 +505,24 @@ actor SyncCoordinator {
             childRecordIDs.insert(mutation.recordID)
         }
         return childRecordIDs
+    }
+
+    private func investmentCashEventRecordIDsForPushSorting(
+        _ mutations: [MistiaSyncMutation]
+    ) async -> Set<UUID> {
+        let transactionMutations = mutations.filter { $0.entity == .transaction }
+        guard !transactionMutations.isEmpty else { return [] }
+
+        var recordIDs: Set<UUID> = []
+        var inspectedRecordIDs: Set<UUID> = []
+        for mutation in transactionMutations where inspectedRecordIDs.insert(mutation.recordID).inserted {
+            guard let record = try? await persistenceWorker.exportRecord(for: mutation),
+                  record.pushPriority == 130 else {
+                continue
+            }
+            recordIDs.insert(mutation.recordID)
+        }
+        return recordIDs
     }
 
     func pushQueuedMutationsOnly(
@@ -1890,8 +1911,8 @@ actor SyncCoordinator {
 
     private func hierarchicalSorted(_ records: [MistiaSyncUploadRecord]) -> [MistiaSyncUploadRecord] {
         records.sorted { a, b in
-            if a.entity.pushPriority != b.entity.pushPriority {
-                return a.entity.pushPriority < b.entity.pushPriority
+            if a.pushPriority != b.pushPriority {
+                return a.pushPriority < b.pushPriority
             }
 
             if a.entity == .category && b.entity == .category {

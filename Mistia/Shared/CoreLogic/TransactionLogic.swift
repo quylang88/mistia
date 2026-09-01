@@ -2131,7 +2131,8 @@ nonisolated enum TransactionLogic {
             case .internalTransfer:
                 return record.sourceWalletID != nil
                     && record.destinationWalletID != nil
-                    && record.sourceWalletID != record.destinationWalletID
+                    && (record.sourceWalletID != record.destinationWalletID
+                        || record.financialDomain == .investment)
             case .familyTransfer:
                 return record.sourceWalletID != nil
             case .debt:

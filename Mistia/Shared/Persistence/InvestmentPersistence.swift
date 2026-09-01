@@ -111,6 +111,9 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     case invalidAssetInput
     case assetHistoryLocksAccounting
     case assetHasRemainingInventory
+    case cashTransferExceedsLimit
+    case cashTransferHasDependents
+    case cashTransferDirectionLocked
 
     var errorDescription: String? {
         switch self {
@@ -132,6 +135,12 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
             return L10n.investment.error.assetHistoryLocksAccounting
         case .assetHasRemainingInventory:
             return L10n.investment.error.closePositionsBeforeDelete
+        case .cashTransferExceedsLimit:
+            return L10n.investment.cashTransfer.error.exceedsLimit
+        case .cashTransferHasDependents:
+            return L10n.investment.cashTransfer.error.hasDependents
+        case .cashTransferDirectionLocked:
+            return L10n.investment.cashTransfer.error.directionLocked
         }
     }
 }
@@ -196,6 +205,167 @@ nonisolated extension InvestmentCashAllocationLogic {
             },
             accountingCurrencyCode: accountingCurrencyCode
         )
+    }
+}
+
+nonisolated enum InvestmentCashHistoryLogic {
+    static func items(
+        ownerUserID: UUID,
+        transactions: [LedgerTransaction],
+        postings: [InvestmentWalletPosting],
+        cashPostingMetadata: [InvestmentCashPostingMetadata],
+        trades: [InvestmentTrade],
+        accountingCurrencyCode: String,
+        limit: Int? = nil
+    ) -> [InvestmentCashHistoryItem] {
+        let transactionsByID = Dictionary(
+            transactions.lazy
+                .filter { $0.deletedAt == nil }
+                .map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        )
+        let tradesByID = Dictionary(
+            trades.lazy
+                .filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
+                .map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        )
+        let cashPostingIDs = Set(
+            cashPostingMetadata.lazy
+                .filter { $0.ownerUserID == ownerUserID }
+                .map(\.id)
+        )
+        let relevantPostings = postings.filter { posting in
+            guard posting.ownerUserID == ownerUserID, posting.deletedAt == nil else { return false }
+            return cashPostingIDs.contains(posting.id)
+                || posting.role == .transferIn
+                || posting.role == .transferOut
+        }
+        let grouped = Dictionary(grouping: relevantPostings, by: \.eventID)
+        let orderedEvents = grouped.compactMap { eventID, eventPostings -> (
+            eventID: UUID,
+            postings: [InvestmentWalletPosting],
+            latest: InvestmentWalletPosting
+        )? in
+            guard let latest = eventPostings.max(by: { $0.occurredAt < $1.occurredAt }) else {
+                return nil
+            }
+            return (eventID, eventPostings, latest)
+        }
+        .sorted { lhs, rhs in
+            if lhs.latest.occurredAt != rhs.latest.occurredAt {
+                return lhs.latest.occurredAt > rhs.latest.occurredAt
+            }
+            return MistiaStableUUIDOrdering.precedes(lhs.eventID, rhs.eventID)
+        }
+        let eventsToBuild: ArraySlice<(
+            eventID: UUID,
+            postings: [InvestmentWalletPosting],
+            latest: InvestmentWalletPosting
+        )>
+        if let limit {
+            eventsToBuild = orderedEvents.prefix(max(limit, 0))
+        } else {
+            eventsToBuild = orderedEvents[...]
+        }
+        var result: [InvestmentCashHistoryItem] = []
+        result.reserveCapacity(eventsToBuild.count)
+
+        for (eventID, eventPostings, latest) in eventsToBuild {
+            let transaction = transactionsByID[latest.ledgerTransactionID]
+            let ledgerRole = transaction.flatMap {
+                InvestmentLedgerLegRole(rawValue: $0.settlementRoleRawValue ?? "")
+            }
+            let trade = eventPostings.lazy.compactMap(\.tradeID).compactMap { tradesByID[$0] }.first
+                ?? tradesByID[eventID]
+            let cashPostings = eventPostings.filter { cashPostingIDs.contains($0.id) }
+            let netAmount = cashPostings.reduce(Int64.zero) { partial, posting in
+                let (value, overflow) = partial.addingReportingOverflow(posting.accountingAmountMinor)
+                return overflow ? (posting.accountingAmountMinor >= 0 ? .max : .min) : value
+            }
+            let sourcePosting = cashPostings.first { $0.accountingAmountMinor < 0 }
+            let destinationPosting = cashPostings.first { $0.accountingAmountMinor > 0 }
+            let kind: InvestmentCashHistoryKind
+            let displayAmount: Int64
+
+            if let trade,
+               trade.kind == .sell,
+               cashPostings.contains(where: { $0.role == .cashAccrual }) {
+                if trade.grossAmountMinor == 0 && trade.realizedProfitLossMinor < 0 {
+                    kind = .liquidation
+                    displayAmount = -magnitude(trade.realizedProfitLossMinor)
+                } else {
+                    kind = .realizedProfit
+                    displayAmount = netAmount
+                }
+            } else if ledgerRole == .investmentCashDeposit {
+                kind = .deposit
+                displayAmount = magnitude(netAmount)
+            } else if ledgerRole == .investmentCashWithdrawal {
+                kind = .withdrawal
+                displayAmount = -magnitude(netAmount)
+            } else if cashPostings.contains(where: { $0.role == .cashConsumption }) {
+                kind = .spending
+                displayAmount = -magnitude(netAmount)
+            } else if cashPostings.count > 1 && netAmount == 0 {
+                kind = .movement
+                displayAmount = cashPostings.reduce(Int64.zero) {
+                    max($0, magnitude($1.accountingAmountMinor))
+                }
+            } else if eventPostings.contains(where: { $0.role == .transferOut }) {
+                kind = .withdrawal
+                displayAmount = -magnitude(saturatedSum(eventPostings.map(\.accountingAmountMinor)))
+            } else if eventPostings.contains(where: { $0.role == .transferIn }) {
+                kind = .deposit
+                displayAmount = magnitude(saturatedSum(eventPostings.map(\.accountingAmountMinor)))
+            } else {
+                kind = .adjustment
+                displayAmount = netAmount
+            }
+
+            let sourceWalletID = transaction?.sourceWallet?.id ?? sourcePosting?.walletID
+            let destinationWalletID = transaction?.destinationWallet?.id ?? destinationPosting?.walletID
+            result.append(
+                InvestmentCashHistoryItem(
+                    id: eventID,
+                    kind: kind,
+                    occurredAt: latest.occurredAt,
+                    accountingAmountMinor: displayAmount,
+                    accountingCurrencyCode: accountingCurrencyCode,
+                    sourceWalletID: sourceWalletID,
+                    destinationWalletID: destinationWalletID,
+                    ledgerTransactionID: transaction?.id ?? latest.ledgerTransactionID,
+                    tradeID: trade?.id,
+                    assetID: trade?.assetID,
+                    title: transaction?.title,
+                    grossAmountMinor: trade?.grossAmountMinor,
+                    grossCurrencyCode: trade?.currencyCode,
+                    isEditable: ledgerRole == .investmentCashDeposit
+                        || ledgerRole == .investmentCashWithdrawal
+                )
+            )
+        }
+
+        return result
+    }
+
+    private static func magnitude(_ value: Int64) -> Int64 {
+        value == .min ? .max : Swift.abs(value)
+    }
+
+    private static func saturatedSum(_ values: [Int64]) -> Int64 {
+        values.reduce(Int64.zero) { partial, value in
+            let (sum, overflow) = partial.addingReportingOverflow(value)
+            return overflow ? (value >= 0 ? .max : .min) : sum
+        }
+    }
+
+    static func filter(
+        _ items: [InvestmentCashHistoryItem],
+        by filter: InvestmentCashHistoryFilter
+    ) -> [InvestmentCashHistoryItem] {
+        guard filter != .all else { return items }
+        return items.filter { $0.filter == filter }
     }
 }
 
@@ -344,6 +514,42 @@ enum InvestmentPersistenceService {
                 }
             )
         )
+        return InvestmentCashAllocationLogic.snapshot(
+            postings: postings,
+            cashPostingMetadata: cashPostingMetadata,
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: accountingCurrencyCode
+        )
+    }
+
+    private static func cashAllocationSnapshot(
+        ownerUserID: UUID,
+        accountingCurrencyCode: String,
+        excludingEventID: UUID?,
+        context: ModelContext
+    ) throws -> InvestmentCashAllocationSnapshot {
+        guard let excludingEventID else {
+            return try cashAllocationSnapshot(
+                ownerUserID: ownerUserID,
+                accountingCurrencyCode: accountingCurrencyCode,
+                context: context
+            )
+        }
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID && posting.deletedAt == nil
+                }
+            )
+        ).filter { $0.eventID != excludingEventID }
+        let postingIDs = Set(postings.map(\.id))
+        let cashPostingMetadata = try context.fetch(
+            FetchDescriptor<InvestmentCashPostingMetadata>(
+                predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                    metadata.ownerUserID == ownerUserID
+                }
+            )
+        ).filter { postingIDs.contains($0.id) }
         return InvestmentCashAllocationLogic.snapshot(
             postings: postings,
             cashPostingMetadata: cashPostingMetadata,
@@ -543,16 +749,24 @@ enum InvestmentPersistenceService {
                 return MistiaStableUUIDOrdering.precedes($0.id, $1.id)
             }
         for trade in trades {
-            guard let walletID = trade.capitalReturnWalletID,
-                  let ledgerID = trade.profitLossLedgerTransactionID else { continue }
-            let cashCurrencyCode = trade.capitalReturnWalletCurrencyCode ?? trade.accountingCurrencyCode
-            let localGrossAmount = try convertedWithStoredRate(
-                trade.accountingGrossAmountMinor,
-                sourceCurrencyCode: trade.accountingCurrencyCode,
-                destinationCurrencyCode: cashCurrencyCode,
-                rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
-            )
-            let localCashAmount = localGrossAmount - (trade.capitalReturnWalletAmountMinor ?? 0)
+            guard let ledgerID = trade.profitLossLedgerTransactionID else { continue }
+            let walletID = trade.capitalReturnWalletID
+                ?? InvestmentSystemWalletIdentity.walletID(ownerUserID: trade.ownerUserID)
+            let cashCurrencyCode: String
+            let localCashAmount: Int64
+            if trade.capitalReturnWalletID != nil {
+                cashCurrencyCode = trade.capitalReturnWalletCurrencyCode ?? trade.accountingCurrencyCode
+                let localGrossAmount = try convertedWithStoredRate(
+                    trade.accountingGrossAmountMinor,
+                    sourceCurrencyCode: trade.accountingCurrencyCode,
+                    destinationCurrencyCode: cashCurrencyCode,
+                    rateDecimalString: trade.accountingToCapitalReturnRateDecimalString
+                )
+                localCashAmount = localGrossAmount - (trade.capitalReturnWalletAmountMinor ?? 0)
+            } else {
+                cashCurrencyCode = trade.accountingCurrencyCode
+                localCashAmount = trade.realizedProfitLossMinor
+            }
             _ = try upsertCashPosting(
                 id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
                 ownerUserID: trade.ownerUserID,
@@ -1513,6 +1727,247 @@ enum InvestmentPersistenceService {
         return InvestmentReconciliationResult(instructions: instructions, persistence: result)
     }
 
+    static func cashTransferPreview(
+        ownerUserID: UUID,
+        direction: InvestmentCashTransferDirection,
+        walletID: UUID,
+        requestedMinor: Int64,
+        excludingEventID: UUID? = nil,
+        context: ModelContext
+    ) throws -> InvestmentCashTransferPreview {
+        guard let configuration = try configuration(
+            ownerUserID: ownerUserID,
+            createIfMissing: false,
+            context: context
+        ), let linkedWalletID = configuration.linkedWalletID else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        let wallets = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in wallet.deletedAt == nil }
+            )
+        )
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        guard let systemWallet = walletsByID[systemWalletID],
+              let linkedWallet = walletsByID[linkedWalletID],
+              let selectedWallet = walletsByID[walletID],
+              selectedWallet.kind != .creditCard,
+              selectedWallet.kind != .investment,
+              !selectedWallet.isArchived,
+              MistiaCurrencyLogic.normalizedCode(selectedWallet.currencyCode)
+                == MistiaCurrencyLogic.normalizedCode(linkedWallet.currencyCode),
+              MistiaCurrencyLogic.normalizedCode(linkedWallet.currencyCode)
+                == MistiaCurrencyLogic.normalizedCode(systemWallet.currencyCode) else {
+            throw InvestmentPersistenceError.invalidWallet
+        }
+        try validateWalletOwnership(
+            ownerUserID: ownerUserID,
+            walletIDs: [linkedWalletID, walletID],
+            context: context
+        )
+
+        let snapshot = try cashAllocationSnapshot(
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: systemWallet.currencyCode,
+            excludingEventID: excludingEventID,
+            context: context
+        )
+        let activeTrades = try context.fetch(
+            FetchDescriptor<InvestmentTrade>(
+                predicate: #Predicate<InvestmentTrade> { trade in
+                    trade.ownerUserID == ownerUserID && trade.deletedAt == nil
+                }
+            )
+        )
+        let realizedProfitMinor = InvestmentSummaryLogic.realizedProfitLoss(
+            trades: activeTrades.map(\.calculation)
+        )
+        let sourceWallet = direction == .deposit ? selectedWallet : linkedWallet
+        let excludedTransactionIDs = excludingEventID.map { Set([$0]) } ?? []
+        let sourceActualMinor = try currentBalance(
+            wallet: sourceWallet,
+            excludingTransactionIDs: excludedTransactionIDs,
+            context: context
+        )
+        let sourceInvestmentMinor = snapshot.locations.first {
+            $0.walletID == sourceWallet.id
+        }?.totalMinor ?? 0
+        let linkedInvestmentMinor = snapshot.locations.first {
+            $0.walletID == linkedWalletID
+        }?.bookedMinor ?? 0
+
+        return InvestmentCashAllocationLogic.transferPreview(
+            direction: direction,
+            requestedMinor: requestedMinor,
+            realizedProfitMinor: realizedProfitMinor,
+            availableInvestmentMinor: snapshot.totalMinor,
+            linkedInvestmentMinor: linkedInvestmentMinor,
+            sourceActualMinor: sourceActualMinor,
+            sourceInvestmentMinor: sourceInvestmentMinor
+        )
+    }
+
+    @discardableResult
+    static func saveCashTransfer(
+        ownerUserID: UUID,
+        draft: InvestmentCashTransferDraft,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        let draftID = draft.id
+        let existing = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in transaction.id == draftID }
+            )
+        ).first
+        if let existing {
+            guard let existingRole = InvestmentLedgerLegRole(
+                rawValue: existing.settlementRoleRawValue ?? ""
+            ), let existingDirection = InvestmentCashTransferDirection(ledgerRole: existingRole) else {
+                throw InvestmentPersistenceError.invalidTradeInput
+            }
+            guard existingDirection == draft.direction else {
+                throw InvestmentPersistenceError.cashTransferDirectionLocked
+            }
+        }
+        let preview = try cashTransferPreview(
+            ownerUserID: ownerUserID,
+            direction: draft.direction,
+            walletID: draft.walletID,
+            requestedMinor: draft.amountMinor,
+            excludingEventID: existing == nil ? nil : draft.id,
+            context: context
+        )
+        guard preview.isValid else {
+            throw InvestmentPersistenceError.cashTransferExceedsLimit
+        }
+        guard let configuration = try configuration(
+            ownerUserID: ownerUserID,
+            createIfMissing: false,
+            context: context
+        ), let linkedWalletID = configuration.linkedWalletID else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        let wallets = try context.fetch(FetchDescriptor<LedgerWallet>())
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        guard let linkedWallet = walletsByID[linkedWalletID],
+              let selectedWallet = walletsByID[draft.walletID] else {
+            throw InvestmentPersistenceError.missingWallet
+        }
+        let sourceWallet = draft.direction == .deposit ? selectedWallet : linkedWallet
+        let destinationWallet = draft.direction == .deposit ? linkedWallet : selectedWallet
+        let title = draft.direction == .deposit
+            ? L10n.investment.cashTransfer.depositTitle
+            : L10n.investment.cashTransfer.withdrawalTitle
+        let transaction = try upsertLedgerTransaction(
+            id: draft.id,
+            primaryKind: .transfer,
+            role: draft.direction.ledgerRole,
+            title: title,
+            note: draft.note,
+            amountMinor: draft.amountMinor,
+            sourceWallet: sourceWallet,
+            destinationWallet: destinationWallet,
+            destinationAmountMinor: draft.amountMinor,
+            reportingAmountMinor: draft.amountMinor,
+            reportingCurrencyCode: linkedWallet.currencyCode,
+            occurredAt: draft.occurredAt,
+            now: now,
+            context: context
+        )
+        if existing == nil {
+            transaction.createdAt = draft.createdAt
+        }
+        try recordTransactionOwnership(transaction, ownerUserID: ownerUserID, now: now, context: context)
+        let accountingDelta = draft.direction == .deposit ? draft.amountMinor : -draft.amountMinor
+        let posting = try upsertCashPosting(
+            id: InvestmentLedgerIdentity.derivedID(eventID: draft.id, component: "cash-transfer-posting"),
+            ownerUserID: ownerUserID,
+            eventID: draft.id,
+            walletID: linkedWalletID,
+            ledgerTransactionID: transaction.id,
+            role: .cashTransfer,
+            bucket: .booked,
+            origin: .manual,
+            amountMinor: accountingDelta,
+            currencyCode: linkedWallet.currencyCode,
+            accountingAmountMinor: accountingDelta,
+            accountingCurrencyCode: linkedWallet.currencyCode,
+            occurredAt: draft.occurredAt,
+            now: now,
+            context: context
+        )
+        try context.save()
+        return InvestmentPersistenceResult(
+            walletIDs: [sourceWallet.id, destinationWallet.id],
+            postingIDs: [posting.id],
+            ledgerTransactionIDs: [transaction.id]
+        )
+    }
+
+    @discardableResult
+    static func deleteCashTransfer(
+        ownerUserID: UUID,
+        transactionID: UUID,
+        now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        guard let transaction = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in transaction.id == transactionID }
+            )
+        ).first,
+        transaction.deletedAt == nil,
+        let role = InvestmentLedgerLegRole(rawValue: transaction.settlementRoleRawValue ?? ""),
+        let direction = InvestmentCashTransferDirection(ledgerRole: role),
+        let selectedWalletID = direction == .deposit
+            ? transaction.sourceWallet?.id
+            : transaction.destinationWallet?.id else {
+            throw InvestmentPersistenceError.invalidTradeInput
+        }
+        let baseline = try cashTransferPreview(
+            ownerUserID: ownerUserID,
+            direction: direction,
+            walletID: selectedWalletID,
+            requestedMinor: transaction.amountMinor,
+            excludingEventID: transactionID,
+            context: context
+        )
+        switch direction {
+        case .deposit:
+            guard baseline.availableInvestmentMinor >= 0,
+                  baseline.linkedInvestmentMinor >= 0 else {
+                throw InvestmentPersistenceError.cashTransferHasDependents
+            }
+        case .withdrawal:
+            guard baseline.availableInvestmentMinor <= max(baseline.realizedProfitMinor, 0) else {
+                throw InvestmentPersistenceError.cashTransferHasDependents
+            }
+        }
+
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID
+                        && posting.eventID == transactionID
+                        && posting.deletedAt == nil
+                }
+            )
+        )
+        transaction.markDeleted(at: now)
+        for posting in postings {
+            posting.deletedAt = now
+            posting.updatedAt = now
+        }
+        try context.save()
+        return InvestmentPersistenceResult(
+            walletIDs: Set([transaction.sourceWallet?.id, transaction.destinationWallet?.id].compactMap { $0 }),
+            deletedPostingIDs: Set(postings.map(\.id)),
+            deletedLedgerTransactionIDs: [transaction.id]
+        )
+    }
+
     static func fundUsagePreview(
         ownerUserID: UUID,
         wallet: LedgerWallet,
@@ -2248,33 +2703,31 @@ enum InvestmentPersistenceService {
                     result.walletIDs.insert(profitWallet.id)
                 }
 
-                if let cashWallet {
-                    let cashPostingOutcome = try upsertCashPostingOutcome(
-                        id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
-                        ownerUserID: ownerUserID,
-                        eventID: trade.id,
-                        tradeID: trade.id,
-                        assetID: trade.assetID,
-                        walletID: cashWallet.id,
-                        ledgerTransactionID: profitTransaction.id,
-                        role: .cashAccrual,
-                        bucket: .booked,
-                        origin: .derived,
-                        amountMinor: cashAmount,
-                        currencyCode: cashWallet.currencyCode,
-                        accountingAmountMinor: trade.realizedProfitLossMinor,
-                        accountingCurrencyCode: trade.accountingCurrencyCode,
-                        occurredAt: trade.occurredAt,
-                        now: now,
-                        context: context,
-                        writePolicy: writePolicy
-                    )
-                    let cashPosting = cashPostingOutcome.model
-                    keepingPostingIDs.insert(cashPosting.id)
-                    if cashPostingOutcome.didMutate {
-                        result.postingIDs.insert(cashPosting.id)
-                        result.walletIDs.insert(cashWallet.id)
-                    }
+                let cashPostingOutcome = try upsertCashPostingOutcome(
+                    id: InvestmentLedgerIdentity.derivedID(eventID: trade.id, component: "cash-accrual-posting"),
+                    ownerUserID: ownerUserID,
+                    eventID: trade.id,
+                    tradeID: trade.id,
+                    assetID: trade.assetID,
+                    walletID: profitWallet.id,
+                    ledgerTransactionID: profitTransaction.id,
+                    role: .cashAccrual,
+                    bucket: .booked,
+                    origin: .derived,
+                    amountMinor: cashAmount,
+                    currencyCode: profitWallet.currencyCode,
+                    accountingAmountMinor: trade.realizedProfitLossMinor,
+                    accountingCurrencyCode: trade.accountingCurrencyCode,
+                    occurredAt: trade.occurredAt,
+                    now: now,
+                    context: context,
+                    writePolicy: writePolicy
+                )
+                let cashPosting = cashPostingOutcome.model
+                keepingPostingIDs.insert(cashPosting.id)
+                if cashPostingOutcome.didMutate {
+                    result.postingIDs.insert(cashPosting.id)
+                    result.walletIDs.insert(profitWallet.id)
                 }
             } else {
                 if assignDerivedValue(
@@ -2297,6 +2750,7 @@ enum InvestmentPersistenceService {
         primaryKind: TransactionPrimaryKind,
         role: InvestmentLedgerLegRole,
         title: String,
+        note: String?,
         amountMinor: Int64,
         sourceWallet: LedgerWallet,
         destinationWallet: LedgerWallet?,
@@ -2311,7 +2765,7 @@ enum InvestmentPersistenceService {
             && transaction.debtIntentRawValue == nil
             && transaction.entryStatusRawValue == TransactionEntryStatus.posted.rawValue
             && transaction.title == title
-            && transaction.note == nil
+            && transaction.note == note
             && transaction.amountMinor == max(amountMinor, 0)
             && transaction.reportingExpenseMinor == 0
             && transaction.reportingIncomeMinor == 0
@@ -2337,6 +2791,7 @@ enum InvestmentPersistenceService {
         primaryKind: TransactionPrimaryKind,
         role: InvestmentLedgerLegRole,
         title: String,
+        note: String? = nil,
         amountMinor: Int64,
         sourceWallet: LedgerWallet,
         destinationWallet: LedgerWallet?,
@@ -2352,6 +2807,7 @@ enum InvestmentPersistenceService {
             primaryKind: primaryKind,
             role: role,
             title: title,
+            note: note,
             amountMinor: amountMinor,
             sourceWallet: sourceWallet,
             destinationWallet: destinationWallet,
@@ -2370,6 +2826,7 @@ enum InvestmentPersistenceService {
         primaryKind: TransactionPrimaryKind,
         role: InvestmentLedgerLegRole,
         title: String,
+        note: String? = nil,
         amountMinor: Int64,
         sourceWallet: LedgerWallet,
         destinationWallet: LedgerWallet?,
@@ -2394,6 +2851,7 @@ enum InvestmentPersistenceService {
                primaryKind: primaryKind,
                role: role,
                title: title,
+               note: note,
                amountMinor: amountMinor,
                sourceWallet: sourceWallet,
                destinationWallet: destinationWallet,
@@ -2431,7 +2889,7 @@ enum InvestmentPersistenceService {
         transaction.debtIntent = nil
         transaction.entryStatus = .posted
         transaction.title = title
-        transaction.note = nil
+        transaction.note = note
         transaction.amountMinor = max(amountMinor, 0)
         transaction.reportingExpenseMinor = 0
         transaction.reportingIncomeMinor = 0

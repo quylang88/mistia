@@ -167,6 +167,12 @@ select has_column('public', 'ledger_wallets', 'investment_linked_wallet_id', 'In
 select has_column('public', 'investment_wallet_postings', 'cash_bucket_raw_value', 'posting stores booked or unreconciled cash bucket');
 select has_column('public', 'investment_wallet_postings', 'cash_origin_raw_value', 'posting records whether cash allocation is derived, inferred or manual');
 select has_function('public', 'mutate_investment_cash_postings', array['jsonb', 'boolean'], 'batch cash mutation RPC is installed');
+select has_function(
+    'public',
+    'mutate_investment_cash_event',
+    array['jsonb', 'jsonb', 'bigint', 'jsonb', 'boolean', 'uuid', 'uuid', 'timestamp with time zone', 'uuid'],
+    'atomic two-way Investment Wallet cash event RPC is installed'
+);
 select hasnt_table('public', 'investment_valuations', 'manual investment valuations are removed');
 select is(
     (
@@ -441,6 +447,35 @@ select is(
     (select position_cost_basis_after_minor from public.investment_trades where id = '30000000-0000-4000-8000-000000000413'),
     0::bigint,
     'zero-amount liquidation clears position cost basis'
+);
+
+select is(
+    (
+        select accounting_amount_minor
+        from public.investment_wallet_postings
+        where id = public.investment_ledger_id(
+            '30000000-0000-4000-8000-000000000413',
+            'cash-accrual-posting'
+        )
+          and role_raw_value = 'cashAccrual'
+          and cash_bucket_raw_value = 'booked'
+          and deleted_at is null
+    ),
+    -250::bigint,
+    'zero-amount liquidation reduces available investment cash'
+);
+
+select is(
+    (
+        select wallet_id
+        from public.investment_wallet_postings
+        where id = public.investment_ledger_id(
+            '30000000-0000-4000-8000-000000000413',
+            'cash-accrual-posting'
+        )
+    ),
+    public.investment_system_wallet_id('30000000-0000-4000-8000-000000000001'),
+    'zero-amount liquidation keeps its allocation on the Investment system wallet'
 );
 
 select lives_ok(
@@ -2036,6 +2071,129 @@ select throws_ok(
     'P0001',
     'Investment cash was already used on another device',
     'a second device cannot consume the same booked allocation'
+);
+
+-- Isolated two-device fixture: 2,000 earned, 1,500 spent, then refill exactly once.
+insert into auth.users (
+    id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values (
+    '40000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated',
+    'investment-cash-owner@mistia.test', '', timezone('utc'::text, now()),
+    '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+    timezone('utc'::text, now()), timezone('utc'::text, now())
+);
+insert into public.user_profiles(user_id, display_name)
+values ('40000000-0000-4000-8000-000000000001', 'Investment cash owner')
+on conflict (user_id) do update set display_name = excluded.display_name;
+select pg_temp.set_actor('40000000-0000-4000-8000-000000000001');
+
+insert into public.ledger_wallets(
+    id, user_id, name, kind_raw_value, icon_symbol_name, icon_color_hex,
+    currency_code, opening_balance_minor, system_purpose_raw_value
+) values (
+    public.investment_system_wallet_id('40000000-0000-4000-8000-000000000001'),
+    '40000000-0000-4000-8000-000000000001', 'Investment Wallet', 'investment',
+    'briefcase.fill', '#9A67FF', 'JPY', 0, 'investmentProfit'
+);
+insert into public.ledger_wallets(
+    id, user_id, name, kind_raw_value, icon_symbol_name, icon_color_hex,
+    currency_code, opening_balance_minor
+) values
+    ('40000000-0000-4000-8000-000000000101', '40000000-0000-4000-8000-000000000001', 'Funding', 'cash', 'banknote.fill', '#111111', 'JPY', 1000),
+    ('40000000-0000-4000-8000-000000000102', '40000000-0000-4000-8000-000000000001', 'Linked', 'bank', 'building.columns.fill', '#222222', 'JPY', 0),
+    ('40000000-0000-4000-8000-000000000103', '40000000-0000-4000-8000-000000000001', 'Refill', 'cash', 'banknote.fill', '#333333', 'JPY', 1500);
+update public.ledger_wallets
+set investment_linked_wallet_id = '40000000-0000-4000-8000-000000000102'
+where id = public.investment_system_wallet_id('40000000-0000-4000-8000-000000000001');
+insert into public.investment_channels(id, user_id, name, icon_symbol_name, icon_color_hex)
+values ('40000000-0000-4000-8000-000000000201', '40000000-0000-4000-8000-000000000001', 'Cash test', 'shippingbox.fill', '#9A67FF');
+insert into public.investment_assets(id, user_id, channel_id, name, currency_code)
+values ('40000000-0000-4000-8000-000000000301', '40000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000201', 'Item', 'JPY');
+
+select * from public.mutate_investment_trade(
+    jsonb_build_object(
+        'id', '40000000-0000-4000-8000-000000000401', 'user_id', '40000000-0000-4000-8000-000000000001',
+        'channel_id', '40000000-0000-4000-8000-000000000201', 'asset_id', '40000000-0000-4000-8000-000000000301',
+        'kind_raw_value', 'buy', 'quantity_decimal_string', '1', 'gross_amount_minor', 1000,
+        'currency_code', 'JPY', 'accounting_gross_amount_minor', 1000, 'accounting_currency_code', 'JPY',
+        'funding_wallet_id', '40000000-0000-4000-8000-000000000101',
+        'occurred_at', '2026-08-31T00:00:00Z', 'created_at', '2026-08-31T00:00:00Z',
+        'last_modified_by_device_id', '40000000-0000-4000-8000-000000000901'
+    ), null, false
+);
+select * from public.mutate_investment_trade(
+    jsonb_build_object(
+        'id', '40000000-0000-4000-8000-000000000402', 'user_id', '40000000-0000-4000-8000-000000000001',
+        'channel_id', '40000000-0000-4000-8000-000000000201', 'asset_id', '40000000-0000-4000-8000-000000000301',
+        'kind_raw_value', 'sell', 'quantity_decimal_string', '1', 'gross_amount_minor', 3000,
+        'currency_code', 'JPY', 'accounting_gross_amount_minor', 3000, 'accounting_currency_code', 'JPY',
+        'capital_return_wallet_id', '40000000-0000-4000-8000-000000000102',
+        'occurred_at', '2026-08-31T00:01:00Z', 'created_at', '2026-08-31T00:01:00Z',
+        'last_modified_by_device_id', '40000000-0000-4000-8000-000000000901'
+    ), null, false
+);
+select * from public.mutate_investment_cash_posting(
+    jsonb_build_object(
+        'id', '40000000-0000-4000-8000-000000000501', 'user_id', '40000000-0000-4000-8000-000000000001',
+        'event_id', '40000000-0000-4000-8000-000000000502', 'wallet_id', '40000000-0000-4000-8000-000000000102',
+        'ledger_transaction_id', public.investment_ledger_id('40000000-0000-4000-8000-000000000402', 'capital-return'),
+        'role_raw_value', 'cashConsumption', 'cash_bucket_raw_value', 'booked', 'cash_origin_raw_value', 'manual',
+        'amount_minor', -1500, 'currency_code', 'JPY', 'accounting_amount_minor', -1500,
+        'accounting_currency_code', 'JPY', 'occurred_at', '2026-08-31T00:02:00Z',
+        'created_at', '2026-08-31T00:02:00Z', 'updated_at', '2026-08-31T00:02:00Z'
+    ), null, false
+);
+
+create or replace function pg_temp.cash_event_json(p_id uuid, p_role text, p_amount bigint, p_wallet uuid, p_device uuid)
+returns jsonb language sql as $$
+    select jsonb_build_object(
+        'id', p_id, 'user_id', '40000000-0000-4000-8000-000000000001',
+        'primary_kind_raw_value', 'transfer', 'transfer_subtype_raw_value', 'internalTransfer',
+        'entry_status_raw_value', 'posted', 'title', 'Investment cash transfer', 'amount_minor', p_amount,
+        'source_currency_code', 'JPY', 'destination_currency_code', 'JPY', 'destination_amount_minor', p_amount,
+        'reporting_currency_code', 'JPY', 'reporting_amount_minor', p_amount,
+        'occurred_at', '2026-08-31T00:03:00Z', 'created_at', '2026-08-31T00:03:00Z',
+        'updated_at', '2026-08-31T00:03:00Z', 'settlement_role_raw_value', p_role,
+        'reporting_expense_minor', 0, 'reporting_income_minor', 0,
+        'source_wallet_id', case when p_role = 'investmentCashDeposit' then p_wallet else '40000000-0000-4000-8000-000000000102'::uuid end,
+        'destination_wallet_id', case when p_role = 'investmentCashDeposit' then '40000000-0000-4000-8000-000000000102'::uuid else p_wallet end,
+        'is_archived', false, 'last_modified_by_device_id', p_device
+    );
+$$;
+
+select lives_ok(
+    $$ select * from public.mutate_investment_cash_event(
+        pg_temp.cash_event_json('40000000-0000-4000-8000-000000000601', 'investmentCashDeposit', 1500, '40000000-0000-4000-8000-000000000103', '40000000-0000-4000-8000-000000000901'),
+        '[]'::jsonb, null, '{}'::jsonb, false
+    ) $$,
+    'first device refills the exact shortfall atomically'
+);
+select is(
+    (select accounting_amount_minor from public.investment_wallet_postings where id = public.investment_ledger_id('40000000-0000-4000-8000-000000000601', 'cash-transfer-posting')),
+    1500::bigint,
+    'refill stores one deterministic positive booked posting'
+);
+select throws_ok(
+    $$ select * from public.mutate_investment_cash_event(
+        pg_temp.cash_event_json('40000000-0000-4000-8000-000000000602', 'investmentCashDeposit', 1, '40000000-0000-4000-8000-000000000103', '40000000-0000-4000-8000-000000000902'),
+        '[]'::jsonb, null, '{}'::jsonb, false
+    ) $$,
+    'P0001',
+    'investment_cash_limit_conflict',
+    'second device cannot refill beyond earned profit after the owner lock'
+);
+select lives_ok(
+    $$ select * from public.mutate_investment_cash_event(
+        pg_temp.cash_event_json('40000000-0000-4000-8000-000000000603', 'investmentCashWithdrawal', 400, '40000000-0000-4000-8000-000000000102', '40000000-0000-4000-8000-000000000901'),
+        '[]'::jsonb, null, '{}'::jsonb, false
+    ) $$,
+    'same-wallet transfer out reclassifies investment cash without moving real cash'
+);
+select is(
+    (select accounting_amount_minor from public.investment_wallet_postings where id = public.investment_ledger_id('40000000-0000-4000-8000-000000000603', 'cash-transfer-posting')),
+    (-400)::bigint,
+    'transfer out stores one deterministic negative booked posting'
 );
 
 select * from finish();

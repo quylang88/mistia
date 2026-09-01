@@ -662,13 +662,11 @@ struct OverviewView: View {
             walletBalance = 0
         }
 
-        let monthStart = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-        let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? .now
         let summary = InvestmentSummaryLogic.summary(
             positions: positions,
             trades: ownerTrades.map(\.calculation),
             tradeDates: Dictionary(uniqueKeysWithValues: ownerTrades.map { ($0.id, $0.occurredAt) }),
-            period: DateInterval(start: monthStart, end: monthEnd),
+            period: nil,
             investmentWalletBalanceMinor: walletBalance
         )
         let inventoryCostInPrimaryCurrency = MistiaCurrencyLogic.convertedMinorAmount(

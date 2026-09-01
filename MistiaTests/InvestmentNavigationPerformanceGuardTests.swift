@@ -41,6 +41,31 @@ final class InvestmentNavigationPerformanceGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("assets=%{public}d trades=%{public}d"))
     }
 
+    func testOverviewUsesAllTimeRealizedInvestmentProfit() throws {
+        let source = try featureSource(relativePath: "Overview/OverviewView.swift")
+        let functionStart = try XCTUnwrap(source.range(of: "private func investmentOverviewSnapshot("))
+        let nextFunction = try XCTUnwrap(
+            source[functionStart.upperBound...].range(of: "private var activeAlert:")
+        )
+        let block = String(source[functionStart.lowerBound..<nextFunction.lowerBound])
+
+        XCTAssertTrue(block.contains("period: nil"))
+        XCTAssertFalse(block.contains("PlanningLogic.startOfMonth"))
+        XCTAssertFalse(block.contains("DateInterval(start:"))
+    }
+
+    func testCashTransferUsesOneAtomicSyncMutation() throws {
+        let source = try featureSource(relativePath: "Investment/InvestmentHubView.swift")
+        let sheetStart = try XCTUnwrap(source.range(of: "private struct InvestmentCashTransferSheet:"))
+        let nextView = try XCTUnwrap(
+            source[sheetStart.upperBound...].range(of: "private struct InvestmentLinkedWalletPickerSheet:")
+        )
+        let block = String(source[sheetStart.lowerBound..<nextView.lowerBound])
+
+        XCTAssertTrue(block.contains("entity: .transaction"))
+        XCTAssertFalse(block.contains("entity: .investmentPosting"))
+    }
+
     private func featureSource(relativePath: String) throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let repoRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()

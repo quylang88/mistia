@@ -394,6 +394,24 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(display?.style, .exactDestination)
     }
 
+    func testInvestmentReclassificationTransferIsCompleteWhenWalletsMatch() {
+        let walletID = UUID()
+        let record = makeRecord(
+            financialDomain: .investment,
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            amountMinor: 500,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            destinationWalletID: walletID,
+            destinationWalletKind: .bank
+        )
+
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(record))
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: record), 0)
+    }
+
     func testCrossCurrencyTransferAppRateDisplayUsesSavedSnapshot() {
         let record = makeRecord(
             primaryKind: .transfer,
@@ -1560,6 +1578,7 @@ final class TransactionLogicTests: XCTestCase {
 
     private func makeRecord(
         id: UUID = UUID(),
+        financialDomain: TransactionFinancialDomain = .ordinary,
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype? = nil,
         debtIntent: TransactionDebtIntent? = nil,
@@ -1587,6 +1606,7 @@ final class TransactionLogicTests: XCTestCase {
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: id,
+            financialDomain: financialDomain,
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,

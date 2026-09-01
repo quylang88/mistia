@@ -2884,14 +2884,23 @@ private struct InvestmentWalletDetailRenderSnapshot {
     let ordinaryWalletLocations: [InvestmentWalletCashLocation]
     let locationsAwaitingTransfer: [InvestmentWalletCashLocation]
     let balanceIndex: TransactionWalletBalanceIndex
-    let saleTimelineTrades: [InvestmentTrade]
+    let historyPreview: [InvestmentCashHistoryItem]
     let totalRealizedProfitLossMinor: Int64
+    let availableInvestmentMinor: Int64
+    let shortfallMinor: Int64
+    let linkedInvestmentMinor: Int64
     let walletsByID: [UUID: LedgerWallet]
     let assetsByID: [UUID: InvestmentAsset]
     let reconcilableLocationIDs: Set<UUID>
     let accountingCurrencyCode: String
     let isOwner: Bool
     let canEdit: Bool
+}
+
+private struct InvestmentCashTransferPresentation: Identifiable {
+    let id = UUID()
+    let direction: InvestmentCashTransferDirection
+    let transactionID: UUID?
 }
 
 private struct InvestmentWalletDetailRenderSnapshotCache {
@@ -2922,14 +2931,33 @@ struct InvestmentWalletDetailView: View {
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var transactions: [LedgerTransaction]
-    @Query(filter: #Predicate<InvestmentWalletPosting> { $0.deletedAt == nil }) private var postings: [InvestmentWalletPosting]
+    @Query private var postings: [InvestmentWalletPosting]
     @Query private var cashPostingMetadata: [InvestmentCashPostingMetadata]
     @Query private var configurations: [InvestmentWalletConfiguration]
-    @Query(filter: #Predicate<InvestmentTrade> { $0.deletedAt == nil }) private var trades: [InvestmentTrade]
-    @Query(filter: #Predicate<InvestmentAsset> { $0.deletedAt == nil }) private var assets: [InvestmentAsset]
+    @Query private var trades: [InvestmentTrade]
+    @Query private var assets: [InvestmentAsset]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let ownerUserID: UUID
+
+    init(ownerUserID: UUID) {
+        self.ownerUserID = ownerUserID
+        _postings = Query(filter: #Predicate<InvestmentWalletPosting> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+        _cashPostingMetadata = Query(filter: #Predicate<InvestmentCashPostingMetadata> {
+            $0.ownerUserID == ownerUserID
+        })
+        _configurations = Query(filter: #Predicate<InvestmentWalletConfiguration> {
+            $0.ownerUserID == ownerUserID
+        })
+        _trades = Query(filter: #Predicate<InvestmentTrade> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+        _assets = Query(filter: #Predicate<InvestmentAsset> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+    }
 
     @State private var viewID = UUID()
     @State private var showsReconciliation = false
@@ -2937,6 +2965,8 @@ struct InvestmentWalletDetailView: View {
     @State private var showsLinkedWalletPicker = false
     @State private var pendingLinkedWalletID: UUID?
     @State private var showsLinkChangeOptions = false
+    @State private var activeCashTransfer: InvestmentCashTransferPresentation?
+    @State private var pendingCashTransferDirection: InvestmentCashTransferDirection?
     @State private var alertMessage: String?
     @State private var renderSnapshotCache: InvestmentWalletDetailRenderSnapshotCache?
 
@@ -3093,13 +3123,25 @@ struct InvestmentWalletDetailView: View {
             records: transactions.map(\.snapshot)
         )
         let ownerTrades = trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
-        let saleTimelineTrades = Array(
-            ownerTrades.lazy.filter { $0.kind == .sell }
-                .sorted { $0.occurredAt > $1.occurredAt }
-                .prefix(40)
-        )
         let totalRealizedProfitLossMinor = InvestmentSummaryLogic.realizedProfitLoss(
             trades: ownerTrades.map(\.calculation)
+        )
+        let availableInvestmentMinor = max(cashSnapshot.totalMinor, 0)
+        let shortfallMinor = max(max(totalRealizedProfitLossMinor, 0) - availableInvestmentMinor, 0)
+        let linkedInvestmentMinor = max(
+            linkedWallet.flatMap { linked in
+                cashSnapshot.locations.first { $0.walletID == linked.id }?.bookedMinor
+            } ?? 0,
+            0
+        )
+        let historyPreview = InvestmentCashHistoryLogic.items(
+            ownerUserID: ownerUserID,
+            transactions: transactions,
+            postings: postings,
+            cashPostingMetadata: cashPostingMetadata,
+            trades: ownerTrades,
+            accountingCurrencyCode: accountingCurrencyCode,
+            limit: 3
         )
         let reconcilableLocationIDs: Set<UUID>
         if canEdit, let linkedWallet, canUseWallet(linkedWallet.id) {
@@ -3120,8 +3162,11 @@ struct InvestmentWalletDetailView: View {
             ordinaryWalletLocations: ordinaryWalletLocations,
             locationsAwaitingTransfer: locationsAwaitingTransfer,
             balanceIndex: balanceIndex,
-            saleTimelineTrades: saleTimelineTrades,
+            historyPreview: historyPreview,
             totalRealizedProfitLossMinor: totalRealizedProfitLossMinor,
+            availableInvestmentMinor: availableInvestmentMinor,
+            shortfallMinor: shortfallMinor,
+            linkedInvestmentMinor: linkedInvestmentMinor,
             walletsByID: walletsByID,
             assetsByID: assetsByID,
             reconcilableLocationIDs: reconcilableLocationIDs,
@@ -3137,6 +3182,7 @@ struct InvestmentWalletDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
                 overviewCard(snapshot: snapshot)
+                cashTransferActions(snapshot: snapshot)
                 linkedWalletCard(snapshot: snapshot)
                 locationsSection(snapshot: snapshot)
                 timelineSection(snapshot: snapshot)
@@ -3168,6 +3214,15 @@ struct InvestmentWalletDetailView: View {
             InvestmentCashReconciliationSheet(
                 ownerUserID: ownerUserID,
                 initialWalletID: reconciliationWalletID
+            ) { alertMessage = $0 }
+            .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $activeCashTransfer) { presentation in
+            InvestmentCashTransferSheet(
+                ownerUserID: ownerUserID,
+                direction: presentation.direction,
+                transactionID: presentation.transactionID,
+                canEdit: snapshot.canEdit
             ) { alertMessage = $0 }
             .presentationDragIndicator(.hidden)
         }
@@ -3215,24 +3270,106 @@ struct InvestmentWalletDetailView: View {
     }
 
     private func overviewCard(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L10n.investment.hub.realizedProfitLoss)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(
-                verbatim: (snapshot.totalRealizedProfitLossMinor > 0 ? "+" : "")
-                    + snapshot.totalRealizedProfitLossMinor.formattedCurrency(code: snapshot.accountingCurrencyCode)
-            )
-            .font(.system(size: 32, weight: .bold, design: .rounded))
-            .foregroundStyle(
-                snapshot.totalRealizedProfitLossMinor > 0
-                    ? Color.green
-                    : (snapshot.totalRealizedProfitLossMinor < 0 ? Color.red : Color.primary)
-            )
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(L10n.investment.wallet.earnedProfit)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(
+                    verbatim: (snapshot.totalRealizedProfitLossMinor > 0 ? "+" : "")
+                        + snapshot.totalRealizedProfitLossMinor.formattedCurrency(code: snapshot.accountingCurrencyCode)
+                )
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(
+                    snapshot.totalRealizedProfitLossMinor > 0
+                        ? Color.green
+                        : (snapshot.totalRealizedProfitLossMinor < 0 ? Color.red : Color.primary)
+                )
+            }
+            Divider()
+            HStack(alignment: .top, spacing: 18) {
+                walletMetric(
+                    title: L10n.investment.wallet.availableInvestment,
+                    amount: snapshot.availableInvestmentMinor,
+                    color: MistiaAccent.lightPurple.color,
+                    snapshot: snapshot
+                )
+                walletMetric(
+                    title: L10n.investment.wallet.shortfall,
+                    amount: snapshot.shortfallMinor,
+                    color: snapshot.shortfallMinor > 0 ? .orange : .secondary,
+                    snapshot: snapshot
+                )
+            }
+            if snapshot.shortfallMinor == 0 && snapshot.totalRealizedProfitLossMinor > 0 {
+                Label(L10n.investment.wallet.fullyFunded, systemImage: "checkmark.circle.fill")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.green)
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(MistiaAccent.purple.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func walletMetric(
+        title: String,
+        amount: Int64,
+        color: Color,
+        snapshot: InvestmentWalletDetailRenderSnapshot
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(verbatim: amount.formattedCurrency(code: snapshot.accountingCurrencyCode))
+                .font(.headline.weight(.bold))
+                .foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func cashTransferActions(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                beginCashTransfer(.deposit, snapshot: snapshot)
+            } label: {
+                Label(L10n.investment.wallet.refillAction, systemImage: "arrow.down.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MistiaAccent.purple.color)
+            .disabled(!snapshot.canEdit || snapshot.shortfallMinor <= 0)
+
+            Button {
+                beginCashTransfer(.withdrawal, snapshot: snapshot)
+            } label: {
+                Label(L10n.investment.wallet.transferOutAction, systemImage: "arrow.up.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(MistiaAccent.purple.color)
+            .disabled(!snapshot.canEdit || (snapshot.linkedWallet != nil && snapshot.linkedInvestmentMinor <= 0))
+        }
+    }
+
+    private func beginCashTransfer(
+        _ direction: InvestmentCashTransferDirection,
+        snapshot: InvestmentWalletDetailRenderSnapshot
+    ) {
+        guard snapshot.linkedWallet != nil else {
+            pendingCashTransferDirection = direction
+            showsLinkedWalletPicker = true
+            return
+        }
+        if direction == .withdrawal && snapshot.linkedInvestmentMinor <= 0 {
+            alertMessage = L10n.investment.cashTransfer.moveToLinkedFirst
+            return
+        }
+        activeCashTransfer = InvestmentCashTransferPresentation(
+            direction: direction,
+            transactionID: nil
+        )
     }
 
     private func linkedWalletCard(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
@@ -3365,56 +3502,41 @@ struct InvestmentWalletDetailView: View {
 
     private func timelineSection(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.investment.wallet.cashFlow).font(.headline)
-            if snapshot.saleTimelineTrades.isEmpty {
-                Text(L10n.investment.wallet.noCashFlow)
+            HStack {
+                Text(L10n.investment.wallet.historyTitle).font(.headline)
+                Spacer()
+                NavigationLink {
+                    InvestmentCashHistoryView(ownerUserID: ownerUserID)
+                } label: {
+                    Text(L10n.investment.wallet.historySeeAll)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+            if snapshot.historyPreview.isEmpty {
+                Text(L10n.investment.wallet.historyEmpty)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(snapshot.saleTimelineTrades) { trade in
-                    HStack(spacing: 12) {
-                        ZStack(alignment: .bottomTrailing) {
-                            InvestmentProductThumbnail(
-                                imagePath: snapshot.assetsByID[trade.assetID]?.imagePath,
-                                size: 44
-                            )
-                            Image(systemName: trade.grossAmountMinor == 0 ? "minus.circle.fill" : "arrow.up.circle.fill")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(trade.grossAmountMinor == 0 ? Color.red : Color.green)
-                                .background(Circle().fill(Color(uiColor: .secondarySystemGroupedBackground)))
-                        }
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(snapshot.assetsByID[trade.assetID]?.name ?? L10n.investment.hub.sell)
-                                .font(.subheadline.weight(.semibold))
-                            Text(saleDestinationText(for: trade, snapshot: snapshot))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(MistiaDateFormatting.fullDateString(for: trade.occurredAt))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 3) {
-                            if trade.grossAmountMinor == 0 {
-                                Text(
-                                    L10n.investment.trade.totalLossBadge(
-                                        trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode)
-                                    )
-                                )
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.red)
-                            } else {
-                                Text(verbatim: trade.grossAmountMinor.formattedCurrency(code: trade.currencyCode))
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            Text(verbatim: trade.realizedProfitLossMinor.formattedCurrency(code: trade.accountingCurrencyCode))
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(trade.realizedProfitLossMinor >= 0 ? Color.green : Color.red)
-                        }
+                ForEach(snapshot.historyPreview) { item in
+                    Button {
+                        guard item.isEditable,
+                              let transactionID = item.ledgerTransactionID,
+                              let role = transactions.first(where: { $0.id == transactionID })
+                                .flatMap({ InvestmentLedgerLegRole(rawValue: $0.settlementRoleRawValue ?? "") }),
+                              let direction = InvestmentCashTransferDirection(ledgerRole: role) else { return }
+                        activeCashTransfer = InvestmentCashTransferPresentation(
+                            direction: direction,
+                            transactionID: transactionID
+                        )
+                    } label: {
+                        InvestmentCashHistoryRow(
+                            item: item,
+                            walletNamesByID: snapshot.walletsByID.mapValues { $0.name },
+                            assetName: item.assetID.flatMap { snapshot.assetsByID[$0]?.name },
+                            assetImagePath: item.assetID.flatMap { snapshot.assetsByID[$0]?.imagePath }
+                        )
                     }
-                    .padding(14)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -3480,10 +3602,718 @@ struct InvestmentWalletDetailView: View {
                     subjectUserIDOverride: ownerUserID
                 )
             }
+            if let pendingCashTransferDirection {
+                activeCashTransfer = InvestmentCashTransferPresentation(
+                    direction: pendingCashTransferDirection,
+                    transactionID: nil
+                )
+                self.pendingCashTransferDirection = nil
+            }
         } catch {
             alertMessage = error.localizedDescription
+            pendingCashTransferDirection = nil
         }
         pendingLinkedWalletID = nil
+    }
+}
+
+private struct InvestmentCashHistoryRow: View {
+    let item: InvestmentCashHistoryItem
+    let walletNamesByID: [UUID: String]
+    let assetName: String?
+    let assetImagePath: String?
+
+    private var title: String {
+        switch item.kind {
+        case .realizedProfit:
+            return assetName ?? L10n.investment.wallet.historyRealizedProfit
+        case .liquidation:
+            return L10n.investment.wallet.historyLiquidation(
+                assetName ?? L10n.investment.trade.asset
+            )
+        case .deposit:
+            return L10n.investment.wallet.historyDeposit
+        case .withdrawal:
+            return L10n.investment.wallet.historyWithdrawal
+        case .spending:
+            let trimmedTitle = item.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedTitle?.isEmpty == false
+                ? trimmedTitle ?? L10n.investment.wallet.historySpending
+                : L10n.investment.wallet.historySpending
+        case .movement:
+            return L10n.investment.wallet.historyMovement
+        case .adjustment:
+            return L10n.investment.wallet.historyAdjustment
+        }
+    }
+
+    private var fluentIconAssetName: String {
+        switch item.kind {
+        case .realizedProfit, .liquidation: "ic_fluent_coin_multiple_24_color"
+        case .deposit: "ic_fluent_savings_24_color"
+        case .withdrawal: "ic_fluent_send_24_color"
+        case .spending: "ic_fluent_receipt_24_color"
+        case .movement: "ic_fluent_arrow_sync_24_color"
+        case .adjustment: "ic_fluent_arrow_clockwise_dashes_24_color"
+        }
+    }
+
+    private var accent: Color {
+        switch item.filter {
+        case .incoming: .green
+        case .outgoing: .orange
+        case .movement, .all: MistiaAccent.lightPurple.color
+        }
+    }
+
+    private var flowText: String? {
+        let source = item.sourceWalletID.flatMap { walletNamesByID[$0] }
+        let destination = item.destinationWalletID.flatMap { walletNamesByID[$0] }
+        if let source, let destination {
+            return L10n.investment.wallet.historyWalletFlow(source, destination)
+        }
+        return source ?? destination
+    }
+
+    private var amountText: String {
+        let magnitude = item.accountingAmountMinor == .min
+            ? Int64.max
+            : Swift.abs(item.accountingAmountMinor)
+        let amount = magnitude
+            .formattedCurrency(code: item.accountingCurrencyCode)
+        switch item.filter {
+        case .incoming: return "+" + amount
+        case .outgoing: return "−" + amount
+        case .movement, .all: return amount
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if item.assetID != nil {
+                InvestmentProductThumbnail(imagePath: assetImagePath, size: 42)
+            } else {
+                Image(fluentIconAssetName)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(7)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        accent.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                if let flowText {
+                    Text(flowText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let grossAmountMinor = item.grossAmountMinor,
+                   let grossCurrencyCode = item.grossCurrencyCode {
+                    Text(
+                        L10n.investment.wallet.historySaleAmount(
+                            grossAmountMinor.formattedCurrency(code: grossCurrencyCode)
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Text(MistiaDateFormatting.fullDateString(for: item.occurredAt))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 8)
+            Text(verbatim: amountText)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(accent)
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct InvestmentCashHistoryRenderSnapshot {
+    let items: [InvestmentCashHistoryItem]
+    let walletNamesByID: [UUID: String]
+    let assetsByID: [UUID: InvestmentAsset]
+}
+
+private struct InvestmentCashHistoryRenderSnapshotCache {
+    let key: InvestmentCashHistoryRenderSnapshotCacheKey
+    let snapshot: InvestmentCashHistoryRenderSnapshot
+}
+
+private struct InvestmentCashHistoryRenderSnapshotCacheKey: Hashable {
+    let ownerUserID: UUID
+    let accountingCurrencyCode: String
+    let walletSignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+    let postingSignature: MistiaCollectionChangeSignature
+    let cashMetadataSignature: MistiaCollectionChangeSignature
+    let tradeSignature: MistiaCollectionChangeSignature
+    let assetSignature: MistiaCollectionChangeSignature
+}
+
+private struct InvestmentCashHistoryView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
+    private var transactions: [LedgerTransaction]
+    @Query private var postings: [InvestmentWalletPosting]
+    @Query private var cashPostingMetadata: [InvestmentCashPostingMetadata]
+    @Query private var trades: [InvestmentTrade]
+    @Query private var assets: [InvestmentAsset]
+    @Query private var channels: [InvestmentChannel]
+    @Query private var ownershipScopes: [OwnedRecordScope]
+
+    let ownerUserID: UUID
+
+    init(ownerUserID: UUID) {
+        self.ownerUserID = ownerUserID
+        _postings = Query(filter: #Predicate<InvestmentWalletPosting> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+        _cashPostingMetadata = Query(filter: #Predicate<InvestmentCashPostingMetadata> {
+            $0.ownerUserID == ownerUserID
+        })
+        _trades = Query(filter: #Predicate<InvestmentTrade> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+        _assets = Query(filter: #Predicate<InvestmentAsset> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+        _channels = Query(filter: #Predicate<InvestmentChannel> {
+            $0.ownerUserID == ownerUserID && $0.deletedAt == nil
+        })
+    }
+
+    @State private var filter: InvestmentCashHistoryFilter = .all
+    @State private var visibleLimit = 50
+    @State private var activeCashTransfer: InvestmentCashTransferPresentation?
+    @State private var transactionTarget: TransactionEditorTarget?
+    @State private var selectedTradeID: UUID?
+    @State private var alertMessage: String?
+    @State private var renderSnapshotCache: InvestmentCashHistoryRenderSnapshotCache?
+
+    private var systemWalletID: UUID {
+        InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+    }
+
+    private var accountingCurrencyCode: String {
+        wallets.first { $0.id == systemWalletID }?.currencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
+    }
+
+    private var renderSnapshotCacheKey: InvestmentCashHistoryRenderSnapshotCacheKey {
+        InvestmentCashHistoryRenderSnapshotCacheKey(
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: accountingCurrencyCode,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                wallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                transactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            postingSignature: MistiaCollectionChangeSignature.make(
+                postings,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            cashMetadataSignature: MistiaCollectionChangeSignature.make(
+                cashPostingMetadata,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            tradeSignature: MistiaCollectionChangeSignature.make(
+                trades,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            assetSignature: MistiaCollectionChangeSignature.make(
+                assets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        )
+    }
+
+    private func cachedRenderSnapshot(
+        for key: InvestmentCashHistoryRenderSnapshotCacheKey
+    ) -> InvestmentCashHistoryRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+        return makeRenderSnapshot()
+    }
+
+    private func makeRenderSnapshot() -> InvestmentCashHistoryRenderSnapshot {
+        let signpostID = OSSignpostID(log: InvestmentPerformanceSignpost.log)
+        os_signpost(
+            .begin,
+            log: InvestmentPerformanceSignpost.log,
+            name: "Investment Cash History Snapshot",
+            signpostID: signpostID
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: InvestmentPerformanceSignpost.log,
+                name: "Investment Cash History Snapshot",
+                signpostID: signpostID
+            )
+        }
+        return InvestmentCashHistoryRenderSnapshot(
+            items: InvestmentCashHistoryLogic.items(
+                ownerUserID: ownerUserID,
+                transactions: transactions,
+                postings: postings,
+                cashPostingMetadata: cashPostingMetadata,
+                trades: trades,
+                accountingCurrencyCode: accountingCurrencyCode
+            ),
+            walletNamesByID: Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0.name) }),
+            assetsByID: Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+        )
+    }
+
+    private var isOwner: Bool {
+        ownerUserID == sessionStore.activeLocalProfileUserID
+            || ownerUserID == sessionStore.signedInUserID
+    }
+
+    private var canEdit: Bool {
+        isOwner || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .investment)
+    }
+
+    var body: some View {
+        let cacheKey = renderSnapshotCacheKey
+        let snapshot = cachedRenderSnapshot(for: cacheKey)
+        let visibleItems = InvestmentCashHistoryLogic.filter(snapshot.items, by: filter)
+        VStack(spacing: 0) {
+            Picker(String(), selection: $filter) {
+                ForEach(InvestmentCashHistoryFilter.allCases) { option in
+                    Text(filterTitle(option)).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(16)
+
+            if visibleItems.isEmpty {
+                ContentUnavailableView(
+                    L10n.investment.wallet.historyEmpty,
+                    systemImage: "clock.arrow.circlepath"
+                )
+                .frame(maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(visibleItems.prefix(visibleLimit)) { item in
+                            Button { open(item) } label: {
+                                InvestmentCashHistoryRow(
+                                    item: item,
+                                    walletNamesByID: snapshot.walletNamesByID,
+                                    assetName: item.assetID.flatMap { snapshot.assetsByID[$0]?.name },
+                                    assetImagePath: item.assetID.flatMap { snapshot.assetsByID[$0]?.imagePath }
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if visibleLimit < visibleItems.count {
+                            ProgressView()
+                                .padding()
+                                .onAppear { visibleLimit += 50 }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(L10n.investment.wallet.historyTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: filter) { _, _ in visibleLimit = 50 }
+        .sheet(item: $activeCashTransfer) { presentation in
+            InvestmentCashTransferSheet(
+                ownerUserID: ownerUserID,
+                direction: presentation.direction,
+                transactionID: presentation.transactionID,
+                canEdit: canEdit
+            ) { alertMessage = $0 }
+        }
+        .sheet(item: $transactionTarget) { target in
+            TransactionEditorSheet(target: target)
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedTradeID != nil },
+            set: { if !$0 { selectedTradeID = nil } }
+        )) {
+            if let trade = trades.first(where: { $0.id == selectedTradeID }) {
+                InvestmentTradeEditorSheet(
+                    ownerUserID: ownerUserID,
+                    channels: channels.filter { $0.ownerUserID == ownerUserID && !$0.isArchived },
+                    assets: assets.filter { $0.ownerUserID == ownerUserID && !$0.isArchived },
+                    trades: trades,
+                    trade: trade,
+                    initialKind: trade.kind,
+                    wallets: wallets,
+                    canUseOrdinaryWallet: canUseWallet,
+                    canEditExisting: canEdit,
+                    onDelete: deleteTrade
+                ) { alertMessage = $0 }
+            }
+        }
+        .alert(
+            L10n.common.error,
+            isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+        ) {
+            Button(L10n.common.ok, role: .cancel) { }
+        } message: {
+            Text(verbatim: alertMessage ?? "")
+        }
+        .task(id: cacheKey) {
+            if renderSnapshotCache?.key != cacheKey {
+                renderSnapshotCache = InvestmentCashHistoryRenderSnapshotCache(
+                    key: cacheKey,
+                    snapshot: snapshot
+                )
+            }
+        }
+    }
+
+    private func filterTitle(_ filter: InvestmentCashHistoryFilter) -> String {
+        switch filter {
+        case .all: L10n.investment.wallet.historyFilterAll
+        case .incoming: L10n.investment.wallet.historyFilterIncoming
+        case .outgoing: L10n.investment.wallet.historyFilterOutgoing
+        case .movement: L10n.investment.wallet.historyFilterMovement
+        }
+    }
+
+    private func open(_ item: InvestmentCashHistoryItem) {
+        if item.isEditable,
+           let transactionID = item.ledgerTransactionID,
+           let transaction = transactions.first(where: { $0.id == transactionID }),
+           let role = InvestmentLedgerLegRole(rawValue: transaction.settlementRoleRawValue ?? ""),
+           let direction = InvestmentCashTransferDirection(ledgerRole: role) {
+            activeCashTransfer = InvestmentCashTransferPresentation(
+                direction: direction,
+                transactionID: transactionID
+            )
+        } else if item.kind == .spending,
+                  let transactionID = item.ledgerTransactionID,
+                  let transaction = transactions.first(where: { $0.id == transactionID }) {
+            transactionTarget = TransactionEditorTarget(transaction: transaction)
+        } else if let tradeID = item.tradeID {
+            selectedTradeID = tradeID
+        }
+    }
+
+    private func canUseWallet(_ wallet: LedgerWallet) -> Bool {
+        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let fallbackOwner = sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
+        guard (ownerMap[wallet.id] ?? fallbackOwner) == ownerUserID else { return false }
+        return isOwner || familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
+    }
+
+    private func deleteTrade(_ trade: InvestmentTrade) -> Bool {
+        do {
+            _ = try InvestmentPersistenceService.deleteTrade(
+                ownerUserID: ownerUserID,
+                tradeID: trade.id,
+                context: modelContext
+            )
+            sessionStore.recordDelete(
+                entity: .investmentTrade,
+                recordID: trade.id,
+                modifiedAt: trade.updatedAt,
+                subjectUserIDOverride: ownerUserID
+            )
+            selectedTradeID = nil
+            return true
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
+    }
+}
+
+private struct InvestmentCashTransferSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil }) private var wallets: [LedgerWallet]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil }) private var transactions: [LedgerTransaction]
+    @Query private var configurations: [InvestmentWalletConfiguration]
+    @Query private var ownershipScopes: [OwnedRecordScope]
+
+    let ownerUserID: UUID
+    let direction: InvestmentCashTransferDirection
+    let transactionID: UUID?
+    let canEdit: Bool
+    let onError: (String) -> Void
+
+    @State private var walletID: UUID?
+    @State private var amountText = ""
+    @State private var note = ""
+    @State private var occurredAt = Date()
+    @State private var eventID = UUID()
+    @State private var createdAt = Date()
+    @State private var maximumMinor: Int64 = 0
+    @State private var didLoad = false
+
+    private var systemWalletID: UUID {
+        InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+    }
+
+    private var linkedWalletID: UUID? {
+        configurations.first { $0.ownerUserID == ownerUserID }?.linkedWalletID
+    }
+
+    private var linkedWallet: LedgerWallet? {
+        linkedWalletID.flatMap { id in wallets.first { $0.id == id } }
+    }
+
+    private var existingTransaction: LedgerTransaction? {
+        transactionID.flatMap { id in transactions.first { $0.id == id } }
+    }
+
+    private var isOwner: Bool {
+        ownerUserID == sessionStore.activeLocalProfileUserID
+            || ownerUserID == sessionStore.signedInUserID
+    }
+
+    private var eligibleWallets: [LedgerWallet] {
+        guard let linkedWallet else { return [] }
+        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let fallbackOwner = sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
+        return wallets.filter { wallet in
+            wallet.kind != .creditCard
+                && wallet.kind != .investment
+                && !wallet.isArchived
+                && MistiaCurrencyLogic.normalizedCode(wallet.currencyCode)
+                    == MistiaCurrencyLogic.normalizedCode(linkedWallet.currencyCode)
+                && (ownerMap[wallet.id] ?? fallbackOwner) == ownerUserID
+                && (isOwner || familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID))
+        }
+        .sorted { $0.sortOrder == $1.sortOrder ? $0.createdAt < $1.createdAt : $0.sortOrder < $1.sortOrder }
+    }
+
+    private var enteredAmountMinor: Int64 {
+        amountText.currencyInputToMinorUnits(currencyCode: linkedWallet?.currencyCode ?? "JPY")
+    }
+
+    var body: some View {
+        MistiaModalScaffold(
+            title: direction == .deposit
+                ? L10n.investment.cashTransfer.depositTitle
+                : L10n.investment.cashTransfer.withdrawalTitle,
+            accent: MistiaAccent.purple.color,
+            contentStyle: .form,
+            saveDisabled: walletID == nil
+                || !canEdit
+                || enteredAmountMinor <= 0
+                || enteredAmountMinor > maximumMinor,
+            onSave: save
+        ) {
+            Form {
+                Section {
+                    if direction == .deposit {
+                        Picker(L10n.investment.cashTransfer.fromWallet, selection: $walletID) {
+                            ForEach(eligibleWallets) { wallet in
+                                Text(wallet.name).tag(Optional(wallet.id))
+                            }
+                        }
+                        LabeledContent(L10n.investment.cashTransfer.toWallet) {
+                            Text(L10n.investment.cashTransfer.investmentWallet)
+                        }
+                    } else {
+                        LabeledContent(L10n.investment.cashTransfer.fromWallet) {
+                            Text(L10n.investment.cashTransfer.investmentWallet)
+                        }
+                        Picker(L10n.investment.cashTransfer.toWallet, selection: $walletID) {
+                            ForEach(eligibleWallets) { wallet in
+                                Text(wallet.name).tag(Optional(wallet.id))
+                            }
+                        }
+                    }
+                }
+
+                Section {
+                    MistiaCurrencyInputField(L10n.investment.cashTransfer.amount, text: $amountText)
+                    Button(direction == .deposit
+                        ? L10n.investment.cashTransfer.refillFull
+                        : L10n.investment.cashTransfer.transferAll) {
+                        amountText = MistiaCurrencyInputFormatting.groupedInput(String(maximumMinor))
+                    }
+                    .disabled(maximumMinor <= 0)
+                } footer: {
+                    Text(
+                        L10n.investment.cashTransfer.maximum(
+                            maximumMinor.formattedCurrency(code: linkedWallet?.currencyCode ?? "JPY")
+                        )
+                    )
+                }
+
+                if walletID == linkedWalletID {
+                    Section {
+                        Text(direction == .deposit
+                            ? L10n.investment.cashTransfer.sameWalletDeposit
+                            : L10n.investment.cashTransfer.sameWalletWithdrawal)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section {
+                    MistiaDatePickerRow(
+                        title: L10n.investment.cashTransfer.time,
+                        selection: $occurredAt,
+                        mode: .dateAndTime
+                    )
+                    TextField(L10n.investment.cashTransfer.note, text: $note)
+                }
+
+                if existingTransaction != nil {
+                    MistiaDestructiveActionSection(
+                        buttonTitle: L10n.investment.cashTransfer.deleteAction,
+                        descriptionText: L10n.investment.cashTransfer.deleteDescription,
+                        popupMessage: L10n.investment.cashTransfer.deleteConfirmation,
+                        confirmationButtonTitle: L10n.common.delete
+                    ) {
+                        deleteTransfer()
+                    }
+                }
+            }
+            .disabled(!canEdit)
+        }
+        .onAppear { loadIfNeeded() }
+        .onChange(of: walletID) { _, _ in refreshCapacity() }
+    }
+
+    private func loadIfNeeded() {
+        guard !didLoad else { return }
+        didLoad = true
+        if let existingTransaction {
+            eventID = existingTransaction.id
+            createdAt = existingTransaction.createdAt
+            occurredAt = existingTransaction.occurredAt
+            note = existingTransaction.note ?? ""
+            amountText = MistiaCurrencyInputFormatting.groupedInput(String(existingTransaction.amountMinor))
+            walletID = direction == .deposit
+                ? existingTransaction.sourceWallet?.id
+                : existingTransaction.destinationWallet?.id
+        } else {
+            eventID = UUID()
+            createdAt = .now
+            occurredAt = .now
+            walletID = direction == .withdrawal ? linkedWalletID : eligibleWallets.first?.id
+        }
+        refreshCapacity()
+        if existingTransaction == nil, maximumMinor > 0 {
+            amountText = MistiaCurrencyInputFormatting.groupedInput(String(maximumMinor))
+        }
+    }
+
+    private func refreshCapacity() {
+        guard let walletID else {
+            maximumMinor = 0
+            return
+        }
+        do {
+            maximumMinor = try InvestmentPersistenceService.cashTransferPreview(
+                ownerUserID: ownerUserID,
+                direction: direction,
+                walletID: walletID,
+                requestedMinor: 0,
+                excludingEventID: existingTransaction?.id,
+                context: modelContext
+            ).maximumMinor
+        } catch {
+            maximumMinor = 0
+        }
+    }
+
+    private func save() {
+        guard let walletID else { return }
+        do {
+            let result = try InvestmentPersistenceService.saveCashTransfer(
+                ownerUserID: ownerUserID,
+                draft: InvestmentCashTransferDraft(
+                    id: eventID,
+                    direction: direction,
+                    walletID: walletID,
+                    amountMinor: enteredAmountMinor,
+                    note: note,
+                    occurredAt: occurredAt,
+                    createdAt: createdAt
+                ),
+                context: modelContext
+            )
+            record(result, deleting: false)
+            dismiss()
+        } catch {
+            onError(error.localizedDescription)
+        }
+    }
+
+    private func deleteTransfer() {
+        guard let transactionID = existingTransaction?.id else { return }
+        do {
+            let result = try InvestmentPersistenceService.deleteCashTransfer(
+                ownerUserID: ownerUserID,
+                transactionID: transactionID,
+                context: modelContext
+            )
+            record(result, deleting: true)
+            dismiss()
+        } catch {
+            onError(error.localizedDescription)
+        }
+    }
+
+    private func record(_ result: InvestmentPersistenceResult, deleting: Bool) {
+        let now = Date.now
+        for transactionID in deleting ? result.deletedLedgerTransactionIDs : result.ledgerTransactionIDs {
+            if deleting {
+                sessionStore.recordDelete(
+                    entity: .transaction,
+                    recordID: transactionID,
+                    modifiedAt: now,
+                    subjectUserIDOverride: ownerUserID
+                )
+            } else {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transactionID,
+                    modifiedAt: now,
+                    subjectUserIDOverride: ownerUserID
+                )
+            }
+        }
+        // The cash-event RPC creates, updates or soft-deletes its deterministic
+        // posting in the same server transaction. Enqueuing that posting again
+        // would split one event into two cloud mutations and create false conflicts.
     }
 }
 
