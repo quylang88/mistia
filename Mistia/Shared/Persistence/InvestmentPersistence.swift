@@ -268,6 +268,62 @@ nonisolated enum InvestmentCashHistoryLogic {
         } else {
             eventsToBuild = orderedEvents[...]
         }
+        var sellFundingWalletsByID: [UUID: UUID] = [:]
+        let activeTrades = trades.filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
+        let tradesByAsset = Dictionary(grouping: activeTrades, by: \.assetID)
+
+        for (_, assetTrades) in tradesByAsset {
+            let sortedAssetTrades = assetTrades.sorted { lhs, rhs in
+                if lhs.occurredAt != rhs.occurredAt {
+                    return lhs.occurredAt < rhs.occurredAt
+                }
+                if lhs.createdAt != rhs.createdAt {
+                    return lhs.createdAt < rhs.createdAt
+                }
+                return MistiaStableUUIDOrdering.precedes(lhs.id, rhs.id)
+            }
+
+            struct OpenLotFunding {
+                let unitKey: String
+                let fundingWalletID: UUID?
+                var remainingQuantity: Decimal
+            }
+
+            var openLots: [OpenLotFunding] = []
+
+            for trade in sortedAssetTrades {
+                guard trade.quantity > 0 else { continue }
+                let unitKey = InvestmentUnitLabel.comparisonKey(trade.unitLabel)
+                if trade.kind == .buy {
+                    openLots.append(
+                        OpenLotFunding(
+                            unitKey: unitKey,
+                            fundingWalletID: trade.fundingWalletID,
+                            remainingQuantity: trade.quantity
+                        )
+                    )
+                } else if trade.kind == .sell {
+                    var quantityToDeduct = trade.quantity
+                    var matchedWalletID: UUID?
+                    for index in 0..<openLots.count {
+                        guard quantityToDeduct > 0 else { break }
+                        if openLots[index].remainingQuantity > 0,
+                           openLots[index].unitKey == unitKey {
+                            let deduct = min(quantityToDeduct, openLots[index].remainingQuantity)
+                            if matchedWalletID == nil {
+                                matchedWalletID = openLots[index].fundingWalletID
+                            }
+                            openLots[index].remainingQuantity -= deduct
+                            quantityToDeduct -= deduct
+                        }
+                    }
+                    if let matchedWalletID {
+                        sellFundingWalletsByID[trade.id] = matchedWalletID
+                    }
+                }
+            }
+        }
+
         var result: [InvestmentCashHistoryItem] = []
         result.reserveCapacity(eventsToBuild.count)
 
@@ -323,8 +379,15 @@ nonisolated enum InvestmentCashHistoryLogic {
                 displayAmount = netAmount
             }
 
-            let sourceWalletID = transaction?.sourceWallet?.id ?? sourcePosting?.walletID
-            let destinationWalletID = transaction?.destinationWallet?.id ?? destinationPosting?.walletID
+            let sourceWalletID: UUID?
+            let destinationWalletID: UUID?
+            if let trade, trade.kind == .sell {
+                sourceWalletID = sellFundingWalletsByID[trade.id] ?? trade.fundingWalletID
+                destinationWalletID = trade.capitalReturnWalletID
+            } else {
+                sourceWalletID = transaction?.sourceWallet?.id ?? sourcePosting?.walletID
+                destinationWalletID = transaction?.destinationWallet?.id ?? destinationPosting?.walletID
+            }
             result.append(
                 InvestmentCashHistoryItem(
                     id: eventID,

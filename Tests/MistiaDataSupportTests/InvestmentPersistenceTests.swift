@@ -1966,7 +1966,10 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(history.filter { $0.id == depositID }.count, 1)
         XCTAssertEqual(history.first { $0.id == depositID }?.kind, .deposit)
         XCTAssertEqual(history.first { $0.id == prepared.expense.id }?.kind, .spending)
-        XCTAssertEqual(history.first { $0.id == prepared.saleID }?.kind, .realizedProfit)
+        let saleItem = history.first { $0.id == prepared.saleID }
+        XCTAssertEqual(saleItem?.kind, .realizedProfit)
+        XCTAssertEqual(saleItem?.sourceWalletID, fixture.fundingWallet.id)
+        XCTAssertEqual(saleItem?.destinationWalletID, fixture.capitalWallet.id)
         let historyPreview = InvestmentCashHistoryLogic.items(
             ownerUserID: fixture.ownerID,
             transactions: try fixture.context.fetch(FetchDescriptor<LedgerTransaction>()),
