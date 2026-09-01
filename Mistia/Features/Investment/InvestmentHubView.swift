@@ -2924,6 +2924,7 @@ private struct InvestmentWalletDetailRenderSnapshotCacheKey: Hashable {
 }
 
 struct InvestmentWalletDetailView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
@@ -3326,6 +3327,10 @@ struct InvestmentWalletDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var actionButtonTint: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
     private func cashTransferActions(snapshot: InvestmentWalletDetailRenderSnapshot) -> some View {
         HStack(spacing: 12) {
             Button {
@@ -3335,7 +3340,7 @@ struct InvestmentWalletDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .tint(MistiaAccent.purple.color)
+            .tint(actionButtonTint)
             .disabled(!snapshot.canEdit || snapshot.shortfallMinor <= 0)
 
             Button {
@@ -3345,7 +3350,7 @@ struct InvestmentWalletDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .tint(MistiaAccent.purple.color)
+            .tint(actionButtonTint)
             .disabled(!snapshot.canEdit || (snapshot.linkedWallet != nil && snapshot.linkedInvestmentMinor <= 0))
         }
     }
