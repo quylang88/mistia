@@ -1085,8 +1085,8 @@ nonisolated enum L10n {
             static func confirmedRealTransferMessage(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.confirmedRealTransferMessage", vi: "Mistia chỉ lưu bút toán sau khi bạn xác nhận tiền đã được chuyển giữa các ví thật.", en: "Mistia only records the entries after you confirm the money was transferred between the real wallets.", ja: "実際のウォレット間で送金したことを確認した後にのみ記録されます。", language: language) }
             static var detailTitle: String { L10n.tr("investment.wallet.detailTitle", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット") }
             static func detailTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.detailTitle", vi: "Ví Đầu tư", en: "Investment Wallet", ja: "投資ウォレット", language: language) }
-            static var earnedProfit: String { L10n.tr("investment.wallet.earnedProfit", vi: "Lợi nhuận đã kiếm", en: "Realized profit earned", ja: "これまでの実現利益") }
-            static func earnedProfit(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.earnedProfit", vi: "Lợi nhuận đã kiếm", en: "Realized profit earned", ja: "これまでの実現利益", language: language) }
+            static var earnedProfit: String { L10n.tr("investment.wallet.earnedProfit", vi: "Lợi nhuận", en: "Realized profit", ja: "実現利益") }
+            static func earnedProfit(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.earnedProfit", vi: "Lợi nhuận", en: "Realized profit", ja: "実現利益", language: language) }
             static var fullyFunded: String { L10n.tr("investment.wallet.fullyFunded", vi: "Tiền đầu tư đã được bù đủ.", en: "Investment cash is fully restored.", ja: "投資資金は全額補充されています。") }
             static func fullyFunded(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.fullyFunded", vi: "Tiền đầu tư đã được bù đủ.", en: "Investment cash is fully restored.", ja: "投資資金は全額補充されています。", language: language) }
             static var historyAdjustment: String { L10n.tr("investment.wallet.historyAdjustment", vi: "Điều chỉnh tiền đầu tư", en: "Investment cash adjusted", ja: "投資資金を調整") }
@@ -1109,6 +1109,8 @@ nonisolated enum L10n {
             static func historyLiquidation(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("investment.wallet.historyLiquidation", vi: "Thanh lý %@", en: "Liquidated %@", ja: "%@を清算", language: language, value)
             }
+            static var historyLiquidationLabel: String { L10n.tr("investment.wallet.historyLiquidationLabel", vi: "Thanh lý", en: "Liquidation", ja: "清算") }
+            static func historyLiquidationLabel(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.historyLiquidationLabel", vi: "Thanh lý", en: "Liquidation", ja: "清算", language: language) }
             static var historyMovement: String { L10n.tr("investment.wallet.historyMovement", vi: "Đã di chuyển tiền đầu tư", en: "Investment cash moved", ja: "投資資金を移動") }
             static func historyMovement(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.historyMovement", vi: "Đã di chuyển tiền đầu tư", en: "Investment cash moved", ja: "投資資金を移動", language: language) }
             static var historyRealizedProfit: String { L10n.tr("investment.wallet.historyRealizedProfit", vi: "Lợi nhuận từ bán hàng", en: "Profit from sale", ja: "販売利益") }

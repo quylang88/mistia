@@ -3294,17 +3294,14 @@ struct InvestmentWalletDetailView: View {
                     color: MistiaAccent.lightPurple.color,
                     snapshot: snapshot
                 )
-                walletMetric(
-                    title: L10n.investment.wallet.shortfall,
-                    amount: snapshot.shortfallMinor,
-                    color: snapshot.shortfallMinor > 0 ? .orange : .secondary,
-                    snapshot: snapshot
-                )
-            }
-            if snapshot.shortfallMinor == 0 && snapshot.totalRealizedProfitLossMinor > 0 {
-                Label(L10n.investment.wallet.fullyFunded, systemImage: "checkmark.circle.fill")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.green)
+                if snapshot.shortfallMinor > 0 {
+                    walletMetric(
+                        title: L10n.investment.wallet.shortfall,
+                        amount: snapshot.shortfallMinor,
+                        color: .orange,
+                        snapshot: snapshot
+                    )
+                }
             }
         }
         .padding(18)
@@ -3628,9 +3625,7 @@ private struct InvestmentCashHistoryRow: View {
         case .realizedProfit:
             return assetName ?? L10n.investment.wallet.historyRealizedProfit
         case .liquidation:
-            return L10n.investment.wallet.historyLiquidation(
-                assetName ?? L10n.investment.trade.asset
-            )
+            return assetName ?? L10n.investment.trade.asset
         case .deposit:
             return L10n.investment.wallet.historyDeposit
         case .withdrawal:
@@ -3659,10 +3654,13 @@ private struct InvestmentCashHistoryRow: View {
     }
 
     private var accent: Color {
+        if item.kind == .liquidation {
+            return .red
+        }
         switch item.filter {
-        case .incoming: .green
-        case .outgoing: .orange
-        case .movement, .all: MistiaAccent.lightPurple.color
+        case .incoming: return .green
+        case .outgoing: return .orange
+        case .movement, .all: return MistiaAccent.lightPurple.color
         }
     }
 
@@ -3713,8 +3711,12 @@ private struct InvestmentCashHistoryRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                if let grossAmountMinor = item.grossAmountMinor,
-                   let grossCurrencyCode = item.grossCurrencyCode {
+                if item.kind == .liquidation {
+                    Text(L10n.investment.wallet.historyLiquidationLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if let grossAmountMinor = item.grossAmountMinor,
+                          let grossCurrencyCode = item.grossCurrencyCode {
                     Text(
                         L10n.investment.wallet.historySaleAmount(
                             grossAmountMinor.formattedCurrency(code: grossCurrencyCode)
