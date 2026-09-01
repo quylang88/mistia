@@ -654,6 +654,28 @@ nonisolated struct InvestmentFundUsagePreview: Equatable, Sendable {
     var investmentToUseMinor: Int64 { bookedToUseMinor + unreconciledToUseMinor }
 }
 
+nonisolated struct InvestmentFundUsageChangePreview: Equatable, Sendable {
+    let proposed: InvestmentFundUsagePreview
+    let previousInvestmentToUseMinor: Int64
+
+    var proposedInvestmentToUseMinor: Int64 { proposed.investmentToUseMinor }
+    var additionalInvestmentToUseMinor: Int64 {
+        max(proposedInvestmentToUseMinor - previousInvestmentToUseMinor, 0)
+    }
+    var investmentToRestoreMinor: Int64 {
+        max(previousInvestmentToUseMinor - proposedInvestmentToUseMinor, 0)
+    }
+    var requiresConfirmation: Bool {
+        previousInvestmentToUseMinor > 0 || proposedInvestmentToUseMinor > 0
+    }
+}
+
+nonisolated struct InvestmentFundUsageTimelineChangePreview: Equatable, Sendable {
+    let walletID: UUID
+    let currencyCode: String
+    let changePreview: InvestmentFundUsageChangePreview
+}
+
 nonisolated enum InvestmentCashTransferDirection: String, Codable, CaseIterable, Sendable {
     case deposit
     case withdrawal

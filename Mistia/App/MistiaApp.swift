@@ -168,6 +168,19 @@ struct MistiaApp: App {
             print("Failed to seed category hierarchy: \(error)")
         }
 
+        if sessionStore.canManageSync, let ownerUserID = sessionStore.signedInUserID {
+            do {
+                let signpostID = MistiaPerformanceSignpost.begin("Investment Fund Usage Repair")
+                defer { MistiaPerformanceSignpost.end("Investment Fund Usage Repair", id: signpostID) }
+                let syncMutations = try await worker.reconcileInvestmentFundUsage(
+                    ownerUserID: ownerUserID
+                )
+                MistiaBootstrap.queueSyncMutations(syncMutations, sessionStore: sessionStore)
+            } catch {
+                print("Failed to reconcile investment fund usage: \(error)")
+            }
+        }
+
         if sessionStore.canManageSync, let signedInUserID = sessionStore.signedInUserID {
             do {
                 let signpostID = MistiaPerformanceSignpost.begin("Archive Cleanup")

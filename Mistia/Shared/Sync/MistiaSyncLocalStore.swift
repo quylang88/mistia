@@ -462,7 +462,26 @@ nonisolated enum MistiaSyncLocalStore {
                 .investmentTrade(RemoteInvestmentTrade(local: $0))
             }
         case .investmentPosting:
-            return nil
+            guard let posting = try fetchInvestmentPosting(id: mutation.recordID, context),
+                  posting.role == .cashReconciliation
+                    || posting.role == .cashConsumption
+                    || posting.role == .cashTransfer
+                    || posting.role == .cashCorrection else {
+                return nil
+            }
+            let postingID = posting.id
+            guard let cashMetadata = try context.fetch(
+                FetchDescriptor<InvestmentCashPostingMetadata>(
+                    predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                        metadata.id == postingID
+                    }
+                )
+            ).first else {
+                return nil
+            }
+            return .investmentPosting(
+                RemoteInvestmentWalletPosting(local: posting, cashMetadata: cashMetadata)
+            )
         }
     }
 

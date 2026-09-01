@@ -261,15 +261,85 @@ private struct TransactionEditorContextRowData: Identifiable {
 }
 
 private struct InvestmentFundUsagePrompt: Identifiable {
+    enum Scope {
+        case directTransaction
+        case timelineImpact
+    }
+
     enum Continuation {
         case saveFullTransaction
         case confirmFamilyTransfer
     }
 
     let id = UUID()
-    let preview: InvestmentFundUsagePreview
+    let changePreview: InvestmentFundUsageChangePreview
     let currencyCode: String
+    let scope: Scope
     let continuation: Continuation
+
+    var preview: InvestmentFundUsagePreview { changePreview.proposed }
+}
+
+private struct InvestmentAutomaticCashRefillPrompt: Identifiable, Equatable {
+    let eventID: UUID
+    let sourceTransactionID: UUID
+    let ownerUserID: UUID
+    let walletID: UUID
+    let amountMinor: Int64
+    let shortfallMinor: Int64
+    let currencyCode: String
+    let occurredAt: Date
+
+    var id: UUID { eventID }
+    var remainingShortfallMinor: Int64 { max(shortfallMinor - amountMinor, 0) }
+}
+
+private enum InvestmentAutomaticCashRefillDecision: Equatable {
+    case refill(InvestmentAutomaticCashRefillPrompt)
+    case later(InvestmentAutomaticCashRefillPrompt)
+
+    var prompt: InvestmentAutomaticCashRefillPrompt {
+        switch self {
+        case .refill(let prompt), .later(let prompt): prompt
+        }
+    }
+}
+
+private struct InvestmentAutomaticCashRefillAlertModifier: ViewModifier {
+    @Binding var prompt: InvestmentAutomaticCashRefillPrompt?
+    let onLater: (InvestmentAutomaticCashRefillPrompt) -> Void
+    let onRefill: (InvestmentAutomaticCashRefillPrompt) -> Void
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { prompt != nil },
+            set: { presented in
+                if !presented { prompt = nil }
+            }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content.alert(
+            L10n.investment.wallet.autoRefillTitle,
+            isPresented: isPresented,
+            presenting: prompt
+        ) { prompt in
+            Button(L10n.investment.wallet.autoRefillLater, role: .cancel) {
+                onLater(prompt)
+            }
+            Button(L10n.investment.wallet.autoRefillAction) {
+                onRefill(prompt)
+            }
+        } message: { prompt in
+            Text(
+                L10n.investment.wallet.autoRefillMessage(
+                    prompt.amountMinor.formattedCurrency(code: prompt.currencyCode),
+                    prompt.remainingShortfallMinor.formattedCurrency(code: prompt.currencyCode)
+                )
+            )
+        }
+    }
 }
 
 struct TransactionEditorSheet: View {
@@ -306,7 +376,19 @@ struct TransactionEditorSheet: View {
     private let initialDraftSnapshot: TransactionFormDraftDismissalSnapshot
     @State private var alertMessage: String?
     @State private var investmentFundUsagePrompt: InvestmentFundUsagePrompt?
-    @State private var confirmedInvestmentFundUsagePreview: InvestmentFundUsagePreview?
+    @State private var confirmedInvestmentFundUsageChange: InvestmentFundUsageChangePreview?
+    @State private var confirmedInvestmentTimelineChange: InvestmentFundUsageChangePreview?
+    @State private var automaticCashRefillPrompt: InvestmentAutomaticCashRefillPrompt?
+    @State private var automaticCashRefillDecision: InvestmentAutomaticCashRefillDecision?
+    @State private var workingTransactionID: UUID
+    private var investmentFundUsagePromptPresented: Binding<Bool> {
+        Binding(
+            get: { investmentFundUsagePrompt != nil },
+            set: { isPresented in
+                if !isPresented { investmentFundUsagePrompt = nil }
+            }
+        )
+    }
     private var isAdjustment: Bool {
         if let transaction = target.transaction {
             return TransactionLogic.isAdjustment(transaction)
@@ -368,6 +450,7 @@ struct TransactionEditorSheet: View {
         let initialDraft = TransactionFormDraft(target: target)
         self.initialDraftSnapshot = initialDraft.dismissalSnapshot
         _draft = State(initialValue: initialDraft)
+        _workingTransactionID = State(initialValue: target.transaction?.id ?? UUID())
     }
 
     private var isLockedByStatement: Bool {
@@ -718,16 +801,19 @@ struct TransactionEditorSheet: View {
             Text(transferPermissionMessage(for: prompt))
         }
         .alert(
-            L10n.investment.wallet.useFundsTitle,
-            isPresented: Binding(
-                get: { investmentFundUsagePrompt != nil },
-                set: { if !$0 { investmentFundUsagePrompt = nil } }
-            ),
+            investmentFundUsagePrompt.map(investmentFundUsagePromptTitle)
+                ?? L10n.investment.wallet.useFundsTitle,
+            isPresented: investmentFundUsagePromptPresented,
             presenting: investmentFundUsagePrompt
         ) { prompt in
             Button(L10n.common.cancel, role: .cancel) { }
-            Button(L10n.investment.wallet.useFundsAction) {
-                confirmedInvestmentFundUsagePreview = prompt.preview
+            Button(investmentFundUsagePromptAction(prompt)) {
+                switch prompt.scope {
+                case .directTransaction:
+                    confirmedInvestmentFundUsageChange = prompt.changePreview
+                case .timelineImpact:
+                    confirmedInvestmentTimelineChange = prompt.changePreview
+                }
                 investmentFundUsagePrompt = nil
                 switch prompt.continuation {
                 case .saveFullTransaction:
@@ -737,13 +823,15 @@ struct TransactionEditorSheet: View {
                 }
             }
         } message: { prompt in
-            Text(
-                L10n.investment.wallet.useFundsMessage(
-                    prompt.preview.investmentToUseMinor.formattedCurrency(code: prompt.currencyCode),
-                    prompt.preview.remainingInvestmentInWalletMinor.formattedCurrency(code: prompt.currencyCode)
-                )
-            )
+            Text(investmentFundUsagePromptMessage(prompt))
         }
+        .modifier(
+            InvestmentAutomaticCashRefillAlertModifier(
+                prompt: $automaticCashRefillPrompt,
+                onLater: postponeAutomaticCashRefill,
+                onRefill: confirmAutomaticCashRefill
+            )
+        )
         .alert(
             L10n.transactions.transactioneditor.canTSaveYet,
             isPresented: Binding(
@@ -2664,7 +2752,7 @@ struct TransactionEditorSheet: View {
                 .joined(separator: " ")
                 return
             }
-            if let preview = confirmedInvestmentFundUsagePreview,
+            if let preview = confirmedInvestmentFundUsageChange?.proposed,
                let ownerUserID = walletOwnerUserID(for: payload.sourceWalletID),
                let senderTransaction = try? modelContext.fetch(
                     FetchDescriptor<LedgerTransaction>(
@@ -3137,32 +3225,370 @@ struct TransactionEditorSheet: View {
             return false
         }
         do {
-            let preview = try InvestmentPersistenceService.fundUsagePreview(
+            let changePreview = try InvestmentPersistenceService.fundUsageChangePreview(
                 ownerUserID: ownerUserID,
                 wallet: wallet,
                 requestedMinor: amountMinor,
                 visibleWalletBalanceMinor: visibleBalanceMinor,
+                transactionID: target.transaction?.id,
+                occurredAt: draft.occurredAt,
+                orderingCreatedAt: target.transaction?.createdAt ?? .now,
                 context: modelContext
             )
+            let preview = changePreview.proposed
             switch preview.outcome {
             case .ordinaryFundsOnly:
-                confirmedInvestmentFundUsagePreview = nil
-                return true
+                guard changePreview.requiresConfirmation else {
+                    confirmedInvestmentFundUsageChange = nil
+                    return true
+                }
             case .insufficientFunds:
                 alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
                 return false
             case .requiresConfirmation:
-                if confirmedInvestmentFundUsagePreview == preview {
+                break
+            }
+            if confirmedInvestmentFundUsageChange == changePreview {
+                return true
+            }
+            confirmedInvestmentFundUsageChange = nil
+            investmentFundUsagePrompt = InvestmentFundUsagePrompt(
+                changePreview: changePreview,
+                currencyCode: wallet.currencyCode,
+                scope: .directTransaction,
+                continuation: continuation
+            )
+            return false
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func validateInvestmentFundUsageRemovalIfNeeded(
+        visibleBalanceIndex: TransactionWalletBalanceIndex
+    ) -> Bool {
+        guard let transaction = target.transaction,
+              let wallet = transaction.sourceWallet,
+              wallet.kind != .creditCard,
+              let ownerUserID = walletOwnerUserID(for: wallet) else {
+            return true
+        }
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: wallet.id,
+            kind: wallet.kind,
+            openingBalanceMinor: wallet.openingBalanceMinor
+        )
+        do {
+            let changePreview = try InvestmentPersistenceService.fundUsageChangePreview(
+                ownerUserID: ownerUserID,
+                wallet: wallet,
+                requestedMinor: 0,
+                visibleWalletBalanceMinor: visibleBalanceIndex.balance(for: walletSnapshot),
+                transactionID: transaction.id,
+                occurredAt: draft.occurredAt,
+                orderingCreatedAt: transaction.createdAt,
+                context: modelContext
+            )
+            guard changePreview.requiresConfirmation else { return true }
+            if confirmedInvestmentFundUsageChange == changePreview {
+                return true
+            }
+            confirmedInvestmentFundUsageChange = nil
+            investmentFundUsagePrompt = InvestmentFundUsagePrompt(
+                changePreview: changePreview,
+                currencyCode: wallet.currencyCode,
+                scope: .directTransaction,
+                continuation: .saveFullTransaction
+            )
+            return false
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func proposedInvestmentTimelineTransactionSnapshot(
+        amountMinor: Int64
+    ) -> TransactionRecordSnapshot? {
+        guard let transaction = target.transaction,
+              transaction.financialDomain == .ordinary else {
+            return nil
+        }
+
+        let sourceWallet: LedgerWallet
+        let destinationWallet: LedgerWallet?
+        let transferSubtype: TransactionTransferSubtype?
+        let destinationAmountMinor: Int64?
+        switch draft.primaryKind {
+        case .expense, .income:
+            guard let selectedSourceWallet else { return nil }
+            sourceWallet = selectedSourceWallet
+            destinationWallet = nil
+            transferSubtype = nil
+            destinationAmountMinor = nil
+        case .transfer where draft.transferSubtype == .internalTransfer:
+            guard let selectedSourceWallet,
+                  let selectedDestinationWallet else {
+                return nil
+            }
+            let destinationAmount = resolvedDestinationAmount(
+                amountMinor: amountMinor,
+                sourceCurrencyCode: selectedSourceWallet.currencyCode,
+                destinationCurrencyCode: selectedDestinationWallet.currencyCode
+            )
+            guard destinationAmount.isValid else { return nil }
+            sourceWallet = selectedSourceWallet
+            destinationWallet = selectedDestinationWallet
+            transferSubtype = .internalTransfer
+            destinationAmountMinor = destinationAmount.amountMinor
+        default:
+            return nil
+        }
+
+        return TransactionRecordSnapshot(
+            id: transaction.id,
+            financialDomain: .ordinary,
+            primaryKind: draft.primaryKind,
+            transferSubtype: transferSubtype,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: draft.title.nilIfBlank ?? transaction.localizedTransactionTitle,
+            note: draft.note.nilIfBlank,
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceWallet.currencyCode,
+            destinationCurrencyCode: destinationWallet?.currencyCode,
+            destinationAmountMinor: destinationAmountMinor,
+            isArchived: false,
+            occurredAt: draft.occurredAt,
+            createdAt: transaction.createdAt,
+            sourceWalletID: sourceWallet.id,
+            sourceWalletKind: sourceWallet.kind,
+            destinationWalletID: destinationWallet?.id,
+            destinationWalletKind: destinationWallet?.kind,
+            categoryID: draft.categoryID,
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func validateInvestmentTimelineImpactIfNeeded(
+        amountMinor: Int64
+    ) -> Bool {
+        guard !target.stagesTransactionOnSave,
+              draft.transferSubtype != .familyTransfer,
+              let transaction = target.transaction,
+              let proposedTransaction = proposedInvestmentTimelineTransactionSnapshot(
+                amountMinor: amountMinor
+              ),
+              let sourceWallet = selectedSourceWallet,
+              let ownerUserID = walletOwnerUserID(for: sourceWallet) else {
+            confirmedInvestmentTimelineChange = nil
+            return true
+        }
+
+        do {
+            guard let timelinePreview = try InvestmentPersistenceService
+                .fundUsageTimelineChangePreview(
+                    ownerUserID: ownerUserID,
+                    replacingTransactionID: transaction.id,
+                    proposedTransaction: proposedTransaction,
+                    context: modelContext
+                ) else {
+                confirmedInvestmentTimelineChange = nil
+                return true
+            }
+            let changePreview = timelinePreview.changePreview
+            if let directPreview = confirmedInvestmentFundUsageChange {
+                let directDelta = directPreview.proposedInvestmentToUseMinor
+                    - directPreview.previousInvestmentToUseMinor
+                let timelineDelta = changePreview.proposedInvestmentToUseMinor
+                    - changePreview.previousInvestmentToUseMinor
+                if directDelta == timelineDelta {
+                    confirmedInvestmentTimelineChange = nil
                     return true
                 }
-                confirmedInvestmentFundUsagePreview = nil
-                investmentFundUsagePrompt = InvestmentFundUsagePrompt(
-                    preview: preview,
-                    currencyCode: wallet.currencyCode,
-                    continuation: continuation
-                )
+            }
+            if confirmedInvestmentTimelineChange == changePreview {
+                return true
+            }
+            confirmedInvestmentTimelineChange = nil
+            investmentFundUsagePrompt = InvestmentFundUsagePrompt(
+                changePreview: changePreview,
+                currencyCode: timelinePreview.currencyCode,
+                scope: .timelineImpact,
+                continuation: .saveFullTransaction
+            )
+            return false
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func investmentFundUsagePromptTitle(_ prompt: InvestmentFundUsagePrompt) -> String {
+        if prompt.changePreview.proposedInvestmentToUseMinor == 0 {
+            return L10n.investment.wallet.restoreFundsTitle
+        }
+        if prompt.changePreview.previousInvestmentToUseMinor > 0,
+           prompt.changePreview.previousInvestmentToUseMinor
+            != prompt.changePreview.proposedInvestmentToUseMinor {
+            return L10n.investment.wallet.updateFundsTitle
+        }
+        return L10n.investment.wallet.useFundsTitle
+    }
+
+    private func investmentFundUsagePromptAction(_ prompt: InvestmentFundUsagePrompt) -> String {
+        if prompt.changePreview.proposedInvestmentToUseMinor == 0 {
+            return L10n.investment.wallet.restoreFundsAction
+        }
+        if prompt.changePreview.previousInvestmentToUseMinor > 0,
+           prompt.changePreview.previousInvestmentToUseMinor
+            != prompt.changePreview.proposedInvestmentToUseMinor {
+            return L10n.investment.wallet.updateFundsAction
+        }
+        return L10n.investment.wallet.useFundsAction
+    }
+
+    private func investmentFundUsagePromptMessage(_ prompt: InvestmentFundUsagePrompt) -> String {
+        let previous = prompt.changePreview.previousInvestmentToUseMinor
+            .formattedCurrency(code: prompt.currencyCode)
+        let proposed = prompt.changePreview.proposedInvestmentToUseMinor
+            .formattedCurrency(code: prompt.currencyCode)
+        let remaining = prompt.preview.remainingInvestmentInWalletMinor
+            .formattedCurrency(code: prompt.currencyCode)
+        if prompt.changePreview.proposedInvestmentToUseMinor == 0 {
+            return L10n.investment.wallet.restoreFundsMessage(previous, remaining)
+        }
+        if prompt.changePreview.previousInvestmentToUseMinor > 0,
+           prompt.changePreview.previousInvestmentToUseMinor
+            != prompt.changePreview.proposedInvestmentToUseMinor {
+            return L10n.investment.wallet.updateFundsMessage(previous, proposed, remaining)
+        }
+        return L10n.investment.wallet.useFundsMessage(proposed, remaining)
+    }
+
+    private func postponeAutomaticCashRefill(_ prompt: InvestmentAutomaticCashRefillPrompt) {
+        automaticCashRefillDecision = .later(prompt)
+        automaticCashRefillPrompt = nil
+        saveFullTransaction()
+    }
+
+    private func confirmAutomaticCashRefill(_ prompt: InvestmentAutomaticCashRefillPrompt) {
+        automaticCashRefillDecision = .refill(prompt)
+        automaticCashRefillPrompt = nil
+        saveFullTransaction()
+    }
+
+    private func validateAutomaticCashRefillIfNeeded(
+        amountMinor: Int64,
+        visibleBalanceIndex: TransactionWalletBalanceIndex
+    ) -> Bool {
+        guard !target.stagesTransactionOnSave,
+              target.transaction?.financialDomain != .investment,
+              draft.transferSubtype != .familyTransfer else {
+            automaticCashRefillDecision = nil
+            return true
+        }
+
+        let receivingWallet: LedgerWallet
+        let incomingMinor: Int64
+        let ownerUserID: UUID
+        switch draft.primaryKind {
+        case .income:
+            guard let wallet = selectedSourceWallet,
+                  let walletOwnerUserID = walletOwnerUserID(for: wallet) else {
+                automaticCashRefillDecision = nil
+                return true
+            }
+            receivingWallet = wallet
+            incomingMinor = amountMinor
+            ownerUserID = walletOwnerUserID
+        case .transfer where draft.transferSubtype == .internalTransfer:
+            guard let sourceWallet = selectedSourceWallet,
+                  let destinationWallet = selectedDestinationWallet,
+                  let sourceOwnerUserID = walletOwnerUserID(for: sourceWallet),
+                  let destinationOwnerUserID = walletOwnerUserID(for: destinationWallet),
+                  sourceOwnerUserID == destinationOwnerUserID else {
+                automaticCashRefillDecision = nil
+                return true
+            }
+            let destinationAmount = resolvedDestinationAmount(
+                amountMinor: amountMinor,
+                sourceCurrencyCode: sourceWallet.currencyCode,
+                destinationCurrencyCode: destinationWallet.currencyCode
+            )
+            guard destinationAmount.isValid,
+                  let resolvedIncomingMinor = destinationAmount.amountMinor,
+                  resolvedIncomingMinor > 0 else {
                 return false
             }
+            receivingWallet = destinationWallet
+            incomingMinor = resolvedIncomingMinor
+            ownerUserID = destinationOwnerUserID
+        default:
+            automaticCashRefillDecision = nil
+            return true
+        }
+
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: receivingWallet.id,
+            kind: receivingWallet.kind,
+            openingBalanceMinor: receivingWallet.openingBalanceMinor
+        )
+        let balanceBeforeIncoming = visibleBalanceIndex.balance(for: walletSnapshot)
+        let (candidateBalance, overflow) = balanceBeforeIncoming.addingReportingOverflow(incomingMinor)
+        let balanceAfterIncoming = overflow ? Int64.max : candidateBalance
+
+        do {
+            guard let preview = try InvestmentPersistenceService.automaticCashRefillPreview(
+                ownerUserID: ownerUserID,
+                receivingWallet: receivingWallet,
+                incomingMinor: incomingMinor,
+                incomingInvestmentMinor: draft.primaryKind == .transfer
+                    ? confirmedInvestmentFundUsageChange?.proposedInvestmentToUseMinor ?? 0
+                    : 0,
+                visibleWalletBalanceAfterIncomingMinor: balanceAfterIncoming,
+                sourceTransactionID: workingTransactionID,
+                context: modelContext
+            ) else {
+                automaticCashRefillDecision = nil
+                return true
+            }
+            let eventID = InvestmentPersistenceService.automaticCashRefillEventID(
+                sourceTransactionID: workingTransactionID
+            )
+            let prompt = InvestmentAutomaticCashRefillPrompt(
+                eventID: eventID,
+                sourceTransactionID: workingTransactionID,
+                ownerUserID: ownerUserID,
+                walletID: receivingWallet.id,
+                amountMinor: preview.requestedMinor,
+                shortfallMinor: preview.shortfallMinor,
+                currencyCode: receivingWallet.currencyCode,
+                occurredAt: draft.occurredAt
+            )
+            if automaticCashRefillDecision?.prompt == prompt {
+                return true
+            }
+            let existingRefill = postedTransactions.first {
+                $0.id == eventID
+                    && $0.settlementRoleRawValue
+                        == InvestmentLedgerLegRole.investmentCashDeposit.rawValue
+            }
+            if let existingRefill,
+               existingRefill.amountMinor == prompt.amountMinor,
+               existingRefill.sourceWallet?.id == prompt.walletID {
+                automaticCashRefillDecision = .refill(prompt)
+                return true
+            }
+            automaticCashRefillDecision = nil
+            automaticCashRefillPrompt = prompt
+            return false
+        } catch InvestmentPersistenceError.missingWallet,
+                InvestmentPersistenceError.invalidWallet {
+            automaticCashRefillDecision = nil
+            return true
         } catch {
             alertMessage = error.localizedDescription
             return false
@@ -3211,9 +3637,15 @@ struct TransactionEditorSheet: View {
             return
         }
 
+        let automaticCashRefillEventID = InvestmentPersistenceService.automaticCashRefillEventID(
+            sourceTransactionID: workingTransactionID
+        )
         let validationRecordSnapshots = postedTransactions
             .lazy
-            .filter { $0.id != target.transaction?.id }
+            .filter {
+                $0.id != target.transaction?.id
+                    && $0.id != automaticCashRefillEventID
+            }
             .map(\.snapshot)
         let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
             wallets: storedWallets.map {
@@ -3225,6 +3657,7 @@ struct TransactionEditorSheet: View {
             },
             records: validationRecordSnapshots
         )
+        var didValidateInvestmentFundUsage = false
 
         switch draft.primaryKind {
         case .expense:
@@ -3260,12 +3693,15 @@ struct TransactionEditorSheet: View {
                     alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                     return
                 }
-            } else if !validateCashOutflow(
-                wallet: sourceWallet,
-                amountMinor: amountMinor,
-                visibleBalanceMinor: currentBalance
-            ) {
-                return
+            } else {
+                didValidateInvestmentFundUsage = true
+                if !validateCashOutflow(
+                    wallet: sourceWallet,
+                    amountMinor: amountMinor,
+                    visibleBalanceMinor: currentBalance
+                ) {
+                    return
+                }
             }
 
         case .transfer:
@@ -3284,6 +3720,7 @@ struct TransactionEditorSheet: View {
                 
                 let currentBalance = validationBalanceIndex.balance(for: snapshot)
                 
+                didValidateInvestmentFundUsage = true
                 if !validateCashOutflow(
                     wallet: sourceWallet,
                     amountMinor: amountMinor,
@@ -3361,12 +3798,15 @@ struct TransactionEditorSheet: View {
                             alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                             return
                         }
-                    } else if !validateCashOutflow(
-                        wallet: sourceWallet,
-                        amountMinor: purchaseCostMinor,
-                        visibleBalanceMinor: currentBalance
-                    ) {
-                        return
+                    } else {
+                        didValidateInvestmentFundUsage = true
+                        if !validateCashOutflow(
+                            wallet: sourceWallet,
+                            amountMinor: purchaseCostMinor,
+                            visibleBalanceMinor: currentBalance
+                        ) {
+                            return
+                        }
                     }
                 } else if isPaidForBorrowDraft {
                     if draft.paidForCountsAsExpense, selectedCategory == nil {
@@ -3405,12 +3845,15 @@ struct TransactionEditorSheet: View {
                             alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                             return
                         }
-                    } else if !validateCashOutflow(
-                        wallet: sourceWallet,
-                        amountMinor: amountMinor,
-                        visibleBalanceMinor: currentBalance
-                    ) {
-                        return
+                    } else {
+                        didValidateInvestmentFundUsage = true
+                        if !validateCashOutflow(
+                            wallet: sourceWallet,
+                            amountMinor: amountMinor,
+                            visibleBalanceMinor: currentBalance
+                        ) {
+                            return
+                        }
                     }
                 }
             case .familyTransfer:
@@ -3421,7 +3864,24 @@ struct TransactionEditorSheet: View {
             break
         }
 
+        if !didValidateInvestmentFundUsage,
+           !validateInvestmentFundUsageRemovalIfNeeded(visibleBalanceIndex: validationBalanceIndex) {
+            return
+        }
+
+        if !validateInvestmentTimelineImpactIfNeeded(amountMinor: amountMinor) {
+            return
+        }
+
+        if !validateAutomaticCashRefillIfNeeded(
+            amountMinor: amountMinor,
+            visibleBalanceIndex: validationBalanceIndex
+        ) {
+            return
+        }
+
         let transaction = target.transaction ?? LedgerTransaction(
+            id: workingTransactionID,
             primaryKind: draft.primaryKind,
             amountMinor: amountMinor,
             occurredAt: draft.occurredAt
@@ -3623,40 +4083,20 @@ struct TransactionEditorSheet: View {
         }
 
         let canonicalOwnerUserID = persistenceOwnerUserID(for: transaction)
+        var investmentUsageResult = InvestmentPersistenceResult()
+        var automaticCashRefillResult = InvestmentPersistenceResult()
         if let canonicalOwnerUserID {
             do {
-                var usageResult = try InvestmentPersistenceService.clearFundUsage(
+                automaticCashRefillResult = try updateAutomaticCashRefill(
+                    for: transaction,
                     ownerUserID: canonicalOwnerUserID,
-                    transactionID: transaction.id,
+                    now: now
+                )
+                investmentUsageResult = try InvestmentPersistenceService.reconcileFundUsageTimeline(
+                    ownerUserID: canonicalOwnerUserID,
+                    saveChanges: false,
                     context: modelContext
                 )
-                if let preview = confirmedInvestmentFundUsagePreview {
-                    let recorded = try InvestmentPersistenceService.recordFundUsage(
-                        ownerUserID: canonicalOwnerUserID,
-                        transaction: transaction,
-                        preview: preview,
-                        context: modelContext
-                    )
-                    usageResult.walletIDs.formUnion(recorded.walletIDs)
-                    usageResult.postingIDs.formUnion(recorded.postingIDs)
-                    usageResult.ledgerTransactionIDs.formUnion(recorded.ledgerTransactionIDs)
-                }
-                for transactionID in usageResult.ledgerTransactionIDs {
-                    sessionStore.recordUpsert(
-                        entity: .transaction,
-                        recordID: transactionID,
-                        modifiedAt: .now,
-                        subjectUserIDOverride: canonicalOwnerUserID
-                    )
-                }
-                for postingID in usageResult.postingIDs {
-                    sessionStore.recordUpsert(
-                        entity: .investmentPosting,
-                        recordID: postingID,
-                        modifiedAt: .now,
-                        subjectUserIDOverride: canonicalOwnerUserID
-                    )
-                }
             } catch {
                 alertMessage = error.localizedDescription
                 return
@@ -3665,7 +4105,55 @@ struct TransactionEditorSheet: View {
         persist(
             transaction: transaction,
             completion: .savedTransaction,
-            subjectUserIDOverride: canonicalOwnerUserID
+            subjectUserIDOverride: canonicalOwnerUserID,
+            investmentUsageResult: investmentUsageResult,
+            automaticCashRefillResult: automaticCashRefillResult
+        )
+    }
+
+    private func updateAutomaticCashRefill(
+        for transaction: LedgerTransaction,
+        ownerUserID: UUID,
+        now: Date
+    ) throws -> InvestmentPersistenceResult {
+        let eventID = InvestmentPersistenceService.automaticCashRefillEventID(
+            sourceTransactionID: transaction.id
+        )
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { candidate in
+                    candidate.id == eventID && candidate.deletedAt == nil
+                }
+            )
+        ).first
+
+        guard case .refill(let prompt) = automaticCashRefillDecision,
+              prompt.eventID == eventID,
+              prompt.sourceTransactionID == transaction.id,
+              prompt.ownerUserID == ownerUserID else {
+            guard existing != nil else { return InvestmentPersistenceResult() }
+            return try InvestmentPersistenceService.deleteCashTransfer(
+                ownerUserID: ownerUserID,
+                transactionID: eventID,
+                now: now,
+                saveChanges: false,
+                context: modelContext
+            )
+        }
+
+        return try InvestmentPersistenceService.saveCashTransfer(
+            ownerUserID: ownerUserID,
+            draft: InvestmentCashTransferDraft(
+                id: eventID,
+                direction: .deposit,
+                walletID: prompt.walletID,
+                amountMinor: prompt.amountMinor,
+                occurredAt: prompt.occurredAt,
+                createdAt: existing?.createdAt ?? now
+            ),
+            now: now,
+            saveChanges: false,
+            context: modelContext
         )
     }
 
@@ -3905,7 +4393,9 @@ struct TransactionEditorSheet: View {
     private func persist(
         transaction: LedgerTransaction,
         completion: TransactionEditorCompletion,
-        subjectUserIDOverride: UUID? = nil
+        subjectUserIDOverride: UUID? = nil,
+        investmentUsageResult: InvestmentPersistenceResult = InvestmentPersistenceResult(),
+        automaticCashRefillResult: InvestmentPersistenceResult = InvestmentPersistenceResult()
     ) {
         do {
             let actorUserID = sessionStore.activeLocalProfileUserID ?? subjectUserIDOverride
@@ -3943,6 +4433,38 @@ struct TransactionEditorSheet: View {
                     modifiedAt: transaction.updatedAt,
                     subjectUserIDOverride: subjectUserIDOverride
                 )
+                for transactionID in investmentUsageResult.ledgerTransactionIDs {
+                    sessionStore.recordUpsert(
+                        entity: .transaction,
+                        recordID: transactionID,
+                        modifiedAt: now,
+                        subjectUserIDOverride: subjectUserIDOverride
+                    )
+                }
+                for postingID in investmentUsageResult.postingIDs {
+                    sessionStore.recordUpsert(
+                        entity: .investmentPosting,
+                        recordID: postingID,
+                        modifiedAt: now,
+                        subjectUserIDOverride: subjectUserIDOverride
+                    )
+                }
+                for transactionID in automaticCashRefillResult.ledgerTransactionIDs {
+                    sessionStore.recordUpsert(
+                        entity: .transaction,
+                        recordID: transactionID,
+                        modifiedAt: now,
+                        subjectUserIDOverride: subjectUserIDOverride
+                    )
+                }
+                for transactionID in automaticCashRefillResult.deletedLedgerTransactionIDs {
+                    sessionStore.recordDelete(
+                        entity: .transaction,
+                        recordID: transactionID,
+                        modifiedAt: now,
+                        subjectUserIDOverride: subjectUserIDOverride
+                    )
+                }
                 if subjectUserIDOverride != sessionStore.activeLocalProfileUserID {
                     Task { @MainActor in
                         _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()

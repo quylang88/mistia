@@ -474,6 +474,50 @@ enum InvestmentPersistenceService {
         let didMutate: Bool
     }
 
+    private struct FundUsageTimelineExpectation {
+        let transaction: LedgerTransaction?
+        let walletID: UUID
+        let preview: InvestmentFundUsagePreview
+    }
+
+    private struct FundUsageTimelineSnapshot {
+        let expectations: [UUID: FundUsageTimelineExpectation]
+        let availableByWalletID: [UUID: Int64]
+    }
+
+    private enum FundUsageTimelineEvent {
+        case posting(InvestmentWalletPosting, InvestmentCashBucket)
+        case transaction(LedgerTransaction?, TransactionRecordSnapshot)
+
+        var occurredAt: Date {
+            switch self {
+            case .posting(let posting, _): posting.occurredAt
+            case .transaction(_, let record): record.occurredAt
+            }
+        }
+
+        var createdAt: Date {
+            switch self {
+            case .posting(let posting, _): posting.createdAt
+            case .transaction(_, let record): record.createdAt
+            }
+        }
+
+        var id: UUID {
+            switch self {
+            case .posting(let posting, _): posting.id
+            case .transaction(_, let record): record.id
+            }
+        }
+
+        var orderingPriority: Int {
+            switch self {
+            case .posting: 0
+            case .transaction: 1
+            }
+        }
+    }
+
     @discardableResult
     private static func assignIfChanged<Root: AnyObject, Value: Equatable>(
         _ value: Value,
@@ -1796,6 +1840,7 @@ enum InvestmentPersistenceService {
         walletID: UUID,
         requestedMinor: Int64,
         excludingEventID: UUID? = nil,
+        sourceActualMinorOverride: Int64? = nil,
         context: ModelContext
     ) throws -> InvestmentCashTransferPreview {
         guard let configuration = try configuration(
@@ -1848,7 +1893,7 @@ enum InvestmentPersistenceService {
         )
         let sourceWallet = direction == .deposit ? selectedWallet : linkedWallet
         let excludedTransactionIDs = excludingEventID.map { Set([$0]) } ?? []
-        let sourceActualMinor = try currentBalance(
+        let sourceActualMinor = try sourceActualMinorOverride ?? currentBalance(
             wallet: sourceWallet,
             excludingTransactionIDs: excludedTransactionIDs,
             context: context
@@ -1871,11 +1916,56 @@ enum InvestmentPersistenceService {
         )
     }
 
+    static func automaticCashRefillEventID(sourceTransactionID: UUID) -> UUID {
+        InvestmentLedgerIdentity.derivedID(
+            eventID: sourceTransactionID,
+            component: "automatic-cash-refill"
+        )
+    }
+
+    static func automaticCashRefillPreview(
+        ownerUserID: UUID,
+        receivingWallet: LedgerWallet,
+        incomingMinor: Int64,
+        incomingInvestmentMinor: Int64 = 0,
+        visibleWalletBalanceAfterIncomingMinor: Int64,
+        sourceTransactionID: UUID,
+        context: ModelContext
+    ) throws -> InvestmentCashTransferPreview? {
+        let incoming = max(incomingMinor, 0)
+        guard incoming > 0 else { return nil }
+        let arrivingInvestment = min(max(incomingInvestmentMinor, 0), incoming)
+        let (ordinaryBalanceBasis, overflow) = visibleWalletBalanceAfterIncomingMinor
+            .subtractingReportingOverflow(arrivingInvestment)
+        let eventID = automaticCashRefillEventID(sourceTransactionID: sourceTransactionID)
+        let limitPreview = try cashTransferPreview(
+            ownerUserID: ownerUserID,
+            direction: .deposit,
+            walletID: receivingWallet.id,
+            requestedMinor: incoming,
+            excludingEventID: eventID,
+            sourceActualMinorOverride: overflow ? Int64.min : ordinaryBalanceBasis,
+            context: context
+        )
+        let refillMinor = min(incoming, limitPreview.maximumMinor)
+        guard refillMinor > 0 else { return nil }
+        return InvestmentCashTransferPreview(
+            direction: .deposit,
+            requestedMinor: refillMinor,
+            maximumMinor: limitPreview.maximumMinor,
+            realizedProfitMinor: limitPreview.realizedProfitMinor,
+            availableInvestmentMinor: limitPreview.availableInvestmentMinor,
+            linkedInvestmentMinor: limitPreview.linkedInvestmentMinor,
+            sourceOrdinaryMinor: limitPreview.sourceOrdinaryMinor
+        )
+    }
+
     @discardableResult
     static func saveCashTransfer(
         ownerUserID: UUID,
         draft: InvestmentCashTransferDraft,
         now: Date = .now,
+        saveChanges: Bool = true,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
         let draftID = draft.id
@@ -1961,7 +2051,9 @@ enum InvestmentPersistenceService {
             now: now,
             context: context
         )
-        try context.save()
+        if saveChanges {
+            try context.save()
+        }
         return InvestmentPersistenceResult(
             walletIDs: [sourceWallet.id, destinationWallet.id],
             postingIDs: [posting.id],
@@ -1974,6 +2066,7 @@ enum InvestmentPersistenceService {
         ownerUserID: UUID,
         transactionID: UUID,
         now: Date = .now,
+        saveChanges: Bool = true,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
         guard let transaction = try context.fetch(
@@ -2023,7 +2116,9 @@ enum InvestmentPersistenceService {
             posting.deletedAt = now
             posting.updatedAt = now
         }
-        try context.save()
+        if saveChanges {
+            try context.save()
+        }
         return InvestmentPersistenceResult(
             walletIDs: Set([transaction.sourceWallet?.id, transaction.destinationWallet?.id].compactMap { $0 }),
             deletedPostingIDs: Set(postings.map(\.id)),
@@ -2031,11 +2126,114 @@ enum InvestmentPersistenceService {
         )
     }
 
+    private static func historicalBalance(
+        wallet: LedgerWallet,
+        beforeOccurredAt occurredAt: Date,
+        beforeCreatedAt createdAt: Date,
+        beforeID: UUID,
+        excludingEventID: UUID?,
+        context: ModelContext
+    ) throws -> Int64 {
+        let excludedAdjustmentID = excludingEventID.map {
+            InvestmentLedgerIdentity.derivedID(
+                eventID: $0,
+                component: "cash-unreconciled-adjustment"
+            )
+        }
+        let records = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.deletedAt == nil && !transaction.isArchived
+                }
+            )
+        )
+        .lazy
+        .filter { transaction in
+            transaction.id != excludingEventID
+                && transaction.id != excludedAdjustmentID
+                && chronologicalEventPrecedes(
+                    occurredAt: transaction.occurredAt,
+                    createdAt: transaction.createdAt,
+                    id: transaction.id,
+                    beforeOccurredAt: occurredAt,
+                    beforeCreatedAt: createdAt,
+                    beforeID: beforeID
+                )
+        }
+        .map(\.snapshot)
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: wallet.id,
+            kind: wallet.kind,
+            openingBalanceMinor: wallet.openingBalanceMinor
+        )
+        return TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
+    }
+
+    private static func historicalCashAllocationSnapshot(
+        ownerUserID: UUID,
+        accountingCurrencyCode: String,
+        beforeOccurredAt occurredAt: Date,
+        beforeCreatedAt createdAt: Date,
+        beforeID: UUID,
+        excludingEventID: UUID?,
+        context: ModelContext
+    ) throws -> InvestmentCashAllocationSnapshot {
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID && posting.deletedAt == nil
+                }
+            )
+        )
+        .filter { posting in
+            posting.eventID != excludingEventID
+                && chronologicalEventPrecedes(
+                    occurredAt: posting.occurredAt,
+                    createdAt: posting.createdAt,
+                    id: posting.id,
+                    beforeOccurredAt: occurredAt,
+                    beforeCreatedAt: createdAt,
+                    beforeID: beforeID
+                )
+        }
+        let postingIDs = Set(postings.map(\.id))
+        let metadata = try context.fetch(
+            FetchDescriptor<InvestmentCashPostingMetadata>(
+                predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                    metadata.ownerUserID == ownerUserID
+                }
+            )
+        )
+        .filter { postingIDs.contains($0.id) }
+        return InvestmentCashAllocationLogic.snapshot(
+            postings: postings,
+            cashPostingMetadata: metadata,
+            ownerUserID: ownerUserID,
+            accountingCurrencyCode: accountingCurrencyCode
+        )
+    }
+
+    private static func chronologicalEventPrecedes(
+        occurredAt: Date,
+        createdAt: Date,
+        id: UUID,
+        beforeOccurredAt: Date,
+        beforeCreatedAt: Date,
+        beforeID: UUID
+    ) -> Bool {
+        if occurredAt != beforeOccurredAt { return occurredAt < beforeOccurredAt }
+        if createdAt != beforeCreatedAt { return createdAt < beforeCreatedAt }
+        return MistiaStableUUIDOrdering.precedes(id, beforeID)
+    }
+
     static func fundUsagePreview(
         ownerUserID: UUID,
         wallet: LedgerWallet,
         requestedMinor: Int64,
         visibleWalletBalanceMinor: Int64,
+        excludingEventID: UUID? = nil,
+        occurredAt: Date? = nil,
+        orderingCreatedAt: Date? = nil,
         context: ModelContext
     ) throws -> InvestmentFundUsagePreview {
         let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
@@ -2052,18 +2250,97 @@ enum InvestmentPersistenceService {
                 investmentInWalletMinor: 0
             )
         }
-        let snapshot = try cashAllocationSnapshot(
-            ownerUserID: ownerUserID,
-            accountingCurrencyCode: systemWallet.currencyCode,
-            context: context
-        )
+        let effectiveVisibleBalanceMinor: Int64
+        let snapshot: InvestmentCashAllocationSnapshot
+        if let occurredAt {
+            let createdAt = orderingCreatedAt ?? occurredAt
+            let orderingID = excludingEventID ?? UUID()
+            effectiveVisibleBalanceMinor = try historicalBalance(
+                wallet: wallet,
+                beforeOccurredAt: occurredAt,
+                beforeCreatedAt: createdAt,
+                beforeID: orderingID,
+                excludingEventID: excludingEventID,
+                context: context
+            )
+            snapshot = try historicalCashAllocationSnapshot(
+                ownerUserID: ownerUserID,
+                accountingCurrencyCode: systemWallet.currencyCode,
+                beforeOccurredAt: occurredAt,
+                beforeCreatedAt: createdAt,
+                beforeID: orderingID,
+                excludingEventID: excludingEventID,
+                context: context
+            )
+        } else {
+            effectiveVisibleBalanceMinor = visibleWalletBalanceMinor
+            snapshot = try cashAllocationSnapshot(
+                ownerUserID: ownerUserID,
+                accountingCurrencyCode: systemWallet.currencyCode,
+                excludingEventID: excludingEventID,
+                context: context
+            )
+        }
         let location = snapshot.locations.first { $0.walletID == wallet.id }
         return InvestmentCashAllocationLogic.usagePreview(
             requestedMinor: requestedMinor,
-            visibleWalletBalanceMinor: visibleWalletBalanceMinor,
+            visibleWalletBalanceMinor: effectiveVisibleBalanceMinor,
             bookedInvestmentMinor: location?.bookedMinor ?? 0,
             unreconciledInvestmentMinor: location?.unreconciledMinor ?? 0,
             investmentInWalletMinor: location?.totalMinor ?? 0
+        )
+    }
+
+    static func fundUsageChangePreview(
+        ownerUserID: UUID,
+        wallet: LedgerWallet,
+        requestedMinor: Int64,
+        visibleWalletBalanceMinor: Int64,
+        transactionID: UUID?,
+        occurredAt: Date? = nil,
+        orderingCreatedAt: Date? = nil,
+        context: ModelContext
+    ) throws -> InvestmentFundUsageChangePreview {
+        let proposed = try fundUsagePreview(
+            ownerUserID: ownerUserID,
+            wallet: wallet,
+            requestedMinor: requestedMinor,
+            visibleWalletBalanceMinor: visibleWalletBalanceMinor,
+            excludingEventID: transactionID,
+            occurredAt: occurredAt,
+            orderingCreatedAt: orderingCreatedAt,
+            context: context
+        )
+        guard let transactionID else {
+            return InvestmentFundUsageChangePreview(
+                proposed: proposed,
+                previousInvestmentToUseMinor: 0
+            )
+        }
+        let previousInvestmentToUseMinor = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID
+                        && posting.eventID == transactionID
+                        && posting.deletedAt == nil
+                }
+            )
+        )
+        .lazy
+        .filter {
+            ($0.role == .cashConsumption || $0.role == .cashTransfer)
+                && $0.accountingAmountMinor < 0
+        }
+        .reduce(Int64.zero) { partial, posting in
+            let magnitude = posting.accountingAmountMinor == .min
+                ? Int64.max
+                : -posting.accountingAmountMinor
+            let (sum, overflow) = partial.addingReportingOverflow(magnitude)
+            return overflow ? .max : sum
+        }
+        return InvestmentFundUsageChangePreview(
+            proposed: proposed,
+            previousInvestmentToUseMinor: previousInvestmentToUseMinor
         )
     }
 
@@ -2072,6 +2349,24 @@ enum InvestmentPersistenceService {
         transaction: LedgerTransaction,
         preview: InvestmentFundUsagePreview,
         now: Date = .now,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        try recordFundUsage(
+            ownerUserID: ownerUserID,
+            transaction: transaction,
+            preview: preview,
+            now: now,
+            writePolicy: .always,
+            context: context
+        )
+    }
+
+    private static func recordFundUsage(
+        ownerUserID: UUID,
+        transaction: LedgerTransaction,
+        preview: InvestmentFundUsagePreview,
+        now: Date,
+        writePolicy: InvestmentDerivedWritePolicy,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
         guard preview.investmentToUseMinor > 0,
@@ -2104,10 +2399,12 @@ enum InvestmentPersistenceService {
             (InvestmentCashBucket.booked, preview.bookedToUseMinor, "booked"),
             (InvestmentCashBucket.unreconciled, preview.unreconciledToUseMinor, "unreconciled")
         ] where amount > 0 {
-            let posting = try upsertCashPosting(
+            let postingOutcome = try upsertCashPostingOutcome(
                 id: InvestmentLedgerIdentity.derivedID(eventID: transaction.id, component: "cash-consumption-\(component)"),
                 ownerUserID: ownerUserID,
                 eventID: transaction.id,
+                tradeID: nil,
+                assetID: nil,
                 walletID: sourceWallet.id,
                 ledgerTransactionID: transaction.id,
                 role: destinationWallet == nil ? .cashConsumption : .cashTransfer,
@@ -2119,15 +2416,21 @@ enum InvestmentPersistenceService {
                 accountingCurrencyCode: systemWallet.currencyCode,
                 occurredAt: transaction.occurredAt,
                 now: now,
-                context: context
+                context: context,
+                writePolicy: writePolicy
             )
-            result.postingIDs.insert(posting.id)
+            let posting = postingOutcome.model
+            if postingOutcome.didMutate {
+                result.postingIDs.insert(posting.id)
+            }
 
             if let destinationWallet {
-                let destinationPosting = try upsertCashPosting(
+                let destinationPostingOutcome = try upsertCashPostingOutcome(
                     id: InvestmentLedgerIdentity.derivedID(eventID: transaction.id, component: "cash-destination-\(component)"),
                     ownerUserID: ownerUserID,
                     eventID: transaction.id,
+                    tradeID: nil,
+                    assetID: nil,
                     walletID: destinationWallet.id,
                     ledgerTransactionID: transaction.id,
                     role: .cashTransfer,
@@ -2139,15 +2442,19 @@ enum InvestmentPersistenceService {
                     accountingCurrencyCode: systemWallet.currencyCode,
                     occurredAt: transaction.occurredAt,
                     now: now,
-                    context: context
+                    context: context,
+                    writePolicy: writePolicy
                 )
+                let destinationPosting = destinationPostingOutcome.model
                 result.walletIDs.insert(destinationWallet.id)
-                result.postingIDs.insert(destinationPosting.id)
+                if destinationPostingOutcome.didMutate {
+                    result.postingIDs.insert(destinationPosting.id)
+                }
             }
 
             if bucket == .unreconciled {
                 let adjustmentID = InvestmentLedgerIdentity.derivedID(eventID: transaction.id, component: "cash-unreconciled-adjustment")
-                let adjustment = try upsertLedgerTransaction(
+                let adjustmentOutcome = try upsertLedgerTransactionOutcome(
                     id: adjustmentID,
                     primaryKind: .transfer,
                     role: .investmentReserveUse,
@@ -2160,11 +2467,22 @@ enum InvestmentPersistenceService {
                     reportingCurrencyCode: systemWallet.currencyCode,
                     occurredAt: transaction.occurredAt,
                     now: now,
-                    context: context
+                    context: context,
+                    writePolicy: writePolicy
                 )
-                try recordTransactionOwnership(adjustment, ownerUserID: ownerUserID, now: now, context: context)
+                let adjustment = adjustmentOutcome.model
+                let metadataDidMutate = try recordTransactionOwnershipIfNeeded(
+                    adjustment,
+                    ownerUserID: ownerUserID,
+                    transactionDidMutate: adjustmentOutcome.didMutate,
+                    now: now,
+                    context: context,
+                    writePolicy: writePolicy
+                )
                 result.walletIDs.insert(systemWallet.id)
-                result.ledgerTransactionIDs.insert(adjustment.id)
+                if adjustmentOutcome.didMutate || metadataDidMutate {
+                    result.ledgerTransactionIDs.insert(adjustment.id)
+                }
             }
         }
         return result
@@ -2229,6 +2547,420 @@ enum InvestmentPersistenceService {
         )
         return TransactionLogic.walletBalanceIndex(wallets: [snapshot], records: records)
             .balance(for: snapshot)
+    }
+
+    static func fundUsageTimelineChangePreview(
+        ownerUserID: UUID,
+        replacingTransactionID: UUID,
+        proposedTransaction: TransactionRecordSnapshot,
+        context: ModelContext
+    ) throws -> InvestmentFundUsageTimelineChangePreview? {
+        let current = try fundUsageTimelineSnapshot(
+            ownerUserID: ownerUserID,
+            context: context
+        )
+        let proposed = try fundUsageTimelineSnapshot(
+            ownerUserID: ownerUserID,
+            replacingTransactionID: replacingTransactionID,
+            proposedTransaction: proposedTransaction,
+            context: context
+        )
+
+        func usageByWallet(
+            _ timeline: FundUsageTimelineSnapshot
+        ) -> [UUID: Int64] {
+            var totals: [UUID: Int64] = [:]
+            for expectation in timeline.expectations.values {
+                let amount = expectation.preview.investmentToUseMinor
+                let (sum, overflow) = totals[expectation.walletID, default: 0]
+                    .addingReportingOverflow(amount)
+                totals[expectation.walletID] = overflow ? .max : sum
+            }
+            return totals
+        }
+
+        let currentUsage = usageByWallet(current)
+        let proposedUsage = usageByWallet(proposed)
+        let affectedWalletIDs = Set(currentUsage.keys).union(proposedUsage.keys)
+        let changedWalletIDs = affectedWalletIDs.filter {
+            currentUsage[$0, default: 0] != proposedUsage[$0, default: 0]
+        }
+        guard let walletID = changedWalletIDs.max(by: { lhs, rhs in
+            let lhsDelta = abs(
+                proposedUsage[lhs, default: 0] - currentUsage[lhs, default: 0]
+            )
+            let rhsDelta = abs(
+                proposedUsage[rhs, default: 0] - currentUsage[rhs, default: 0]
+            )
+            if lhsDelta != rhsDelta { return lhsDelta < rhsDelta }
+            return MistiaStableUUIDOrdering.precedes(lhs, rhs)
+        }) else {
+            return nil
+        }
+        guard let wallet = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in wallet.id == walletID }
+            )
+        ).first else {
+            return nil
+        }
+
+        let previousInvestmentToUseMinor = currentUsage[walletID, default: 0]
+        let proposedInvestmentToUseMinor = proposedUsage[walletID, default: 0]
+        let preview = InvestmentFundUsagePreview(
+            requestedMinor: proposedInvestmentToUseMinor,
+            ordinaryAvailableMinor: 0,
+            bookedToUseMinor: proposedInvestmentToUseMinor,
+            unreconciledToUseMinor: 0,
+            remainingInvestmentInWalletMinor: proposed.availableByWalletID[walletID, default: 0],
+            outcome: proposedInvestmentToUseMinor > 0
+                ? .requiresConfirmation
+                : .ordinaryFundsOnly
+        )
+        return InvestmentFundUsageTimelineChangePreview(
+            walletID: walletID,
+            currencyCode: wallet.currencyCode,
+            changePreview: InvestmentFundUsageChangePreview(
+                proposed: preview,
+                previousInvestmentToUseMinor: previousInvestmentToUseMinor
+            )
+        )
+    }
+
+    /// Replays real-wallet cash and Investment allocations in occurrence order.
+    /// Derived usage postings are deliberately removed from the input and rebuilt
+    /// from the cash that actually existed immediately before each outflow.
+    @discardableResult
+    static func reconcileFundUsageTimeline(
+        ownerUserID: UUID,
+        now: Date = .now,
+        saveChanges: Bool = true,
+        context: ModelContext
+    ) throws -> InvestmentPersistenceResult {
+        let timeline = try fundUsageTimelineSnapshot(
+            ownerUserID: ownerUserID,
+            context: context
+        )
+        let metadata = try context.fetch(
+            FetchDescriptor<InvestmentCashPostingMetadata>(
+                predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                    metadata.ownerUserID == ownerUserID
+                }
+            )
+        )
+        let originByPostingID = Dictionary(
+            metadata.map { ($0.id, $0.cashOrigin) },
+            uniquingKeysWith: { _, rhs in rhs }
+        )
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID
+                }
+            )
+        )
+        var result = InvestmentPersistenceResult()
+        var desiredPostingIDs: Set<UUID> = []
+        var desiredAdjustmentIDs: Set<UUID> = []
+
+        for expectation in timeline.expectations.values {
+            guard let transaction = expectation.transaction else { continue }
+            let preview = expectation.preview
+            for (amount, component) in [
+                (preview.bookedToUseMinor, "booked"),
+                (preview.unreconciledToUseMinor, "unreconciled")
+            ] where amount > 0 {
+                desiredPostingIDs.insert(
+                    InvestmentLedgerIdentity.derivedID(
+                        eventID: transaction.id,
+                        component: "cash-consumption-\(component)"
+                    )
+                )
+                if transaction.primaryKind == .transfer,
+                   transaction.transferSubtype == .internalTransfer,
+                   transaction.destinationWallet?.kind != .creditCard,
+                   transaction.destinationWallet != nil {
+                    desiredPostingIDs.insert(
+                        InvestmentLedgerIdentity.derivedID(
+                            eventID: transaction.id,
+                            component: "cash-destination-\(component)"
+                        )
+                    )
+                }
+            }
+            if preview.unreconciledToUseMinor > 0 {
+                desiredAdjustmentIDs.insert(
+                    InvestmentLedgerIdentity.derivedID(
+                        eventID: transaction.id,
+                        component: "cash-unreconciled-adjustment"
+                    )
+                )
+            }
+            let recorded = try recordFundUsage(
+                ownerUserID: ownerUserID,
+                transaction: transaction,
+                preview: preview,
+                now: now,
+                writePolicy: .ifChanged,
+                context: context
+            )
+            result.walletIDs.formUnion(recorded.walletIDs)
+            result.postingIDs.formUnion(recorded.postingIDs)
+            result.ledgerTransactionIDs.formUnion(recorded.ledgerTransactionIDs)
+        }
+
+        for posting in postings where posting.deletedAt == nil {
+            let isDerivedUsage = posting.role == .cashConsumption
+                || (posting.role == .cashTransfer
+                    && originByPostingID[posting.id] == .derived)
+            guard isDerivedUsage, !desiredPostingIDs.contains(posting.id) else { continue }
+            posting.deletedAt = now
+            posting.updatedAt = now
+            result.walletIDs.insert(posting.walletID)
+            result.postingIDs.insert(posting.id)
+            result.deletedPostingIDs.insert(posting.id)
+        }
+
+        let transactionScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(
+            from: transactionScopes,
+            entity: .transaction
+        )
+        let adjustments = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.deletedAt == nil
+                }
+            )
+        ).filter {
+            $0.settlementRoleRawValue == InvestmentLedgerLegRole.investmentReserveUse.rawValue
+        }
+        for adjustment in adjustments where transactionOwnerMap[adjustment.id] == ownerUserID
+            && !desiredAdjustmentIDs.contains(adjustment.id) {
+            adjustment.markDeleted(at: now)
+            result.ledgerTransactionIDs.insert(adjustment.id)
+            result.deletedLedgerTransactionIDs.insert(adjustment.id)
+        }
+
+        if saveChanges, context.hasChanges {
+            try context.save()
+        }
+        return result
+    }
+
+    private static func fundUsageTimelineSnapshot(
+        ownerUserID: UUID,
+        replacingTransactionID: UUID? = nil,
+        proposedTransaction: TransactionRecordSnapshot? = nil,
+        context: ModelContext
+    ) throws -> FundUsageTimelineSnapshot {
+        let wallets = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in
+                    wallet.deletedAt == nil && !wallet.isArchived
+                }
+            )
+        )
+        let scopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+        let systemWalletID = InvestmentSystemWalletIdentity.walletID(ownerUserID: ownerUserID)
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID && posting.deletedAt == nil
+                }
+            )
+        )
+        let postingWalletIDs = Set(postings.map(\.walletID))
+        let ownerWallets = wallets.filter {
+            walletOwnerMap[$0.id] == ownerUserID
+                || $0.id == systemWalletID
+                || postingWalletIDs.contains($0.id)
+        }
+        let walletsByID = Dictionary(
+            ownerWallets.map { ($0.id, $0) },
+            uniquingKeysWith: { _, rhs in rhs }
+        )
+        let balanceSnapshots = ownerWallets.map {
+            TransactionWalletSnapshot(
+                id: $0.id,
+                kind: $0.kind,
+                openingBalanceMinor: $0.openingBalanceMinor
+            )
+        }
+        let zeroBalanceSnapshots = ownerWallets.map {
+            TransactionWalletSnapshot(id: $0.id, kind: $0.kind, openingBalanceMinor: 0)
+        }
+        var actualByWalletID = Dictionary(
+            balanceSnapshots.map { ($0.id, $0.balanceSeedMinor) },
+            uniquingKeysWith: { _, rhs in rhs }
+        )
+
+        let metadata = try context.fetch(
+            FetchDescriptor<InvestmentCashPostingMetadata>(
+                predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                    metadata.ownerUserID == ownerUserID
+                }
+            )
+        )
+        let metadataByID = Dictionary(
+            metadata.map { ($0.id, $0) },
+            uniquingKeysWith: { _, rhs in rhs }
+        )
+        let ownedInvestmentLedgerIDs = Set(postings.map(\.ledgerTransactionID))
+        var replacedEventIDs: Set<UUID> = []
+        if let replacingTransactionID {
+            replacedEventIDs.insert(replacingTransactionID)
+        }
+        let basePostingEvents: [FundUsageTimelineEvent] = postings.compactMap { posting in
+            guard !replacedEventIDs.contains(posting.eventID) else { return nil }
+            guard let cashMetadata = metadataByID[posting.id] else { return nil }
+            let isDerivedUsage = posting.role == .cashConsumption
+                || (posting.role == .cashTransfer && cashMetadata.cashOrigin == .derived)
+            guard !isDerivedUsage else { return nil }
+            return .posting(posting, cashMetadata.cashBucket)
+        }
+
+        let transactions = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.deletedAt == nil && !transaction.isArchived
+                }
+            )
+        )
+        .filter { transaction in
+            guard transaction.entryStatus == .posted,
+                  transaction.settlementRoleRawValue
+                    != InvestmentLedgerLegRole.investmentReserveUse.rawValue else {
+                return false
+            }
+            return transactionOwnerMap[transaction.id] == ownerUserID
+                || transaction.sourceWallet.map { walletOwnerMap[$0.id] == ownerUserID } == true
+                || transaction.destinationWallet.map { walletOwnerMap[$0.id] == ownerUserID } == true
+                || ownedInvestmentLedgerIDs.contains(transaction.id)
+        }
+        var transactionEvents = transactions.compactMap { transaction -> FundUsageTimelineEvent? in
+            guard !replacedEventIDs.contains(transaction.id) else { return nil }
+            return .transaction(transaction, transaction.snapshot)
+        }
+        if let proposedTransaction {
+            let sourceBelongsToOwner = proposedTransaction.sourceWalletID.map {
+                walletOwnerMap[$0] == ownerUserID
+            } == true
+            let destinationBelongsToOwner = proposedTransaction.destinationWalletID.map {
+                walletOwnerMap[$0] == ownerUserID
+            } == true
+            let existingBelongsToOwner = transactionOwnerMap[proposedTransaction.id] == ownerUserID
+            if sourceBelongsToOwner || destinationBelongsToOwner || existingBelongsToOwner {
+                let existing = transactions.first { $0.id == proposedTransaction.id }
+                transactionEvents.append(.transaction(existing, proposedTransaction))
+            }
+        }
+        let events = (basePostingEvents + transactionEvents)
+            .sorted { lhs, rhs in
+                if lhs.occurredAt != rhs.occurredAt { return lhs.occurredAt < rhs.occurredAt }
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+                if lhs.orderingPriority != rhs.orderingPriority {
+                    return lhs.orderingPriority < rhs.orderingPriority
+                }
+                return MistiaStableUUIDOrdering.precedes(lhs.id, rhs.id)
+            }
+
+        var bookedByWalletID: [UUID: Int64] = [:]
+        var unreconciledByWalletID: [UUID: Int64] = [:]
+        var expectations: [UUID: FundUsageTimelineExpectation] = [:]
+
+        func add(_ delta: Int64, to value: inout Int64) {
+            let (sum, overflow) = value.addingReportingOverflow(delta)
+            value = overflow ? (delta >= 0 ? .max : .min) : sum
+        }
+
+        for event in events {
+            switch event {
+            case .posting(let posting, let bucket):
+                guard walletsByID[posting.walletID] != nil else { continue }
+                switch bucket {
+                case .booked:
+                    add(posting.accountingAmountMinor, to: &bookedByWalletID[posting.walletID, default: 0])
+                case .unreconciled:
+                    add(posting.accountingAmountMinor, to: &unreconciledByWalletID[posting.walletID, default: 0])
+                }
+
+            case .transaction(let transaction, let record):
+                let deltaIndex = TransactionLogic.walletBalanceIndex(
+                    wallets: zeroBalanceSnapshots,
+                    records: [record]
+                )
+                var deltasByWalletID: [UUID: Int64] = [:]
+                for walletSnapshot in zeroBalanceSnapshots {
+                    let delta = deltaIndex.balance(for: walletSnapshot)
+                    if delta != 0 { deltasByWalletID[walletSnapshot.id] = delta }
+                }
+
+                if record.financialDomain == .ordinary {
+                    for (walletID, delta) in deltasByWalletID where delta < 0 {
+                        guard let wallet = walletsByID[walletID], wallet.kind != .creditCard else {
+                            continue
+                        }
+                        let requested = delta == .min ? Int64.max : -delta
+                        let booked = max(bookedByWalletID[walletID, default: 0], 0)
+                        let unreconciled = max(unreconciledByWalletID[walletID, default: 0], 0)
+                        let preview = InvestmentCashAllocationLogic.usagePreview(
+                            requestedMinor: requested,
+                            visibleWalletBalanceMinor: actualByWalletID[walletID, default: 0],
+                            bookedInvestmentMinor: booked,
+                            unreconciledInvestmentMinor: unreconciled,
+                            investmentInWalletMinor: booked + unreconciled
+                        )
+                        guard preview.investmentToUseMinor > 0 else { continue }
+                        bookedByWalletID[walletID, default: 0] -= preview.bookedToUseMinor
+                        unreconciledByWalletID[walletID, default: 0] -= preview.unreconciledToUseMinor
+
+                        if record.primaryKind == .transfer,
+                           record.transferSubtype == .internalTransfer,
+                           let destinationWalletID = record.destinationWalletID,
+                           record.destinationWalletKind != .creditCard,
+                           walletOwnerMap[destinationWalletID] == ownerUserID {
+                            add(
+                                preview.investmentToUseMinor,
+                                to: &bookedByWalletID[destinationWalletID, default: 0]
+                            )
+                        }
+                        if preview.unreconciledToUseMinor > 0 {
+                            add(
+                                preview.unreconciledToUseMinor,
+                                to: &actualByWalletID[walletID, default: 0]
+                            )
+                            add(
+                                -preview.unreconciledToUseMinor,
+                                to: &actualByWalletID[systemWalletID, default: 0]
+                            )
+                        }
+                        expectations[record.id] = FundUsageTimelineExpectation(
+                            transaction: transaction,
+                            walletID: walletID,
+                            preview: preview
+                        )
+                    }
+                }
+
+                for (walletID, delta) in deltasByWalletID {
+                    add(delta, to: &actualByWalletID[walletID, default: 0])
+                }
+            }
+        }
+        var availableByWalletID: [UUID: Int64] = [:]
+        for walletID in walletsByID.keys {
+            let booked = bookedByWalletID[walletID, default: 0]
+            let unreconciled = unreconciledByWalletID[walletID, default: 0]
+            let (total, overflow) = booked.addingReportingOverflow(unreconciled)
+            availableByWalletID[walletID] = overflow ? .max : max(total, 0)
+        }
+        return FundUsageTimelineSnapshot(
+            expectations: expectations,
+            availableByWalletID: availableByWalletID
+        )
     }
 
     private static func validateWalletSelection(

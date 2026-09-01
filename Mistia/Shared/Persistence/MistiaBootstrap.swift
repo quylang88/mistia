@@ -42,6 +42,25 @@ actor MistiaStartupMaintenanceWorker {
         )
     }
 
+    func reconcileInvestmentFundUsage(
+        ownerUserID: UUID,
+        now: Date = .now
+    ) throws -> [MistiaBootstrapSyncMutation] {
+        let context = ModelContext(modelContainer)
+        let result = try InvestmentPersistenceService.reconcileFundUsageTimeline(
+            ownerUserID: ownerUserID,
+            now: now,
+            context: context
+        )
+        let transactionMutations = result.ledgerTransactionIDs.map {
+            MistiaBootstrapSyncMutation(entity: .transaction, recordID: $0, modifiedAt: now)
+        }
+        let postingMutations = result.postingIDs.map {
+            MistiaBootstrapSyncMutation(entity: .investmentPosting, recordID: $0, modifiedAt: now)
+        }
+        return transactionMutations + postingMutations
+    }
+
     func cleanupExpiredArchivedData(
         signedInUserID: UUID,
         cleanupProtectionIndex: MistiaArchiveCleanupProtectionIndex
