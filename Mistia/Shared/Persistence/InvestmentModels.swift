@@ -659,9 +659,6 @@ nonisolated struct InvestmentFundUsageChangePreview: Equatable, Sendable {
     let previousInvestmentToUseMinor: Int64
 
     var proposedInvestmentToUseMinor: Int64 { proposed.investmentToUseMinor }
-    var additionalInvestmentToUseMinor: Int64 {
-        max(proposedInvestmentToUseMinor - previousInvestmentToUseMinor, 0)
-    }
     var investmentToRestoreMinor: Int64 {
         max(previousInvestmentToUseMinor - proposedInvestmentToUseMinor, 0)
     }

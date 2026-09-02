@@ -261,6 +261,12 @@ private struct TransactionEditorContextRowData: Identifiable {
 }
 
 private struct InvestmentFundUsagePrompt: Identifiable {
+    private enum Kind {
+        case use
+        case update
+        case restore
+    }
+
     enum Scope {
         case directTransaction
         case timelineImpact
@@ -277,7 +283,46 @@ private struct InvestmentFundUsagePrompt: Identifiable {
     let scope: Scope
     let continuation: Continuation
 
-    var preview: InvestmentFundUsagePreview { changePreview.proposed }
+    private var kind: Kind {
+        let previous = changePreview.previousInvestmentToUseMinor
+        let proposed = changePreview.proposedInvestmentToUseMinor
+        if proposed == 0 { return .restore }
+        if previous > 0, previous != proposed { return .update }
+        return .use
+    }
+
+    var title: String {
+        switch kind {
+        case .use: L10n.investment.wallet.useFundsTitle
+        case .update: L10n.investment.wallet.updateFundsTitle
+        case .restore: L10n.investment.wallet.restoreFundsTitle
+        }
+    }
+
+    var actionTitle: String {
+        switch kind {
+        case .use: L10n.investment.wallet.useFundsAction
+        case .update: L10n.investment.wallet.updateFundsAction
+        case .restore: L10n.investment.wallet.restoreFundsAction
+        }
+    }
+
+    var message: String {
+        let previous = changePreview.previousInvestmentToUseMinor
+            .formattedCurrency(code: currencyCode)
+        let proposed = changePreview.proposedInvestmentToUseMinor
+            .formattedCurrency(code: currencyCode)
+        let remaining = changePreview.proposed.remainingInvestmentInWalletMinor
+            .formattedCurrency(code: currencyCode)
+        switch kind {
+        case .use:
+            return L10n.investment.wallet.useFundsMessage(proposed, remaining)
+        case .update:
+            return L10n.investment.wallet.updateFundsMessage(previous, proposed, remaining)
+        case .restore:
+            return L10n.investment.wallet.restoreFundsMessage(previous, remaining)
+        }
+    }
 }
 
 private struct InvestmentAutomaticCashRefillPrompt: Identifiable, Equatable {
@@ -801,13 +846,13 @@ struct TransactionEditorSheet: View {
             Text(transferPermissionMessage(for: prompt))
         }
         .alert(
-            investmentFundUsagePrompt.map(investmentFundUsagePromptTitle)
+            investmentFundUsagePrompt?.title
                 ?? L10n.investment.wallet.useFundsTitle,
             isPresented: investmentFundUsagePromptPresented,
             presenting: investmentFundUsagePrompt
         ) { prompt in
             Button(L10n.common.cancel, role: .cancel) { }
-            Button(investmentFundUsagePromptAction(prompt)) {
+            Button(prompt.actionTitle) {
                 switch prompt.scope {
                 case .directTransaction:
                     confirmedInvestmentFundUsageChange = prompt.changePreview
@@ -823,7 +868,7 @@ struct TransactionEditorSheet: View {
                 }
             }
         } message: { prompt in
-            Text(investmentFundUsagePromptMessage(prompt))
+            Text(prompt.message)
         }
         .modifier(
             InvestmentAutomaticCashRefillAlertModifier(
@@ -3248,17 +3293,12 @@ struct TransactionEditorSheet: View {
             case .requiresConfirmation:
                 break
             }
-            if confirmedInvestmentFundUsageChange == changePreview {
-                return true
-            }
-            confirmedInvestmentFundUsageChange = nil
-            investmentFundUsagePrompt = InvestmentFundUsagePrompt(
-                changePreview: changePreview,
+            return requestInvestmentFundUsageConfirmation(
+                changePreview,
                 currencyCode: wallet.currencyCode,
                 scope: .directTransaction,
                 continuation: continuation
             )
-            return false
         } catch {
             alertMessage = error.localizedDescription
             return false
@@ -3291,17 +3331,12 @@ struct TransactionEditorSheet: View {
                 context: modelContext
             )
             guard changePreview.requiresConfirmation else { return true }
-            if confirmedInvestmentFundUsageChange == changePreview {
-                return true
-            }
-            confirmedInvestmentFundUsageChange = nil
-            investmentFundUsagePrompt = InvestmentFundUsagePrompt(
-                changePreview: changePreview,
+            return requestInvestmentFundUsageConfirmation(
+                changePreview,
                 currencyCode: wallet.currencyCode,
                 scope: .directTransaction,
                 continuation: .saveFullTransaction
             )
-            return false
         } catch {
             alertMessage = error.localizedDescription
             return false
@@ -3409,63 +3444,39 @@ struct TransactionEditorSheet: View {
                     return true
                 }
             }
-            if confirmedInvestmentTimelineChange == changePreview {
-                return true
-            }
-            confirmedInvestmentTimelineChange = nil
-            investmentFundUsagePrompt = InvestmentFundUsagePrompt(
-                changePreview: changePreview,
+            return requestInvestmentFundUsageConfirmation(
+                changePreview,
                 currencyCode: timelinePreview.currencyCode,
                 scope: .timelineImpact,
                 continuation: .saveFullTransaction
             )
-            return false
         } catch {
             alertMessage = error.localizedDescription
             return false
         }
     }
 
-    private func investmentFundUsagePromptTitle(_ prompt: InvestmentFundUsagePrompt) -> String {
-        if prompt.changePreview.proposedInvestmentToUseMinor == 0 {
-            return L10n.investment.wallet.restoreFundsTitle
+    private func requestInvestmentFundUsageConfirmation(
+        _ changePreview: InvestmentFundUsageChangePreview,
+        currencyCode: String,
+        scope: InvestmentFundUsagePrompt.Scope,
+        continuation: InvestmentFundUsagePrompt.Continuation
+    ) -> Bool {
+        switch scope {
+        case .directTransaction:
+            guard confirmedInvestmentFundUsageChange != changePreview else { return true }
+            confirmedInvestmentFundUsageChange = nil
+        case .timelineImpact:
+            guard confirmedInvestmentTimelineChange != changePreview else { return true }
+            confirmedInvestmentTimelineChange = nil
         }
-        if prompt.changePreview.previousInvestmentToUseMinor > 0,
-           prompt.changePreview.previousInvestmentToUseMinor
-            != prompt.changePreview.proposedInvestmentToUseMinor {
-            return L10n.investment.wallet.updateFundsTitle
-        }
-        return L10n.investment.wallet.useFundsTitle
-    }
-
-    private func investmentFundUsagePromptAction(_ prompt: InvestmentFundUsagePrompt) -> String {
-        if prompt.changePreview.proposedInvestmentToUseMinor == 0 {
-            return L10n.investment.wallet.restoreFundsAction
-        }
-        if prompt.changePreview.previousInvestmentToUseMinor > 0,
-           prompt.changePreview.previousInvestmentToUseMinor
-            != prompt.changePreview.proposedInvestmentToUseMinor {
-            return L10n.investment.wallet.updateFundsAction
-        }
-        return L10n.investment.wallet.useFundsAction
-    }
-
-    private func investmentFundUsagePromptMessage(_ prompt: InvestmentFundUsagePrompt) -> String {
-        let previous = prompt.changePreview.previousInvestmentToUseMinor
-            .formattedCurrency(code: prompt.currencyCode)
-        let proposed = prompt.changePreview.proposedInvestmentToUseMinor
-            .formattedCurrency(code: prompt.currencyCode)
-        let remaining = prompt.preview.remainingInvestmentInWalletMinor
-            .formattedCurrency(code: prompt.currencyCode)
-        if prompt.changePreview.proposedInvestmentToUseMinor == 0 {
-            return L10n.investment.wallet.restoreFundsMessage(previous, remaining)
-        }
-        if prompt.changePreview.previousInvestmentToUseMinor > 0,
-           prompt.changePreview.previousInvestmentToUseMinor
-            != prompt.changePreview.proposedInvestmentToUseMinor {
-            return L10n.investment.wallet.updateFundsMessage(previous, proposed, remaining)
-        }
-        return L10n.investment.wallet.useFundsMessage(proposed, remaining)
+        investmentFundUsagePrompt = InvestmentFundUsagePrompt(
+            changePreview: changePreview,
+            currencyCode: currencyCode,
+            scope: scope,
+            continuation: continuation
+        )
+        return false
     }
 
     private func postponeAutomaticCashRefill(_ prompt: InvestmentAutomaticCashRefillPrompt) {

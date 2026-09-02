@@ -2815,9 +2815,7 @@ private struct InvestmentTradeEditorSheet: View {
                         transactionID: transactionID,
                         context: modelContext
                     )
-                    persistenceResult.walletIDs.formUnion(cleared.walletIDs)
-                    persistenceResult.postingIDs.formUnion(cleared.postingIDs)
-                    persistenceResult.ledgerTransactionIDs.formUnion(cleared.ledgerTransactionIDs)
+                    persistenceResult.formUnion(cleared)
                 }
                 if let usagePreview,
                    let transactionID = savedTrade.fundingLedgerTransactionID,
@@ -2829,9 +2827,7 @@ private struct InvestmentTradeEditorSheet: View {
                         preview: usagePreview,
                         context: modelContext
                     )
-                    persistenceResult.walletIDs.formUnion(usageResult.walletIDs)
-                    persistenceResult.postingIDs.formUnion(usageResult.postingIDs)
-                    persistenceResult.ledgerTransactionIDs.formUnion(usageResult.ledgerTransactionIDs)
+                    persistenceResult.formUnion(usageResult)
                     try modelContext.save()
                 }
                 sessionStore.recordUpsert(
