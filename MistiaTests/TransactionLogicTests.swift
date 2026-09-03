@@ -3,6 +3,59 @@ import XCTest
 @testable import Mistia
 
 final class TransactionLogicTests: XCTestCase {
+    func testInternalTransferIncomingAmountUsesSourceAmountForSameCurrency() {
+        XCTAssertEqual(
+            TransactionLogic.internalTransferIncomingAmount(
+                sourceAmountMinor: 12_000,
+                destinationAmountMinor: nil
+            ),
+            12_000
+        )
+    }
+
+    func testInternalTransferIncomingAmountUsesConvertedDestinationAmount() {
+        XCTAssertEqual(
+            TransactionLogic.internalTransferIncomingAmount(
+                sourceAmountMinor: 12_000,
+                destinationAmountMinor: 2_100_000
+            ),
+            2_100_000
+        )
+    }
+
+    func testSameCurrencyBankTransferCreditsNewZeroBalanceBankWallet() {
+        let sourceWalletID = UUID()
+        let destinationWalletID = UUID()
+        let sourceWallet = TransactionWalletSnapshot(
+            id: sourceWalletID,
+            kind: .bank,
+            openingBalanceMinor: 50_000
+        )
+        let newDestinationWallet = TransactionWalletSnapshot(
+            id: destinationWalletID,
+            kind: .bank,
+            openingBalanceMinor: 0
+        )
+        let transfer = record(
+            primaryKind: .transfer,
+            amountMinor: 12_000,
+            currencyCode: "JPY",
+            transferSubtype: .internalTransfer,
+            sourceWalletID: sourceWalletID,
+            sourceWalletKind: .bank,
+            destinationWalletID: destinationWalletID,
+            destinationWalletKind: .bank
+        )
+
+        let balances = TransactionLogic.walletBalanceIndex(
+            wallets: [sourceWallet, newDestinationWallet],
+            records: [transfer]
+        )
+
+        XCTAssertEqual(balances.balance(for: sourceWallet), 38_000)
+        XCTAssertEqual(balances.balance(for: newDestinationWallet), 12_000)
+    }
+
     func testOpenDebtPositionsAreGroupedByCounterpartyAndCurrency() {
         let personKey = TransactionLogic.normalizeCounterpartyName("An")!
         let lendWalletID = UUID()

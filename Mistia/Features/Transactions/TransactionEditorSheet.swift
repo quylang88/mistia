@@ -3227,7 +3227,7 @@ struct TransactionEditorSheet: View {
             from: sourceCurrencyCode,
             to: destinationCurrencyCode,
             rates: rates
-        ) else {
+        ), converted > 0 else {
             alertMessage = L10n.transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates
             return CurrencyConversionResolution(isValid: false, amountMinor: nil, mode: .appRate, rateDecimalString: nil, rateProvider: nil, rateDate: nil)
         }
@@ -3529,11 +3529,13 @@ struct TransactionEditorSheet: View {
                 sourceCurrencyCode: sourceWallet.currencyCode,
                 destinationCurrencyCode: destinationWallet.currencyCode
             )
-            guard destinationAmount.isValid,
-                  let resolvedIncomingMinor = destinationAmount.amountMinor,
-                  resolvedIncomingMinor > 0 else {
+            guard destinationAmount.isValid else {
                 return false
             }
+            let resolvedIncomingMinor = TransactionLogic.internalTransferIncomingAmount(
+                sourceAmountMinor: amountMinor,
+                destinationAmountMinor: destinationAmount.amountMinor
+            )
             receivingWallet = destinationWallet
             incomingMinor = resolvedIncomingMinor
             ownerUserID = destinationOwnerUserID

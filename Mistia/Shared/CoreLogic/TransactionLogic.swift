@@ -1191,6 +1191,13 @@ nonisolated enum SettlementLogic {
 }
 
 nonisolated enum TransactionLogic {
+    static func internalTransferIncomingAmount(
+        sourceAmountMinor: Int64,
+        destinationAmountMinor: Int64?
+    ) -> Int64 {
+        destinationAmountMinor ?? sourceAmountMinor
+    }
+
     static func crossCurrencyTransferDestinationDisplay(
         for record: TransactionRecordSnapshot
     ) -> TransactionCrossCurrencyTransferDestinationDisplay? {
@@ -2022,7 +2029,10 @@ nonisolated enum TransactionLogic {
                     applyDelta(
                         walletID: record.destinationWalletID,
                         explicitKind: record.destinationWalletKind,
-                        amount: record.destinationAmountMinor ?? record.amountMinor,
+                        amount: internalTransferIncomingAmount(
+                            sourceAmountMinor: record.amountMinor,
+                            destinationAmountMinor: record.destinationAmountMinor
+                        ),
                         delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
                     )
                 case .familyTransfer:
@@ -2326,7 +2336,10 @@ nonisolated enum TransactionLogic {
                 if record.destinationWalletID == wallet.id {
                     delta += incomingDelta(
                         for: wallet.kind,
-                        amount: record.destinationAmountMinor ?? record.amountMinor
+                        amount: internalTransferIncomingAmount(
+                            sourceAmountMinor: record.amountMinor,
+                            destinationAmountMinor: record.destinationAmountMinor
+                        )
                     )
                 }
 
