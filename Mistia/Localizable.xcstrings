@@ -17458,6 +17458,29 @@
         }
       }
     },
+    "planning.bill.archive.unpaidCyclesMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This bill still has an unpaid payment in the current or a past month. Complete all payments before archiving it."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この請求には、今月または過去の月に未払いの支払いが残っています。すべての支払いを完了してからアーカイブしてください。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hóa đơn này vẫn còn khoản chưa thanh toán trong tháng hiện tại hoặc các tháng trước. Hãy hoàn tất tất cả thanh toán trước khi lưu trữ."
+          }
+        }
+      }
+    },
     "planning.planning.accessRequested" : {
       "extractionState" : "stale",
       "localizations" : {

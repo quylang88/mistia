@@ -865,7 +865,8 @@ extension RecurringBillPlan {
             autoPayDate: resolvedScheduleKind == .oneTime ? autoPayDate : nil,
             isPaused: isPaused,
             pausedAt: pausedAt,
-            resumeStartMonth: resumeStartMonth
+            resumeStartMonth: resumeStartMonth,
+            isArchived: isArchived
         )
     }
 }

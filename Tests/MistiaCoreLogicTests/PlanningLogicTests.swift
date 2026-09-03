@@ -1287,6 +1287,149 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(item?.linkedTransactionID, paidTransactionID)
     }
 
+    func testArchivedBillKeepsPaidHistoryButDoesNotCreateCurrentOrFutureItems() {
+        let billID = UUID()
+        let paidMonth = makeDate(year: 2026, month: 6, day: 1)
+        let currentMonth = makeDate(year: 2026, month: 7, day: 1)
+        let bill = PlanningBillSnapshot(
+            id: billID,
+            name: "Internet",
+            iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+            categorySystemKey: .internet,
+            amountMinor: 5_000,
+            dueDay: 5,
+            frequencyMonths: 1,
+            paymentWalletID: UUID(),
+            currencyCode: "JPY",
+            createdAt: makeDate(year: 2026, month: 1, day: 1),
+            scheduleKind: .recurring,
+            paymentStartDay: 5,
+            firstScheduledMonth: makeDate(year: 2026, month: 1, day: 1),
+            isArchived: true
+        )
+        let paidOccurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: PlanningLogic.monthKey(for: paidMonth, calendar: calendar),
+            scheduledDate: makeDate(year: 2026, month: 6, day: 5),
+            amountMinorSnapshot: 5_000,
+            status: .paid,
+            linkedTransactionID: UUID()
+        )
+
+        let paidHistory = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [paidOccurrence],
+            selectedMonth: paidMonth,
+            calendar: calendar
+        )
+        let currentItems = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [paidOccurrence],
+            selectedMonth: currentMonth,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(paidHistory.count, 1)
+        XCTAssertEqual(paidHistory.first?.status, .paid)
+        XCTAssertEqual(paidHistory.first?.isSourceArchived, true)
+        XCTAssertTrue(currentItems.isEmpty)
+    }
+
+    func testBillArchiveValidationRequiresEveryCycleThroughCurrentMonthToBeResolved() {
+        let billID = UUID()
+        let may = makeDate(year: 2026, month: 5, day: 1)
+        let june = makeDate(year: 2026, month: 6, day: 1)
+        let july = makeDate(year: 2026, month: 7, day: 1)
+        let bill = PlanningBillSnapshot(
+            id: billID,
+            name: "Internet",
+            iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+            categorySystemKey: .internet,
+            amountMinor: 5_000,
+            dueDay: 5,
+            frequencyMonths: 1,
+            paymentWalletID: UUID(),
+            currencyCode: "JPY",
+            createdAt: may,
+            scheduleKind: .recurring,
+            paymentStartDay: 5,
+            firstScheduledMonth: may
+        )
+        let resolvedOccurrences = [
+            PlanningDueOccurrenceSnapshot(
+                id: UUID(),
+                sourceKind: .recurringBill,
+                sourceID: billID,
+                selectedMonthKey: PlanningLogic.monthKey(for: may, calendar: calendar),
+                scheduledDate: makeDate(year: 2026, month: 5, day: 5),
+                amountMinorSnapshot: 5_000,
+                status: .paid,
+                linkedTransactionID: UUID()
+            ),
+            PlanningDueOccurrenceSnapshot(
+                id: UUID(),
+                sourceKind: .recurringBill,
+                sourceID: billID,
+                selectedMonthKey: PlanningLogic.monthKey(for: june, calendar: calendar),
+                scheduledDate: makeDate(year: 2026, month: 6, day: 5),
+                amountMinorSnapshot: 5_000,
+                status: .paid,
+                linkedTransactionID: UUID()
+            )
+        ]
+
+        XCTAssertTrue(
+            PlanningLogic.hasUnpaidBillCyclesThroughCurrentMonth(
+                bill: bill,
+                occurrences: resolvedOccurrences,
+                referenceDate: makeDate(year: 2026, month: 7, day: 20),
+                calendar: calendar
+            )
+        )
+
+        let currentSkipped = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: PlanningLogic.monthKey(for: july, calendar: calendar),
+            scheduledDate: makeDate(year: 2026, month: 7, day: 5),
+            amountMinorSnapshot: 5_000,
+            status: .skipped,
+            linkedTransactionID: nil
+        )
+
+        XCTAssertTrue(
+            PlanningLogic.hasUnpaidBillCyclesThroughCurrentMonth(
+                bill: bill,
+                occurrences: resolvedOccurrences + [currentSkipped],
+                referenceDate: makeDate(year: 2026, month: 7, day: 20),
+                calendar: calendar
+            )
+        )
+
+        let currentPaid = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: PlanningLogic.monthKey(for: july, calendar: calendar),
+            scheduledDate: makeDate(year: 2026, month: 7, day: 5),
+            amountMinorSnapshot: 5_000,
+            status: .paid,
+            linkedTransactionID: UUID()
+        )
+
+        XCTAssertFalse(
+            PlanningLogic.hasUnpaidBillCyclesThroughCurrentMonth(
+                bill: bill,
+                occurrences: resolvedOccurrences + [currentPaid],
+                referenceDate: makeDate(year: 2026, month: 7, day: 20),
+                calendar: calendar
+            )
+        )
+    }
+
     func testRecurringBillWindowKeepsDeadlineInSameMonthWhenDueDayIsAfterPaymentStart() {
         let items = PlanningLogic.recurringBillDueItems(
             bills: [
@@ -2685,7 +2828,7 @@ final class PlanningLogicTests: XCTestCase {
             frequencyMonths: 1,
             paymentWalletID: nil,
             currencyCode: "JPY",
-            createdAt: .now
+            createdAt: selectedMonth
         )
 
         let occurrence = PlanningDueOccurrenceSnapshot(

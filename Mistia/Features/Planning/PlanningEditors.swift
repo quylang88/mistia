@@ -1050,6 +1050,8 @@ struct PlanningBillEditorSheet: View {
     private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
+    private var storedOccurrences: [DueOccurrenceRecord]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningBillEditorTarget
@@ -1634,11 +1636,22 @@ struct PlanningBillEditorSheet: View {
     private func archivePlan() {
         guard let plan = target.plan else { return }
         let now = Date()
+        if PlanningLogic.hasUnpaidBillCyclesThroughCurrentMonth(
+            bill: plan.planningSnapshot,
+            occurrences: storedOccurrences.lazy.map(\.planningSnapshot),
+            referenceDate: now,
+            calendar: calendar
+        ) {
+            alertMessage = L10n.planning.bill.archive.unpaidCyclesMessage
+            return
+        }
+
         plan.isArchived = true
         plan.updatedAt = now
 
         do {
             try modelContext.save()
+            MistiaRecurringBillMaintenance.resolveNotifications(for: plan.id, modelContext: modelContext)
             sessionStore.recordUpsert(
                 entity: .recurringBillPlan,
                 recordID: plan.id,

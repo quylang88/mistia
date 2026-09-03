@@ -89,30 +89,45 @@ nonisolated enum MistiaBootstrap {
 
         var txDescriptor = FetchDescriptor<LedgerTransaction>()
         txDescriptor.predicate = #Predicate<LedgerTransaction> {
-            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+            $0.isArchived == true && $0.archivedAt != nil
         }
-        let expiredTransactions = try modelContext.fetch(txDescriptor)
+        let expiredTransactions = try modelContext.fetch(txDescriptor).filter {
+            $0.archivedAt.map { $0 < thresholdDate } ?? false
+        }
 
         var walletDescriptor = FetchDescriptor<LedgerWallet>()
         walletDescriptor.predicate = #Predicate<LedgerWallet> {
-            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+            $0.isArchived == true && $0.archivedAt != nil
         }
-        let expiredWallets = try modelContext.fetch(walletDescriptor)
+        let expiredWallets = try modelContext.fetch(walletDescriptor).filter {
+            $0.archivedAt.map { $0 < thresholdDate } ?? false
+        }
 
         var categoryDescriptor = FetchDescriptor<TransactionCategory>()
         categoryDescriptor.predicate = #Predicate<TransactionCategory> {
-            $0.isArchived == true && $0.archivedAt != nil && $0.archivedAt! < thresholdDate
+            $0.isArchived == true && $0.archivedAt != nil
         }
-        let expiredCategories = try modelContext.fetch(categoryDescriptor)
+        let expiredCategories = try modelContext.fetch(categoryDescriptor).filter {
+            $0.archivedAt.map { $0 < thresholdDate } ?? false
+        }
 
-        guard !expiredTransactions.isEmpty || !expiredWallets.isEmpty || !expiredCategories.isEmpty else {
+        var billDescriptor = FetchDescriptor<RecurringBillPlan>()
+        billDescriptor.predicate = #Predicate<RecurringBillPlan> {
+            $0.isArchived == true && $0.updatedAt < thresholdDate
+        }
+        let expiredBills = try modelContext.fetch(billDescriptor)
+
+        guard !expiredTransactions.isEmpty
+                || !expiredWallets.isEmpty
+                || !expiredCategories.isEmpty
+                || !expiredBills.isEmpty else {
             return []
         }
 
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
             from: ownershipScopes,
-            entities: [.transaction, .wallet, .category]
+            entities: [.transaction, .wallet, .category, .recurringBillPlan]
         )
 
         var deleteMutations: [MistiaBootstrapDeleteMutation] = []
@@ -194,6 +209,31 @@ nonisolated enum MistiaBootstrap {
                 recordID: category.id
             ) {
                 modelContext.delete(category)
+                didDelete = true
+            }
+        }
+
+        for bill in expiredBills {
+            guard MistiaArchiveRetention.canAutomaticallyCleanup(
+                recordOwnerUserID: ownerMaps[.recurringBillPlan][bill.id],
+                signedInUserID: signedInUserID
+            ) else {
+                continue
+            }
+
+            if bill.deletedAt == nil {
+                bill.markDeleted(at: .now)
+                deleteMutations.append(MistiaBootstrapDeleteMutation(
+                    entity: .recurringBillPlan,
+                    recordID: bill.id,
+                    modifiedAt: bill.updatedAt
+                ))
+                didDelete = true
+            } else if cleanupProtectionIndex.canHardPurge(
+                entity: .recurringBillPlan,
+                recordID: bill.id
+            ) {
+                modelContext.delete(bill)
                 didDelete = true
             }
         }

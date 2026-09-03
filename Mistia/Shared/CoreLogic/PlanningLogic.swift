@@ -636,6 +636,7 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let isPaused: Bool
     let pausedAt: Date?
     let resumeStartMonth: Date?
+    let isArchived: Bool
 
     init(
         id: UUID,
@@ -662,7 +663,8 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         autoPayDate: Date? = nil,
         isPaused: Bool = false,
         pausedAt: Date? = nil,
-        resumeStartMonth: Date? = nil
+        resumeStartMonth: Date? = nil,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -689,6 +691,7 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         self.isPaused = isPaused
         self.pausedAt = pausedAt
         self.resumeStartMonth = resumeStartMonth
+        self.isArchived = isArchived
     }
 }
 
@@ -755,6 +758,7 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
     let linkedTransactionID: UUID?
     let autoPayEnabled: Bool
     let autoPayDate: Date?
+    let isSourceArchived: Bool
 
     init(
         id: UUID,
@@ -778,7 +782,8 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
         status: PlanningDueOccurrenceStatus,
         linkedTransactionID: UUID?,
         autoPayEnabled: Bool = false,
-        autoPayDate: Date? = nil
+        autoPayDate: Date? = nil,
+        isSourceArchived: Bool = false
     ) {
         self.id = id
         self.sourceKind = sourceKind
@@ -802,6 +807,7 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
         self.linkedTransactionID = linkedTransactionID
         self.autoPayEnabled = autoPayEnabled
         self.autoPayDate = autoPayDate
+        self.isSourceArchived = isSourceArchived
     }
 }
 
@@ -1901,6 +1907,69 @@ nonisolated enum PlanningLogic {
         )
     }
 
+    static func hasUnpaidBillCyclesThroughCurrentMonth<Occurrences: Sequence>(
+        bill: PlanningBillSnapshot,
+        occurrences: Occurrences,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> Bool where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let currentMonth = startOfMonth(for: referenceDate, calendar: calendar)
+        let firstRelevantMonth: Date
+
+        switch bill.scheduleKind {
+        case .recurring:
+            firstRelevantMonth = startOfMonth(
+                for: bill.resumeStartMonth ?? bill.firstScheduledMonth ?? bill.createdAt,
+                calendar: calendar
+            )
+        case .oneTime:
+            guard let paymentStartDate = bill.paymentStartDate else { return false }
+            firstRelevantMonth = startOfMonth(for: paymentStartDate, calendar: calendar)
+        }
+
+        let lastRelevantMonth: Date
+        if bill.scheduleKind == .recurring,
+           bill.isPaused,
+           let pausedAt = bill.pausedAt {
+            lastRelevantMonth = min(
+                currentMonth,
+                startOfMonth(for: pausedAt, calendar: calendar)
+            )
+        } else {
+            lastRelevantMonth = currentMonth
+        }
+
+        guard firstRelevantMonth <= lastRelevantMonth else { return false }
+
+        var selectedMonth = firstRelevantMonth
+        while selectedMonth <= lastRelevantMonth {
+            let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+            let occurrence = firstOccurrence(
+                for: .recurringBill,
+                sourceID: bill.id,
+                selectedMonthKey: selectedMonthKey,
+                occurrences: occurrences
+            )
+            if let item = makeRecurringBillDueItem(
+                bill: bill,
+                occurrence: occurrence,
+                selectedMonth: selectedMonth,
+                calendar: calendar,
+                ignoresPauseState: true
+            ), item.status != .paid {
+                return true
+            }
+
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: selectedMonth),
+                  nextMonth > selectedMonth else {
+                break
+            }
+            selectedMonth = nextMonth
+        }
+
+        return false
+    }
+
     static func recurringBillAmountTotalsByCurrency(
         _ items: [PlanningRecurringDueSnapshot]
     ) -> [PlanningCurrencyAmountTotalSnapshot] {
@@ -2226,22 +2295,26 @@ nonisolated enum PlanningLogic {
     private static func recurringBillWindow(
         for bill: PlanningBillSnapshot,
         selectedMonth: Date,
-        calendar: Calendar
+        calendar: Calendar,
+        ignoresPauseState: Bool = false,
+        assumesScheduledMonth: Bool = false
     ) -> RecurringBillWindow? {
         switch bill.scheduleKind {
         case .recurring:
-            guard !bill.isPaused else {
+            guard ignoresPauseState || !bill.isPaused else {
                 return nil
             }
             let scheduleAnchor = bill.resumeStartMonth ?? bill.firstScheduledMonth ?? bill.createdAt
-            guard isScheduledMonth(
-                selectedMonth: selectedMonth,
-                anchorDate: scheduleAnchor,
-                frequencyMonths: bill.frequencyMonths,
-                totalCycles: nil,
-                calendar: calendar
-            ) else {
-                return nil
+            if !assumesScheduledMonth {
+                guard isScheduledMonth(
+                    selectedMonth: selectedMonth,
+                    anchorDate: scheduleAnchor,
+                    frequencyMonths: bill.frequencyMonths,
+                    totalCycles: nil,
+                    calendar: calendar
+                ) else {
+                    return nil
+                }
             }
 
             let paymentStartDate = scheduledDate(
@@ -2279,7 +2352,10 @@ nonisolated enum PlanningLogic {
 
         case .oneTime:
             guard let paymentStartDate = bill.paymentStartDate else { return nil }
-            guard isSameMonth(paymentStartDate, other: selectedMonth, calendar: calendar) else { return nil }
+            guard assumesScheduledMonth
+                    || isSameMonth(paymentStartDate, other: selectedMonth, calendar: calendar) else {
+                return nil
+            }
 
             let hasExplicitDueDate = bill.hasExplicitDueDate
                 && bill.dueDate != nil
@@ -2912,12 +2988,18 @@ nonisolated enum PlanningLogic {
         bill: PlanningBillSnapshot,
         occurrence: PlanningDueOccurrenceSnapshot?,
         selectedMonth: Date,
-        calendar: Calendar
+        calendar: Calendar,
+        ignoresPauseState: Bool = false
     ) -> PlanningRecurringDueSnapshot? {
+        let preservesArchivedPayment = bill.isArchived && occurrence?.status == .paid
+        guard !bill.isArchived || preservesArchivedPayment else { return nil }
+
         let window = recurringBillWindow(
             for: bill,
             selectedMonth: selectedMonth,
-            calendar: calendar
+            calendar: calendar,
+            ignoresPauseState: ignoresPauseState || preservesArchivedPayment,
+            assumesScheduledMonth: preservesArchivedPayment
         )
         guard let window else { return nil }
 
@@ -2943,7 +3025,8 @@ nonisolated enum PlanningLogic {
             status: occurrence?.status ?? .pending,
             linkedTransactionID: occurrence?.linkedTransactionID,
             autoPayEnabled: bill.autoPayEnabled,
-            autoPayDate: window.autoPayDate
+            autoPayDate: window.autoPayDate,
+            isSourceArchived: bill.isArchived
         )
     }
 

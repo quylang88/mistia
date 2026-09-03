@@ -8,6 +8,7 @@ enum MistiaRestoreError: Error {
 
 private enum ArchivedItemSelection: Hashable {
     case transaction(UUID)
+    case bill(UUID)
     case wallet(UUID)
     case category(UUID)
     case settlementGroup(UUID)
@@ -49,6 +50,7 @@ private struct ArchivedTransactionDescriptor {
 private struct ManagementArchivedItemsSnapshot {
     let activeTransactions: [LedgerTransaction]
     let archivedTransactions: [LedgerTransaction]
+    let archivedBills: [RecurringBillPlan]
     let archivedWallets: [LedgerWallet]
     let archivedCategories: [TransactionCategory]
     let archivedSettlementGroups: [SettlementGroup]
@@ -60,6 +62,7 @@ private struct ManagementArchivedItemsSnapshot {
     let availableSelections: Set<ArchivedItemSelection>
 
     private let archivedTransactionsByID: [UUID: LedgerTransaction]
+    private let archivedBillsByID: [UUID: RecurringBillPlan]
     private let archivedWalletsByID: [UUID: LedgerWallet]
     private let archivedCategoriesByID: [UUID: TransactionCategory]
     private let archivedSettlementGroupsByID: [UUID: SettlementGroup]
@@ -67,6 +70,7 @@ private struct ManagementArchivedItemsSnapshot {
     init(
         activeTransactions: [LedgerTransaction],
         archivedTransactions: [LedgerTransaction],
+        archivedBills: [RecurringBillPlan],
         archivedWallets: [LedgerWallet],
         archivedCategories: [TransactionCategory],
         archivedSettlementGroups: [SettlementGroup],
@@ -79,6 +83,7 @@ private struct ManagementArchivedItemsSnapshot {
     ) {
         self.activeTransactions = activeTransactions
         self.archivedTransactions = archivedTransactions
+        self.archivedBills = archivedBills
         self.archivedWallets = archivedWallets
         self.archivedCategories = archivedCategories
         self.archivedSettlementGroups = archivedSettlementGroups
@@ -89,6 +94,9 @@ private struct ManagementArchivedItemsSnapshot {
         self.ownerMaps = ownerMaps
         self.archivedTransactionsByID = buildsLookupIndexes
             ? Dictionary(uniqueKeysWithValues: archivedTransactions.map { ($0.id, $0) })
+            : [:]
+        self.archivedBillsByID = buildsLookupIndexes
+            ? Dictionary(uniqueKeysWithValues: archivedBills.map { ($0.id, $0) })
             : [:]
         self.archivedWalletsByID = buildsLookupIndexes
             ? Dictionary(uniqueKeysWithValues: archivedWallets.map { ($0.id, $0) })
@@ -103,12 +111,16 @@ private struct ManagementArchivedItemsSnapshot {
         var selections = Set<ArchivedItemSelection>()
         selections.reserveCapacity(
             archivedTransactions.count
+                + archivedBills.count
                 + archivedWallets.count
                 + archivedCategories.count
                 + archivedSettlementGroups.count
         )
         for transaction in archivedTransactions {
             selections.insert(.transaction(transaction.id))
+        }
+        for bill in archivedBills {
+            selections.insert(.bill(bill.id))
         }
         for wallet in archivedWallets {
             selections.insert(.wallet(wallet.id))
@@ -128,6 +140,10 @@ private struct ManagementArchivedItemsSnapshot {
 
     func archivedTransaction(id: UUID) -> LedgerTransaction? {
         archivedTransactionsByID[id]
+    }
+
+    func archivedBill(id: UUID) -> RecurringBillPlan? {
+        archivedBillsByID[id]
     }
 
     func archivedWallet(id: UUID) -> LedgerWallet? {
@@ -296,6 +312,7 @@ struct ManagementArchivedItemsView: View {
             from: ownershipScopes,
             entities: [
                 .transaction,
+                .recurringBillPlan,
                 .wallet,
                 .category,
                 .settlementGroup,
@@ -319,6 +336,13 @@ struct ManagementArchivedItemsView: View {
             signedInUserID: sessionStore.signedInUserID
         )
         .filter { !TransactionLogic.isEventGeneratedSharedExpenseDebt($0.snapshot) }
+        let archivedBills = MistiaRecordOwnershipStore.visibleRecords(
+            allBills.filter(\.isArchived),
+            entity: .recurringBillPlan,
+            ownerMap: ownerMaps[.recurringBillPlan],
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
         let archivedWallets = MistiaRecordOwnershipStore.visibleRecords(
             self.archivedWallets,
             entity: .wallet,
@@ -354,6 +378,7 @@ struct ManagementArchivedItemsView: View {
         return ManagementArchivedItemsSnapshot(
             activeTransactions: activeTransactions,
             archivedTransactions: archivedTransactions,
+            archivedBills: archivedBills,
             archivedWallets: archivedWallets,
             archivedCategories: archivedCategories,
             archivedSettlementGroups: archivedSettlementGroups,
@@ -502,6 +527,31 @@ struct ManagementArchivedItemsView: View {
                 }
             }
 
+            if !snapshot.archivedBills.isEmpty {
+                ManagementSection(
+                    title: L10n.planning.planning.bills2,
+                    titleColor: sectionLabelColor
+                ) {
+                    ForEach(snapshot.archivedBills) { bill in
+                        ArchivedDetailRow(
+                            title: bill.name,
+                            subtitle: billSubtitle(for: bill),
+                            icon: bill.category?.iconSymbolName ?? bill.iconSymbolName,
+                            iconTint: Color(
+                                hex: bill.category?.iconColorHex
+                                    ?? MistiaFinanceIconRegistry.defaultColorHex(for: bill.iconSymbolName)
+                            ),
+                            archivedAt: bill.updatedAt,
+                            isSelecting: isSelecting,
+                            isSelected: selectedItems.contains(.bill(bill.id)),
+                            onToggleSelection: { toggleSelection(.bill(bill.id)) },
+                            onRestore: { restoreSelections([.bill(bill.id)]) },
+                            onDelete: { deleteSelections([.bill(bill.id)]) }
+                        )
+                    }
+                }
+            }
+
             if !snapshot.archivedTransactions.isEmpty {
                 ManagementSection(
                     title: L10n.management.managementarchiveditems.transactions,
@@ -594,6 +644,14 @@ struct ManagementArchivedItemsView: View {
         }
 
         return category.kind.title
+    }
+
+    private func billSubtitle(for bill: RecurringBillPlan) -> String {
+        let scheduleTitle = bill.scheduleKind == .recurring
+            ? L10n.planning.planning.recurring
+            : L10n.planning.planning.oneTime
+        guard let amountMinor = bill.amountMinor else { return scheduleTitle }
+        return "\(scheduleTitle) • \(amountMinor.formattedCurrency(code: bill.currencyCode))"
     }
 
     private func archivedEventSubtitle(participantNames: String, billCount: Int) -> String {
@@ -817,6 +875,15 @@ struct ManagementArchivedItemsView: View {
                         snapshot: snapshot,
                         mutations: &mutations
                     )
+                case .bill(let id):
+                    guard let bill = snapshot.archivedBill(id: id) else { continue }
+                    prepareBillMutation(
+                        bill,
+                        action: action,
+                        at: now,
+                        snapshot: snapshot,
+                        mutations: &mutations
+                    )
                 case .wallet(let id):
                     guard let wallet = snapshot.archivedWallet(id: id) else { continue }
                     prepareWalletMutation(
@@ -950,6 +1017,33 @@ struct ManagementArchivedItemsView: View {
                 id: wallet.id,
                 updatedAt: wallet.updatedAt,
                 subjectUserIDOverride: walletOwnerUserID(for: wallet, ownerMaps: snapshot.ownerMaps),
+                action: action
+            )
+        )
+    }
+
+    private func prepareBillMutation(
+        _ bill: RecurringBillPlan,
+        action: ArchivedMutationAction,
+        at date: Date,
+        snapshot: ManagementArchivedItemsSnapshot,
+        mutations: inout [ArchivedSyncMutation]
+    ) {
+        switch action {
+        case .restore:
+            bill.isArchived = false
+            bill.updatedAt = date
+        case .delete:
+            bill.markDeleted(at: date)
+            MistiaRecurringBillMaintenance.resolveNotifications(for: bill.id, modelContext: modelContext)
+        }
+
+        mutations.append(
+            ArchivedSyncMutation(
+                entity: .recurringBillPlan,
+                id: bill.id,
+                updatedAt: bill.updatedAt,
+                subjectUserIDOverride: billOwnerUserID(for: bill, ownerMaps: snapshot.ownerMaps),
                 action: action
             )
         )
@@ -1140,6 +1234,15 @@ struct ManagementArchivedItemsView: View {
         ownerMaps: MistiaRecordOwnerMaps
     ) -> UUID? {
         ownerMaps[.wallet][wallet.id] ?? selfUserID
+    }
+
+    private func billOwnerUserID(
+        for bill: RecurringBillPlan,
+        ownerMaps: MistiaRecordOwnerMaps
+    ) -> UUID? {
+        ownerMaps[.recurringBillPlan][bill.id]
+            ?? bill.paymentWallet.flatMap { walletOwnerUserID(for: $0, ownerMaps: ownerMaps) }
+            ?? selfUserID
     }
 
     private func categoryOwnerUserID(

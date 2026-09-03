@@ -475,11 +475,11 @@ struct PlanningView: View {
             referenceDate: .now,
             calendar: calendar
         )
-        let activeVisibleBills = visibleBills.filter { !$0.isArchived }
-        let activeBillSnapshots = activeVisibleBills.map(\.planningSnapshot)
+        let billSnapshots = visibleBills.map(\.planningSnapshot)
+        let activeBillSnapshots = billSnapshots.filter { !$0.isArchived }
         let pausedBills = PlanningLogic.pausedRecurringBills(from: activeBillSnapshots)
         let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
-            bills: activeBillSnapshots,
+            bills: billSnapshots,
             occurrences: occurrenceSnapshots,
             selectedMonth: selectedMonth,
             calendar: calendar
@@ -878,6 +878,7 @@ struct PlanningView: View {
                             openBillAddIfAllowed()
                         },
                         onEditBill: { item in
+                            guard !item.isSourceArchived else { return }
                             openBillEditorIfAllowed(
                                 plan: storedBills.first(where: { $0.id == item.sourceID }),
                                 dueItem: item
@@ -2860,11 +2861,13 @@ private struct PlanningDueRow: View {
                     HStack(spacing: 8) {
                         PlanningStatusBadge(title: L10n.planning.planning.paid, color: .mint)
 
-                        PlanningDueIconButton(
-                            iconSymbol: "arrow.uturn.backward",
-                            accent: .secondary,
-                            action: onUndoPayment
-                        )
+                        if !item.isSourceArchived {
+                            PlanningDueIconButton(
+                                iconSymbol: "arrow.uturn.backward",
+                                accent: .secondary,
+                                action: onUndoPayment
+                            )
+                        }
                     }
                 }
             }
