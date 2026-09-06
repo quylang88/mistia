@@ -568,6 +568,48 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(preview.outcome, .insufficientFunds)
     }
 
+    func testFundUsageAllowsBackdatedExpenseWhenCurrentWalletBalanceIsEnough() {
+        let preview = InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: 1_800,
+            visibleWalletBalanceMinor: 360,
+            bookedInvestmentMinor: 0,
+            unreconciledInvestmentMinor: 0,
+            investmentInWalletMinor: 0,
+            spendableWalletBalanceMinor: 9_340
+        )
+
+        XCTAssertEqual(preview.outcome, .ordinaryFundsOnly)
+        XCTAssertEqual(preview.investmentToUseMinor, 0)
+    }
+
+    func testFundUsageRejectsCurrentShortfallEvenWhenHistoricalBalanceWasEnough() {
+        let preview = InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: 1_800,
+            visibleWalletBalanceMinor: 9_340,
+            bookedInvestmentMinor: 0,
+            unreconciledInvestmentMinor: 0,
+            investmentInWalletMinor: 0,
+            spendableWalletBalanceMinor: 360
+        )
+
+        XCTAssertEqual(preview.outcome, .insufficientFunds)
+    }
+
+    func testCurrentAffordabilityPreservesHistoricalInvestmentAllocation() {
+        let preview = InvestmentCashAllocationLogic.usagePreview(
+            requestedMinor: 4_000,
+            visibleWalletBalanceMinor: 6_380,
+            bookedInvestmentMinor: 3_399,
+            unreconciledInvestmentMinor: 0,
+            investmentInWalletMinor: 3_399,
+            spendableWalletBalanceMinor: 7_323
+        )
+
+        XCTAssertEqual(preview.outcome, .requiresConfirmation)
+        XCTAssertEqual(preview.bookedToUseMinor, 1_019)
+        XCTAssertEqual(preview.remainingInvestmentInWalletMinor, 2_380)
+    }
+
     func testCashDepositIsCappedByShortfallAndOrdinarySourceCash() {
         let shortfallCapped = InvestmentCashAllocationLogic.transferPreview(
             direction: .deposit,

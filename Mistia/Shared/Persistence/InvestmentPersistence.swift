@@ -2308,7 +2308,8 @@ nonisolated enum InvestmentPersistenceService {
             visibleWalletBalanceMinor: effectiveVisibleBalanceMinor,
             bookedInvestmentMinor: location?.bookedMinor ?? 0,
             unreconciledInvestmentMinor: location?.unreconciledMinor ?? 0,
-            investmentInWalletMinor: location?.totalMinor ?? 0
+            investmentInWalletMinor: location?.totalMinor ?? 0,
+            spendableWalletBalanceMinor: occurredAt == nil ? nil : visibleWalletBalanceMinor
         )
     }
 

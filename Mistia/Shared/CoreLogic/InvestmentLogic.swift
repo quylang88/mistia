@@ -615,7 +615,8 @@ nonisolated enum InvestmentCashAllocationLogic {
         visibleWalletBalanceMinor: Int64,
         bookedInvestmentMinor: Int64,
         unreconciledInvestmentMinor: Int64,
-        investmentInWalletMinor: Int64
+        investmentInWalletMinor: Int64,
+        spendableWalletBalanceMinor: Int64? = nil
     ) -> InvestmentFundUsagePreview {
         let requested = max(requestedMinor, 0)
         let booked = max(bookedInvestmentMinor, 0)
@@ -626,8 +627,12 @@ nonisolated enum InvestmentCashAllocationLogic {
         remaining -= bookedToUse
         let unreconciledToUse = min(unreconciled, remaining)
         remaining -= unreconciledToUse
+        // A dated preview uses historical cash only to attribute Investment usage.
+        // Saving an outflow is limited by the wallet balance available now.
+        let hasInsufficientFunds = spendableWalletBalanceMinor.map { max($0, 0) < requested }
+            ?? (remaining > 0)
         let outcome: InvestmentFundUsageOutcome
-        if remaining > 0 {
+        if hasInsufficientFunds {
             outcome = .insufficientFunds
         } else if bookedToUse > 0 || unreconciledToUse > 0 {
             outcome = .requiresConfirmation
