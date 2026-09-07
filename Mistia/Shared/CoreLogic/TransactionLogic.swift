@@ -2313,7 +2313,7 @@ nonisolated enum TransactionLogic {
             .replacingOccurrences(of: " ", with: "")
     }
 
-    private static func balanceDelta(
+    static func balanceDelta(
         for wallet: TransactionWalletSnapshot,
         record: TransactionRecordSnapshot
     ) -> Int64 {

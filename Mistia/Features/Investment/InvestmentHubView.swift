@@ -2159,6 +2159,102 @@ private struct InvestmentTradeFundUsagePrompt: Identifiable {
     let currencyCode: String
 }
 
+private struct InvestmentTradeEditorDataSnapshot {
+    let assetsByID: [UUID: InvestmentAsset]
+    let unitPositionsByAssetID: [UUID: [InvestmentUnitPosition]]
+    let unitHistoryRecords: [MistiaTextHistoryRecord]
+
+    init(
+        ownerUserID: UUID,
+        assets: [InvestmentAsset],
+        trades: [InvestmentTrade],
+        excludingTradeID: UUID?
+    ) {
+        let signpostID = OSSignpostID(log: InvestmentPerformanceSignpost.log)
+        os_signpost(
+            .begin,
+            log: InvestmentPerformanceSignpost.log,
+            name: "Investment Trade Editor Snapshot",
+            signpostID: signpostID,
+            "assets=%{public}d trades=%{public}d",
+            assets.count,
+            trades.count
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: InvestmentPerformanceSignpost.log,
+                name: "Investment Trade Editor Snapshot",
+                signpostID: signpostID
+            )
+        }
+
+        let assetsByID = Dictionary(
+            assets.map { ($0.id, $0) },
+            uniquingKeysWith: { _, rhs in rhs }
+        )
+        self.assetsByID = assetsByID
+
+        let ownerAssetsByID = assetsByID.filter { $0.value.ownerUserID == ownerUserID }
+        var positionInputs: [(assetID: UUID, trade: InvestmentTradeInput)] = []
+        positionInputs.reserveCapacity(trades.count)
+        var historyRecords: [MistiaTextHistoryRecord] = []
+        historyRecords.reserveCapacity(trades.count + ownerAssetsByID.count)
+
+        for trade in trades where trade.deletedAt == nil {
+            if trade.id != excludingTradeID, assetsByID[trade.assetID] != nil {
+                positionInputs.append((
+                    assetID: trade.assetID,
+                    trade: InvestmentTradeInput(
+                        id: trade.id,
+                        kind: trade.kind,
+                        quantity: trade.quantity,
+                        unitLabel: trade.unitLabel ?? assetsByID[trade.assetID]?.defaultUnitLabel,
+                        accountingGrossAmountMinor: trade.accountingGrossAmountMinor,
+                        occurredAt: trade.occurredAt,
+                        createdAt: trade.createdAt
+                    )
+                ))
+            }
+
+            guard trade.ownerUserID == ownerUserID,
+                  let asset = ownerAssetsByID[trade.assetID],
+                  let label = InvestmentUnitLabel.normalizedDisplay(
+                    trade.unitLabel ?? asset.defaultUnitLabel
+                  ) else {
+                continue
+            }
+            historyRecords.append(
+                MistiaTextHistoryRecord(
+                    id: trade.id,
+                    value: label,
+                    occurredAt: trade.occurredAt,
+                    createdAt: trade.createdAt
+                )
+            )
+        }
+
+        for asset in ownerAssetsByID.values {
+            guard let label = InvestmentUnitLabel.normalizedDisplay(asset.defaultUnitLabel) else {
+                continue
+            }
+            historyRecords.append(
+                MistiaTextHistoryRecord(
+                    id: asset.id,
+                    value: label,
+                    occurredAt: asset.updatedAt,
+                    createdAt: asset.createdAt
+                )
+            )
+        }
+
+        unitPositionsByAssetID = InvestmentAccountingEngine.unitPositionsByAsset(
+            trades: positionInputs
+        )
+        unitHistoryRecords = historyRecords
+    }
+}
+
 private struct InvestmentTradeEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -2177,6 +2273,7 @@ private struct InvestmentTradeEditorSheet: View {
     let canEditExisting: Bool
     let onDelete: (InvestmentTrade) -> Bool
     let onError: (String) -> Void
+    private let dataSnapshot: InvestmentTradeEditorDataSnapshot
 
     @State private var kind: InvestmentTradeKind = .buy
     @State private var assetID: UUID?
@@ -2200,7 +2297,46 @@ private struct InvestmentTradeEditorSheet: View {
     @State private var unitSuggestionRefreshTask: Task<Void, Never>?
     @FocusState private var focusedField: InvestmentTradeEditorFocusedField?
 
-    private var selectedAsset: InvestmentAsset? { assets.first { $0.id == assetID } }
+    init(
+        ownerUserID: UUID,
+        channels: [InvestmentChannel],
+        assets: [InvestmentAsset],
+        trades: [InvestmentTrade],
+        trade: InvestmentTrade?,
+        initialKind: InvestmentTradeKind,
+        wallets: [LedgerWallet],
+        canUseOrdinaryWallet: @escaping (LedgerWallet) -> Bool,
+        canEditExisting: Bool,
+        onDelete: @escaping (InvestmentTrade) -> Bool,
+        onError: @escaping (String) -> Void
+    ) {
+        self.ownerUserID = ownerUserID
+        self.channels = channels
+        self.assets = assets
+        self.trades = trades
+        self.trade = trade
+        self.initialKind = initialKind
+        self.wallets = wallets
+        self.canUseOrdinaryWallet = canUseOrdinaryWallet
+        self.canEditExisting = canEditExisting
+        self.onDelete = onDelete
+        self.onError = onError
+        _investmentWalletConfigurations = Query(
+            filter: #Predicate<InvestmentWalletConfiguration> { configuration in
+                configuration.ownerUserID == ownerUserID
+            }
+        )
+        self.dataSnapshot = InvestmentTradeEditorDataSnapshot(
+            ownerUserID: ownerUserID,
+            assets: assets,
+            trades: trades,
+            excludingTradeID: trade?.id
+        )
+    }
+
+    private var selectedAsset: InvestmentAsset? {
+        assetID.flatMap { dataSnapshot.assetsByID[$0] }
+    }
     private var accountingCurrencyCode: String {
         systemWallet?.currencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
     }
@@ -2548,7 +2684,7 @@ private struct InvestmentTradeEditorSheet: View {
             return
         }
 
-        var records = unitHistoryRecords
+        var records = dataSnapshot.unitHistoryRecords
         if kind == .sell, let selectedAsset {
             let availableKeys = Set(availableUnitPositions(for: selectedAsset).map(\.unitKey))
             records = records.filter {
@@ -2560,42 +2696,6 @@ private struct InvestmentTradeEditorSheet: View {
             query: unitLabel,
             limit: 5
         )
-    }
-
-    private var unitHistoryRecords: [MistiaTextHistoryRecord] {
-        let ownerAssetsByID = Dictionary(
-            uniqueKeysWithValues: assets
-                .filter { $0.ownerUserID == ownerUserID && $0.deletedAt == nil }
-                .map { ($0.id, $0) }
-        )
-        var records = trades.compactMap { trade -> MistiaTextHistoryRecord? in
-            guard trade.ownerUserID == ownerUserID,
-                  trade.deletedAt == nil,
-                  let asset = ownerAssetsByID[trade.assetID],
-                  let label = InvestmentUnitLabel.normalizedDisplay(
-                      trade.unitLabel ?? asset.defaultUnitLabel
-                  ) else {
-                return nil
-            }
-            return MistiaTextHistoryRecord(
-                id: trade.id,
-                value: label,
-                occurredAt: trade.occurredAt,
-                createdAt: trade.createdAt
-            )
-        }
-        records.append(contentsOf: ownerAssetsByID.values.compactMap { asset in
-            guard let label = InvestmentUnitLabel.normalizedDisplay(asset.defaultUnitLabel) else {
-                return nil
-            }
-            return MistiaTextHistoryRecord(
-                id: asset.id,
-                value: label,
-                occurredAt: asset.updatedAt,
-                createdAt: asset.createdAt
-            )
-        })
-        return records
     }
 
     private func applyUnitSuggestion(_ suggestion: TransactionTitleSuggestion) {
@@ -2637,22 +2737,7 @@ private struct InvestmentTradeEditorSheet: View {
     }
 
     private func availableUnitPositions(for asset: InvestmentAsset) -> [InvestmentUnitPosition] {
-        let assetTrades = trades.filter { $0.assetID == asset.id && $0.deletedAt == nil }
-        guard !assetTrades.isEmpty else { return [] }
-        let eligible = assetTrades.filter { $0.id != trade?.id }
-        return (try? InvestmentAccountingEngine.unitPositions(
-            trades: eligible.map {
-                InvestmentTradeInput(
-                    id: $0.id,
-                    kind: $0.kind,
-                    quantity: $0.quantity,
-                    unitLabel: $0.unitLabel ?? asset.defaultUnitLabel,
-                    accountingGrossAmountMinor: $0.accountingGrossAmountMinor,
-                    occurredAt: $0.occurredAt,
-                    createdAt: $0.createdAt
-                )
-            }
-        )) ?? []
+        dataSnapshot.unitPositionsByAssetID[asset.id] ?? []
     }
 
     private func save() {
@@ -2716,28 +2801,12 @@ private struct InvestmentTradeEditorSheet: View {
                 trade?.capitalReturnLedgerTransactionID,
                 trade?.profitLossLedgerTransactionID
             ].compactMap { $0 })
-            let activeLedgerTransactions = (try? modelContext.fetch(
-                FetchDescriptor<LedgerTransaction>(
-                    predicate: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived }
-                )
-            )) ?? []
-            let balance = TransactionLogic.walletBalanceIndex(
-                wallets: [
-                    TransactionWalletSnapshot(
-                        id: fundingWallet.id,
-                        kind: fundingWallet.kind,
-                        openingBalanceMinor: fundingWallet.openingBalanceMinor
-                    )
-                ],
-                records: activeLedgerTransactions.filter { !excludedIDs.contains($0.id) }.map(\.snapshot)
-            ).balance(
-                for: TransactionWalletSnapshot(
-                    id: fundingWallet.id,
-                    kind: fundingWallet.kind,
-                    openingBalanceMinor: fundingWallet.openingBalanceMinor
-                )
-            )
             do {
+                let balance = try InvestmentPersistenceService.currentBalance(
+                    wallet: fundingWallet,
+                    excludingTransactionIDs: excludedIDs,
+                    context: modelContext
+                )
                 let preview = try InvestmentPersistenceService.fundUsagePreview(
                     ownerUserID: ownerUserID,
                     wallet: fundingWallet,
@@ -2805,7 +2874,13 @@ private struct InvestmentTradeEditorSheet: View {
                 rates: rates,
                 context: modelContext
             )
-            if let savedTrade = try? modelContext.fetch(FetchDescriptor<InvestmentTrade>()).first(where: { $0.id == savedTradeID }) {
+            if let savedTrade = try? modelContext.fetch(
+                FetchDescriptor<InvestmentTrade>(
+                    predicate: #Predicate<InvestmentTrade> { savedTrade in
+                        savedTrade.id == savedTradeID && savedTrade.ownerUserID == ownerUserID
+                    }
+                )
+            ).first {
                 for transactionID in Set([
                     previousFundingLedgerTransactionID,
                     savedTrade.fundingLedgerTransactionID
@@ -2819,8 +2894,13 @@ private struct InvestmentTradeEditorSheet: View {
                 }
                 if let usagePreview,
                    let transactionID = savedTrade.fundingLedgerTransactionID,
-                   let fundingTransaction = try? modelContext.fetch(FetchDescriptor<LedgerTransaction>())
-                    .first(where: { $0.id == transactionID }) {
+                   let fundingTransaction = try? modelContext.fetch(
+                    FetchDescriptor<LedgerTransaction>(
+                        predicate: #Predicate<LedgerTransaction> { transaction in
+                            transaction.id == transactionID
+                        }
+                    )
+                   ).first {
                     let usageResult = try InvestmentPersistenceService.recordFundUsage(
                         ownerUserID: ownerUserID,
                         transaction: fundingTransaction,
@@ -2845,7 +2925,13 @@ private struct InvestmentTradeEditorSheet: View {
                     )
                 }
                 let cashPostingIDs = Set(
-                    (try? modelContext.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()))?
+                    (try? modelContext.fetch(
+                        FetchDescriptor<InvestmentCashPostingMetadata>(
+                            predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
+                                metadata.ownerUserID == ownerUserID
+                            }
+                        )
+                    ))?
                         .filter { persistenceResult.postingIDs.contains($0.id) }
                         .map(\.id) ?? []
                 )

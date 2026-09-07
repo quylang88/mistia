@@ -137,7 +137,6 @@ nonisolated enum InvestmentAccountingError: LocalizedError, Equatable {
 
 nonisolated enum InvestmentAccountingEngine {
     private struct OpenLot {
-        let unitKey: String
         var quantity: Decimal
         var costBasisMinor: Int64
     }
@@ -171,9 +170,13 @@ nonisolated enum InvestmentAccountingEngine {
         var positionQuantity: Decimal = 0
         var positionCostBasisMinor: Int64 = 0
         var openLots: [OpenLot] = []
+        var openLotIndicesByUnit: [String: [Int]] = [:]
+        var openLotCursorByUnit: [String: Int] = [:]
+        var openLotCount = 0
         var unitBalances: [String: UnitBalance] = [:]
         var output: [InvestmentTradeCalculation] = []
         output.reserveCapacity(trades.count)
+        openLots.reserveCapacity(trades.count)
 
         for trade in sorted(trades) {
             guard trade.quantity > 0 else {
@@ -201,13 +204,15 @@ nonisolated enum InvestmentAccountingEngine {
                     unitBalance.label = InvestmentUnitLabel.normalizedDisplay(trade.unitLabel)
                 }
                 unitBalances[unitKey] = unitBalance
+                let lotIndex = openLots.count
                 openLots.append(
                     OpenLot(
-                        unitKey: unitKey,
                         quantity: trade.quantity,
                         costBasisMinor: trade.accountingGrossAmountMinor
                     )
                 )
+                openLotIndicesByUnit[unitKey, default: []].append(lotIndex)
+                openLotCount += 1
                 output.append(
                     InvestmentTradeCalculation(
                         id: trade.id,
@@ -215,7 +220,7 @@ nonisolated enum InvestmentAccountingEngine {
                         realizedProfitLossMinor: 0,
                         positionQuantityAfter: positionQuantity,
                         positionCostBasisAfterMinor: positionCostBasisMinor,
-                        openLotCountAfter: openLots.lazy.filter { $0.quantity > 0 }.count
+                        openLotCountAfter: openLotCount
                     )
                 )
 
@@ -229,14 +234,21 @@ nonisolated enum InvestmentAccountingEngine {
 
                 var quantityToRelease = trade.quantity
                 var releasedCostBasisMinor: Int64 = 0
+                var openLotCursor = openLotCursorByUnit[unitKey, default: 0]
+                guard let unitLotIndices = openLotIndicesByUnit[unitKey] else {
+                    throw InvestmentAccountingError.insufficientPosition
+                }
 
                 while quantityToRelease > 0 {
-                    guard let lotIndex = openLots.firstIndex(where: {
-                        $0.unitKey == unitKey && $0.quantity > 0
-                    }) else {
+                    while openLotCursor < unitLotIndices.count,
+                          openLots[unitLotIndices[openLotCursor]].quantity <= 0 {
+                        openLotCursor += 1
+                    }
+                    guard openLotCursor < unitLotIndices.count else {
                         throw InvestmentAccountingError.insufficientPosition
                     }
 
+                    let lotIndex = unitLotIndices[openLotCursor]
                     var lot = openLots[lotIndex]
                     let releasedQuantity = min(quantityToRelease, lot.quantity)
                     let releasedLotCost: Int64
@@ -262,7 +274,12 @@ nonisolated enum InvestmentAccountingEngine {
                     lot.costBasisMinor -= releasedLotCost
 
                     openLots[lotIndex] = lot
+                    if lot.quantity == 0 {
+                        openLotCursor += 1
+                        openLotCount -= 1
+                    }
                 }
+                openLotCursorByUnit[unitKey] = openLotCursor
 
                 let (realizedProfitLossMinor, profitOverflow) = trade.accountingGrossAmountMinor.subtractingReportingOverflow(
                     releasedCostBasisMinor
@@ -291,7 +308,7 @@ nonisolated enum InvestmentAccountingEngine {
                         realizedProfitLossMinor: realizedProfitLossMinor,
                         positionQuantityAfter: positionQuantity,
                         positionCostBasisAfterMinor: positionCostBasisMinor,
-                        openLotCountAfter: openLots.lazy.filter { $0.quantity > 0 }.count
+                        openLotCountAfter: openLotCount
                     )
                 )
             }
@@ -318,6 +335,22 @@ nonisolated enum InvestmentAccountingEngine {
             uniqueKeysWithValues: try recalculate(trades: trades)
                 .map { ($0.id, $0) }
         )
+    }
+
+    static func unitPositionsByAsset(
+        trades: [(assetID: UUID, trade: InvestmentTradeInput)]
+    ) -> [UUID: [InvestmentUnitPosition]] {
+        var tradesByAssetID: [UUID: [InvestmentTradeInput]] = [:]
+        for input in trades {
+            tradesByAssetID[input.assetID, default: []].append(input.trade)
+        }
+
+        var positionsByAssetID: [UUID: [InvestmentUnitPosition]] = [:]
+        positionsByAssetID.reserveCapacity(tradesByAssetID.count)
+        for (assetID, assetTrades) in tradesByAssetID {
+            positionsByAssetID[assetID] = (try? unitPositions(trades: assetTrades)) ?? []
+        }
+        return positionsByAssetID
     }
 
     private static func sorted(_ trades: [InvestmentTradeInput]) -> [InvestmentTradeInput] {

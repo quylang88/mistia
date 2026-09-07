@@ -502,7 +502,6 @@ nonisolated enum InvestmentPersistenceService {
         let walletOwnerMap: [UUID: UUID]
         let transactionOwnerMap: [UUID: UUID]
         let balanceSnapshots: [TransactionWalletSnapshot]
-        let zeroBalanceSnapshots: [TransactionWalletSnapshot]
         let postings: [InvestmentWalletPosting]
         let metadataByID: [UUID: InvestmentCashPostingMetadata]
         let transactions: [LedgerTransaction]
@@ -1223,8 +1222,13 @@ nonisolated enum InvestmentPersistenceService {
                   existingAsset.deletedAt == nil else {
                 throw InvestmentPersistenceError.invalidAssetInput
             }
-            let hasHistory = try context.fetch(FetchDescriptor<InvestmentTrade>())
-                .contains { $0.assetID == draftID }
+            let hasHistory = try context.fetch(
+                FetchDescriptor<InvestmentTrade>(
+                    predicate: #Predicate<InvestmentTrade> { trade in
+                        trade.assetID == draftID
+                    }
+                )
+            ).isEmpty == false
             if hasHistory,
                (existingAsset.channelID != draft.channelID
                     || MistiaCurrencyLogic.normalizedCode(existingAsset.currencyCode) != normalizedCurrency) {
@@ -1240,8 +1244,14 @@ nonisolated enum InvestmentPersistenceService {
             existingAsset.defaultUnitLabel = normalizedDefaultUnit
             existingAsset.updatedAt = now
             if resolvesLegacyUnits, let normalizedDefaultUnit {
-                let assetTrades = try context.fetch(FetchDescriptor<InvestmentTrade>())
-                    .filter { $0.assetID == existingAsset.id && $0.unitLabel == nil }
+                let assetID = existingAsset.id
+                let assetTrades = try context.fetch(
+                    FetchDescriptor<InvestmentTrade>(
+                        predicate: #Predicate<InvestmentTrade> { trade in
+                            trade.assetID == assetID && trade.unitLabel == nil
+                        }
+                    )
+                )
                 for trade in assetTrades {
                     trade.unitLabel = normalizedDefaultUnit
                 }
@@ -1539,12 +1549,42 @@ nonisolated enum InvestmentPersistenceService {
             return InvestmentPersistenceResult()
         }
 
-        let trades = try context.fetch(FetchDescriptor<InvestmentTrade>())
-            .filter { trade in
-                trade.deletedAt == nil
-                    && assetIDs.contains(trade.assetID)
-                    && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
+        let trades: [InvestmentTrade]
+        if assetIDs.count == 1, let assetID = assetIDs.first {
+            if let ownerUserID {
+                trades = try context.fetch(
+                    FetchDescriptor<InvestmentTrade>(
+                        predicate: #Predicate<InvestmentTrade> { trade in
+                            trade.assetID == assetID
+                                && trade.ownerUserID == ownerUserID
+                                && trade.deletedAt == nil
+                        }
+                    )
+                )
+            } else {
+                trades = try context.fetch(
+                    FetchDescriptor<InvestmentTrade>(
+                        predicate: #Predicate<InvestmentTrade> { trade in
+                            trade.assetID == assetID && trade.deletedAt == nil
+                        }
+                    )
+                )
             }
+        } else if let ownerUserID {
+            trades = try context.fetch(
+                FetchDescriptor<InvestmentTrade>(
+                    predicate: #Predicate<InvestmentTrade> { trade in
+                        trade.ownerUserID == ownerUserID && trade.deletedAt == nil
+                    }
+                )
+            ).filter { assetIDs.contains($0.assetID) }
+        } else {
+            trades = try context.fetch(
+                FetchDescriptor<InvestmentTrade>(
+                    predicate: #Predicate<InvestmentTrade> { trade in trade.deletedAt == nil }
+                )
+            ).filter { assetIDs.contains($0.assetID) }
+        }
         return try reconcile(
             trades: trades,
             signpostName: "Investment Targeted Reconciliation",
@@ -1559,10 +1599,22 @@ nonisolated enum InvestmentPersistenceService {
         now: Date = .now,
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
-        let trades = try context.fetch(FetchDescriptor<InvestmentTrade>())
-            .filter { trade in
-                trade.deletedAt == nil && (ownerUserID == nil || trade.ownerUserID == ownerUserID)
-            }
+        let trades: [InvestmentTrade]
+        if let ownerUserID {
+            trades = try context.fetch(
+                FetchDescriptor<InvestmentTrade>(
+                    predicate: #Predicate<InvestmentTrade> { trade in
+                        trade.ownerUserID == ownerUserID && trade.deletedAt == nil
+                    }
+                )
+            )
+        } else {
+            trades = try context.fetch(
+                FetchDescriptor<InvestmentTrade>(
+                    predicate: #Predicate<InvestmentTrade> { trade in trade.deletedAt == nil }
+                )
+            )
+        }
         return try reconcile(
             trades: trades,
             signpostName: "Investment Full Reconciliation",
@@ -1590,11 +1642,28 @@ nonisolated enum InvestmentPersistenceService {
             return InvestmentPersistenceResult()
         }
 
-        let assets = try context.fetch(FetchDescriptor<InvestmentAsset>())
-            .filter { $0.deletedAt == nil && requestedAssetIDs.contains($0.id) }
+        let assets: [InvestmentAsset]
+        if requestedAssetIDs.count == 1, let requestedAssetID = requestedAssetIDs.first {
+            assets = try context.fetch(
+                FetchDescriptor<InvestmentAsset>(
+                    predicate: #Predicate<InvestmentAsset> { asset in
+                        asset.id == requestedAssetID && asset.deletedAt == nil
+                    }
+                )
+            )
+        } else {
+            assets = try context.fetch(
+                FetchDescriptor<InvestmentAsset>(
+                    predicate: #Predicate<InvestmentAsset> { asset in asset.deletedAt == nil }
+                )
+            ).filter { requestedAssetIDs.contains($0.id) }
+        }
         let assetsByID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
-        let allWallets = try context.fetch(FetchDescriptor<LedgerWallet>())
-            .filter { $0.deletedAt == nil }
+        let allWallets = try context.fetch(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in wallet.deletedAt == nil }
+            )
+        )
         var walletsByID = Dictionary(uniqueKeysWithValues: allWallets.map { ($0.id, $0) })
         var systemWalletByOwnerID: [UUID: LedgerWallet] = [:]
 
@@ -2155,6 +2224,7 @@ nonisolated enum InvestmentPersistenceService {
         excludingEventID: UUID?,
         context: ModelContext
     ) throws -> Int64 {
+        let walletID = wallet.id
         let excludedAdjustmentID = excludingEventID.map {
             InvestmentLedgerIdentity.derivedID(
                 eventID: $0,
@@ -2164,7 +2234,12 @@ nonisolated enum InvestmentPersistenceService {
         let records = try context.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate<LedgerTransaction> { transaction in
-                    transaction.deletedAt == nil && !transaction.isArchived
+                    transaction.deletedAt == nil
+                        && !transaction.isArchived
+                        && transaction.entryStatusRawValue == "posted"
+                        && transaction.occurredAt <= occurredAt
+                        && (transaction.sourceWallet?.id == walletID
+                            || transaction.destinationWallet?.id == walletID)
                 }
             )
         )
@@ -2202,7 +2277,9 @@ nonisolated enum InvestmentPersistenceService {
         let postings = try context.fetch(
             FetchDescriptor<InvestmentWalletPosting>(
                 predicate: #Predicate<InvestmentWalletPosting> { posting in
-                    posting.ownerUserID == ownerUserID && posting.deletedAt == nil
+                    posting.ownerUserID == ownerUserID
+                        && posting.deletedAt == nil
+                        && posting.occurredAt <= occurredAt
                 }
             )
         )
@@ -2552,10 +2629,15 @@ nonisolated enum InvestmentPersistenceService {
         excludingTransactionIDs: Set<UUID> = [],
         context: ModelContext
     ) throws -> Int64 {
+        let walletID = wallet.id
         let transactions = try context.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate<LedgerTransaction> { transaction in
-                    transaction.deletedAt == nil && !transaction.isArchived
+                    transaction.deletedAt == nil
+                        && !transaction.isArchived
+                        && transaction.entryStatusRawValue == "posted"
+                        && (transaction.sourceWallet?.id == walletID
+                            || transaction.destinationWallet?.id == walletID)
                 }
             )
         )
@@ -2567,8 +2649,7 @@ nonisolated enum InvestmentPersistenceService {
             kind: wallet.kind,
             openingBalanceMinor: wallet.openingBalanceMinor
         )
-        return TransactionLogic.walletBalanceIndex(wallets: [snapshot], records: records)
-            .balance(for: snapshot)
+        return TransactionLogic.effectiveBalance(for: snapshot, records: records)
     }
 
     static func fundUsageTimelineChangePreview(
@@ -2768,9 +2849,6 @@ nonisolated enum InvestmentPersistenceService {
                 openingBalanceMinor: $0.openingBalanceMinor
             )
         }
-        let zeroBalanceSnapshots = ownerWallets.map {
-            TransactionWalletSnapshot(id: $0.id, kind: $0.kind, openingBalanceMinor: 0)
-        }
         let metadata = try context.fetch(
             FetchDescriptor<InvestmentCashPostingMetadata>(
                 predicate: #Predicate<InvestmentCashPostingMetadata> { metadata in
@@ -2786,6 +2864,8 @@ nonisolated enum InvestmentPersistenceService {
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate<LedgerTransaction> { transaction in
                     transaction.deletedAt == nil
+                        && !transaction.isArchived
+                        && transaction.entryStatusRawValue == "posted"
                 }
             )
         )
@@ -2797,7 +2877,6 @@ nonisolated enum InvestmentPersistenceService {
             walletOwnerMap: walletOwnerMap,
             transactionOwnerMap: transactionOwnerMap,
             balanceSnapshots: balanceSnapshots,
-            zeroBalanceSnapshots: zeroBalanceSnapshots,
             postings: postings,
             metadataByID: metadataByID,
             transactions: transactions
@@ -2895,14 +2974,28 @@ nonisolated enum InvestmentPersistenceService {
                 }
 
             case .transaction(let transaction, let record):
-                let deltaIndex = TransactionLogic.walletBalanceIndex(
-                    wallets: source.zeroBalanceSnapshots,
-                    records: [record]
-                )
                 var deltasByWalletID: [UUID: Int64] = [:]
-                for walletSnapshot in source.zeroBalanceSnapshots {
-                    let delta = deltaIndex.balance(for: walletSnapshot)
-                    if delta != 0 { deltasByWalletID[walletSnapshot.id] = delta }
+                deltasByWalletID.reserveCapacity(2)
+                if let sourceWalletID = record.sourceWalletID,
+                   let wallet = source.walletsByID[sourceWalletID] {
+                    let walletSnapshot = TransactionWalletSnapshot(
+                        id: wallet.id,
+                        kind: wallet.kind,
+                        openingBalanceMinor: 0
+                    )
+                    let delta = TransactionLogic.balanceDelta(for: walletSnapshot, record: record)
+                    if delta != 0 { deltasByWalletID[sourceWalletID] = delta }
+                }
+                if let destinationWalletID = record.destinationWalletID,
+                   destinationWalletID != record.sourceWalletID,
+                   let wallet = source.walletsByID[destinationWalletID] {
+                    let walletSnapshot = TransactionWalletSnapshot(
+                        id: wallet.id,
+                        kind: wallet.kind,
+                        openingBalanceMinor: 0
+                    )
+                    let delta = TransactionLogic.balanceDelta(for: walletSnapshot, record: record)
+                    if delta != 0 { deltasByWalletID[destinationWalletID] = delta }
                 }
 
                 if record.financialDomain == .ordinary {

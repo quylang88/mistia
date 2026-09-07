@@ -169,6 +169,55 @@ final class InvestmentLogicTests: XCTestCase {
         XCTAssertEqual(projection.unitPositions, try InvestmentAccountingEngine.unitPositions(trades: trades))
     }
 
+    func testInterleavedUnitFIFOTracksLotCursorsAndOpenLotCount() throws {
+        let start = Date(timeIntervalSince1970: 4_875)
+        let firstPackSaleID = UUID()
+        let secondPackSaleID = UUID()
+        let boxSaleID = UUID()
+        let calculations = try InvestmentAccountingEngine.calculationMap(
+            trades: [
+                trade(kind: .buy, quantity: 10, unit: "pack", gross: 100, occurredAt: start),
+                trade(kind: .buy, quantity: 1, unit: "box", gross: 50, occurredAt: start.addingTimeInterval(1)),
+                trade(kind: .buy, quantity: 10, unit: "pack", gross: 200, occurredAt: start.addingTimeInterval(2)),
+                trade(id: firstPackSaleID, kind: .sell, quantity: 10, unit: "pack", gross: 150, occurredAt: start.addingTimeInterval(3)),
+                trade(id: secondPackSaleID, kind: .sell, quantity: 5, unit: "pack", gross: 125, occurredAt: start.addingTimeInterval(4)),
+                trade(id: boxSaleID, kind: .sell, quantity: 1, unit: "box", gross: 75, occurredAt: start.addingTimeInterval(5))
+            ]
+        )
+
+        XCTAssertEqual(calculations[firstPackSaleID]?.releasedCostBasisMinor, 100)
+        XCTAssertEqual(calculations[firstPackSaleID]?.openLotCountAfter, 2)
+        XCTAssertEqual(calculations[secondPackSaleID]?.releasedCostBasisMinor, 100)
+        XCTAssertEqual(calculations[secondPackSaleID]?.openLotCountAfter, 2)
+        XCTAssertEqual(calculations[boxSaleID]?.releasedCostBasisMinor, 50)
+        XCTAssertEqual(calculations[boxSaleID]?.openLotCountAfter, 1)
+    }
+
+    func testUnitPositionsByAssetKeepsInvalidInventoryIsolated() {
+        let start = Date(timeIntervalSince1970: 4_880)
+        let validAssetID = UUID()
+        let invalidAssetID = UUID()
+        let positionsByAssetID = InvestmentAccountingEngine.unitPositionsByAsset(
+            trades: [
+                (
+                    validAssetID,
+                    trade(kind: .buy, quantity: 3, unit: "pack", gross: 300, occurredAt: start)
+                ),
+                (
+                    validAssetID,
+                    trade(kind: .sell, quantity: 1, unit: "pack", gross: 150, occurredAt: start.addingTimeInterval(1))
+                ),
+                (
+                    invalidAssetID,
+                    trade(kind: .sell, quantity: 1, unit: "box", gross: 100, occurredAt: start)
+                )
+            ]
+        )
+
+        XCTAssertEqual(positionsByAssetID[validAssetID]?.first?.quantity, 2)
+        XCTAssertEqual(positionsByAssetID[invalidAssetID], [])
+    }
+
     func testSaleRejectsUnitOversellEvenWhenOtherUnitsRemain() {
         let start = Date(timeIntervalSince1970: 4_900)
 
