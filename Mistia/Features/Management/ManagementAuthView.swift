@@ -285,8 +285,8 @@ struct ManagementAccountView: View {
                     await sessionStore.startInitialSync(with: choice)
                 }
             }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.hidden)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .overlay {
             if let prompt = sessionStore.pendingAuthenticationPrompt {
@@ -1991,16 +1991,18 @@ private struct ManagementInitialSyncChoiceButtonBackground: View {
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.44)
+        if isRecommended {
+            return accent.opacity(colorScheme == .dark ? 0.45 : 0.32)
+        } else {
+            return colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.06)
+        }
     }
 
     private var baseFillColor: Color {
         if isRecommended {
-            return colorScheme == .dark ? accent.opacity(0.18) : accent.opacity(0.08)
+            return colorScheme == .dark ? accent.opacity(0.14) : accent.opacity(0.06)
         } else {
-            return colorScheme == .dark
-                ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
-                : Color.white.opacity(0.72)
+            return Color(UIColor.secondarySystemGroupedBackground)
         }
     }
 
@@ -2016,41 +2018,148 @@ private struct ManagementInitialSyncChoiceButtonBackground: View {
     }
 }
 
+private struct ManagementSyncDataComparisonCard: View {
+    let localCount: Int
+    let remoteCount: Int
+    let accent: Color
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "iphone.gen3")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(accent)
+
+                    Text(L10n.management.managementauth.useThisDevice)
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Text(verbatim: "\(localCount)")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(L10n.management.managementauth.backupRecordCount(localCount))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+
+            ZStack {
+                Circle()
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                    .frame(width: 32, height: 32)
+
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 6)
+
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "icloud.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MistiaAccent.sky.color)
+
+                    Text(L10n.management.managementauth.useCloud2)
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Text(verbatim: "\(remoteCount)")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(L10n.management.managementauth.backupRecordCount(remoteCount))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(UIColor.secondarySystemGroupedBackground))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.8)
+        }
+    }
+}
+
 private struct ManagementInitialSyncChoiceSheet: View {
     let preview: MistiaInitialSyncPreview
     let accent: Color
     let onCancel: () -> Void
     let onSelect: (MistiaInitialSyncChoice) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(UIColor.systemGroupedBackground)
-                    .ignoresSafeArea()
+                MistiaBackgroundView(tone: .modal)
 
-                ScrollView {
-                    VStack(alignment: .center, spacing: 28) {
-                        Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
-                            .font(.system(size: 56))
-                            .foregroundStyle(accent)
-                            .padding(.top, 24)
+                VStack {
+                    Circle()
+                        .fill(accent.opacity(colorScheme == .dark ? 0.14 : 0.08))
+                        .frame(width: 320, height: 320)
+                        .blur(radius: 60)
+                        .offset(y: -100)
+                    Spacer()
+                }
+                .ignoresSafeArea()
 
-                        VStack(spacing: 8) {
-                            Text(L10n.management.managementauth.firstSync)
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        VStack(spacing: 16) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .fill(accent.opacity(colorScheme == .dark ? 0.18 : 0.10))
+                                    .frame(width: 76, height: 76)
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                            .strokeBorder(accent.opacity(colorScheme == .dark ? 0.35 : 0.22), lineWidth: 1)
+                                    }
+
+                                Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
+                                    .font(.system(size: 38, weight: .semibold))
+                                    .foregroundStyle(accent)
+                            }
+                            .padding(.top, 12)
+
+                            VStack(spacing: 8) {
+                                Text(L10n.management.managementauth.firstSync)
+                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .multilineTextAlignment(.center)
+
+                                Text(
+                                    preview.remoteActiveCount == 0
+                                    ? L10n.management.managementauth.theCloudHasNoDataYetExcept(String(describing: preview.localActiveCount))
+                                    : L10n.management.managementauth.thisDeviceHasValueRecordsAndThe(String(describing: preview.localActiveCount), String(describing: preview.remoteActiveCount))
+                                )
+                                .font(.system(size: 14.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
-
-                            Text(
-                                preview.remoteActiveCount == 0
-                                ? L10n.management.managementauth.theCloudHasNoDataYetExcept(String(describing: preview.localActiveCount))
-                                : L10n.management.managementauth.thisDeviceHasValueRecordsAndThe(String(describing: preview.localActiveCount), String(describing: preview.remoteActiveCount))
-                            )
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 12)
-                            .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 16)
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
+
+                        ManagementSyncDataComparisonCard(
+                            localCount: preview.localActiveCount,
+                            remoteCount: preview.remoteActiveCount,
+                            accent: accent
+                        )
 
                         VStack(spacing: 12) {
                             ManagementInitialSyncChoiceButton(
@@ -2076,16 +2185,29 @@ private struct ManagementInitialSyncChoiceSheet: View {
                             ManagementInitialSyncChoiceButton(
                                 title: L10n.management.managementauth.useCloud2,
                                 detail: L10n.management.managementauth.replaceTheCurrentLocalSnapshotWithThe,
-                                systemImage: "icloud",
-                                accent: .secondary,
+                                systemImage: "icloud.and.arrow.down",
+                                accent: accent,
                                 isRecommended: false
                             ) {
                                 onSelect(.useCloud)
                             }
                         }
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+
+                            Text(L10n.management.managementauth.useTheSameMistiaAccountToSync)
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 36)
                 }
             }
             .navigationTitle(String())
@@ -2095,10 +2217,11 @@ private struct ManagementInitialSyncChoiceSheet: View {
                     Button {
                         onCancel()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.secondary.opacity(0.8))
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -2116,52 +2239,66 @@ private struct ManagementInitialSyncChoiceButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var iconForegroundTint: Color {
-        isRecommended ? accent : (colorScheme == .dark ? .white.opacity(0.92) : .secondary)
+        isRecommended ? accent : (colorScheme == .dark ? .white.opacity(0.92) : .primary.opacity(0.85))
     }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
                 ZStack {
-                    Circle()
-                        .fill(iconForegroundTint.opacity(colorScheme == .dark ? 0.18 : 0.12))
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(isRecommended
+                              ? accent.opacity(colorScheme == .dark ? 0.22 : 0.12)
+                              : (colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)))
+                        .frame(width: 44, height: 44)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(isRecommended
+                                              ? accent.opacity(colorScheme == .dark ? 0.40 : 0.24)
+                                              : (colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)), lineWidth: 0.8)
+                        }
 
                     Image(systemName: systemImage)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(iconForegroundTint)
                 }
-                .frame(width: 36, height: 36)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(title)
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         if isRecommended {
-                            Text(L10n.management.managementauth.recommended)
-                                .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                                .foregroundStyle(accent)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(accent.opacity(0.12), in: Capsule())
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(L10n.management.managementauth.recommended)
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                            }
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3.5)
+                            .background(accent.opacity(colorScheme == .dark ? 0.20 : 0.12), in: Capsule())
                         }
                     }
 
                     Text(detail)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
+                        .lineSpacing(2.5)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 6)
 
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(isRecommended ? accent : .secondary.opacity(0.72))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(isRecommended ? accent : .secondary.opacity(0.6))
+                    .padding(.top, 4)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 15)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 ManagementInitialSyncChoiceButtonBackground(
@@ -2170,7 +2307,7 @@ private struct ManagementInitialSyncChoiceButton: View {
                 )
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20, tint: accent))
     }
 }
 

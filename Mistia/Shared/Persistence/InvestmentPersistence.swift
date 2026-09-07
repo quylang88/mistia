@@ -2037,12 +2037,84 @@ nonisolated enum InvestmentPersistenceService {
             sourceActualMinorOverride: overflow ? Int64.min : ordinaryBalanceBasis,
             context: context
         )
-        let refillMinor = min(incoming, limitPreview.maximumMinor)
+        let globalShortfall = limitPreview.shortfallMinor
+        guard globalShortfall > 0 else { return nil }
+
+        guard let configuration = try configuration(
+            ownerUserID: ownerUserID,
+            createIfMissing: false,
+            context: context
+        ), let linkedWalletID = configuration.linkedWalletID else {
+            return nil
+        }
+
+        let postings = try context.fetch(
+            FetchDescriptor<InvestmentWalletPosting>(
+                predicate: #Predicate<InvestmentWalletPosting> { posting in
+                    posting.ownerUserID == ownerUserID
+                        && posting.deletedAt == nil
+                }
+            )
+        ).filter { $0.eventID != eventID }
+
+        var consumedByWallet: [UUID: Int64] = [:]
+        for posting in postings where posting.role == .cashConsumption {
+            let consumed = max(-posting.accountingAmountMinor, 0)
+            if consumed > 0 {
+                consumedByWallet[posting.walletID, default: 0] += consumed
+            }
+        }
+
+        let refillRole = InvestmentLedgerLegRole.investmentCashDeposit.rawValue
+        let refillTransactions = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.deletedAt == nil
+                        && !transaction.isArchived
+                        && transaction.entryStatusRawValue == "posted"
+                }
+            )
+        ).filter { transaction in
+            transaction.id != eventID
+                && transaction.settlementRoleRawValue == refillRole
+        }
+
+        var refilledByWallet: [UUID: Int64] = [:]
+        for transaction in refillTransactions {
+            if let sourceID = transaction.sourceWallet?.id {
+                refilledByWallet[sourceID, default: 0] += max(transaction.amountMinor, 0)
+            }
+        }
+
+        var netConsumptionByWallet: [UUID: Int64] = [:]
+        for (walletID, consumed) in consumedByWallet {
+            let refilled = refilledByWallet[walletID, default: 0]
+            let net = max(consumed - refilled, 0)
+            if net > 0 {
+                netConsumptionByWallet[walletID] = net
+            }
+        }
+
+        let walletDeficit: Int64
+        if receivingWallet.id == linkedWalletID {
+            let otherWalletsDeficit = netConsumptionByWallet
+                .filter { $0.key != linkedWalletID }
+                .values
+                .reduce(0, +)
+            walletDeficit = max(globalShortfall - otherWalletsDeficit, 0)
+        } else {
+            walletDeficit = min(netConsumptionByWallet[receivingWallet.id, default: 0], globalShortfall)
+        }
+
+        guard walletDeficit > 0 else { return nil }
+
+        let maximumForWallet = min(limitPreview.maximumMinor, walletDeficit)
+        let refillMinor = min(incoming, maximumForWallet)
         guard refillMinor > 0 else { return nil }
         return InvestmentCashTransferPreview(
             direction: .deposit,
             requestedMinor: refillMinor,
-            maximumMinor: limitPreview.maximumMinor,
+            maximumMinor: maximumForWallet,
             realizedProfitMinor: limitPreview.realizedProfitMinor,
             availableInvestmentMinor: limitPreview.availableInvestmentMinor,
             linkedInvestmentMinor: limitPreview.linkedInvestmentMinor,

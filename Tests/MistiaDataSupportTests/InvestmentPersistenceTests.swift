@@ -2336,14 +2336,24 @@ final class InvestmentPersistenceTests: XCTestCase {
             amountMinor: 1_000,
             sourceCurrencyCode: "JPY",
             occurredAt: fixture.start.addingTimeInterval(3),
-            sourceWallet: prepared.refillWallet
+            sourceWallet: fixture.capitalWallet
         )
         fixture.context.insert(income)
+
+        let unrelatedPreview = try InvestmentPersistenceService.automaticCashRefillPreview(
+            ownerUserID: fixture.ownerID,
+            receivingWallet: prepared.refillWallet,
+            incomingMinor: 1_000,
+            visibleWalletBalanceAfterIncomingMinor: 2_500,
+            sourceTransactionID: sourceTransactionID,
+            context: fixture.context
+        )
+        XCTAssertNil(unrelatedPreview, "Unrelated wallet without investment deficit should not prompt refill")
 
         var preview = try XCTUnwrap(
             InvestmentPersistenceService.automaticCashRefillPreview(
                 ownerUserID: fixture.ownerID,
-                receivingWallet: prepared.refillWallet,
+                receivingWallet: fixture.capitalWallet,
                 incomingMinor: 1_000,
                 visibleWalletBalanceAfterIncomingMinor: 2_500,
                 sourceTransactionID: sourceTransactionID,
@@ -2359,7 +2369,7 @@ final class InvestmentPersistenceTests: XCTestCase {
             draft: InvestmentCashTransferDraft(
                 id: refillEventID,
                 direction: .deposit,
-                walletID: prepared.refillWallet.id,
+                walletID: fixture.capitalWallet.id,
                 amountMinor: preview.requestedMinor,
                 occurredAt: income.occurredAt
             ),
@@ -2368,7 +2378,6 @@ final class InvestmentPersistenceTests: XCTestCase {
         )
         try fixture.context.save()
 
-        XCTAssertEqual(try balance(prepared.refillWallet, fixture), 1_500)
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 1_500)
         var snapshot = try InvestmentPersistenceService.cashAllocationSnapshot(
             ownerUserID: fixture.ownerID,
@@ -2382,7 +2391,7 @@ final class InvestmentPersistenceTests: XCTestCase {
         preview = try XCTUnwrap(
             InvestmentPersistenceService.automaticCashRefillPreview(
                 ownerUserID: fixture.ownerID,
-                receivingWallet: prepared.refillWallet,
+                receivingWallet: fixture.capitalWallet,
                 incomingMinor: 1_500,
                 visibleWalletBalanceAfterIncomingMinor: 3_000,
                 sourceTransactionID: sourceTransactionID,
@@ -2395,7 +2404,7 @@ final class InvestmentPersistenceTests: XCTestCase {
             draft: InvestmentCashTransferDraft(
                 id: refillEventID,
                 direction: .deposit,
-                walletID: prepared.refillWallet.id,
+                walletID: fixture.capitalWallet.id,
                 amountMinor: preview.requestedMinor,
                 occurredAt: income.occurredAt
             ),
@@ -2410,7 +2419,6 @@ final class InvestmentPersistenceTests: XCTestCase {
             context: fixture.context
         )
         XCTAssertEqual(snapshot.totalMinor, 2_000)
-        XCTAssertEqual(try balance(prepared.refillWallet, fixture), 1_500)
         XCTAssertEqual(try balance(fixture.capitalWallet, fixture), 2_000)
         XCTAssertEqual(
             try fixture.context.fetch(FetchDescriptor<LedgerTransaction>())
