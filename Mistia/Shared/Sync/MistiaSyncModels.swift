@@ -898,6 +898,40 @@ nonisolated struct RemoteRecurringBillPlan: MistiaRemoteRow {
 }
 
 extension RemoteRecurringBillPlan {
+    nonisolated func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(iconSymbolName, forKey: .iconSymbolName)
+        // These rows are also PATCH payloads. Encode nil as null so clearing a field
+        // removes its cloud value instead of leaving the old column unchanged.
+        try container.encode(categoryID, forKey: .categoryID)
+        try container.encode(amountMinor, forKey: .amountMinor)
+        try container.encode(dueDay, forKey: .dueDay)
+        try container.encode(scheduleKindRawValue, forKey: .scheduleKindRawValue)
+        try container.encode(paymentStartDay, forKey: .paymentStartDay)
+        try container.encode(paymentStartDate, forKey: .paymentStartDate)
+        try container.encode(firstScheduledMonth, forKey: .firstScheduledMonth)
+        try container.encode(hasExplicitDueDate, forKey: .hasExplicitDueDate)
+        try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(autoPayEnabled, forKey: .autoPayEnabled)
+        try container.encode(autoPayDay, forKey: .autoPayDay)
+        try container.encode(autoPayDate, forKey: .autoPayDate)
+        try container.encode(frequencyMonths, forKey: .frequencyMonths)
+        try container.encode(paymentWalletID, forKey: .paymentWalletID)
+        try container.encode(currencyCode, forKey: .currencyCode)
+        try container.encode(isArchived, forKey: .isArchived)
+        try container.encode(isPaused, forKey: .isPaused)
+        try container.encode(pausedAt, forKey: .pausedAt)
+        try container.encode(resumeStartMonth, forKey: .resumeStartMonth)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(syncVersion, forKey: .syncVersion)
+        try container.encode(lastModifiedByDeviceID, forKey: .lastModifiedByDeviceID)
+    }
+
     nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         userID = try container.decode(UUID.self, forKey: .userID)
@@ -1691,19 +1725,32 @@ nonisolated enum MistiaSyncUploadRecord: Sendable {
                 Self.dateString(row.deletedAt)
             ].joined(separator: "|")
         case .recurringBillPlan(let row):
-            return [
+            let fields: [String] = [
                 entity.rawValue,
                 row.name,
                 row.iconSymbolName,
                 row.categoryID?.uuidString.lowercased() ?? "",
                 row.amountMinor.map(String.init) ?? "",
                 "\(row.dueDay)",
+                row.scheduleKindRawValue ?? "",
+                row.paymentStartDay.map(String.init) ?? "",
+                Self.dateString(row.paymentStartDate),
+                Self.dateString(row.firstScheduledMonth),
+                row.hasExplicitDueDate.map { $0 ? "1" : "0" } ?? "",
+                Self.dateString(row.dueDate),
+                row.autoPayEnabled.map { $0 ? "1" : "0" } ?? "",
+                row.autoPayDay.map(String.init) ?? "",
+                Self.dateString(row.autoPayDate),
                 "\(row.frequencyMonths)",
                 row.paymentWalletID?.uuidString.lowercased() ?? "",
                 row.currencyCode,
                 row.isArchived ? "1" : "0",
+                row.isPaused ? "1" : "0",
+                Self.dateString(row.pausedAt),
+                Self.dateString(row.resumeStartMonth),
                 Self.dateString(row.deletedAt)
-            ].joined(separator: "|")
+            ]
+            return fields.joined(separator: "|")
         case .installmentPlan(let row):
             return [
                 entity.rawValue,
