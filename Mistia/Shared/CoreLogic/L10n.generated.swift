@@ -1747,8 +1747,6 @@ nonisolated enum L10n {
             static func confirmPassword(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.confirmPassword", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力", language: language) }
             static var confirmYourEmail: String { L10n.tr("management.managementauth.confirmYourEmail", vi: "Xác nhận email", en: "Confirm your email", ja: "メール確認") }
             static func confirmYourEmail(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.confirmYourEmail", vi: "Xác nhận email", en: "Confirm your email", ja: "メール確認", language: language) }
-            static var conflictInUpdateTiming: String { L10n.tr("management.managementauth.conflictInUpdateTiming", vi: "Conflict ở thời điểm cập nhật.", en: "Conflict in update timing.", ja: "更新タイミングで競合しています。") }
-            static func conflictInUpdateTiming(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.conflictInUpdateTiming", vi: "Conflict ở thời điểm cập nhật.", en: "Conflict in update timing.", ja: "更新タイミングで競合しています。", language: language) }
             static var continueWithEmail: String { L10n.tr("management.managementauth.continueWithEmail", vi: "Tiếp tục bằng Email", en: "Continue with Email", ja: "メールで続行") }
             static func continueWithEmail(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.continueWithEmail", vi: "Tiếp tục bằng Email", en: "Continue with Email", ja: "メールで続行", language: language) }
             static var continueWithGoogle: String { L10n.tr("management.managementauth.continueWithGoogle", vi: "Tiếp tục với Google", en: "Continue with Google", ja: "Google で続行") }
@@ -1893,12 +1891,8 @@ nonisolated enum L10n {
             static func mistiaUsesYourNameAndProfilePhoto(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.mistiaUsesYourNameAndProfilePhoto", vi: "Mistia dùng tên và ảnh đại diện để hiển thị hồ sơ của bạn trên thiết bị đã đăng nhập và trong các vùng liên quan đến tài khoản.", en: "Mistia uses your name and profile photo to present your account consistently across signed-in devices and account-related surfaces.", ja: "ミスティアは、サインイン済みデバイスやアカウント関連画面でプロフィールを一貫して表示するために、名前とプロフィール写真を使用します。", language: language) }
             static var nameAndProfilePhoto: String { L10n.tr("management.managementauth.nameAndProfilePhoto", vi: "Tên và ảnh đại diện", en: "Name and profile photo", ja: "名前とプロフィール写真") }
             static func nameAndProfilePhoto(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.nameAndProfilePhoto", vi: "Tên và ảnh đại diện", en: "Name and profile photo", ja: "名前とプロフィール写真", language: language) }
-            static var nameUnavailable: String { L10n.tr("management.managementauth.nameUnavailable", vi: "Không tìm thấy tên", en: "Name unavailable", ja: "名前なし") }
-            static func nameUnavailable(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.nameUnavailable", vi: "Không tìm thấy tên", en: "Name unavailable", ja: "名前なし", language: language) }
             static var newer: String { L10n.tr("management.managementauth.newer", vi: "Mới hơn", en: "Newer", ja: "最新") }
             static func newer(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.newer", vi: "Mới hơn", en: "Newer", ja: "最新", language: language) }
-            static var noConflictsYet: String { L10n.tr("management.managementauth.noConflictsYet", vi: "Dữ liệu đã đồng bộ hoàn tất", en: "Everything is Up to Date", ja: "データは最新です") }
-            static func noConflictsYet(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.noConflictsYet", vi: "Dữ liệu đã đồng bộ hoàn tất", en: "Everything is Up to Date", ja: "データは最新です", language: language) }
             static var noFileSelected: String { L10n.tr("management.managementauth.noFileSelected", vi: "Không có file nào được chọn", en: "No file selected", ja: "ファイルが選択されていません") }
             static func noFileSelected(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.noFileSelected", vi: "Không có file nào được chọn", en: "No file selected", ja: "ファイルが選択されていません", language: language) }
             static var noLocalBackup: String { L10n.tr("management.managementauth.noLocalBackup", vi: "Chưa có bản sao lưu nào trên thiết bị.", en: "No backups are available on this device.", ja: "この端末にはバックアップがありません。") }
@@ -1979,8 +1973,28 @@ nonisolated enum L10n {
             static func snapshotRestored(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.snapshotRestored", vi: "Đã khôi phục snapshot", en: "Snapshot restored", ja: "スナップショットを復元しました", language: language) }
             static var strong: String { L10n.tr("management.managementauth.strong", vi: "Mạnh", en: "Strong", ja: "強い") }
             static func strong(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.strong", vi: "Mạnh", en: "Strong", ja: "強い", language: language) }
+            static var syncConflictChooseVersion: String { L10n.tr("management.managementauth.syncConflictChooseVersion", vi: "Chọn bản dữ liệu muốn lưu", en: "Choose Version to Keep", ja: "残すデータを選択") }
+            static func syncConflictChooseVersion(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictChooseVersion", vi: "Chọn bản dữ liệu muốn lưu", en: "Choose Version to Keep", ja: "残すデータを選択", language: language) }
             static var syncConflictCloud: String { L10n.tr("management.managementauth.syncConflictCloud", vi: "Trên cloud", en: "Cloud", ja: "クラウド") }
             static func syncConflictCloud(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictCloud", vi: "Trên cloud", en: "Cloud", ja: "クラウド", language: language) }
+            static var syncConflictCloudNewerBanner: String { L10n.tr("management.managementauth.syncConflictCloudNewerBanner", vi: "Bản trên Cloud có thời gian sửa đổi mới hơn", en: "Cloud version was updated more recently", ja: "クラウド版の方が新しく更新されています") }
+            static func syncConflictCloudNewerBanner(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictCloudNewerBanner", vi: "Bản trên Cloud có thời gian sửa đổi mới hơn", en: "Cloud version was updated more recently", ja: "クラウド版の方が新しく更新されています", language: language) }
+            static var syncConflictDeviceNewerBanner: String { L10n.tr("management.managementauth.syncConflictDeviceNewerBanner", vi: "Bản trên máy này có thời gian sửa đổi mới hơn", en: "This device version was updated more recently", ja: "このデバイス版の方が新しく更新されています") }
+            static func syncConflictDeviceNewerBanner(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictDeviceNewerBanner", vi: "Bản trên máy này có thời gian sửa đổi mới hơn", en: "This device version was updated more recently", ja: "このデバイス版の方が新しく更新されています", language: language) }
+            static var syncConflictDifferences: String { L10n.tr("management.managementauth.syncConflictDifferences", vi: "Các điểm khác biệt", en: "Differences", ja: "相違点") }
+            static func syncConflictDifferences(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictDifferences", vi: "Các điểm khác biệt", en: "Differences", ja: "相違点", language: language) }
+            static func syncConflictDifferentPrefix(_ value: String) -> String {
+                L10n.format("management.managementauth.syncConflictDifferentPrefix", vi: "Khác biệt: %@", en: "Different: %@", ja: "相違: %@", value)
+            }
+            static func syncConflictDifferentPrefix(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("management.managementauth.syncConflictDifferentPrefix", vi: "Khác biệt: %@", en: "Different: %@", ja: "相違: %@", language: language, value)
+            }
+            static func syncConflictFieldCount(_ count: Int) -> String {
+                L10n.format("management.managementauth.syncConflictFieldCount", vi: "%lld trường", en: "%lld fields", ja: "%lld項目", Int64(count))
+            }
+            static func syncConflictFieldCount(_ count: Int, language: MistiaAppLanguage) -> String {
+                L10n.format("management.managementauth.syncConflictFieldCount", vi: "%lld trường", en: "%lld fields", ja: "%lld項目", language: language, Int64(count))
+            }
             static var syncConflictKeepCloud: String { L10n.tr("management.managementauth.syncConflictKeepCloud", vi: "Dùng dữ liệu trên Cloud", en: "Keep data on Cloud", ja: "クラウドのデータを使用") }
             static func syncConflictKeepCloud(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictKeepCloud", vi: "Dùng dữ liệu trên Cloud", en: "Keep data on Cloud", ja: "クラウドのデータを使用", language: language) }
             static var syncConflictKeepThisDevice: String { L10n.tr("management.managementauth.syncConflictKeepThisDevice", vi: "Dùng dữ liệu trên máy này", en: "Keep data on this device", ja: "このデバイスのデータを使用") }
@@ -1991,6 +2005,8 @@ nonisolated enum L10n {
             static func syncConflictReviewTitle(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictReviewTitle", vi: "Chọn dữ liệu bạn muốn lưu giữ", en: "Review Data Differences", ja: "データ内容の確認", language: language) }
             static var syncConflictThisDevice: String { L10n.tr("management.managementauth.syncConflictThisDevice", vi: "Máy này", en: "This device", ja: "この端末") }
             static func syncConflictThisDevice(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictThisDevice", vi: "Máy này", en: "This device", ja: "この端末", language: language) }
+            static var syncConflictUpdateTimes: String { L10n.tr("management.managementauth.syncConflictUpdateTimes", vi: "Thời gian cập nhật", en: "Update Times", ja: "更新日時") }
+            static func syncConflictUpdateTimes(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncConflictUpdateTimes", vi: "Thời gian cập nhật", en: "Update Times", ja: "更新日時", language: language) }
             static var syncIsOff: String { L10n.tr("management.managementauth.syncIsOff", vi: "Chưa đồng bộ", en: "Sync is off", ja: "同期はオフです") }
             static func syncIsOff(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.syncIsOff", vi: "Chưa đồng bộ", en: "Sync is off", ja: "同期はオフです", language: language) }
             static var syncNow: String { L10n.tr("management.managementauth.syncNow", vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期") }
@@ -2053,8 +2069,6 @@ nonisolated enum L10n {
             static func weak(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.weak", vi: "Yếu", en: "Weak", ja: "弱い", language: language) }
             static var welcomeToMistia: String { L10n.tr("management.managementauth.welcomeToMistia", vi: "Chào mừng đến với Mistia", en: "Welcome to Mistia", ja: "ミスティアへようこそ") }
             static func welcomeToMistia(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.welcomeToMistia", vi: "Chào mừng đến với Mistia", en: "Welcome to Mistia", ja: "ミスティアへようこそ", language: language) }
-            static var whenSyncConflictsOrReviewNeededData: String { L10n.tr("management.managementauth.whenSyncConflictsOrReviewNeededData", vi: "Tất cả thông tin tài chính và thu chi trên các thiết bị của bạn đã hoàn toàn thống nhất.", en: "All your financial records across your devices are fully synchronized.", ja: "すべての端末でデータが正常に同期されています。") }
-            static func whenSyncConflictsOrReviewNeededData(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.whenSyncConflictsOrReviewNeededData", vi: "Tất cả thông tin tài chính và thu chi trên các thiết bị của bạn đã hoàn toàn thống nhất.", en: "All your financial records across your devices are fully synchronized.", ja: "すべての端末でデータが正常に同期されています。", language: language) }
             static var youCanAlwaysSignOutDisableSync: String { L10n.tr("management.managementauth.youCanAlwaysSignOutDisableSync", vi: "Bạn luôn có thể đăng xuất, tắt đồng bộ, hoặc xóa tài khoản cloud trong phần Hồ sơ. Dữ liệu local trên thiết bị vẫn được kiểm soát riêng theo các lựa chọn đó.", en: "You can always sign out, disable sync, or delete your cloud account from Profile. Local data on your device remains under the control of those choices.", ja: "プロフィール画面から、ログアウト、同期の無効化、クラウドアカウントの削除をいつでも行えます。ローカルデータはその選択に応じて管理されます。") }
             static func youCanAlwaysSignOutDisableSync(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.youCanAlwaysSignOutDisableSync", vi: "Bạn luôn có thể đăng xuất, tắt đồng bộ, hoặc xóa tài khoản cloud trong phần Hồ sơ. Dữ liệu local trên thiết bị vẫn được kiểm soát riêng theo các lựa chọn đó.", en: "You can always sign out, disable sync, or delete your cloud account from Profile. Local data on your device remains under the control of those choices.", ja: "プロフィール画面から、ログアウト、同期の無効化、クラウドアカウントの削除をいつでも行えます。ローカルデータはその選択に応じて管理されます。", language: language) }
             static var youWillBeSignedOutAndThe: String { L10n.tr("management.managementauth.youWillBeSignedOutAndThe", vi: "Bạn sẽ đăng xuất và toàn bộ dữ liệu của hồ sơ hiện tại trên thiết bị này sẽ bị xóa. Các hồ sơ khác trên thiết bị (nếu có) không bị ảnh hưởng.", en: "You will be signed out and all data for the current profile on this device will be deleted. Other profiles on this device will remain unaffected.", ja: "サインアウトし、この端末にある現在のプロフィールのデータをすべて削除します。端末上の他のプロフィールには影響しません。") }
@@ -4435,8 +4449,6 @@ nonisolated enum L10n {
                 static func monthlyFrequency(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.monthlyFrequency", vi: "Chu kỳ tháng", en: "Monthly frequency", ja: "月単位の周期", language: language) }
                 static var name: String { L10n.tr("shared.sync.mistiasync.name", vi: "Tên", en: "Name", ja: "名前") }
                 static func name(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.name", vi: "Tên", en: "Name", ja: "名前", language: language) }
-                static var nameUnavailable: String { L10n.tr("shared.sync.mistiasync.nameUnavailable", vi: "Không tìm thấy tên", en: "Name unavailable", ja: "名前なし") }
-                static func nameUnavailable(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.nameUnavailable", vi: "Không tìm thấy tên", en: "Name unavailable", ja: "名前なし", language: language) }
                 static var no: String { L10n.tr("shared.sync.mistiasync.no", vi: "Không", en: "No", ja: "いいえ") }
                 static func no(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.no", vi: "Không", en: "No", ja: "いいえ", language: language) }
                 static var none: String { L10n.tr("shared.sync.mistiasync.none", vi: "Chưa có", en: "None", ja: "なし") }

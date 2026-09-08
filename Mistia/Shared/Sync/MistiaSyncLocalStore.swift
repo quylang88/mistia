@@ -1418,6 +1418,23 @@ nonisolated enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    static func purgeNonSemanticConflicts(
+        from container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+        let conflicts = try fetchConflicts(context)
+        var hasChanges = false
+        for conflict in conflicts {
+            if !conflict.hasSemanticDifferences {
+                context.delete(conflict)
+                hasChanges = true
+            }
+        }
+        if hasChanges {
+            try context.save()
+        }
+    }
+
     static func conflictedRecordIDs(
         in container: ModelContainer
     ) throws -> Set<String> {

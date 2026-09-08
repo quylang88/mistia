@@ -243,6 +243,13 @@ nonisolated extension SyncConflict {
             : semanticDifferences + metadataDifferences
     }
 
+    var hasSemanticDifferences: Bool {
+        let diffs = conflictDifferences
+        let userFacing = diffs.filter { !MistiaSyncConflictPresentation.isInternalField($0.id) }
+        let semantic = userFacing.filter { !MistiaSyncConflictPresentation.isMetadataField($0.id) }
+        return !semantic.isEmpty
+    }
+
     private func fallbackRecordSummary(from json: String) -> MistiaSyncConflictRecordSummary {
         let fields = rawPayloadFields(json)
         let title = firstNonEmpty(
@@ -265,7 +272,18 @@ nonisolated extension SyncConflict {
     }
 }
 
-nonisolated private extension MistiaSyncUploadRecord {
+extension ModelContext {
+    func purgeNonSemanticConflicts(from conflicts: [SyncConflict]) {
+        let stale = conflicts.filter { !$0.hasSemanticDifferences }
+        guard !stale.isEmpty else { return }
+        for record in stale {
+            delete(record)
+        }
+        try? save()
+    }
+}
+
+nonisolated extension MistiaSyncUploadRecord {
     var recordSummary: MistiaSyncConflictRecordSummary {
         switch self {
         case .wallet(let row):
@@ -503,7 +521,7 @@ nonisolated private extension MistiaSyncUploadRecord {
                 field("status", L10n.shared.sync.mistiasync.status, local.entryStatusRawValue, remote.entryStatusRawValue)
                 field("title", L10n.shared.sync.mistiasync.title, local.title, remote.title)
                 field("note", L10n.shared.sync.mistiasync.note, local.note, remote.note)
-                field("amount", L10n.shared.sync.mistiasync.amount, number(local.amountMinor), number(remote.amountMinor))
+                field("amount", L10n.shared.sync.mistiasync.amount, formattedPlainAmount(local.amountMinor), formattedPlainAmount(remote.amountMinor))
                 field("occurred", L10n.shared.sync.mistiasync.transactionDate, date(local.occurredAt), date(remote.occurredAt))
                 field("counterparty", L10n.shared.sync.mistiasync.counterparty, local.counterpartyName, remote.counterpartyName)
                 field("sourceWallet", L10n.shared.sync.mistiasync.sourceWallet, uuid(local.sourceWalletID), uuid(remote.sourceWalletID))
@@ -620,6 +638,13 @@ nonisolated private extension MistiaSyncUploadRecord {
         }
     }
 
+    func hasSemanticDifferences(comparedWith remote: MistiaSyncUploadRecord) -> Bool {
+        let diffs = conflictDifferences(comparedWith: remote)
+        let userFacing = diffs.filter { !MistiaSyncConflictPresentation.isInternalField($0.id) }
+        let semantic = userFacing.filter { !MistiaSyncConflictPresentation.isMetadataField($0.id) }
+        return !semantic.isEmpty
+    }
+
     func syncMetadataDifferences(comparedWith remote: MistiaSyncUploadRecord) -> [MistiaSyncConflictDifference] {
         MistiaSyncConflictDifferenceBuilder.build {
             field("updatedAt", L10n.shared.sync.mistiasync.updatedAt, date(updatedAt), date(remote.updatedAt))
@@ -715,9 +740,6 @@ nonisolated private func displayValue(_ value: String?) -> String {
     guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return L10n.shared.sync.mistiasync.none
     }
-    if UUID(uuidString: value) != nil {
-        return L10n.shared.sync.mistiasync.nameUnavailable
-    }
     return value
 }
 
@@ -761,7 +783,7 @@ nonisolated private func date(_ value: Date?) -> String? {
 }
 
 nonisolated private func uuid(_ value: UUID?) -> String? {
-    value.map { String($0.uuidString.lowercased().prefix(8)) }
+    value?.uuidString.lowercased()
 }
 
 nonisolated private func yesNo(_ value: Bool) -> String {

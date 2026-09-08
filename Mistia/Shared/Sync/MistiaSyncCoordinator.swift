@@ -133,6 +133,10 @@ actor MistiaSyncPersistenceWorker {
         try MistiaSyncLocalStore.removeConflict(id: id, from: modelContainer)
     }
 
+    func purgeNonSemanticConflicts() throws {
+        try MistiaSyncLocalStore.purgeNonSemanticConflicts(from: modelContainer)
+    }
+
     func saveConflictAndApplyRemote(
         entity: MistiaSyncEntity,
         recordID: UUID,
@@ -455,6 +459,7 @@ actor SyncCoordinator {
         let previousFingerprint = lastSnapshotFingerprint
         let snapshotActiveCount = snapshot.activeRowCount
         let snapshotFingerprint = try await applySnapshot(snapshot)
+        try? await persistenceWorker.purgeNonSemanticConflicts()
         reportProgress(1.0)
 
         if seededMissingRows && remoteWasEmpty {
@@ -1576,6 +1581,21 @@ actor SyncCoordinator {
         subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> Bool {
+        if !localDraft.hasSemanticDifferences(comparedWith: remoteRecord) {
+            if localDraft.updatedAt > remoteRecord.updatedAt {
+                _ = try await forcePushLocalRecord(
+                    localDraft,
+                    subjectUserID: subjectUserID,
+                    remoteVersion: remoteVersion,
+                    session: session
+                )
+                return true
+            } else {
+                try await persistenceWorker.applyRemoteRecord(remoteRecord)
+                return false
+            }
+        }
+
         switch preferredAuthority(localDraft: localDraft, remoteRecord: remoteRecord) {
         case .local:
             _ = try await forcePushLocalRecord(

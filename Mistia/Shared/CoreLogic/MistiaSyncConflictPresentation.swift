@@ -3,8 +3,8 @@ import Foundation
 nonisolated enum MistiaSyncConflictPresentation {
     static func visibleDifferences(
         from differences: [MistiaSyncConflictDifference],
-        semanticLimit: Int = 3,
-        fallbackLimit: Int = 2
+        semanticLimit: Int = 100,
+        fallbackLimit: Int = 100
     ) -> [MistiaSyncConflictDifference] {
         let userFacingDifferences = differences.filter { !isInternalField($0.id) }
         let semanticDifferences = userFacingDifferences.filter { !isMetadataField($0.id) }

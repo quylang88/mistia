@@ -86,7 +86,6 @@ private enum ManagementProfileDestination: String, Identifiable {
     case settings
     case syncSettings
     case family
-    case dataManagement
     case backupRestore
     case signedInDevices
     case editProfile
@@ -132,6 +131,7 @@ private enum ManagementEditProfileDestination: String, Identifiable {
 
 struct ManagementAccountView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Query
@@ -164,7 +164,7 @@ struct ManagementAccountView: View {
     }
 
     private var activeConflicts: [SyncConflict] {
-        storedConflicts
+        storedConflicts.filter(\.hasSemanticDifferences)
     }
 
     var body: some View {
@@ -216,8 +216,6 @@ struct ManagementAccountView: View {
                 ManagementSyncSettingsView(accent: accent)
             case .family:
                 FamilyManagementView()
-            case .dataManagement:
-                ManagementDataConflictsView(accent: accent)
             case .backupRestore:
                 ManagementBackupRestoreView()
             case .signedInDevices:
@@ -304,6 +302,9 @@ struct ManagementAccountView: View {
                     }
                 )
             }
+        }
+        .task {
+            modelContext.purgeNonSemanticConflicts(from: storedConflicts)
         }
     }
 
@@ -3664,6 +3665,7 @@ private struct ManagementProfilePlaceholderCard: View {
 struct ManagementSyncSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Query private var storedConflicts: [SyncConflict]
 
@@ -3671,6 +3673,10 @@ struct ManagementSyncSettingsView: View {
     @State private var showsNoConflictsAlert = false
 
     let accent: Color
+
+    private var activeConflicts: [SyncConflict] {
+        storedConflicts.filter(\.hasSemanticDifferences)
+    }
 
     private var cardTint: Color {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
@@ -3724,13 +3730,11 @@ struct ManagementSyncSettingsView: View {
                         icon: "externaldrive.badge.person.crop",
                         accent: .purple,
                         subtitle: nil,
-                        badge: {
-                            storedConflicts.isEmpty ? nil : "\(storedConflicts.count)"
-                        }(),
+                        badge: activeConflicts.isEmpty ? nil : "\(activeConflicts.count)",
                         badgeAccent: .purple,
                         usesDarkReadableIconStyle: true
                     ) {
-                        if !storedConflicts.isEmpty {
+                        if !activeConflicts.isEmpty {
                             destination = .dataManagement
                         } else {
                             showsNoConflictsAlert = true
@@ -3830,6 +3834,9 @@ struct ManagementSyncSettingsView: View {
             Text(
                 L10n.management.managementauth.yourDataIsCurrentlyFullySyncedNo
             )
+        }
+        .task {
+            modelContext.purgeNonSemanticConflicts(from: storedConflicts)
         }
     }
 }
