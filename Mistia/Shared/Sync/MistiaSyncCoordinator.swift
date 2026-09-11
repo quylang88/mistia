@@ -651,6 +651,11 @@ actor SyncCoordinator {
             return false
         }
         let subjectUserID = localRecord.userID
+        try await ensureRemoteWalletDependenciesExistIfNeeded(
+            for: localRecord,
+            subjectUserID: subjectUserID,
+            session: session
+        )
         try await ensureRemoteCategoryDependenciesExistIfNeeded(
             for: localRecord,
             subjectUserID: subjectUserID,
@@ -895,6 +900,12 @@ actor SyncCoordinator {
             return false
         }
         let subjectUserID = localRecord.userID
+        try await ensureRemoteWalletDependenciesExistIfNeeded(
+            for: localRecord,
+            subjectUserID: subjectUserID,
+            session: session,
+            localUserID: session.user.id
+        )
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
@@ -1139,6 +1150,11 @@ actor SyncCoordinator {
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
             reportProgress(progress)
 
+            try await ensureRemoteWalletDependenciesExistIfNeeded(
+                for: localRecord,
+                subjectUserID: localRecord.userID,
+                session: session
+            )
             try await ensureRemoteCategoryDependenciesExistIfNeeded(
                 for: localRecord,
                 subjectUserID: localRecord.userID,
@@ -1149,6 +1165,65 @@ actor SyncCoordinator {
                 subjectUserID: localRecord.userID,
                 session: session
             )
+        }
+    }
+
+    private func ensureRemoteWalletDependenciesExistIfNeeded(
+        for record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession,
+        localUserID: UUID? = nil
+    ) async throws {
+        guard case .transaction(let transaction) = record else { return }
+
+        let walletIDs = Set([
+            transaction.sourceWalletID,
+            transaction.destinationWalletID
+        ].compactMap { $0 })
+
+        for walletID in walletIDs.sorted(by: MistiaStableUUIDOrdering.precedes) {
+            let dependencyMutation = MistiaSyncMutation(
+                entity: .wallet,
+                recordID: walletID,
+                subjectUserID: subjectUserID,
+                kind: .upsert,
+                modifiedAt: record.updatedAt,
+                baseVersion: 0,
+                deviceID: deviceID
+            )
+            guard let localWallet = try await persistenceWorker.exportRecord(for: dependencyMutation) else {
+                continue
+            }
+
+            let walletOwnerUserID = localWallet.userID
+            if try await remoteStore.fetchRecord(
+                entity: .wallet,
+                recordID: walletID,
+                subjectUserID: walletOwnerUserID,
+                session: session
+            ) != nil {
+                continue
+            }
+
+            let createdWallet = try await remoteStore.create(
+                localWallet.preparedForCreate(
+                    deviceID: deviceID,
+                    lastModifiedByUserID: session.user.id
+                ),
+                subjectUserID: walletOwnerUserID,
+                session: session
+            )
+            try await persistenceWorker.applyRemoteRecord(
+                createdWallet,
+                localUserID: localUserID
+            )
+            try await createFamilyActivityNotificationIfNeeded(
+                for: createdWallet,
+                subjectUserID: walletOwnerUserID,
+                action: .created,
+                session: session
+            )
+            outbox.remove(entity: .wallet, recordID: walletID)
         }
     }
 
@@ -1628,6 +1703,11 @@ actor SyncCoordinator {
         remoteVersion: Int64,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
+        try await ensureRemoteWalletDependenciesExistIfNeeded(
+            for: localRecord,
+            subjectUserID: subjectUserID,
+            session: session
+        )
         try await ensureRemoteCategoryDependenciesExistIfNeeded(
             for: localRecord,
             subjectUserID: subjectUserID,

@@ -74,6 +74,108 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertEqual(indexedWallet.syncVersion, 2)
     }
 
+    func testQueuedTransactionCreateUploadsMissingLocalWalletDependencyFirst() async throws {
+        let userID = UUID()
+        let walletID = UUID()
+        let transactionID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let wallet = LedgerWallet(
+            id: walletID,
+            name: "New local wallet",
+            kind: .bank,
+            iconSymbolName: "building.columns.fill",
+            iconColorHex: "#6E56CF",
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            remoteVersion: 0
+        )
+        let transaction = LedgerTransaction(
+            id: transactionID,
+            primaryKind: .expense,
+            title: "Local purchase",
+            amountMinor: 500,
+            occurredAt: updatedAt,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            sourceWallet: wallet
+        )
+        context.insert(wallet)
+        context.insert(transaction)
+        context.insert(
+            OwnedRecordScope(
+                entity: .wallet,
+                recordID: walletID,
+                ownerUserID: userID,
+                updatedAt: updatedAt
+            )
+        )
+        context.insert(
+            OwnedRecordScope(
+                entity: .transaction,
+                recordID: transactionID,
+                ownerUserID: userID,
+                updatedAt: updatedAt
+            )
+        )
+        context.insert(
+            TransactionAuditRecord(
+                transactionID: transactionID,
+                createdByUserID: userID,
+                lastModifiedByUserID: userID,
+                updatedAt: updatedAt
+            )
+        )
+        try context.save()
+
+        let remoteStore = FamilyConflictRemoteStore()
+        let outbox = MistiaSyncOutbox(
+            defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+            key: "missing-wallet-dependency"
+        )
+        let coordinator = SyncCoordinator(
+            modelContainer: container,
+            remoteStore: remoteStore,
+            outbox: outbox,
+            deviceID: UUID()
+        )
+        let mutation = MistiaSyncMutation(
+            entity: .transaction,
+            recordID: transactionID,
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: updatedAt,
+            baseVersion: 0
+        )
+        coordinator.outbox.enqueue(mutation)
+
+        let pushed = try await coordinator.pushQueuedMutationsOnly(
+            [mutation],
+            session: makeSession(userID: userID)
+        )
+
+        XCTAssertTrue(pushed)
+        XCTAssertEqual(remoteStore.fetchedEntities, [.wallet, .transaction])
+        XCTAssertEqual(remoteStore.createdRecords.map(\.entity), [.wallet, .transaction])
+        XCTAssertEqual(remoteStore.createSubjectUserIDs, [userID, userID])
+        XCTAssertFalse(outbox.contains(entity: .transaction, recordID: transactionID))
+
+        let savedWallet = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<LedgerWallet>()).first {
+                $0.id == walletID
+            }
+        )
+        XCTAssertEqual(savedWallet.remoteVersion, 1)
+
+        let savedTransaction = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<LedgerTransaction>()).first {
+                $0.id == transactionID
+            }
+        )
+        XCTAssertEqual(savedTransaction.remoteVersion, 1)
+    }
+
     func testFamilyCloudFirstPushRequiresRefreshWhenRemoteVersionChanged() async throws {
         let viewerUserID = UUID()
         let memberUserID = UUID()
@@ -306,7 +408,16 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         )
         try context.save()
 
-        let remoteStore = FamilyConflictRemoteStore()
+        let remoteStore = FamilyConflictRemoteStore(
+            remoteRecord: .wallet(
+                remoteWallet(
+                    id: walletID,
+                    userID: memberUserID,
+                    name: "PayPay",
+                    syncVersion: 1
+                )
+            )
+        )
         let outbox = MistiaSyncOutbox(
             defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
             key: "family-transaction-create"
@@ -334,7 +445,7 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
 
         XCTAssertTrue(pushed)
         XCTAssertEqual(remoteStore.fetchSnapshotCallCount, 0)
-        XCTAssertEqual(remoteStore.fetchedEntities, [.transaction])
+        XCTAssertEqual(remoteStore.fetchedEntities, [.wallet, .transaction])
         XCTAssertFalse(remoteStore.forceUpsertCalled)
         let createdTransaction = remoteStore.createdRecords.compactMap { record -> RemoteLedgerTransaction? in
             guard case .transaction(let row) = record else { return nil }
@@ -409,7 +520,16 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         )
         try context.save()
 
-        let remoteStore = FamilyConflictRemoteStore()
+        let remoteStore = FamilyConflictRemoteStore(
+            remoteRecord: .wallet(
+                remoteWallet(
+                    id: walletID,
+                    userID: memberUserID,
+                    name: "Member wallet",
+                    syncVersion: 1
+                )
+            )
+        )
         let outbox = MistiaSyncOutbox(
             defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
             key: "stale-transaction-subject"
