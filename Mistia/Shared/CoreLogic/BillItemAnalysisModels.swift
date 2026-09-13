@@ -28,7 +28,8 @@ enum BillItemLineType: String, Codable, Equatable, Hashable {
 }
 
 struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
-    let lineID: String
+    var lineID: String
+    var rawLineText: String?
     var originalName: String
     var translatedName: String?
     var lineType: BillItemLineType
@@ -62,8 +63,34 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         return finalAmountMinor / quantityMinor
     }
 
+    func reviewed(originalAmount: Int64, discountAmount: Int64, quantity: Int) -> BillItemAnalysisItem? {
+        guard originalAmount >= 0, discountAmount >= 0, quantity > 0,
+              !originalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              lineType == .discount || (originalAmount > 0 && discountAmount <= originalAmount) else { return nil }
+        var edited = self
+        edited.quantity = lineType == .purchase && quantity > 1 ? quantity : nil
+        edited.originalAmountMinor = lineType == .purchase ? originalAmount : nil
+        edited.discountAmountMinor = discountAmount
+        edited.finalAmountMinor = lineType == .purchase ? originalAmount - discountAmount : -discountAmount
+        if lineType == .discount { edited.categoryID = nil }
+        edited.missingFields.removeAll { ["sourceText", "originalName", "quantity", "finalAmountMinor", "originalAmountMinor", "discountAmountMinor"].contains($0) }
+        return edited
+    }
+
+    var requiresReview: Bool {
+        if originalName.isEmpty { return true }
+        if !Set(missingFields).isDisjoint(with: ["sourceText", "originalName", "finalAmountMinor", "quantity", "originalAmountMinor", "discountAmountMinor"]) { return true }
+        guard lineType == .purchase else { return finalAmountMinor > 0 }
+        if let originalAmountMinor {
+            let difference = originalAmountMinor.subtractingReportingOverflow(discountAmountMinor)
+            if difference.overflow || difference.partialValue != finalAmountMinor { return true }
+        }
+        return finalAmountMinor == 0 && (originalAmountMinor ?? 0) == 0
+    }
+
     enum CodingKeys: String, CodingKey {
         case lineID = "line_id"
+        case rawLineText = "raw_line_text"
         case originalName = "original_name"
         case translatedName = "translated_name"
         case lineType = "line_type"
@@ -79,6 +106,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
     init(
         lineID: String,
         originalName: String,
+        rawLineText: String? = nil,
         translatedName: String? = nil,
         lineType: BillItemLineType = .purchase,
         quantity: Int? = nil,
@@ -90,6 +118,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         missingFields: [String] = []
     ) {
         self.lineID = lineID.nilIfBlank ?? UUID().uuidString
+        self.rawLineText = rawLineText?.nilIfBlank
         self.originalName = originalName.nilIfBlank ?? ""
         self.translatedName = translatedName?.nilIfBlank
         self.lineType = lineType
@@ -107,6 +136,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         lineID = try container.decodeTrimmedStringIfPresent(forKey: .lineID) ?? UUID().uuidString
+        rawLineText = try container.decodeTrimmedStringIfPresent(forKey: .rawLineText)
         originalName = try container.decodeTrimmedStringIfPresent(forKey: .originalName) ?? ""
         translatedName = try container.decodeTrimmedStringIfPresent(forKey: .translatedName)
         let decodedLineType = try container.decodeIfPresent(BillItemLineType.self, forKey: .lineType) ?? .purchase
@@ -203,6 +233,28 @@ struct BillItemAnalysisResult: Codable, Equatable {
         quota = try container.decodeIfPresent(ReceiptAnalysisQuota.self, forKey: .quota)
     }
 
+    var itemsTotalMinor: Int64? {
+        var total: Int64 = 0
+        for item in items {
+            let sum = total.addingReportingOverflow(item.finalAmountMinor)
+            guard !sum.overflow else { return nil }
+            total = sum.partialValue
+        }
+        return total
+    }
+
+    var totalDifferenceMinor: Int64? {
+        guard let totalMinor, let itemsTotalMinor else { return nil }
+        let difference = itemsTotalMinor.subtractingReportingOverflow(totalMinor)
+        return difference.overflow ? nil : difference.partialValue
+    }
+
+    var requiresReview: Bool {
+        items.isEmpty || totalMinor == nil || totalDifferenceMinor != 0 ||
+            items.contains(where: \.requiresReview) ||
+            Set(items.map(\.lineID)).count != items.count
+    }
+
     func validated(categoryIDs: Set<UUID>, walletIDs: Set<UUID>) -> BillItemAnalysisResult {
         var copy = self
         var missing = Set(copy.missingFields)
@@ -212,8 +264,13 @@ struct BillItemAnalysisResult: Codable, Equatable {
             missing.insert("walletID")
         }
 
-        copy.items = copy.items.map { item in
+        var seenLineIDs = Set<String>()
+        copy.items = copy.items.enumerated().map { index, item in
             var next = item
+            if !seenLineIDs.insert(item.lineID).inserted {
+                next.lineID = "review-\(index)-\(UUID().uuidString)"
+                next.missingFields.append("sourceText")
+            }
             if let categoryID = item.categoryID, !categoryIDs.contains(categoryID) {
                 next.categoryID = nil
                 var itemMissing = Set(next.missingFields)
@@ -750,20 +807,22 @@ enum BillItemDiscountAllocator {
 
         let discountItem = items[discountIndex]
         let discountAmount = max(discountItem.discountAmountMinor, abs(discountItem.finalAmountMinor))
-        guard discountAmount > 0 else { return nil }
+        guard discountItem.finalAmountMinor < 0, discountAmount > 0 else { return nil }
 
         let eligibleIndexes = items.indices.filter { index in
             items[index].lineType == .purchase && items[index].finalAmountMinor > 0
         }
         let baseTotal = eligibleIndexes.reduce(Int64.zero) { partial, index in
-            partial + max(items[index].originalAmountMinor ?? items[index].finalAmountMinor, 0)
+            partial + items[index].finalAmountMinor
         }
-        guard baseTotal > 0 else { return nil }
+        guard baseTotal > 0, discountAmount <= baseTotal else { return nil }
 
-        var allocations = eligibleIndexes.map { index -> (index: Int, floor: Int64, remainder: Double) in
-            let base = Double(max(items[index].originalAmountMinor ?? items[index].finalAmountMinor, 0))
-            let exact = base * Double(discountAmount) / Double(baseTotal)
-            return (index, Int64(floor(exact)), exact - floor(exact))
+        var allocations = eligibleIndexes.map { index -> (index: Int, floor: Int64, remainder: Decimal) in
+            let base = Decimal(items[index].finalAmountMinor)
+            var exact = base * Decimal(discountAmount) / Decimal(baseTotal)
+            var rounded = Decimal()
+            NSDecimalRound(&rounded, &exact, 0, .down)
+            return (index, NSDecimalNumber(decimal: rounded).int64Value, exact - rounded)
         }
 
         let allocatedTotal = allocations.reduce(Int64.zero) { $0 + $1.floor }
@@ -781,6 +840,9 @@ enum BillItemDiscountAllocator {
 
         var updated = items
         for allocation in allocations {
+            if updated[allocation.index].originalAmountMinor == nil {
+                updated[allocation.index].originalAmountMinor = updated[allocation.index].finalAmountMinor + updated[allocation.index].discountAmountMinor
+            }
             updated[allocation.index].discountAmountMinor += allocation.floor
             updated[allocation.index].finalAmountMinor = max(0, updated[allocation.index].finalAmountMinor - allocation.floor)
         }

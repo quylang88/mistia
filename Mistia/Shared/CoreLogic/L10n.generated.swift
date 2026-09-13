@@ -4710,6 +4710,8 @@ nonisolated enum L10n {
         nonisolated enum aibill {
             static var addBills: String { L10n.tr("transactions.aibill.addBills", vi: "Thêm bill", en: "Add bills", ja: "レシートを追加") }
             static func addBills(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.addBills", vi: "Thêm bill", en: "Add bills", ja: "レシートを追加", language: language) }
+            static var addItem: String { L10n.tr("transactions.aibill.addItem", vi: "Thêm món còn thiếu", en: "Add missing item", ja: "不足している商品を追加") }
+            static func addItem(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.addItem", vi: "Thêm món còn thiếu", en: "Add missing item", ja: "不足している商品を追加", language: language) }
             static var aiBill: String { L10n.tr("transactions.aibill.aiBill", vi: "Phân tích bill", en: "Receipt Analysis", ja: "レシート解析") }
             static func aiBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.aiBill", vi: "Phân tích bill", en: "Receipt Analysis", ja: "レシート解析", language: language) }
             static var allocateDiscount: String { L10n.tr("transactions.aibill.allocateDiscount", vi: "Phân bổ tỷ lệ", en: "Allocate proportionally", ja: "按分") }
@@ -4718,6 +4720,8 @@ nonisolated enum L10n {
             static func allocated(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.allocated", vi: "Đã phân bổ", en: "Allocated", ja: "按分済み", language: language) }
             static var analyze: String { L10n.tr("transactions.aibill.analyze", vi: "Phân tích", en: "Analyze", ja: "解析") }
             static func analyze(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.analyze", vi: "Phân tích", en: "Analyze", ja: "解析", language: language) }
+            static var analyzeAgain: String { L10n.tr("transactions.aibill.analyzeAgain", vi: "Phân tích lại", en: "Analyze again", ja: "再解析") }
+            static func analyzeAgain(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.analyzeAgain", vi: "Phân tích lại", en: "Analyze again", ja: "再解析", language: language) }
             static var analyzing: String { L10n.tr("transactions.aibill.analyzing", vi: "Đang phân tích...", en: "Analyzing...", ja: "解析中...") }
             static func analyzing(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.analyzing", vi: "Đang phân tích...", en: "Analyzing...", ja: "解析中...", language: language) }
             static func billValue(_ value: String) -> String {
@@ -4732,10 +4736,40 @@ nonisolated enum L10n {
             static func created(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.created", vi: "Đã tạo", en: "Created", ja: "作成済み", language: language) }
             static var discardAnalysis: String { L10n.tr("transactions.aibill.discardAnalysis", vi: "Thoát", en: "Leave", ja: "閉じる") }
             static func discardAnalysis(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.discardAnalysis", vi: "Thoát", en: "Leave", ja: "閉じる", language: language) }
+            static var discountAmount: String { L10n.tr("transactions.aibill.discountAmount", vi: "Giảm giá", en: "Discount", ja: "値引き") }
+            static func discountAmount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.discountAmount", vi: "Giảm giá", en: "Discount", ja: "値引き", language: language) }
             static var discountLine: String { L10n.tr("transactions.aibill.discountLine", vi: "Giảm giá", en: "Discount", ja: "値引") }
             static func discountLine(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.discountLine", vi: "Giảm giá", en: "Discount", ja: "値引", language: language) }
+            static var editItem: String { L10n.tr("transactions.aibill.editItem", vi: "Sửa món", en: "Edit item", ja: "商品を編集") }
+            static func editItem(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.editItem", vi: "Sửa món", en: "Edit item", ja: "商品を編集", language: language) }
+            static var editTotal: String { L10n.tr("transactions.aibill.editTotal", vi: "Sửa tổng hóa đơn", en: "Edit receipt total", ja: "レシート合計を編集") }
+            static func editTotal(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.editTotal", vi: "Sửa tổng hóa đơn", en: "Edit receipt total", ja: "レシート合計を編集", language: language) }
+            static var finalRowAmount: String { L10n.tr("transactions.aibill.finalRowAmount", vi: "Thành tiền", en: "Line total", ja: "行合計") }
+            static func finalRowAmount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.finalRowAmount", vi: "Thành tiền", en: "Line total", ja: "行合計", language: language) }
             static var imageContainsMultipleBills: String { L10n.tr("transactions.aibill.imageContainsMultipleBills", vi: "Ảnh này có vẻ chứa nhiều bill. Hãy tách ra mỗi ảnh một bill rồi gửi lại.", en: "This image appears to contain multiple receipts. Split them into one receipt per image and try again.", ja: "この画像には複数のレシートが含まれているようです。1枚につき1つのレシートに分けて再度送信してください。") }
             static func imageContainsMultipleBills(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.imageContainsMultipleBills", vi: "Ảnh này có vẻ chứa nhiều bill. Hãy tách ra mỗi ảnh một bill rồi gửi lại.", en: "This image appears to contain multiple receipts. Split them into one receipt per image and try again.", ja: "この画像には複数のレシートが含まれているようです。1枚につき1つのレシートに分けて再度送信してください。", language: language) }
+            static func itemCount(_ value: String) -> String {
+                L10n.format("transactions.aibill.itemCount", vi: "%@ dòng hàng", en: "%@ item lines", ja: "商品行 %@件", value)
+            }
+            static func itemCount(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("transactions.aibill.itemCount", vi: "%@ dòng hàng", en: "%@ item lines", ja: "商品行 %@件", language: language, value)
+            }
+            static var itemDetails: String { L10n.tr("transactions.aibill.itemDetails", vi: "Thông tin món hàng", en: "Item details", ja: "商品情報") }
+            static func itemDetails(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.itemDetails", vi: "Thông tin món hàng", en: "Item details", ja: "商品情報", language: language) }
+            static func itemDiscount(_ value: String) -> String {
+                L10n.format("transactions.aibill.itemDiscount", vi: "Giảm %@", en: "Discount %@", ja: "値引き %@", value)
+            }
+            static func itemDiscount(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("transactions.aibill.itemDiscount", vi: "Giảm %@", en: "Discount %@", ja: "値引き %@", language: language, value)
+            }
+            static func itemsTotal(_ value: String) -> String {
+                L10n.format("transactions.aibill.itemsTotal", vi: "Tổng món: %@", en: "Items total: %@", ja: "商品合計：%@", value)
+            }
+            static func itemsTotal(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("transactions.aibill.itemsTotal", vi: "Tổng món: %@", en: "Items total: %@", ja: "商品合計：%@", language: language, value)
+            }
+            static var lineType: String { L10n.tr("transactions.aibill.lineType", vi: "Loại dòng", en: "Line type", ja: "行の種類") }
+            static func lineType(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.lineType", vi: "Loại dòng", en: "Line type", ja: "行の種類", language: language) }
             static var locked: String { L10n.tr("transactions.aibill.locked", vi: "Đã chốt", en: "Locked", ja: "確定済み") }
             static func locked(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.locked", vi: "Đã chốt", en: "Locked", ja: "確定済み", language: language) }
             static func lockedGroupValue(_ value: String) -> String {
@@ -4744,20 +4778,46 @@ nonisolated enum L10n {
             static func lockedGroupValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("transactions.aibill.lockedGroupValue", vi: "Đã chốt %@", en: "Locked %@", ja: "%@ 確定済み", language: language, value)
             }
+            static var needsReview: String { L10n.tr("transactions.aibill.needsReview", vi: "Cần kiểm tra", en: "Review needed", ja: "要確認") }
+            static func needsReview(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.needsReview", vi: "Cần kiểm tra", en: "Review needed", ja: "要確認", language: language) }
             static var noBillsMessage: String { L10n.tr("transactions.aibill.noBillsMessage", vi: "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua.", en: "Add up to 5 receipt images for AI to split items.", ja: "最大5枚のレシートを追加してAIで明細を分けます。") }
             static func noBillsMessage(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.noBillsMessage", vi: "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua.", en: "Add up to 5 receipt images for AI to split items.", ja: "最大5枚のレシートを追加してAIで明細を分けます。", language: language) }
             static var noBillsTitle: String { L10n.tr("transactions.aibill.noBillsTitle", vi: "Chưa có bill", en: "No receipts yet", ja: "レシートがありません") }
             static func noBillsTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.noBillsTitle", vi: "Chưa có bill", en: "No receipts yet", ja: "レシートがありません", language: language) }
             static var noSelectableItems: String { L10n.tr("transactions.aibill.noSelectableItems", vi: "Chọn các mục hợp lệ để tạo khoản thu chi.", en: "Select valid items to create a cashflow item.", ja: "有効な項目を選んで取引を作成してください。") }
             static func noSelectableItems(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.noSelectableItems", vi: "Chọn các mục hợp lệ để tạo khoản thu chi.", en: "Select valid items to create a cashflow item.", ja: "有効な項目を選んで取引を作成してください。", language: language) }
+            static var originalName: String { L10n.tr("transactions.aibill.originalName", vi: "Tên trên hóa đơn", en: "Printed name", ja: "レシートの商品名") }
+            static func originalName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.originalName", vi: "Tên trên hóa đơn", en: "Printed name", ja: "レシートの商品名", language: language) }
+            static var originalRowAmount: String { L10n.tr("transactions.aibill.originalRowAmount", vi: "Tổng giá gốc", en: "Original line total", ja: "値引き前の行合計") }
+            static func originalRowAmount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.originalRowAmount", vi: "Tổng giá gốc", en: "Original line total", ja: "値引き前の行合計", language: language) }
+            static var printedText: String { L10n.tr("transactions.aibill.printedText", vi: "Nội dung trên hóa đơn", en: "Printed receipt text", ja: "レシートの印字内容") }
+            static func printedText(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.printedText", vi: "Nội dung trên hóa đơn", en: "Printed receipt text", ja: "レシートの印字内容", language: language) }
+            static var purchaseLine: String { L10n.tr("transactions.aibill.purchaseLine", vi: "Món hàng", en: "Purchase", ja: "購入商品") }
+            static func purchaseLine(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.purchaseLine", vi: "Món hàng", en: "Purchase", ja: "購入商品", language: language) }
+            static var quantity: String { L10n.tr("transactions.aibill.quantity", vi: "Số lượng", en: "Quantity", ja: "数量") }
+            static func quantity(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.quantity", vi: "Số lượng", en: "Quantity", ja: "数量", language: language) }
+            static var receiptActions: String { L10n.tr("transactions.aibill.receiptActions", vi: "Tùy chọn hóa đơn", en: "Receipt options", ja: "レシートの操作") }
+            static func receiptActions(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.receiptActions", vi: "Tùy chọn hóa đơn", en: "Receipt options", ja: "レシートの操作", language: language) }
+            static var receiptImage: String { L10n.tr("transactions.aibill.receiptImage", vi: "Ảnh hóa đơn", en: "Receipt image", ja: "レシート画像") }
+            static func receiptImage(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.receiptImage", vi: "Ảnh hóa đơn", en: "Receipt image", ja: "レシート画像", language: language) }
+            static var receiptTotal: String { L10n.tr("transactions.aibill.receiptTotal", vi: "Tổng thanh toán", en: "Receipt total", ja: "支払合計") }
+            static func receiptTotal(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.receiptTotal", vi: "Tổng thanh toán", en: "Receipt total", ja: "支払合計", language: language) }
+            static var receiptTotalHelp: String { L10n.tr("transactions.aibill.receiptTotalHelp", vi: "Nhập tổng thanh toán được in trên hóa đơn, sau thuế và giảm giá.", en: "Enter the payable total printed on the receipt, after tax and discounts.", ja: "税金・値引きを含めた、レシートに印字された支払合計を入力してください。") }
+            static func receiptTotalHelp(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.receiptTotalHelp", vi: "Nhập tổng thanh toán được in trên hóa đơn, sau thuế và giảm giá.", en: "Enter the payable total printed on the receipt, after tax and discounts.", ja: "税金・値引きを含めた、レシートに印字された支払合計を入力してください。", language: language) }
             static func remainingAmountValue(_ value: String) -> String {
                 L10n.format("transactions.aibill.remainingAmountValue", vi: "Còn lại %@", en: "Remaining %@", ja: "残り %@", value)
             }
             static func remainingAmountValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("transactions.aibill.remainingAmountValue", vi: "Còn lại %@", en: "Remaining %@", ja: "残り %@", language: language, value)
             }
+            static var removeItem: String { L10n.tr("transactions.aibill.removeItem", vi: "Xóa dòng hàng", en: "Remove item", ja: "商品行を削除") }
+            static func removeItem(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.removeItem", vi: "Xóa dòng hàng", en: "Remove item", ja: "商品行を削除", language: language) }
             static var resultsWillBeLost: String { L10n.tr("transactions.aibill.resultsWillBeLost", vi: "Dữ liệu phân tích sẽ mất nếu bạn thoát màn này.", en: "Analysis data will be lost if you leave this screen.", ja: "この画面を閉じると解析データは失われます。") }
             static func resultsWillBeLost(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.resultsWillBeLost", vi: "Dữ liệu phân tích sẽ mất nếu bạn thoát màn này.", en: "Analysis data will be lost if you leave this screen.", ja: "この画面を閉じると解析データは失われます。", language: language) }
+            static var reviewBeforeCreate: String { L10n.tr("transactions.aibill.reviewBeforeCreate", vi: "Đối chiếu ảnh gốc và sửa các món cần kiểm tra trước khi tạo giao dịch.", en: "Check the receipt image and correct flagged items before creating a transaction.", ja: "取引を作成する前に、画像と照合し、要確認の商品を修正してください。") }
+            static func reviewBeforeCreate(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.reviewBeforeCreate", vi: "Đối chiếu ảnh gốc và sửa các món cần kiểm tra trước khi tạo giao dịch.", en: "Check the receipt image and correct flagged items before creating a transaction.", ja: "取引を作成する前に、画像と照合し、要確認の商品を修正してください。", language: language) }
+            static var rowAmountHelp: String { L10n.tr("transactions.aibill.rowAmountHelp", vi: "Nhập tổng tiền cho toàn bộ số lượng của dòng hàng. Thành tiền bằng tổng giá gốc trừ giảm giá.", en: "Enter the total for the entire quantity on this line. The line total is the original amount minus the discount.", ja: "その行の数量すべての金額を入力してください。行合計は値引き前の金額から値引きを引いた金額です。") }
+            static func rowAmountHelp(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.rowAmountHelp", vi: "Nhập tổng tiền cho toàn bộ số lượng của dòng hàng. Thành tiền bằng tổng giá gốc trừ giảm giá.", en: "Enter the total for the entire quantity on this line. The line total is the original amount minus the discount.", ja: "その行の数量すべての金額を入力してください。行合計は値引き前の金額から値引きを引いた金額です。", language: language) }
             static func selectedAmountValue(_ value: String) -> String {
                 L10n.format("transactions.aibill.selectedAmountValue", vi: "Tổng chọn %@", en: "Selected %@", ja: "選択 %@", value)
             }
@@ -4772,6 +4832,16 @@ nonisolated enum L10n {
             static func tooManyImages(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("transactions.aibill.tooManyImages", vi: "Mỗi lần chỉ chọn tối đa %@ ảnh bill.", en: "Choose no more than %@ receipt images at a time.", ja: "一度に選択できるレシート画像は %@ 枚までです。", language: language, value)
             }
+            static func totalDifference(_ value: String) -> String {
+                L10n.format("transactions.aibill.totalDifference", vi: "Chênh lệch so với hóa đơn: %@", en: "Difference from receipt: %@", ja: "レシートとの差額：%@", value)
+            }
+            static func totalDifference(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("transactions.aibill.totalDifference", vi: "Chênh lệch so với hóa đơn: %@", en: "Difference from receipt: %@", ja: "レシートとの差額：%@", language: language, value)
+            }
+            static var totalMatched: String { L10n.tr("transactions.aibill.totalMatched", vi: "Tổng tiền đã khớp", en: "Totals match", ja: "合計金額が一致") }
+            static func totalMatched(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.totalMatched", vi: "Tổng tiền đã khớp", en: "Totals match", ja: "合計金額が一致", language: language) }
+            static var translatedName: String { L10n.tr("transactions.aibill.translatedName", vi: "Tên dịch", en: "Translated name", ja: "翻訳名") }
+            static func translatedName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.translatedName", vi: "Tên dịch", en: "Translated name", ja: "翻訳名", language: language) }
             static var walletForBill: String { L10n.tr("transactions.aibill.walletForBill", vi: "Ví của bill", en: "Receipt wallet", ja: "レシートのウォレット") }
             static func walletForBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.walletForBill", vi: "Ví của bill", en: "Receipt wallet", ja: "レシートのウォレット", language: language) }
         }

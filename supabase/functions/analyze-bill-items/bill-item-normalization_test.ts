@@ -575,3 +575,23 @@ Deno.test("normalizeBillAnalysisItems does not invent discounts to force receipt
     throw new Error(`Second item was mutated: ${JSON.stringify(items[1])}`);
   }
 });
+
+Deno.test("English product names containing off or sale are purchases", () => {
+  for (
+    const name of ["COFFEE", "OFFICE PAPER", "SALEWA JACKET", "OFF WHITE TEE"]
+  ) {
+    const item = sanitizeBillItem(
+      {
+        original_name: name,
+        raw_line_text: `${name} 500`,
+        line_type: "purchase",
+        final_amount_minor: 500,
+      },
+      0,
+      new Set(),
+    );
+    if (item?.line_type !== "purchase" || item.final_amount_minor !== 500) {
+      throw new Error(`Misclassified product: ${name}`);
+    }
+  }
+});

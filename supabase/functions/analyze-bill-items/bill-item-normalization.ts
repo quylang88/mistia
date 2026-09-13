@@ -1,6 +1,7 @@
 export type SanitizedItem = {
   line_id: string;
   original_name: string;
+  raw_line_text: string | null;
   translated_name: string | null;
   line_type: "purchase" | "discount";
   quantity: number | null;
@@ -155,6 +156,7 @@ export function sanitizeBillItem(
       trimmedString(valueFor(raw, "line_id", "lineID", "lineId", "id")) ??
         `line-${index + 1}`,
     original_name: originalName,
+    raw_line_text: effectiveRawLineText,
     translated_name: trimmedString(
       valueFor(raw, "translated_name", "translatedName", "translation"),
     ),
@@ -195,6 +197,10 @@ export function normalizeBillItems(items: SanitizedItem[]): SanitizedItem[] {
         item.discount_amount_minor,
         Math.abs(item.final_amount_minor),
       );
+      previous.raw_line_text =
+        [previous.raw_line_text, item.raw_line_text].filter(Boolean).join(
+          "\n",
+        ) || null;
       previous.discount_amount_minor += discountAmount;
       previous.original_amount_minor = previous.original_amount_minor ??
         previous.final_amount_minor + discountAmount;
@@ -264,9 +270,9 @@ function valueFor(raw: Record<string, unknown>, ...keys: string[]): unknown {
 }
 
 const discountMarkerRegex =
-  /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|特売|特価|値下|cpn|coupon|voucher|discount|promo|promotion|markdown|off|sale|giảm giá|khuyến mãi|khuyen mai|(?:^|\s)\d[\d,]*\s*(?:[-−－]\s*[A-ZＡ-Ｚ]?|[A-ZＡ-Ｚ]\s*[-−－])(?:\s|$))/i;
+  /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|特売|特価|値下|\b(?:cpn|coupon|voucher|discount|promo|promotion|markdown)\b|giảm giá|khuyến mãi|khuyen mai|(?:^|\s)\d[\d,]*\s*(?:[-−－]\s*[A-ZＡ-Ｚ]?|[A-ZＡ-Ｚ]\s*[-−－])(?:\s|$))/i;
 const attachedCouponMarkerRegex =
-  /\b(?:cpn|coupon|voucher|promo|promotion|markdown|off|sale)\b|クーポン|ｸｰﾎﾟﾝ|値引|割引|特売|割戻/i;
+  /\b(?:cpn|coupon|voucher|promo|promotion|markdown)\b|クーポン|ｸｰﾎﾟﾝ|値引|割引|値下|特売|割戻/i;
 
 function rawStringText(raw: Record<string, unknown>): string {
   return [
@@ -311,7 +317,9 @@ function preservePrintedOriginalName(
 }
 
 function printedItemNameCandidate(rawLineText: string): string | null {
-  const candidate = rawLineText
+  const candidate = rawLineText.split(/\r?\n/)[0]
+    .replace(/^\d{2,8}\s+/, "")
+    .replace(/(?:^|\s)(?:\d+\s*@|[x×@]\s*\d+)(?=\s|$)/gi, " ")
     .replace(/[¥￥]\s*\d[\d,]*/g, " ")
     .replace(
       /(?:^|\s)\d[\d,]*\s*(?:[-−－]\s*[A-Z]?|[A-Z]\s*[-−－])(?=\s|$)/gi,
@@ -332,91 +340,60 @@ function bestLiteralOCRLineText(
     originalName.trim();
   if (!modelName) return null;
 
-  let bestLine: string | null = null;
-  let bestScore = 0;
-  for (const line of ocrItemLines) {
+  const matches = ocrItemLines.filter((line) => {
     const lineName = printedItemNameCandidate(line);
-    if (!lineName) continue;
-    const score = literalOCRMatchScore(modelName, lineName, modelText ?? "");
-    if (score > bestScore) {
-      bestLine = line;
-      bestScore = score;
-    }
-  }
-
-  return bestScore >= 0.65 ? bestLine : null;
-}
-
-function literalOCRMatchScore(
-  modelName: string,
-  ocrName: string,
-  modelText: string,
-): number {
-  const left = modelName.normalize("NFKC").toLowerCase();
-  const right = ocrName.normalize("NFKC").toLowerCase();
-  if (!left || !right) return 0;
-  if (left === right || left.includes(right) || right.includes(left)) return 1;
-  if (hasStrongSharedToken(`${left} ${modelText}`, right)) return 0.9;
-
-  if (containsJapaneseKana(left) && containsJapaneseKana(right)) {
-    const distanceRatio = levenshteinDistance(left, right) /
+    if (!lineName) return false;
+    const left = modelName.normalize("NFKC").toLowerCase();
+    const right = lineName.normalize("NFKC").toLowerCase();
+    const distance = levenshteinDistance(left, right) /
       Math.max(left.length, right.length);
-    if (distanceRatio <= 0.25) return 0.9 - distanceRatio;
-  }
-
-  return 0;
+    return left === right ||
+      (containsJapaneseKana(left) && containsJapaneseKana(right) &&
+        distance <= 0.25);
+  });
+  // Ambiguous names must not steal the first matching receipt row.
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function itemLevelDiscountCorrectionFromVisibleText(
   rawLineText: string | null,
   originalName: string,
-  rawFinalAmount: number | null,
+  _rawFinalAmount: number | null,
 ): {
   originalName: string;
   originalAmount: number;
   discountAmount: number;
   finalAmount: number;
 } | null {
-  if (!rawLineText || rawFinalAmount === null || rawFinalAmount >= 0) {
-    return null;
+  if (!rawLineText) return null;
+  const lines = rawLineText.normalize("NFKC").split(/\r?\n/).map((line) =>
+    line.trim()
+  );
+  if (lines.length < 2 || attachedCouponMarkerRegex.test(lines[0])) return null;
+  let originalAmount: number | null = null;
+  let discountAmount = 0;
+  for (const line of lines) {
+    // Read only the trailing money column; never sizes, codes or unit prices.
+    const match =
+      /(?:^|\s|[¥￥])([-−－]?\s*[¥￥]?\s*\d[\d,]*)(?:\s*[-−－]?\s*[A-Z]?\s*[-−－]?)?$/
+        .exec(line);
+    if (!match) continue;
+    const amount = Number(match[1].replace(/[^0-9]/g, ""));
+    if (!Number.isSafeInteger(amount) || amount <= 0) continue;
+    if (attachedCouponMarkerRegex.test(line)) discountAmount += amount;
+    else if (originalAmount === null) originalAmount = amount;
   }
-
-  const normalized = rawLineText.normalize("NFKC");
-  if (!attachedCouponMarkerRegex.test(normalized)) return null;
-
-  const visibleAmounts = visibleMinorAmounts(normalized);
-  const targetFinalAmount = Math.abs(rawFinalAmount);
-  for (const originalAmount of visibleAmounts) {
-    for (const discountAmount of visibleAmounts) {
-      if (originalAmount <= discountAmount) continue;
-      if (originalAmount - discountAmount !== targetFinalAmount) continue;
-
-      const recoveredName = attachedCouponPurchaseName(
-        normalized,
-        originalName,
-      );
-      if (!recoveredName) return null;
-      return {
-        originalName: recoveredName,
-        originalAmount,
-        discountAmount,
-        finalAmount: targetFinalAmount,
-      };
-    }
-  }
-
-  return null;
-}
-
-function visibleMinorAmounts(rawLineText: string): number[] {
-  const seen = new Set<number>();
-  for (const match of rawLineText.matchAll(/\d[\d,]*/g)) {
-    const parsed = Number(match[0].replace(/,/g, ""));
-    if (Number.isFinite(parsed) && parsed > 0) {
-      seen.add(Math.round(parsed));
-    }
-  }
-  return Array.from(seen).sort((left, right) => right - left);
+  if (
+    originalAmount === null || discountAmount <= 0 ||
+    discountAmount > originalAmount
+  ) return null;
+  return {
+    originalName: attachedCouponPurchaseName(lines[0], originalName) ??
+      originalName,
+    originalAmount,
+    discountAmount,
+    finalAmount: originalAmount - discountAmount,
+  };
 }
 
 function attachedCouponPurchaseName(
@@ -584,15 +561,7 @@ function normalizedQuantity(
 ): number | null {
   if (visibleQuantity !== null) {
     if (visibleQuantity <= 1) return null;
-    if (
-      rawQuantity === null ||
-      rawQuantity === visibleQuantity ||
-      rawQuantity === visibleQuantity * 10 &&
-        visibleQuantity >= 2 &&
-        visibleQuantity <= 4
-    ) {
-      return visibleQuantity;
-    }
+    return visibleQuantity;
   }
 
   return rawQuantity !== null && rawQuantity > 1 ? rawQuantity : null;
@@ -601,6 +570,16 @@ function normalizedQuantity(
 function quantityFromVisibleMarker(value: string | null): number | null {
   if (!value) return null;
   const normalized = value.normalize("NFKC");
+  const unitPriceRow = /(?:^|\n)@\s*([\d,]+)\s+(\d+)\s+[¥￥]\s*([\d,]+)/.exec(
+    normalized,
+  );
+  if (unitPriceRow) {
+    const unitPrice = Number(unitPriceRow[1].replace(/,/g, ""));
+    const quantity = Number(unitPriceRow[2]);
+    const total = Number(unitPriceRow[3].replace(/,/g, ""));
+    if (quantity > 0 && unitPrice * quantity === total) return quantity;
+    return null;
+  }
   const patterns = [
     /(?:^|[^\d])(\d{1,2})\s*@(?:[^\d]|$)/,
     /(?:^|[^\d])@\s*(\d{1,2})(?:[^\d]|$)/,
