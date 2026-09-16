@@ -262,6 +262,83 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         }
     }
 
+    func testFamilyInvestmentEditRetriesVersionDriftProducedBySameDeviceRebuild() async throws {
+        let viewerUserID = UUID()
+        let memberUserID = UUID()
+        let channelID = UUID()
+        let assetID = UUID()
+        let tradeID = UUID()
+        let deviceID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let schema = Schema(versionedSchema: MistiaSchemaV11.self)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
+        let context = ModelContext(container)
+        let trade = InvestmentTrade(
+            id: tradeID,
+            ownerUserID: memberUserID,
+            channelID: channelID,
+            assetID: assetID,
+            kind: .buy,
+            quantity: 1,
+            unitLabel: "box",
+            grossAmountMinor: 0,
+            currencyCode: "JPY",
+            accountingGrossAmountMinor: 0,
+            accountingCurrencyCode: "JPY",
+            note: "Local edit",
+            occurredAt: updatedAt,
+            createdAt: updatedAt,
+            updatedAt: updatedAt.addingTimeInterval(900),
+            remoteVersion: 2
+        )
+        context.insert(trade)
+        try context.save()
+
+        var remoteTrade = RemoteInvestmentTrade(local: trade)
+        remoteTrade.note = "Before local edit"
+        remoteTrade.syncVersion = 7
+        remoteTrade.lastModifiedByDeviceID = deviceID
+        let remoteStore = FamilyConflictRemoteStore(remoteRecord: .investmentTrade(remoteTrade))
+        remoteStore.shouldReturnConditionalUpdateRecord = true
+        let outbox = MistiaSyncOutbox(
+            defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+            key: "family-investment-derived-version-drift"
+        )
+        let coordinator = SyncCoordinator(
+            modelContainer: container,
+            remoteStore: remoteStore,
+            outbox: outbox,
+            deviceID: deviceID
+        )
+        let mutation = MistiaSyncMutation(
+            entity: .investmentTrade,
+            recordID: tradeID,
+            subjectUserID: memberUserID,
+            kind: .upsert,
+            modifiedAt: updatedAt.addingTimeInterval(900),
+            baseVersion: 2,
+            deviceID: deviceID
+        )
+        coordinator.outbox.enqueue(mutation)
+
+        let pushed = try await coordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
+            [mutation],
+            session: makeSession(userID: viewerUserID)
+        )
+
+        XCTAssertTrue(pushed)
+        XCTAssertEqual(remoteStore.conditionalUpdatedRecords.count, 1)
+        guard case .investmentTrade(let pushedTrade) = remoteStore.conditionalUpdatedRecords.first else {
+            return XCTFail("Expected investment trade update")
+        }
+        XCTAssertEqual(pushedTrade.note, "Local edit")
+        XCTAssertEqual(pushedTrade.syncVersion, 8)
+        XCTAssertFalse(outbox.contains(entity: .investmentTrade, recordID: tradeID))
+    }
+
     func testFamilyCloudFirstPushContinuesAfterRemoteChangedConflict() async throws {
         let viewerUserID = UUID()
         let memberUserID = UUID()

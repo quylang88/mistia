@@ -703,6 +703,18 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("perform public.investment_rebuild_asset"))
     }
 
+    func testInvestmentHistoryRebuildDoesNotReauthorizeEveryHistoricalWallet() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260916090000_allow_authorized_investment_history_rebuild.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("pg_get_functiondef"))
+        XCTAssertTrue(migration.contains("investment_rebuild_asset funding wallet permission fragment not found"))
+        XCTAssertTrue(migration.contains("investment_rebuild_asset capital-return wallet permission fragment not found"))
+        XCTAssertTrue(migration.contains("revoke execute on function public.investment_rebuild_asset"))
+        XCTAssertTrue(migration.contains("from public, anon, authenticated"))
+    }
+
     func testInvestmentCashMigrationLinksWalletsAndSerializesBatchReconciliation() throws {
         let baseMigrationURL = repositoryRootURL()
             .appending(path: "supabase/migrations/20260824090000_link_investment_cash_wallet.sql")

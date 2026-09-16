@@ -950,13 +950,22 @@ actor SyncCoordinator {
             throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
-        guard remoteRecord.syncVersion == mutation.baseVersion else {
+        let expectedRemoteVersion: Int64
+        if remoteRecord.syncVersion == mutation.baseVersion {
+            expectedRemoteVersion = mutation.baseVersion
+        } else if mutation.entity == .investmentTrade,
+                  remoteRecord.lastModifiedByDeviceID == deviceID {
+            // Rebuilding an asset's FIFO snapshots can advance sibling trade
+            // versions using this same device ID. That derived-only drift must
+            // not strand a later local edit from the same queued batch.
+            expectedRemoteVersion = remoteRecord.syncVersion
+        } else {
             throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
         guard let updated = try await remoteStore.conditionalUpdate(
-            localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID, lastModifiedByUserID: session.user.id),
-            expectedVersion: mutation.baseVersion,
+            localRecord.preparedForMutation(nextVersion: expectedRemoteVersion + 1, deviceID: deviceID, lastModifiedByUserID: session.user.id),
+            expectedVersion: expectedRemoteVersion,
             subjectUserID: subjectUserID,
             session: session
         ) else {
@@ -1174,12 +1183,21 @@ actor SyncCoordinator {
         session: SupabaseAuthSession,
         localUserID: UUID? = nil
     ) async throws {
-        guard case .transaction(let transaction) = record else { return }
-
-        let walletIDs = Set([
-            transaction.sourceWalletID,
-            transaction.destinationWalletID
-        ].compactMap { $0 })
+        let walletIDs: Set<UUID>
+        switch record {
+        case .transaction(let transaction):
+            walletIDs = Set([
+                transaction.sourceWalletID,
+                transaction.destinationWalletID
+            ].compactMap { $0 })
+        case .investmentTrade(let trade):
+            walletIDs = Set([
+                trade.fundingWalletID,
+                trade.capitalReturnWalletID
+            ].compactMap { $0 })
+        default:
+            return
+        }
 
         for walletID in walletIDs.sorted(by: MistiaStableUUIDOrdering.precedes) {
             let dependencyMutation = MistiaSyncMutation(
