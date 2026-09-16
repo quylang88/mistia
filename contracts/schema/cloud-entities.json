@@ -1,0 +1,131 @@
+{
+  "contractVersion": 1,
+  "moneyEncoding": "signed_int64_minor_units",
+  "decimalEncoding": "base10_string",
+  "uuidEncoding": "lowercase_hyphenated_string",
+  "timestampEncoding": "utc_iso8601",
+  "deletionEncoding": "deleted_at_tombstone",
+  "clearOptionalEncoding": "explicit_json_null",
+  "entities": [
+    {
+      "name": "transaction_categories",
+      "model": "TransactionCategory",
+      "pullOrder": 10,
+      "pushPriority": 10,
+      "dependencies": [{"field": "parent_category_id", "entity": "transaction_categories"}],
+      "fields": ["user_id", "id", "name", "name_english", "name_japanese", "kind_raw_value", "icon_symbol_name", "icon_color_hex", "is_favorite", "family_budget_spending_enabled", "parent_category_id", "hierarchy_role_raw_value", "system_key", "is_system", "sort_order", "is_archived", "archived_at", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "ledger_wallets",
+      "model": "LedgerWallet",
+      "pullOrder": 20,
+      "pushPriority": 20,
+      "dependencies": [{"field": "investment_linked_wallet_id", "entity": "ledger_wallets"}],
+      "fields": ["user_id", "id", "name", "kind_raw_value", "icon_symbol_name", "icon_color_hex", "currency_code", "opening_balance_minor", "institution_display_name", "institution_preset_key", "sort_order", "is_archived", "archived_at", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id", "system_purpose_raw_value", "investment_linked_wallet_id"]
+    },
+    {
+      "name": "credit_card_profiles",
+      "model": "CreditCardProfile",
+      "pullOrder": 30,
+      "pushPriority": 30,
+      "dependencies": [{"field": "wallet_id", "entity": "ledger_wallets"}, {"field": "payment_source_wallet_id", "entity": "ledger_wallets"}],
+      "fields": ["user_id", "id", "issuer_name", "network_raw_value", "last4", "credit_limit_minor", "statement_closing_day", "payment_due_day", "notes", "wallet_id", "payment_source_wallet_id", "auto_pay_enabled", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "settlement_groups",
+      "model": "SettlementGroup",
+      "pullOrder": 35,
+      "pushPriority": 35,
+      "dependencies": [],
+      "fields": ["user_id", "id", "kind_raw_value", "status_raw_value", "title", "currency_code", "occurred_at", "total_minor", "expected_minor", "settled_minor", "organizer_user_id", "note", "created_at", "updated_at", "deleted_at", "is_archived", "archived_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "settlement_participants",
+      "model": "SettlementParticipant",
+      "pullOrder": 36,
+      "pushPriority": 36,
+      "dependencies": [{"field": "group_id", "entity": "settlement_groups"}],
+      "fields": ["user_id", "id", "group_id", "display_name", "normalized_key", "member_user_id", "is_self", "sort_order", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "ledger_transactions",
+      "model": "LedgerTransaction",
+      "pullOrder": 40,
+      "pushPriority": 40,
+      "dependencies": [{"field": "source_wallet_id", "entity": "ledger_wallets"}, {"field": "destination_wallet_id", "entity": "ledger_wallets"}, {"field": "category_id", "entity": "transaction_categories"}, {"field": "settlement_group_id", "entity": "settlement_groups"}],
+      "fields": ["user_id", "id", "primary_kind_raw_value", "transfer_subtype_raw_value", "debt_intent_raw_value", "entry_status_raw_value", "title", "note", "amount_minor", "source_currency_code", "destination_currency_code", "destination_amount_minor", "reporting_currency_code", "reporting_amount_minor", "conversion_mode_raw_value", "exchange_rate_decimal_string", "exchange_rate_provider", "exchange_rate_date", "occurred_at", "created_at", "updated_at", "created_by_user_id", "last_modified_by_user_id", "counterparty_name", "normalized_counterparty_key", "settlement_group_id", "settlement_obligation_id", "settlement_role_raw_value", "reporting_expense_minor", "reporting_income_minor", "source_wallet_id", "destination_wallet_id", "category_id", "deleted_at", "is_archived", "archived_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "budget_plans",
+      "model": "BudgetPlan",
+      "pullOrder": 50,
+      "pushPriority": 50,
+      "dependencies": [{"field": "category_id", "entity": "transaction_categories"}],
+      "fields": ["user_id", "id", "category_id", "category_id_snapshot", "category_name_snapshot", "category_name_english_snapshot", "category_name_japanese_snapshot", "category_path_snapshot", "category_path_english_snapshot", "category_path_japanese_snapshot", "category_icon_symbol_name_snapshot", "category_color_hex_snapshot", "category_parent_id_snapshot", "category_parent_name_snapshot", "category_parent_name_english_snapshot", "category_parent_name_japanese_snapshot", "category_parent_icon_symbol_name_snapshot", "category_parent_color_hex_snapshot", "category_hierarchy_role_snapshot_raw_value", "category_is_parent_snapshot", "includes_family_spending", "month_anchor", "limit_minor", "rollover_enabled", "currency_code", "is_archived", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "savings_goals",
+      "model": "SavingsGoal",
+      "pullOrder": 60,
+      "pushPriority": 60,
+      "dependencies": [{"field": "linked_wallet_id", "entity": "ledger_wallets"}],
+      "fields": ["user_id", "id", "name", "icon_symbol_name", "target_minor", "current_saved_minor", "target_date", "linked_wallet_id", "currency_code", "sort_order", "is_archived", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "recurring_bill_plans",
+      "model": "RecurringBillPlan",
+      "pullOrder": 70,
+      "pushPriority": 70,
+      "dependencies": [{"field": "category_id", "entity": "transaction_categories"}, {"field": "payment_wallet_id", "entity": "ledger_wallets"}],
+      "fields": ["user_id", "id", "name", "icon_symbol_name", "category_id", "amount_minor", "due_day", "schedule_kind_raw_value", "payment_start_day", "payment_start_date", "first_scheduled_month", "has_explicit_due_date", "due_date", "auto_pay_enabled", "auto_pay_day", "auto_pay_date", "frequency_months", "payment_wallet_id", "currency_code", "is_archived", "is_paused", "paused_at", "resume_start_month", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "installment_plans",
+      "model": "InstallmentPlan",
+      "pullOrder": 80,
+      "pushPriority": 80,
+      "dependencies": [{"field": "payment_wallet_id", "entity": "ledger_wallets"}],
+      "fields": ["user_id", "id", "name", "icon_symbol_name", "amount_per_cycle_minor", "due_day", "total_cycles", "frequency_months", "payment_wallet_id", "currency_code", "is_archived", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "due_occurrence_records",
+      "model": "DueOccurrenceRecord",
+      "pullOrder": 90,
+      "pushPriority": 90,
+      "dependencies": [{"field": "linked_transaction_id", "entity": "ledger_transactions"}],
+      "fields": ["user_id", "id", "source_kind_raw_value", "source_id", "selected_month_key", "scheduled_date", "amount_minor_snapshot", "status_raw_value", "paid_at", "linked_transaction_id", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "investment_channels",
+      "model": "InvestmentChannel",
+      "pullOrder": 100,
+      "pushPriority": 100,
+      "dependencies": [],
+      "fields": ["user_id", "id", "name", "icon_symbol_name", "icon_color_hex", "sort_order", "is_archived", "archived_at", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "investment_assets",
+      "model": "InvestmentAsset",
+      "pullOrder": 110,
+      "pushPriority": 110,
+      "dependencies": [{"field": "channel_id", "entity": "investment_channels"}],
+      "fields": ["user_id", "id", "channel_id", "name", "currency_code", "image_path", "default_unit_label", "sort_order", "is_archived", "archived_at", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "investment_trades",
+      "model": "InvestmentTrade",
+      "pullOrder": 120,
+      "pushPriority": 120,
+      "dependencies": [{"field": "channel_id", "entity": "investment_channels"}, {"field": "asset_id", "entity": "investment_assets"}, {"field": "funding_wallet_id", "entity": "ledger_wallets"}, {"field": "capital_return_wallet_id", "entity": "ledger_wallets"}],
+      "fields": ["user_id", "id", "channel_id", "asset_id", "kind_raw_value", "quantity_decimal_string", "unit_label", "gross_amount_minor", "currency_code", "accounting_gross_amount_minor", "accounting_currency_code", "exchange_rate_decimal_string", "exchange_rate_provider", "exchange_rate_date", "funding_wallet_id", "capital_return_wallet_id", "funding_wallet_currency_code", "capital_return_wallet_currency_code", "funding_wallet_amount_minor", "capital_return_wallet_amount_minor", "funding_to_accounting_rate_decimal_string", "accounting_to_capital_return_rate_decimal_string", "funding_ledger_transaction_id", "capital_return_ledger_transaction_id", "profit_loss_ledger_transaction_id", "released_cost_basis_minor", "realized_profit_loss_minor", "position_quantity_after_decimal_string", "position_cost_basis_after_minor", "note", "occurred_at", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    },
+    {
+      "name": "investment_wallet_postings",
+      "model": "InvestmentWalletPosting",
+      "pullOrder": 140,
+      "pushPriority": 140,
+      "dependencies": [{"field": "trade_id", "entity": "investment_trades"}, {"field": "asset_id", "entity": "investment_assets"}, {"field": "wallet_id", "entity": "ledger_wallets"}, {"field": "ledger_transaction_id", "entity": "ledger_transactions"}],
+      "fields": ["user_id", "id", "event_id", "trade_id", "asset_id", "wallet_id", "ledger_transaction_id", "role_raw_value", "cash_bucket_raw_value", "cash_origin_raw_value", "amount_minor", "currency_code", "accounting_amount_minor", "accounting_currency_code", "occurred_at", "created_at", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"]
+    }
+  ]
+}

@@ -1,0 +1,229 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "3e0337bb70029a0e779951f72f9f9ae9",
+    "entities": [
+      {
+        "tableName": "cloud_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner_user_id` TEXT NOT NULL, `entity` TEXT NOT NULL, `record_id` TEXT NOT NULL, `payload_json` TEXT NOT NULL, `updated_at` TEXT, `deleted_at` TEXT, `sync_version` INTEGER NOT NULL, `has_pending_mutation` INTEGER NOT NULL, `received_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`owner_user_id`, `entity`, `record_id`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUserId",
+            "columnName": "owner_user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entity",
+            "columnName": "entity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "record_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "syncVersion",
+            "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasPendingMutation",
+            "columnName": "has_pending_mutation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receivedAtEpochMillis",
+            "columnName": "received_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "owner_user_id",
+            "entity",
+            "record_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_cloud_records_owner_user_id_entity_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "owner_user_id",
+              "entity",
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_cloud_records_owner_user_id_entity_deleted_at` ON `${TABLE_NAME}` (`owner_user_id`, `entity`, `deleted_at`)"
+          },
+          {
+            "name": "index_cloud_records_owner_user_id_updated_at",
+            "unique": false,
+            "columnNames": [
+              "owner_user_id",
+              "updated_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_cloud_records_owner_user_id_updated_at` ON `${TABLE_NAME}` (`owner_user_id`, `updated_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner_user_id` TEXT NOT NULL, `entity` TEXT NOT NULL, `record_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `payload_json` TEXT, `modified_at` TEXT NOT NULL, `base_version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `attempt_count` INTEGER NOT NULL, `next_attempt_at_epoch_millis` INTEGER NOT NULL, `last_error` TEXT, PRIMARY KEY(`owner_user_id`, `entity`, `record_id`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUserId",
+            "columnName": "owner_user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entity",
+            "columnName": "entity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "record_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modified_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseVersion",
+            "columnName": "base_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceId",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAtEpochMillis",
+            "columnName": "next_attempt_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "last_error",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "owner_user_id",
+            "entity",
+            "record_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_outbox_owner_user_id_next_attempt_at_epoch_millis",
+            "unique": false,
+            "columnNames": [
+              "owner_user_id",
+              "next_attempt_at_epoch_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_owner_user_id_next_attempt_at_epoch_millis` ON `${TABLE_NAME}` (`owner_user_id`, `next_attempt_at_epoch_millis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_cursors",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner_user_id` TEXT NOT NULL, `entity` TEXT NOT NULL, `last_full_pull_epoch_millis` INTEGER NOT NULL, `last_record_count` INTEGER NOT NULL, PRIMARY KEY(`owner_user_id`, `entity`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUserId",
+            "columnName": "owner_user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entity",
+            "columnName": "entity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastFullPullEpochMillis",
+            "columnName": "last_full_pull_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastRecordCount",
+            "columnName": "last_record_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "owner_user_id",
+            "entity"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3e0337bb70029a0e779951f72f9f9ae9')"
+    ]
+  }
+}

@@ -58,6 +58,19 @@ playground.xcworkspace
 # Project-local caches
 .modulecache/
 
+# Android / Gradle
+.gradle/
+android/.gradle/
+android/local.properties
+android/**/build/
+*.apk
+*.aab
+*.jks
+*.keystore
+keystore.properties
+captures/
+.cxx/
+
 # Supabase CLI temporary files
 **/supabase/.temp
 **/supabase/.branches

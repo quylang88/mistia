@@ -1,0 +1,46 @@
+name: Android contract and APK
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - "contracts/**"
+      - "Mistia/Localizable.xcstrings"
+      - "Scripts/generate-android-l10n.swift"
+      - "Scripts/check-android-contracts.swift"
+      - ".github/workflows/android.yml"
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "contracts/**"
+      - "Mistia/Localizable.xcstrings"
+      - "Scripts/generate-android-l10n.swift"
+      - "Scripts/check-android-contracts.swift"
+
+jobs:
+  verify:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+      - name: Check localization generators
+        run: |
+          Scripts/generate-l10n.swift --input Mistia/Localizable.xcstrings --output Mistia/Shared/CoreLogic/L10n.generated.swift --check --strict-keys
+          Scripts/generate-android-l10n.swift --check
+      - name: Check cross-platform contracts
+        run: Scripts/check-android-contracts.swift
+      - name: Test and assemble APK 0
+        working-directory: android
+        run: ./gradlew testDebugUnitTest :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mistia-apk0-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk

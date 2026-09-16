@@ -1,0 +1,16 @@
+{
+  "contractVersion": 1,
+  "rules": {
+    "unknownValue": "preserve_wire_value_and_block_unsafe_write",
+    "renaming": "forbidden_without_backward_compatible_migration"
+  },
+  "enums": {
+    "SyncMutationKind": ["upsert", "delete"],
+    "InitialSyncChoice": ["mergeSafely", "useDevice", "useCloud"],
+    "PrimaryTransactionKind": ["expense", "income", "transfer"],
+    "EntryStatus": ["posted", "pending"],
+    "InvestmentTradeKind": ["buy", "sell"],
+    "InvestmentCashBucket": ["booked", "unreconciled"],
+    "DueOccurrenceStatus": ["pending", "paid", "skipped"]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "contractVersion": 1,
+  "postgrest": {
+    "basePath": "/rest/v1",
+    "authorization": "supabase_user_jwt",
+    "rlsRequired": true
+  },
+  "rpc": [
+    "preview_family_invite",
+    "accept_family_invite",
+    "decline_family_invite",
+    "create_family_invite_link",
+    "revoke_family_invite",
+    "set_family_permission_grant",
+    "set_family_planning_manager",
+    "remove_family_member",
+    "transfer_family_owner",
+    "delete_family",
+    "mutate_investment_trade",
+    "mutate_investment_cash_posting",
+    "mutate_investment_cash_event",
+    "mutate_investment_asset",
+    "delete_investment_trade",
+    "delete_investment_asset",
+    "create_family_activity_notification"
+  ],
+  "edgeFunctions": [
+    "analyze-receipt",
+    "analyze-bill-items",
+    "translate-category-name",
+    "delete-account"
+  ],
+  "storageBuckets": [
+    {"name": "profile-avatars", "cloudSynced": true, "path": "{user_id}/avatar.jpg"},
+    {"name": "investment-product-images", "cloudSynced": true, "path": "owner-scoped"}
+  ],
+  "deviceLocalOnly": ["app_lock_secret", "notification_authorization", "receipt_images"],
+  "deepLinks": [
+    "mistia://family-invite/{token}",
+    "https://mistia.app/invite/family/{token}"
+  ],
+  "backup": {"extension": ".mistiabackup", "formatVersion": 1}
+}

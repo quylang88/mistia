@@ -1,0 +1,114 @@
+package vn.com.quyln.mistia
+
+import android.content.Context
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import vn.com.quyln.mistia.core.auth.KeystoreSessionStore
+import vn.com.quyln.mistia.core.auth.KeystoreDeviceIdStore
+import vn.com.quyln.mistia.core.auth.SecureSessionStore
+import vn.com.quyln.mistia.core.auth.SecureDeviceIdStore
+import vn.com.quyln.mistia.core.auth.SupabaseAuthRepository
+import vn.com.quyln.mistia.core.auth.SupabaseDeviceRegistry
+import vn.com.quyln.mistia.core.database.MistiaDatabase
+import vn.com.quyln.mistia.core.database.OfflineFirstFamilyRepository
+import vn.com.quyln.mistia.core.database.OfflineFirstFinanceRepository
+import vn.com.quyln.mistia.core.database.OfflineFirstInvestmentRepository
+import vn.com.quyln.mistia.core.database.RoomLocalStore
+import vn.com.quyln.mistia.core.model.AuthRepository
+import vn.com.quyln.mistia.core.model.DeviceRegistry
+import vn.com.quyln.mistia.core.model.FamilyRepository
+import vn.com.quyln.mistia.core.model.FinanceRepository
+import vn.com.quyln.mistia.core.model.InvestmentRepository
+import vn.com.quyln.mistia.core.model.LocalStore
+import vn.com.quyln.mistia.core.model.RemoteStore
+import vn.com.quyln.mistia.core.model.SyncEngine
+import vn.com.quyln.mistia.core.network.SupabaseConfig
+import vn.com.quyln.mistia.core.network.MistiaWireFormat
+import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
+import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
+
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+    @Provides
+    @Singleton
+    fun provideJson(): Json = MistiaWireFormat.json
+
+    @Provides
+    @Singleton
+    fun provideHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
+
+    @Provides
+    @Singleton
+    fun provideSupabaseConfig(): SupabaseConfig = SupabaseConfig(
+        projectUrl = BuildConfig.SUPABASE_URL,
+        anonKey = BuildConfig.SUPABASE_ANON_KEY,
+    )
+
+    @Provides
+    @Singleton
+    fun provideDatabase(@ApplicationContext context: Context): MistiaDatabase = MistiaDatabase.create(context)
+
+    @Provides
+    @Singleton
+    fun provideLocalStore(database: MistiaDatabase, json: Json): LocalStore = RoomLocalStore(database, json)
+
+    @Provides
+    @Singleton
+    fun provideSecureSessionStore(@ApplicationContext context: Context): SecureSessionStore =
+        KeystoreSessionStore(context)
+
+    @Provides
+    @Singleton
+    fun provideSecureDeviceIdStore(@ApplicationContext context: Context): SecureDeviceIdStore =
+        KeystoreDeviceIdStore(context)
+
+    @Provides
+    @Singleton
+    fun provideDeviceRegistry(config: SupabaseConfig, client: OkHttpClient): DeviceRegistry =
+        SupabaseDeviceRegistry(config, client)
+
+    @Provides
+    @Singleton
+    fun provideAuthRepository(
+        config: SupabaseConfig,
+        client: OkHttpClient,
+        secureSessionStore: SecureSessionStore,
+        json: Json,
+    ): AuthRepository = SupabaseAuthRepository(config, client, secureSessionStore, json)
+
+    @Provides
+    @Singleton
+    fun provideRemoteStore(config: SupabaseConfig, client: OkHttpClient, json: Json): RemoteStore =
+        SupabasePostgrestRemoteStore(config, client, json)
+
+    @Provides
+    @Singleton
+    fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
+        OfflineFirstFinanceRepository(localStore)
+
+    @Provides
+    @Singleton
+    fun provideFamilyRepository(localStore: LocalStore): FamilyRepository =
+        OfflineFirstFamilyRepository(localStore)
+
+    @Provides
+    @Singleton
+    fun provideInvestmentRepository(localStore: LocalStore): InvestmentRepository =
+        OfflineFirstInvestmentRepository(localStore)
+
+    @Provides
+    @Singleton
+    fun provideSyncEngine(
+        @ApplicationContext context: Context,
+        authRepository: AuthRepository,
+        localStore: LocalStore,
+        remoteStore: RemoteStore,
+    ): SyncEngine = PullOnlySyncEngine(context, authRepository, localStore, remoteStore)
+}

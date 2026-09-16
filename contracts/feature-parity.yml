@@ -1,0 +1,52 @@
+contract_version: 1
+policy:
+  ios_runtime_shared: false
+  android_native: true
+  cloud_data_should_match: true
+  device_local_exceptions:
+    - app_lock_secret
+    - notification_authorization
+    - receipt_images
+
+release_gates:
+  apk0:
+    status: build_verified_device_pending
+    writes_enabled: false
+    features:
+      shell: implemented
+      email_password_auth: implemented
+      secure_session: implemented
+      room_cloud_mirror: implemented
+      pull_all_finance_entities: implemented
+      profile_and_device_registration: implemented
+      overview_read_only: implemented
+      transactions_read_only: implemented
+      planning_read_only: implemented
+      family_read_only: implemented
+      investment_read_only: implemented
+  apk1:
+    status: planned
+    features: [wallets, credit_cards, categories, transactions, transfers, multi_currency, receipt_ai]
+  apk2:
+    status: planned
+    features: [budgets, savings, recurring_bills, installments, card_statements, due_maintenance, local_notifications]
+  apk3:
+    status: planned
+    features: [family_roles, invites, family_transfers, shared_expense, settlement, inbox]
+  apk4:
+    status: planned
+    features: [resale_inventory, unit_aware_fifo, cash_posting, product_images, atomic_rpc]
+  rc:
+    status: planned
+    features: [archive, conflicts, backup_v1, account_devices, remote_sign_out, app_lock, settings, feedback]
+
+parity_requirements:
+  - signed_int64_minor_units
+  - decimal_strings_without_binary_float
+  - explicit_json_null_for_cleared_optional
+  - utc_timestamp_and_uuid_compatibility
+  - dependency_ordered_push
+  - owner_and_subject_scope
+  - tombstone_and_sync_version_conflict_resolution
+  - account_switch_isolation
+  - no_rls_relaxation
