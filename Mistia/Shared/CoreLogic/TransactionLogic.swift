@@ -444,6 +444,12 @@ nonisolated struct SettlementGroupRecordSnapshot: Equatable, Identifiable {
     }
 }
 
+nonisolated struct SettlementEventDebtProgress: Equatable {
+    let expectedMinor: Int64
+    let settledMinor: Int64
+    let status: SettlementStatus
+}
+
 nonisolated struct SettlementParticipantRecordSnapshot: Equatable, Identifiable {
     let id: UUID
     let groupID: UUID
@@ -547,14 +553,20 @@ nonisolated enum SettlementLogic {
         records: [TransactionRecordSnapshot]
     ) -> [PreparingSettlementEventSnapshot] {
         let participantsByGroupID = Dictionary(grouping: participants) { $0.groupID }
-        let recordsByGroupID = Dictionary(
-            grouping: records.filter(isSharedExpenseEventBill)
-        ) { record in
-            record.settlementGroupID ?? UUID()
+        var recordsByGroupID: [UUID: [TransactionRecordSnapshot]] = [:]
+        for record in records {
+            guard let groupID = record.settlementGroupID else { continue }
+            recordsByGroupID[groupID, default: []].append(record)
         }
 
         return groups
-            .filter { $0.kind == .sharedExpense && $0.status != .settled && !$0.isArchived }
+            .filter { group in
+                guard group.kind == .sharedExpense, !group.isArchived else { return false }
+                return effectiveSharedExpenseEventStatus(
+                    group: group,
+                    records: recordsByGroupID[group.id] ?? []
+                ) != .settled
+            }
             .map { group in
                 let groupParticipants = participantsByGroupID[group.id] ?? []
                 let visibleParticipantNames = groupParticipants
@@ -563,7 +575,7 @@ nonisolated enum SettlementLogic {
                     .map(\.displayName)
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
-                let billRecords = recordsByGroupID[group.id] ?? []
+                let billRecords = (recordsByGroupID[group.id] ?? []).filter(isSharedExpenseEventBill)
                 let totalPaid = billRecords.reduce(Int64.zero) { total, record in
                     total + max(record.amountMinor, 0)
                 }
@@ -595,6 +607,74 @@ nonisolated enum SettlementLogic {
                 }
                 return $0.occurredAt > $1.occurredAt
             }
+    }
+
+    static func sharedExpenseEventDebtProgress(
+        groupID: UUID,
+        records: [TransactionRecordSnapshot]
+    ) -> SettlementEventDebtProgress? {
+        struct CounterpartyProgress {
+            var receivableMinor = Int64.zero
+            var collectedMinor = Int64.zero
+            var payableMinor = Int64.zero
+            var repaidMinor = Int64.zero
+        }
+
+        var progressByCounterparty: [String: CounterpartyProgress] = [:]
+        for record in records where record.settlementGroupID == groupID {
+            let counterpartyKey = record.normalizedCounterpartyKey
+                ?? TransactionLogic.normalizeCounterpartyName(record.counterpartyName)
+                ?? "__missing_counterparty__"
+            var progress = progressByCounterparty[counterpartyKey, default: CounterpartyProgress()]
+
+            if isSharedExpenseDebtPrincipal(record, debtIntent: .lend) {
+                progress.receivableMinor += max(record.amountMinor, 0)
+            } else if isSharedExpenseDebtPayment(record, debtIntent: .collect) {
+                progress.collectedMinor += max(record.amountMinor, 0)
+            } else if isSharedExpenseDebtPrincipal(record, debtIntent: .borrow) {
+                progress.payableMinor += max(record.amountMinor, 0)
+            } else if isSharedExpenseDebtPayment(record, debtIntent: .repay) {
+                progress.repaidMinor += max(record.amountMinor, 0)
+            } else {
+                continue
+            }
+
+            progressByCounterparty[counterpartyKey] = progress
+        }
+
+        let expectedMinor = progressByCounterparty.values.reduce(Int64.zero) { total, progress in
+            total + progress.receivableMinor + progress.payableMinor
+        }
+        guard expectedMinor > 0 else { return nil }
+
+        let settledMinor = progressByCounterparty.values.reduce(Int64.zero) { total, progress in
+            total
+                + min(progress.receivableMinor, progress.collectedMinor)
+                + min(progress.payableMinor, progress.repaidMinor)
+        }
+        let status: SettlementStatus
+        if settledMinor >= expectedMinor {
+            status = .settled
+        } else if settledMinor > 0 {
+            status = .partiallySettled
+        } else {
+            status = .open
+        }
+
+        return SettlementEventDebtProgress(
+            expectedMinor: expectedMinor,
+            settledMinor: settledMinor,
+            status: status
+        )
+    }
+
+    private static func effectiveSharedExpenseEventStatus(
+        group: SettlementGroupRecordSnapshot,
+        records: [TransactionRecordSnapshot]
+    ) -> SettlementStatus {
+        guard group.status != .preparing else { return .preparing }
+        return sharedExpenseEventDebtProgress(groupID: group.id, records: records)?.status
+            ?? group.status
     }
 
     static func allEventSnapshots(

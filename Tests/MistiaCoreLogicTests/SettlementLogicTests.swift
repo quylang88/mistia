@@ -181,6 +181,108 @@ final class SettlementLogicTests: XCTestCase {
         XCTAssertEqual(events.first?.lastUpdatedAt, later)
     }
 
+    func testSharedExpenseEventProgressRequiresEveryCounterpartyDebtToBeSettled() {
+        let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000A201")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let records = [
+            sharedExpenseDebtPrincipalRecord(
+                groupID: groupID,
+                debtIntent: .lend,
+                amountMinor: 4_000,
+                counterpartyName: "Linh",
+                occurredAt: now
+            ),
+            sharedExpenseDebtPrincipalRecord(
+                groupID: groupID,
+                debtIntent: .lend,
+                amountMinor: 3_000,
+                counterpartyName: "Mai",
+                occurredAt: now.addingTimeInterval(60)
+            ),
+            sharedExpenseDebtSettlementRecord(
+                groupID: groupID,
+                debtIntent: .collect,
+                amountMinor: 4_000,
+                reportingExpenseMinor: 0,
+                counterpartyName: "Linh",
+                occurredAt: now.addingTimeInterval(120)
+            )
+        ]
+
+        let partiallySettled = SettlementLogic.sharedExpenseEventDebtProgress(
+            groupID: groupID,
+            records: records
+        )
+        let fullySettled = SettlementLogic.sharedExpenseEventDebtProgress(
+            groupID: groupID,
+            records: records + [
+                sharedExpenseDebtSettlementRecord(
+                    groupID: groupID,
+                    debtIntent: .collect,
+                    amountMinor: 3_000,
+                    reportingExpenseMinor: 0,
+                    counterpartyName: "Mai",
+                    occurredAt: now.addingTimeInterval(180)
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            partiallySettled,
+            SettlementEventDebtProgress(
+                expectedMinor: 7_000,
+                settledMinor: 4_000,
+                status: .partiallySettled
+            )
+        )
+        XCTAssertEqual(
+            fullySettled,
+            SettlementEventDebtProgress(
+                expectedMinor: 7_000,
+                settledMinor: 7_000,
+                status: .settled
+            )
+        )
+    }
+
+    func testPreparingEventsUseDebtRecordsToCorrectAStalePartiallySettledStatus() {
+        let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000A202")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let groups = [
+            settlementGroupSnapshot(
+                id: groupID,
+                status: .partiallySettled,
+                title: "Weekend Osaka",
+                now: now
+            )
+        ]
+        let records = [
+            sharedExpenseDebtPrincipalRecord(
+                groupID: groupID,
+                debtIntent: .borrow,
+                amountMinor: 5_000,
+                counterpartyName: "Linh",
+                occurredAt: now
+            ),
+            sharedExpenseDebtSettlementRecord(
+                groupID: groupID,
+                debtIntent: .repay,
+                amountMinor: 5_000,
+                reportingExpenseMinor: 0,
+                counterpartyName: "Linh",
+                occurredAt: now.addingTimeInterval(60)
+            )
+        ]
+
+        let ongoingEvents = SettlementLogic.preparingEventSnapshots(
+            groups: groups,
+            participants: [],
+            records: records
+        )
+
+        XCTAssertTrue(ongoingEvents.isEmpty)
+    }
+
     func testArchivedEventFilteringHidesGeneratedDebtButKeepsLinkedBills() {
         let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E101")!
         let otherGroupID = UUID(uuidString: "00000000-0000-0000-0000-00000000E102")!
@@ -1038,6 +1140,7 @@ final class SettlementLogicTests: XCTestCase {
         groupID: UUID,
         debtIntent: TransactionDebtIntent,
         amountMinor: Int64,
+        counterpartyName: String = "B",
         occurredAt: Date
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
@@ -1059,8 +1162,8 @@ final class SettlementLogicTests: XCTestCase {
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: nil,
-            counterpartyName: "B",
-            normalizedCounterpartyKey: "b"
+            counterpartyName: counterpartyName,
+            normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName)
         )
     }
 
@@ -1069,6 +1172,7 @@ final class SettlementLogicTests: XCTestCase {
         debtIntent: TransactionDebtIntent,
         amountMinor: Int64,
         reportingExpenseMinor: Int64,
+        counterpartyName: String = "B",
         occurredAt: Date
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
@@ -1092,8 +1196,8 @@ final class SettlementLogicTests: XCTestCase {
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: nil,
-            counterpartyName: "B",
-            normalizedCounterpartyKey: "b"
+            counterpartyName: counterpartyName,
+            normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName)
         )
     }
 

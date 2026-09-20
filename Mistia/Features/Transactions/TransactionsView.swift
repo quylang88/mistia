@@ -2685,6 +2685,8 @@ struct DebtSettlementSheet: View {
     private var wallets: [LedgerWallet]
     @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
     private var settlementGroups: [SettlementGroup]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
+    private var settlementDebtTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: DebtSettlementSheetTarget
@@ -2920,7 +2922,7 @@ struct DebtSettlementSheet: View {
             settlementIntent: target.intent,
             paymentMinor: parsedAmountMinor
         )
-        let transactions = allocations.map { allocation in
+        let paymentTransactions = allocations.map { allocation in
             LedgerTransaction(
                 primaryKind: .transfer,
                 transferSubtype: .debt,
@@ -2942,14 +2944,18 @@ struct DebtSettlementSheet: View {
             )
         }
 
-        transactions.forEach(modelContext.insert)
-        updateSharedExpenseGroupsAfterDebtPayment(allocations: allocations, transactions: transactions, modifiedAt: now)
+        paymentTransactions.forEach(modelContext.insert)
+        updateSharedExpenseGroupsAfterDebtPayment(
+            allocations: allocations,
+            transactions: paymentTransactions,
+            modifiedAt: now
+        )
 
         do {
             let ownerUserID = walletPickerAccess.walletOwnerUserID(for: selectedWallet)
             let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
             if let actorUserID {
-                for transaction in transactions {
+                for transaction in paymentTransactions {
                     try TransactionAuditStore.upsert(
                         transactionID: transaction.id,
                         createdByUserID: actorUserID,
@@ -2960,7 +2966,7 @@ struct DebtSettlementSheet: View {
                 }
             }
             if let ownerUserID {
-                for transaction in transactions {
+                for transaction in paymentTransactions {
                     try MistiaRecordOwnershipStore.upsert(
                         entity: .transaction,
                         recordID: transaction.id,
@@ -2982,7 +2988,7 @@ struct DebtSettlementSheet: View {
                 }
             }
             try modelContext.save()
-            for transaction in transactions {
+            for transaction in paymentTransactions {
                 sessionStore.recordUpsert(
                     entity: .transaction,
                     recordID: transaction.id,
@@ -3020,23 +3026,26 @@ struct DebtSettlementSheet: View {
         guard !affectedGroupIDs.isEmpty else { return }
 
         let newSnapshots = transactions.map(\.snapshot)
+        let newTransactionIDs = Set(newSnapshots.map(\.id))
         for groupID in affectedGroupIDs {
             guard let group = settlementGroups.first(where: { $0.id == groupID }) else { continue }
-            let groupRecords = target.position.relatedRecords.filter { $0.settlementGroupID == groupID } + newSnapshots.filter { $0.settlementGroupID == groupID }
-            let principalIntent: TransactionDebtIntent = target.intent == .collect ? .lend : .borrow
-            let paymentIntent: TransactionDebtIntent = target.intent
-            let expected = groupRecords.reduce(Int64.zero) { total, record in
-                record.debtIntent == principalIntent ? total + max(record.amountMinor, 0) : total
-            }
-            let settled = min(
-                expected,
-                groupRecords.reduce(Int64.zero) { total, record in
-                    record.debtIntent == paymentIntent ? total + max(record.amountMinor, 0) : total
+            let existingRecords = settlementDebtTransactions
+                .filter {
+                    $0.settlementGroupID == groupID
+                        && !newTransactionIDs.contains($0.id)
                 }
-            )
-            group.expectedMinor = max(group.expectedMinor, expected)
-            group.settledMinor = settled
-            group.status = settled >= max(group.expectedMinor, expected) ? .settled : (settled > 0 ? .partiallySettled : .open)
+                .map(\.snapshot)
+            let groupRecords = existingRecords
+                + newSnapshots.filter { $0.settlementGroupID == groupID }
+            guard let progress = SettlementLogic.sharedExpenseEventDebtProgress(
+                groupID: groupID,
+                records: groupRecords
+            ) else {
+                continue
+            }
+            group.expectedMinor = progress.expectedMinor
+            group.settledMinor = progress.settledMinor
+            group.status = progress.status
             group.updatedAt = modifiedAt
         }
     }
