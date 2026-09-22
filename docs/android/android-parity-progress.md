@@ -125,3 +125,35 @@ and live Supabase verification remain a later wallet sync slice; therefore APK
 1 is still not complete.
 
 Evidence: `docs/android/evidence/2026-09-22-apk1-wallet-push-foundation.md`.
+
+## APK 1 offline category hierarchy — 2026-09-23
+
+- [x] Added the full typed `transaction_categories` contract with explicit
+  nullable fields, 64-bit sync versions, localized names, hierarchy inference,
+  system metadata preservation and iOS expense/income defaults.
+- [x] Added owner-scoped create/edit/favorite/archive through the existing
+  atomic Room record+outbox boundary. Duplicate names use the active editing
+  locale; child parents must be active, same-kind roots; role is immutable
+  after creation; structural edits receive the next branch sort order.
+- [x] Matched iOS archive guards for active children and direct active
+  transaction, budget and recurring-bill references.
+- [x] Matched the iOS current-month budget branch guard: category name, kind
+  and parent changes are blocked while that branch is used by an active budget;
+  icon and favorite-only edits remain allowed.
+- [x] Replaced the category count with expense/income hierarchy cards,
+  expandable parent branches, child favorite controls, add/edit sheets,
+  localized validation and archive confirmation. The editor packages the
+  shared iOS system-category catalog and exposes all 147 active canonical
+  `mistia.category.*` icon tokens; internal balance-adjustment children and
+  empty uncategorized roots stay hidden like iOS.
+- [x] Passed 89 Android unit tests, lint, debug assembly, Room instrumented-test
+  compilation, contract/localization checks and 17 focused Swift system
+  category tests.
+- [ ] Install with `adb install -r` and verify the hierarchy/editor/archive
+  states on Samsung. No ADB device was connected for this slice.
+
+Category push, remote translation and live multi-device conflict verification
+remain later domain-gated work. Category writes were not added to the wallet
+allowlist, and no production write, migration, RPC or deployment occurred.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-category-offline.md`.

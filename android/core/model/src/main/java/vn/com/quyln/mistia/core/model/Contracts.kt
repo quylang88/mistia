@@ -165,6 +165,7 @@ interface AuthRepository {
 interface FinanceRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
+    fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun saveWallet(
         ownerUserId: UserId,
@@ -175,6 +176,25 @@ interface FinanceRepository {
     suspend fun archiveWallet(
         ownerUserId: UserId,
         walletId: RecordId,
+        deviceId: String,
+        now: String,
+    ): Result<Unit>
+    suspend fun saveCategory(
+        ownerUserId: UserId,
+        draft: CategoryDraft,
+        deviceId: String,
+        now: String,
+    ): Result<TransactionCategoryRecord>
+    suspend fun setCategoryFavorite(
+        ownerUserId: UserId,
+        categoryId: RecordId,
+        isFavorite: Boolean,
+        deviceId: String,
+        now: String,
+    ): Result<Unit>
+    suspend fun archiveCategory(
+        ownerUserId: UserId,
+        categoryId: RecordId,
         deviceId: String,
         now: String,
     ): Result<Unit>

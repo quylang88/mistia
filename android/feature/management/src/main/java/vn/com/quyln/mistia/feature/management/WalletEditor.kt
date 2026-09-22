@@ -603,7 +603,7 @@ private fun formatMinorInput(minor: Long, currencyCode: String): String {
     return BigDecimal.valueOf(minor).movePointLeft(fractionDigits).stripTrailingZeros().toPlainString()
 }
 
-private fun colorFromHex(raw: String): Color {
+internal fun colorFromHex(raw: String): Color {
     val value = raw.removePrefix("#").toLongOrNull(16) ?: 0x8A8A8E
     return Color(
         red = ((value shr 16) and 0xFF) / 255f,
