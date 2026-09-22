@@ -73,3 +73,28 @@ then proceed to APK 2, 3, 4 and RC in sequence.
   1/1 and 597/597 passed. No production migration or schema was changed.
 
 Evidence: `docs/android/evidence/2026-09-22-swift-v7-migration-test-lifecycle.md`.
+
+## APK 1 wallet slice — 2026-09-22
+
+- [x] Added typed wallet contract mapping with exact signed `Long` minor units,
+  iOS kind/icon/color defaults, explicit JSON nulls, canonical IDs/timestamps,
+  and dedicated-flow guards for credit-card and investment wallets.
+- [x] Added account-scoped offline create/edit/archive with one atomic Room
+  transaction for the local wallet row and coalesced outbox row. Archive remains
+  an `is_archived=true` upsert, matching iOS.
+- [x] Replaced the wallet count with an interactive grouped list, empty state,
+  editor sheet, bank validation, archive confirmation, 13 iOS wallet icon
+  choices and the 10-color iOS palette.
+- [x] Kept existing opening balance immutable in metadata editing; Android must
+  add the separate balance-adjustment transaction flow before showing iOS's
+  effective current balance.
+- [x] Passed 51 Android unit tests, lint, debug assembly, Room instrumented-test
+  compilation, contract/localization checks, and 597 Swift tests.
+- [ ] Run `WalletRoomTest` and visual/create/edit/archive verification on the
+  Samsung with `adb install -r`; no ADB device was connected for this slice.
+
+This is one APK 1 vertical slice, not APK 1 completion. Wallet cloud push,
+credit-card profiles/statements, categories, transactions, FX and receipts
+remain pending, and `ALLOW_CLOUD_WRITES` remains `false`.
+
+Evidence: `docs/android/evidence/2026-09-22-apk1-wallet-offline.md`.

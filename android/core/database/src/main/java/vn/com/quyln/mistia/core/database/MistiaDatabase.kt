@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.LocalStore
+import vn.com.quyln.mistia.core.model.PendingMutation
 import vn.com.quyln.mistia.core.model.UserId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -101,6 +102,18 @@ interface CloudRecordDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(records: List<CloudRecordEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(record: CloudRecordEntity)
+
+    @Query(
+        """
+        SELECT * FROM cloud_records
+        WHERE owner_user_id = :ownerUserId AND entity = :entity AND record_id = :recordId
+        LIMIT 1
+        """
+    )
+    suspend fun record(ownerUserId: String, entity: String, recordId: String): CloudRecordEntity?
+
     @Query(
         """
         DELETE FROM cloud_records
@@ -117,6 +130,18 @@ interface CloudRecordDao {
 interface SyncOutboxDao {
     @Query("SELECT record_id FROM sync_outbox WHERE owner_user_id = :ownerUserId AND entity = :entity")
     suspend fun recordIds(ownerUserId: String, entity: String): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: SyncOutboxEntity)
+
+    @Query(
+        """
+        SELECT * FROM sync_outbox
+        WHERE owner_user_id = :ownerUserId
+        ORDER BY modified_at ASC, entity ASC, record_id ASC
+        """
+    )
+    suspend fun rows(ownerUserId: String): List<SyncOutboxEntity>
 
     @Query("DELETE FROM sync_outbox WHERE owner_user_id = :ownerUserId")
     suspend fun deleteAccount(ownerUserId: String)
@@ -172,6 +197,37 @@ class RoomLocalStore(
             rows.map { EntityCount(entity = it.entity, count = it.count) }
         }
 
+    override suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord? =
+        database.cloudRecordDao().record(ownerUserId.value, entity, recordId)?.toCloudRecord()
+
+    override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
+        require(record.ownerUserId == mutation.subjectUserId) { "Mutation owner does not match record owner" }
+        require(record.entity == mutation.entity.table) { "Mutation entity does not match record entity" }
+        require(record.id == mutation.recordId) { "Mutation record ID does not match record" }
+        require(record.payload == mutation.payload) { "Mutation payload does not match local record" }
+
+        database.withTransaction {
+            database.cloudRecordDao().upsert(
+                record.toEntity(
+                    hasPendingMutation = true,
+                    receivedAtEpochMillis = System.currentTimeMillis(),
+                )
+            )
+            database.syncOutboxDao().upsert(
+                SyncOutboxEntity(
+                    ownerUserId = mutation.subjectUserId,
+                    entity = mutation.entity.table,
+                    recordId = mutation.recordId,
+                    kind = mutation.kind.name.lowercase(),
+                    payloadJson = mutation.payload?.toString(),
+                    modifiedAt = mutation.modifiedAt,
+                    baseVersion = mutation.baseVersion,
+                    deviceId = mutation.deviceId,
+                )
+            )
+        }
+    }
+
     override suspend fun replacePullSnapshot(
         ownerUserId: UserId,
         entity: String,
@@ -219,4 +275,29 @@ class RoomLocalStore(
             database.syncCursorDao().deleteAccount(ownerUserId.value)
         }
     }
+
+    private fun CloudRecordEntity.toCloudRecord(): CloudRecord = CloudRecord(
+        entity = entity,
+        id = recordId,
+        ownerUserId = ownerUserId,
+        payload = json.parseToJsonElement(payloadJson) as JsonObject,
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+        syncVersion = syncVersion,
+    )
+
+    private fun CloudRecord.toEntity(
+        hasPendingMutation: Boolean,
+        receivedAtEpochMillis: Long,
+    ): CloudRecordEntity = CloudRecordEntity(
+        ownerUserId = ownerUserId,
+        entity = entity,
+        recordId = id,
+        payloadJson = payload.toString(),
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+        syncVersion = syncVersion,
+        hasPendingMutation = hasPendingMutation,
+        receivedAtEpochMillis = receivedAtEpochMillis,
+    )
 }

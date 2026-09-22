@@ -134,6 +134,7 @@ private fun MistiaApp(
                 familyRepository = familyRepository,
                 investmentRepository = investmentRepository,
                 syncEngine = syncEngine,
+                deviceIdStore = deviceIdStore,
                 openedFromFamilyInvite = openedFromFamilyInvite,
             )
         }
@@ -155,6 +156,7 @@ private fun SignedInRoot(
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
+    deviceIdStore: SecureDeviceIdStore,
     openedFromFamilyInvite: Boolean,
 ) {
     val navController = rememberNavController()
@@ -200,6 +202,7 @@ private fun SignedInRoot(
                     RootTab.MANAGEMENT -> ManagementScreen(
                         ownerUserId = authState.session.userId,
                         repository = financeRepository,
+                        deviceIdProvider = { deviceIdStore.getOrCreate() },
                         onSyncNow = { scope.launch { syncEngine.pullAll() } },
                         onSignOut = { scope.launch { authRepository.signOut() } },
                         onOpenFamily = { navController.navigate("family") },

@@ -156,7 +156,20 @@ interface AuthRepository {
 
 interface FinanceRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
+    fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
+    suspend fun saveWallet(
+        ownerUserId: UserId,
+        draft: WalletDraft,
+        deviceId: String,
+        now: String,
+    ): Result<LedgerWalletRecord>
+    suspend fun archiveWallet(
+        ownerUserId: UserId,
+        walletId: RecordId,
+        deviceId: String,
+        now: String,
+    ): Result<Unit>
 }
 
 interface FamilyRepository {
@@ -171,6 +184,8 @@ interface InvestmentRepository {
 interface LocalStore {
     fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
+    suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
+    suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
     suspend fun replacePullSnapshot(ownerUserId: UserId, entity: String, records: List<CloudRecord>)
     suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String): Set<String>
     suspend fun clearAccount(ownerUserId: UserId)
