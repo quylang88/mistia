@@ -1,7 +1,7 @@
 [versions]
 agp = "8.13.2"
 kotlin = "2.2.21"
-ksp = "2.2.21-2.0.5"
+ksp = "2.3.12"
 hilt = "2.57.2"
 composeBom = "2026.06.01"
 coreKtx = "1.17.0"
@@ -16,6 +16,7 @@ serialization = "1.9.0"
 okhttp = "5.3.2"
 securityCrypto = "1.1.0"
 credentials = "1.5.0"
+googleid = "1.2.0"
 supabase = "3.4.1"
 ktor = "3.3.3"
 junit = "4.13.2"
@@ -37,6 +38,7 @@ androidx-datastore = { module = "androidx.datastore:datastore-preferences", vers
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 androidx-credentials-play = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }

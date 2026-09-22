@@ -32,7 +32,7 @@ data class SupabaseConfig(
 class SupabaseHttpException(
     val statusCode: Int,
     val responseBody: String,
-) : IOException("Supabase request failed ($statusCode): ${responseBody.take(240)}")
+) : IOException("Supabase request failed ($statusCode)")
 
 class SupabasePostgrestRemoteStore(
     private val config: SupabaseConfig,

@@ -6,33 +6,24 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -40,10 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -120,7 +107,7 @@ private fun MistiaApp(
         AuthState.Restoring -> FullScreenProgress()
         AuthState.SignedOut,
         is AuthState.Failure,
-        -> SignInScreen(authRepository)
+        -> vn.com.quyln.mistia.auth.AuthScreen()
         is AuthState.SignedIn -> {
             LaunchedEffect(state.session.userId.value) {
                 deviceRegistry.register(
@@ -235,68 +222,6 @@ private fun SignedInRoot(
                 repository = investmentRepository,
                 onBack = { navController.popBackStack() },
             )
-        }
-    }
-}
-
-@Composable
-private fun SignInScreen(authRepository: AuthRepository) {
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(
-                text = stringResource(DesignR.string.management_managementauth_welcome_to_mistia),
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text(stringResource(DesignR.string.management_managementauth_email2)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(stringResource(DesignR.string.management_managementauth_password)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (failed) Text(stringResource(DesignR.string.common_unknown_error), color = MaterialTheme.colorScheme.error)
-            Button(
-                enabled = !busy && email.isNotBlank() && password.isNotBlank(),
-                onClick = {
-                    busy = true
-                    failed = false
-                    scope.launch {
-                        authRepository.signIn(email, password)
-                            .onFailure { failed = true }
-                        busy = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (busy) CircularProgressIndicator() else Text(stringResource(DesignR.string.management_managementauth_sign_in))
-            }
-            TextButton(
-                onClick = {
-                    if (email.isNotBlank()) scope.launch { authRepository.sendPasswordReset(email) }
-                },
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text(stringResource(DesignR.string.management_managementauth_forgot_password))
-            }
         }
     }
 }

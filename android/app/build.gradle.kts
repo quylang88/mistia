@@ -16,8 +16,8 @@ val localProperties = Properties().apply {
     if (file.isFile) file.inputStream().use(::load)
 }
 
-fun plistValue(key: String): String? {
-    val plist = rootProject.file("../Mistia/MistiaSyncConfig.plist")
+fun plistValue(key: String, fileName: String = "../Mistia/MistiaSyncConfig.plist"): String? {
+    val plist = rootProject.file(fileName)
     if (!plist.isFile) return null
     val match = Regex("<key>\\s*${Regex.escape(key)}\\s*</key>\\s*<string>([^<]+)</string>")
         .find(plist.readText())
@@ -32,6 +32,10 @@ fun resolveConfig(environment: String, property: String, plistKey: String): Stri
 
 val supabaseUrl = resolveConfig("MISTIA_SUPABASE_URL", "mistia.supabase.url", "SUPABASE_URL")
 val supabaseAnonKey = resolveConfig("MISTIA_SUPABASE_ANON_KEY", "mistia.supabase.anonKey", "SUPABASE_ANON_KEY")
+val googleWebClientId = providers.environmentVariable("MISTIA_GOOGLE_SERVER_CLIENT_ID").orNull
+    ?: localProperties.getProperty("mistia.google.serverClientId")
+    ?: plistValue("GIDServerClientID", "../MistiaInfo.plist")
+    ?: ""
 
 android {
     namespace = "vn.com.quyln.mistia"
@@ -41,13 +45,14 @@ android {
         applicationId = "vn.com.quyln.mistia"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-apk0"
+        versionCode = 3
+        versionName = "0.1.2-apk0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "SUPABASE_URL", supabaseUrl.asBuildConfigString())
         buildConfigField("String", "SUPABASE_ANON_KEY", supabaseAnonKey.asBuildConfigString())
         buildConfigField("boolean", "ALLOW_CLOUD_WRITES", "false")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.trim().asBuildConfigString())
     }
 
     buildTypes {
@@ -97,6 +102,15 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    testImplementation(libs.junit)
+    testImplementation("org.mockito:mockito-core:5.20.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.work.runtime)
     implementation(libs.hilt.android)

@@ -18,11 +18,11 @@ import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
-import vn.com.quyln.mistia.core.designsystem.long
 import vn.com.quyln.mistia.core.designsystem.string
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.UserId
+import vn.com.quyln.mistia.core.model.transactionDisplayMoney
 
 @Composable
 fun TransactionsScreen(
@@ -32,6 +32,9 @@ fun TransactionsScreen(
 ) {
     val records by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
+    val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
+        .collectAsStateWithLifecycle(emptyList())
+    val walletCurrencies = wallets.associate { it.id to it.string("currency_code") }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -55,14 +58,15 @@ fun TransactionsScreen(
         } else {
             items(records, key = { it.id }) { record ->
                 MistiaGlassCard { padding ->
-                    val currency = record.string("reporting_currency_code")
-                        ?: record.string("source_currency_code")
-                        ?: "JPY"
+                    val money = record.transactionDisplayMoney(
+                        walletCurrencies[record.string("source_wallet_id")],
+                        walletCurrencies[record.string("destination_wallet_id")],
+                    )
                     MistiaRecordRow(
                         title = record.string("title")
                             ?: stringResource(R.string.shared_corelogic_transaction_unknown_name),
                         subtitle = record.string("occurred_at"),
-                        trailing = record.long("amount_minor")?.let { formatMinorUnits(it, currency) },
+                        trailing = money?.let { formatMinorUnits(it.minor, it.currencyCode) },
                         modifier = Modifier.padding(padding),
                     )
                 }

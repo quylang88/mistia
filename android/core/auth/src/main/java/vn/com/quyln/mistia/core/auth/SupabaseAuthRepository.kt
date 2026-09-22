@@ -91,6 +91,7 @@ class SupabaseAuthRepository(
     private val secureStore: SecureSessionStore,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = true },
     private val nowEpochSeconds: () -> Long = { Instant.now().epochSecond },
+    private val clearCredentialState: suspend () -> Unit = {},
 ) : AuthRepository {
     private val mutableState = MutableStateFlow<AuthState>(AuthState.Restoring)
     override val state: StateFlow<AuthState> = mutableState.asStateFlow()
@@ -124,16 +125,25 @@ class SupabaseAuthRepository(
         response.toSession().also(::persist)
     }
 
-    override suspend fun signUp(email: String, password: String): Result<AuthSession?> = runCatching {
+    override suspend fun signUp(email: String, password: String, displayName: String): Result<AuthSession?> = runCatching {
         val response = post(
             path = "auth/v1/signup",
             payload = buildJsonObject {
                 put("email", email.trim())
                 put("password", password)
+                put("data", buildJsonObject { put("display_name", displayName.trim()) })
             },
         )
         val token = response["access_token"]?.jsonPrimitive?.contentOrNull
         if (token == null) null else response.toSession().also(::persist)
+    }
+
+    override suspend fun resendConfirmation(email: String): Result<Unit> = runCatching {
+        post(path = "auth/v1/resend", payload = buildJsonObject {
+            put("type", "signup")
+            put("email", email.trim())
+        })
+        Unit
     }
 
     override suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
@@ -176,6 +186,7 @@ class SupabaseAuthRepository(
         }
         if (clearLocalSession) secureStore.clear()
         mutableState.value = AuthState.SignedOut
+        runCatching { clearCredentialState() }
     }
 
     private fun persist(session: AuthSession) {

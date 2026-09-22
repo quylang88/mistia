@@ -15,6 +15,9 @@ import vn.com.quyln.mistia.core.auth.SecureSessionStore
 import vn.com.quyln.mistia.core.auth.SecureDeviceIdStore
 import vn.com.quyln.mistia.core.auth.SupabaseAuthRepository
 import vn.com.quyln.mistia.core.auth.SupabaseDeviceRegistry
+import vn.com.quyln.mistia.core.auth.GoogleSignInBridge
+import vn.com.quyln.mistia.core.auth.GoogleSignInProvider
+import vn.com.quyln.mistia.core.auth.AuthDiagnostics
 import vn.com.quyln.mistia.core.database.MistiaDatabase
 import vn.com.quyln.mistia.core.database.OfflineFirstFamilyRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstFinanceRepository
@@ -77,11 +80,24 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAuthRepository(
+        @ApplicationContext context: Context,
         config: SupabaseConfig,
         client: OkHttpClient,
         secureSessionStore: SecureSessionStore,
         json: Json,
-    ): AuthRepository = SupabaseAuthRepository(config, client, secureSessionStore, json)
+    ): AuthRepository = SupabaseAuthRepository(config, client, secureSessionStore, json,
+        clearCredentialState = { GoogleSignInBridge.clear(context) })
+
+    @Provides
+    @Singleton
+    fun provideGoogleSignInBridge(diagnostics: AuthDiagnostics): GoogleSignInProvider =
+        GoogleSignInBridge(BuildConfig.GOOGLE_WEB_CLIENT_ID, diagnostics)
+
+    @Provides
+    @Singleton
+    fun provideAuthDiagnostics(): AuthDiagnostics = AuthDiagnostics { event ->
+        if (BuildConfig.DEBUG) android.util.Log.i("MistiaAuth", event.name)
+    }
 
     @Provides
     @Singleton

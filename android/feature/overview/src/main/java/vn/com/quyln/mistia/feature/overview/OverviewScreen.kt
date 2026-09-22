@@ -23,12 +23,12 @@ import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.MistiaSectionCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
-import vn.com.quyln.mistia.core.designsystem.long
 import vn.com.quyln.mistia.core.designsystem.string
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.SyncStatus
 import vn.com.quyln.mistia.core.model.UserId
+import vn.com.quyln.mistia.core.model.transactionDisplayMoney
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
@@ -41,6 +41,9 @@ fun OverviewScreen(
     val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
+    val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
+        .collectAsStateWithLifecycle(emptyList())
+    val walletCurrencies = wallets.associate { it.id to it.string("currency_code") }
     val status by syncStatus.collectAsStateWithLifecycle()
     val countMap = counts.associate { it.entity to it.count }
 
@@ -90,15 +93,15 @@ fun OverviewScreen(
                     )
                 } else {
                     transactions.take(8).forEach { transaction ->
-                        val amount = transaction.long("amount_minor")
-                        val currency = transaction.string("reporting_currency_code")
-                            ?: transaction.string("source_currency_code")
-                            ?: "JPY"
+                        val money = transaction.transactionDisplayMoney(
+                            walletCurrencies[transaction.string("source_wallet_id")],
+                            walletCurrencies[transaction.string("destination_wallet_id")],
+                        )
                         MistiaRecordRow(
                             title = transaction.string("title")
                                 ?: stringResource(R.string.shared_corelogic_transaction_unknown_name),
                             subtitle = transaction.string("occurred_at"),
-                            trailing = amount?.let { formatMinorUnits(it, currency) },
+                            trailing = money?.let { formatMinorUnits(it.minor, it.currencyCode) },
                         )
                     }
                 }

@@ -121,6 +121,7 @@ data class AuthSession(
     val expiresAtEpochSeconds: Long,
 ) {
     fun shouldRefresh(nowEpochSeconds: Long): Boolean = expiresAtEpochSeconds - nowEpochSeconds <= 60
+    override fun toString(): String = "AuthSession(credentials=redacted)"
 }
 
 sealed interface AuthState {
@@ -145,7 +146,8 @@ interface AuthRepository {
     val state: StateFlow<AuthState>
     suspend fun restore()
     suspend fun signIn(email: String, password: String): Result<AuthSession>
-    suspend fun signUp(email: String, password: String): Result<AuthSession?>
+    suspend fun signUp(email: String, password: String, displayName: String = ""): Result<AuthSession?>
+    suspend fun resendConfirmation(email: String): Result<Unit>
     suspend fun sendPasswordReset(email: String): Result<Unit>
     suspend fun exchangeGoogleIdToken(idToken: String, nonce: String?): Result<AuthSession>
     suspend fun refreshIfNeeded(): Result<AuthSession?>
