@@ -52,6 +52,7 @@ android {
         buildConfigField("String", "SUPABASE_URL", supabaseUrl.asBuildConfigString())
         buildConfigField("String", "SUPABASE_ANON_KEY", supabaseAnonKey.asBuildConfigString())
         buildConfigField("boolean", "ALLOW_CLOUD_WRITES", "false")
+        buildConfigField("boolean", "ALLOW_WALLET_CLOUD_WRITES", "false")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.trim().asBuildConfigString())
     }
 

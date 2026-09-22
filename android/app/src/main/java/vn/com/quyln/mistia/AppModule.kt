@@ -30,11 +30,14 @@ import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.RemoteStore
+import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.SyncEngine
 import vn.com.quyln.mistia.core.network.SupabaseConfig
 import vn.com.quyln.mistia.core.network.MistiaWireFormat
 import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
+import vn.com.quyln.mistia.core.sync.WalletPushCoordinator
+import vn.com.quyln.mistia.core.model.CloudEntity
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -101,8 +104,39 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRemoteStore(config: SupabaseConfig, client: OkHttpClient, json: Json): RemoteStore =
-        SupabasePostgrestRemoteStore(config, client, json)
+    fun providePostgrestStore(
+        config: SupabaseConfig,
+        client: OkHttpClient,
+        json: Json,
+    ): SupabasePostgrestRemoteStore = SupabasePostgrestRemoteStore(
+        config = config,
+        client = client,
+        json = json,
+        writableEntities = if (BuildConfig.ALLOW_WALLET_CLOUD_WRITES) {
+            setOf(CloudEntity.LEDGER_WALLET)
+        } else {
+            emptySet()
+        },
+    )
+
+    @Provides
+    @Singleton
+    fun provideRemoteStore(store: SupabasePostgrestRemoteStore): RemoteStore = store
+
+    @Provides
+    @Singleton
+    fun provideRemoteMutationStore(store: SupabasePostgrestRemoteStore): RemoteMutationStore = store
+
+    @Provides
+    @Singleton
+    fun provideWalletPushCoordinator(
+        localStore: LocalStore,
+        remoteStore: RemoteMutationStore,
+    ): WalletPushCoordinator = WalletPushCoordinator(
+        localStore = localStore,
+        remoteStore = remoteStore,
+        writesEnabled = BuildConfig.ALLOW_WALLET_CLOUD_WRITES,
+    )
 
     @Provides
     @Singleton
@@ -126,5 +160,12 @@ object AppModule {
         authRepository: AuthRepository,
         localStore: LocalStore,
         remoteStore: RemoteStore,
-    ): SyncEngine = PullOnlySyncEngine(context, authRepository, localStore, remoteStore)
+        walletPushCoordinator: WalletPushCoordinator,
+    ): SyncEngine = PullOnlySyncEngine(
+        context,
+        authRepository,
+        localStore,
+        remoteStore,
+        walletPushCoordinator,
+    )
 }

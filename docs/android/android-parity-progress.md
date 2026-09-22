@@ -98,3 +98,30 @@ credit-card profiles/statements, categories, transactions, FX and receipts
 remain pending, and `ALLOW_CLOUD_WRITES` remains `false`.
 
 Evidence: `docs/android/evidence/2026-09-22-apk1-wallet-offline.md`.
+
+## APK 1 wallet push foundation — 2026-09-22
+
+- [x] Added iOS-equivalent PostgREST wallet fetch/create/update requests: owner
+  and record filters on reads, array POST create, and owner/record/version
+  filters on conditional PATCH with server representations returned.
+- [x] Added account-scoped due-outbox reads, bounded retry metadata and an
+  atomic compare-and-ACK transaction. A response for an older mutation cannot
+  delete or overwrite a newer edit made while the request is in flight.
+- [x] Added wallet create/update/semantic-ACK/conflict/retry coordination,
+  including create-race refetch and deterministic iOS authority rules. Sync-now
+  and WorkManager use the coordinator before pull.
+- [x] Added a wallet-only build gate and kept it `false`; the PostgREST client
+  independently rejects wallet writes while disabled. No production request,
+  migration, RPC or deployment was performed.
+- [x] Passed 65 Android unit tests, lint, debug assembly, Room instrumented-test
+  compilation, contract/localization checks and the 5-test Swift outbox suite.
+- [ ] Run Room tests plus offline-create/push/edit/conflict behavior on Samsung,
+  then deliberately enable the wallet gate in a device-test build. ADB listed
+  no device, so the current APK still performs pull-only behavior at runtime.
+
+Unresolved Android conflicts are durably retained in the outbox with automatic
+retry disabled, preventing data loss. The dedicated conflict record/review UI
+and live Supabase verification remain a later wallet sync slice; therefore APK
+1 is still not complete.
+
+Evidence: `docs/android/evidence/2026-09-22-apk1-wallet-push-foundation.md`.

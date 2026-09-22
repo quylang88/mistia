@@ -113,6 +113,13 @@ data class PendingMutation(
     val deviceId: String,
 )
 
+data class QueuedMutation(
+    val mutation: PendingMutation,
+    val attemptCount: Int,
+    val nextAttemptAtEpochMillis: Long,
+    val lastError: String?,
+)
+
 data class AuthSession(
     val userId: UserId,
     val email: String?,
@@ -135,6 +142,7 @@ enum class InitialSyncChoice { MERGE_SAFELY, USE_DEVICE, USE_CLOUD }
 
 sealed interface SyncStatus {
     data object Idle : SyncStatus
+    data class Pushing(val entity: String) : SyncStatus
     data class Pulling(val entity: String, val completed: Int, val total: Int) : SyncStatus
     data class Success(val recordCount: Int, val completedAtEpochMillis: Long) : SyncStatus
     data class Failed(val message: String, val retryable: Boolean) : SyncStatus
@@ -186,6 +194,18 @@ interface LocalStore {
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
+    suspend fun pendingMutations(
+        ownerUserId: UserId,
+        entity: CloudEntity,
+        dueAtEpochMillis: Long,
+        limit: Int = 100,
+    ): List<QueuedMutation>
+    suspend fun acknowledgeMutation(mutation: QueuedMutation, remoteRecord: CloudRecord): Boolean
+    suspend fun recordMutationFailure(
+        mutation: QueuedMutation,
+        nextAttemptAtEpochMillis: Long,
+        errorCode: String,
+    ): Boolean
     suspend fun replacePullSnapshot(ownerUserId: UserId, entity: String, records: List<CloudRecord>)
     suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String): Set<String>
     suspend fun clearAccount(ownerUserId: UserId)
@@ -201,6 +221,31 @@ interface RemoteStore {
     ): RemotePage
 }
 
+interface RemoteMutationStore {
+    suspend fun fetchRecord(
+        entity: CloudEntity,
+        recordId: String,
+        accessToken: String,
+        ownerUserId: UserId,
+    ): CloudRecord?
+
+    suspend fun createRecord(
+        entity: CloudEntity,
+        accessToken: String,
+        ownerUserId: UserId,
+        payload: JsonObject,
+    ): CloudRecord
+
+    suspend fun conditionalUpdate(
+        entity: CloudEntity,
+        recordId: String,
+        accessToken: String,
+        ownerUserId: UserId,
+        expectedVersion: Long,
+        payload: JsonObject,
+    ): CloudRecord?
+}
+
 interface AssetStore {
     suspend fun uploadAvatar(userId: UserId, bytes: ByteArray): Result<String>
     suspend fun uploadInvestmentProductImage(userId: UserId, assetId: RecordId, bytes: ByteArray): Result<String>
@@ -209,6 +254,7 @@ interface AssetStore {
 
 interface SyncEngine {
     val status: StateFlow<SyncStatus>
+    suspend fun syncNow(): Result<Int>
     suspend fun pullAll(): Result<Int>
     fun scheduleBackgroundSync()
 }

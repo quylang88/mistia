@@ -17,9 +17,14 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import vn.com.quyln.mistia.core.model.CloudEntity
+import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.RemotePage
+import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.RemoteStore
 import vn.com.quyln.mistia.core.model.UserId
+
+private val POSTGREST_JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
 data class SupabaseConfig(
     val projectUrl: String,
@@ -38,7 +43,8 @@ class SupabasePostgrestRemoteStore(
     private val config: SupabaseConfig,
     private val client: OkHttpClient,
     private val json: Json = Json { ignoreUnknownKeys = true },
-) : RemoteStore {
+    private val writableEntities: Set<CloudEntity> = emptySet(),
+) : RemoteStore, RemoteMutationStore {
     override suspend fun pullPage(
         table: String,
         accessToken: String,
@@ -79,6 +85,125 @@ class SupabasePostgrestRemoteStore(
                 .orEmpty()
             RemotePage(records = records, nextOffset = if (records.size == limit) offset + limit else null)
         }
+    }
+
+    override suspend fun fetchRecord(
+        entity: CloudEntity,
+        recordId: String,
+        accessToken: String,
+        ownerUserId: UserId,
+    ): CloudRecord? = withContext(Dispatchers.IO) {
+        requireRecordIdentity(recordId, ownerUserId)
+        val url = tableUrl(entity)
+            .addQueryParameter("select", "*")
+            .addQueryParameter("id", "eq.$recordId")
+            .addQueryParameter("user_id", "eq.${ownerUserId.value}")
+            .addQueryParameter("limit", "1")
+            .build()
+        val request = authorizedRequest(url.toString(), accessToken).get().build()
+        client.newCall(request).execute().use { response ->
+            response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)
+        }
+    }
+
+    override suspend fun createRecord(
+        entity: CloudEntity,
+        accessToken: String,
+        ownerUserId: UserId,
+        payload: JsonObject,
+    ): CloudRecord = withContext(Dispatchers.IO) {
+        requireWriteEnabled(entity)
+        val recordId = payload.string("id") ?: error("Mutation payload is missing id")
+        requirePayloadIdentity(payload, recordId, ownerUserId)
+        val url = tableUrl(entity)
+            .addQueryParameter("user_id", "eq.${ownerUserId.value}")
+            .build()
+        val request = authorizedRequest(url.toString(), accessToken)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=representation")
+            .post(json.encodeToString(JsonArray(listOf(payload))).toRequestBody(POSTGREST_JSON_MEDIA_TYPE))
+            .build()
+        client.newCall(request).execute().use { response ->
+            response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)
+                ?: error("Supabase create returned no ${entity.table} row")
+        }
+    }
+
+    override suspend fun conditionalUpdate(
+        entity: CloudEntity,
+        recordId: String,
+        accessToken: String,
+        ownerUserId: UserId,
+        expectedVersion: Long,
+        payload: JsonObject,
+    ): CloudRecord? = withContext(Dispatchers.IO) {
+        requireWriteEnabled(entity)
+        require(expectedVersion >= 0) { "Expected version cannot be negative" }
+        requirePayloadIdentity(payload, recordId, ownerUserId)
+        val url = tableUrl(entity)
+            .addQueryParameter("id", "eq.$recordId")
+            .addQueryParameter("user_id", "eq.${ownerUserId.value}")
+            .addQueryParameter("sync_version", "eq.$expectedVersion")
+            .build()
+        val request = authorizedRequest(url.toString(), accessToken)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=representation")
+            .patch(json.encodeToString(payload).toRequestBody(POSTGREST_JSON_MEDIA_TYPE))
+            .build()
+        client.newCall(request).execute().use { response ->
+            response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)
+        }
+    }
+
+    private fun tableUrl(entity: CloudEntity) = config.projectUrl.toHttpUrl().newBuilder()
+        .addPathSegments("rest/v1")
+        .addPathSegment(entity.table)
+
+    private fun authorizedRequest(url: String, accessToken: String): Request.Builder {
+        check(config.isConfigured) { "Supabase is not configured for this build" }
+        return Request.Builder()
+            .url(url)
+            .header("apikey", config.anonKey)
+            .header("Authorization", "Bearer $accessToken")
+            .header("Accept", "application/json")
+    }
+
+    private fun requireWriteEnabled(entity: CloudEntity) {
+        check(entity in writableEntities) { "Cloud writes are disabled for ${entity.table}" }
+    }
+
+    private fun requireRecordIdentity(recordId: String, ownerUserId: UserId) {
+        require(recordId.isNotBlank()) { "Record ID cannot be blank" }
+        require(ownerUserId.value.isNotBlank()) { "Owner user ID cannot be blank" }
+    }
+
+    private fun requirePayloadIdentity(payload: JsonObject, recordId: String, ownerUserId: UserId) {
+        requireRecordIdentity(recordId, ownerUserId)
+        require(payload.string("id") == recordId) { "Mutation payload ID does not match request" }
+        require(payload.string("user_id") == ownerUserId.value) { "Mutation payload owner does not match request" }
+    }
+
+    private fun Response.requireObjectRows(): List<JsonObject> {
+        val raw = body.string()
+        if (!isSuccessful) throw SupabaseHttpException(code, raw)
+        if (raw.isBlank()) return emptyList()
+        return (json.parseToJsonElement(raw) as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            ?: error("Supabase response was not a JSON array")
+    }
+
+    private fun JsonObject.toCloudRecord(entity: CloudEntity, ownerUserId: UserId): CloudRecord {
+        val recordId = string("id") ?: error("Supabase ${entity.table} row is missing id")
+        require(string("user_id") == ownerUserId.value) { "Supabase row owner does not match request" }
+        return CloudRecord(
+            entity = entity.table,
+            id = recordId,
+            ownerUserId = ownerUserId.value,
+            payload = this,
+            updatedAt = string("updated_at"),
+            deletedAt = string("deleted_at"),
+            syncVersion = long("sync_version"),
+        )
     }
 }
 

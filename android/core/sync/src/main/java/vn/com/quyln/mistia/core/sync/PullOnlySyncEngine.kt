@@ -38,39 +38,47 @@ class PullOnlySyncEngine(
     private val authRepository: AuthRepository,
     private val localStore: LocalStore,
     private val remoteStore: RemoteStore,
+    private val walletPushCoordinator: WalletPushCoordinator,
 ) : SyncEngine {
     private val mutex = Mutex()
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
     override val status: StateFlow<SyncStatus> = mutableStatus.asStateFlow()
 
-    override suspend fun pullAll(): Result<Int> = mutex.withLock {
+    override suspend fun syncNow(): Result<Int> = mutex.withLock {
         runCatching {
-            val refreshed = authRepository.refreshIfNeeded().getOrThrow()
-            val session = refreshed
-                ?: (authRepository.state.value as? AuthState.SignedIn)?.session
-                ?: error("Sign in before syncing")
-            val requiredTables = CloudEntity.pullOrder.map(CloudEntity::table)
-            val optionalTables = ReadOnlyCloudCollection.entries.map(ReadOnlyCloudCollection::table)
-            val allTables = requiredTables + optionalTables
-            var totalRecords = 0
-
-            allTables.forEachIndexed { index, table ->
-                mutableStatus.value = SyncStatus.Pulling(table, index, allTables.size)
-                val rows = try {
-                    pullTable(table, session.accessToken, session.userId)
-                } catch (error: SupabaseHttpException) {
-                    if (table in optionalTables && error.statusCode in setOf(400, 404)) emptyList()
-                    else throw error
+            val session = signedInSession()
+            mutableStatus.value = SyncStatus.Pushing(CloudEntity.LEDGER_WALLET.table)
+            val push = walletPushCoordinator.pushPending(session.userId, session.accessToken)
+            val totalRecords = pullAllTables(session.accessToken, session.userId)
+            when {
+                push.retryableFailures > 0 -> throw WalletPushRetryException(push.retryableFailures)
+                push.conflicts + push.permanentFailures > 0 -> {
+                    mutableStatus.value = SyncStatus.Failed(
+                        message = "wallet_push_needs_attention",
+                        retryable = false,
+                    )
                 }
-                localStore.replacePullSnapshot(session.userId, table, rows)
-                totalRecords += rows.size
+                else -> mutableStatus.value = SyncStatus.Success(totalRecords, System.currentTimeMillis())
             }
-            mutableStatus.value = SyncStatus.Success(totalRecords, System.currentTimeMillis())
             totalRecords
         }.onFailure { error ->
             mutableStatus.value = SyncStatus.Failed(
                 message = error.message ?: error::class.java.simpleName,
-                retryable = error is IOException || (error is SupabaseHttpException && error.statusCode >= 500),
+                retryable = error.isRetryableSyncFailure(),
+            )
+        }
+    }
+
+    override suspend fun pullAll(): Result<Int> = mutex.withLock {
+        runCatching {
+            val session = signedInSession()
+            pullAllTables(session.accessToken, session.userId).also { totalRecords ->
+                mutableStatus.value = SyncStatus.Success(totalRecords, System.currentTimeMillis())
+            }
+        }.onFailure { error ->
+            mutableStatus.value = SyncStatus.Failed(
+                message = error.message ?: error::class.java.simpleName,
+                retryable = error.isRetryableSyncFailure(),
             )
         }
     }
@@ -111,6 +119,29 @@ class PullOnlySyncEngine(
         return result
     }
 
+    private suspend fun signedInSession() = authRepository.refreshIfNeeded().getOrThrow()
+        ?: (authRepository.state.value as? AuthState.SignedIn)?.session
+        ?: error("Sign in before syncing")
+
+    private suspend fun pullAllTables(accessToken: String, ownerUserId: UserId): Int {
+        val requiredTables = CloudEntity.pullOrder.map(CloudEntity::table)
+        val optionalTables = ReadOnlyCloudCollection.entries.map(ReadOnlyCloudCollection::table)
+        val allTables = requiredTables + optionalTables
+        var totalRecords = 0
+        allTables.forEachIndexed { index, table ->
+            mutableStatus.value = SyncStatus.Pulling(table, index, allTables.size)
+            val rows = try {
+                pullTable(table, accessToken, ownerUserId)
+            } catch (error: SupabaseHttpException) {
+                if (table in optionalTables && error.statusCode in setOf(400, 404)) emptyList()
+                else throw error
+            }
+            localStore.replacePullSnapshot(ownerUserId, table, rows)
+            totalRecords += rows.size
+        }
+        return totalRecords
+    }
+
     private fun JsonObject.toCloudRecord(entity: String, ownerUserId: UserId): CloudRecord? {
         val id = string("id") ?: string("user_id") ?: string("device_id") ?: return null
         return CloudRecord(
@@ -147,10 +178,10 @@ class MistiaSyncWorker(
 ) : CoroutineWorker(appContext, workerParameters) {
     override suspend fun doWork(): Result {
         val engine = SyncRuntime.engine ?: return Result.retry()
-        return engine.pullAll().fold(
+        return engine.syncNow().fold(
             onSuccess = { Result.success() },
             onFailure = { error ->
-                if (error is IOException || (error is SupabaseHttpException && error.statusCode >= 500)) {
+                if (error.isRetryableSyncFailure()) {
                     Result.retry()
                 } else {
                     Result.failure()
@@ -158,4 +189,13 @@ class MistiaSyncWorker(
             },
         )
     }
+}
+
+private class WalletPushRetryException(failureCount: Int) :
+    IOException("$failureCount wallet mutation(s) are waiting to retry")
+
+internal fun Throwable.isRetryableSyncFailure(): Boolean = when (this) {
+    is SupabaseHttpException -> statusCode >= 500 || statusCode == 408 || statusCode == 429
+    is IOException -> true
+    else -> false
 }

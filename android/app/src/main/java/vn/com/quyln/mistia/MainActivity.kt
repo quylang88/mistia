@@ -125,7 +125,7 @@ private fun MistiaApp(
                     ),
                 )
                 syncEngine.scheduleBackgroundSync()
-                syncEngine.pullAll()
+                syncEngine.syncNow()
             }
             SignedInRoot(
                 authState = state,
@@ -203,7 +203,7 @@ private fun SignedInRoot(
                         ownerUserId = authState.session.userId,
                         repository = financeRepository,
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
-                        onSyncNow = { scope.launch { syncEngine.pullAll() } },
+                        onSyncNow = { scope.launch { syncEngine.syncNow() } },
                         onSignOut = { scope.launch { authRepository.signOut() } },
                         onOpenFamily = { navController.navigate("family") },
                         onOpenInvestment = { navController.navigate("investment") },

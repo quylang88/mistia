@@ -17,6 +17,7 @@ import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.PendingMutation
 import vn.com.quyln.mistia.core.model.RecordId
+import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
@@ -116,6 +117,39 @@ class WalletRepositoryTest {
             records.value = records.value + (key to record)
             outbox[key] = mutation
         }
+
+        override suspend fun pendingMutations(
+            ownerUserId: UserId,
+            entity: CloudEntity,
+            dueAtEpochMillis: Long,
+            limit: Int,
+        ): List<QueuedMutation> = outbox
+            .filterKeys { it.first == ownerUserId.value && it.second == entity.table }
+            .values
+            .sortedBy(PendingMutation::modifiedAt)
+            .take(limit)
+            .map { QueuedMutation(it, 0, 0, null) }
+
+        override suspend fun acknowledgeMutation(
+            mutation: QueuedMutation,
+            remoteRecord: CloudRecord,
+        ): Boolean {
+            val key = Triple(
+                mutation.mutation.subjectUserId,
+                mutation.mutation.entity.table,
+                mutation.mutation.recordId,
+            )
+            if (outbox[key] != mutation.mutation) return false
+            outbox.remove(key)
+            records.value = records.value + (key to remoteRecord)
+            return true
+        }
+
+        override suspend fun recordMutationFailure(
+            mutation: QueuedMutation,
+            nextAttemptAtEpochMillis: Long,
+            errorCode: String,
+        ): Boolean = outbox.values.contains(mutation.mutation)
 
         override suspend fun replacePullSnapshot(
             ownerUserId: UserId,

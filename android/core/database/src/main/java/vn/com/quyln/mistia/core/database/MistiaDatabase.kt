@@ -17,9 +17,12 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import vn.com.quyln.mistia.core.model.CloudRecord
+import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.LocalStore
+import vn.com.quyln.mistia.core.model.MutationKind
 import vn.com.quyln.mistia.core.model.PendingMutation
+import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.UserId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -143,6 +146,72 @@ interface SyncOutboxDao {
     )
     suspend fun rows(ownerUserId: String): List<SyncOutboxEntity>
 
+    @Query(
+        """
+        SELECT * FROM sync_outbox
+        WHERE owner_user_id = :ownerUserId
+          AND entity = :entity
+          AND next_attempt_at_epoch_millis <= :dueAtEpochMillis
+        ORDER BY modified_at ASC, record_id ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun dueRows(
+        ownerUserId: String,
+        entity: String,
+        dueAtEpochMillis: Long,
+        limit: Int,
+    ): List<SyncOutboxEntity>
+
+    @Query(
+        """
+        DELETE FROM sync_outbox
+        WHERE owner_user_id = :ownerUserId
+          AND entity = :entity
+          AND record_id = :recordId
+          AND modified_at = :modifiedAt
+          AND base_version = :baseVersion
+          AND device_id = :deviceId
+          AND attempt_count = :attemptCount
+        """
+    )
+    suspend fun deleteExact(
+        ownerUserId: String,
+        entity: String,
+        recordId: String,
+        modifiedAt: String,
+        baseVersion: Long,
+        deviceId: String,
+        attemptCount: Int,
+    ): Int
+
+    @Query(
+        """
+        UPDATE sync_outbox
+        SET attempt_count = attempt_count + 1,
+            next_attempt_at_epoch_millis = :nextAttemptAtEpochMillis,
+            last_error = :errorCode
+        WHERE owner_user_id = :ownerUserId
+          AND entity = :entity
+          AND record_id = :recordId
+          AND modified_at = :modifiedAt
+          AND base_version = :baseVersion
+          AND device_id = :deviceId
+          AND attempt_count = :attemptCount
+        """
+    )
+    suspend fun markFailureExact(
+        ownerUserId: String,
+        entity: String,
+        recordId: String,
+        modifiedAt: String,
+        baseVersion: Long,
+        deviceId: String,
+        attemptCount: Int,
+        nextAttemptAtEpochMillis: Long,
+        errorCode: String,
+    ): Int
+
     @Query("DELETE FROM sync_outbox WHERE owner_user_id = :ownerUserId")
     suspend fun deleteAccount(ownerUserId: String)
 }
@@ -228,6 +297,73 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun pendingMutations(
+        ownerUserId: UserId,
+        entity: CloudEntity,
+        dueAtEpochMillis: Long,
+        limit: Int,
+    ): List<QueuedMutation> {
+        require(limit in 1..1_000) { "Outbox batch limit must be between 1 and 1000" }
+        return database.syncOutboxDao().dueRows(
+            ownerUserId = ownerUserId.value,
+            entity = entity.table,
+            dueAtEpochMillis = dueAtEpochMillis,
+            limit = limit,
+        ).map { it.toQueuedMutation() }
+    }
+
+    override suspend fun acknowledgeMutation(
+        mutation: QueuedMutation,
+        remoteRecord: CloudRecord,
+    ): Boolean {
+        val pending = mutation.mutation
+        require(remoteRecord.ownerUserId == pending.subjectUserId) { "Remote owner does not match mutation" }
+        require(remoteRecord.entity == pending.entity.table) { "Remote entity does not match mutation" }
+        require(remoteRecord.id == pending.recordId) { "Remote record ID does not match mutation" }
+        return database.withTransaction {
+            val removed = database.syncOutboxDao().deleteExact(
+                ownerUserId = pending.subjectUserId,
+                entity = pending.entity.table,
+                recordId = pending.recordId,
+                modifiedAt = pending.modifiedAt,
+                baseVersion = pending.baseVersion,
+                deviceId = pending.deviceId,
+                attemptCount = mutation.attemptCount,
+            ) == 1
+            if (removed) {
+                database.cloudRecordDao().upsert(
+                    remoteRecord.toEntity(
+                        hasPendingMutation = false,
+                        receivedAtEpochMillis = System.currentTimeMillis(),
+                    )
+                )
+            }
+            removed
+        }
+    }
+
+    override suspend fun recordMutationFailure(
+        mutation: QueuedMutation,
+        nextAttemptAtEpochMillis: Long,
+        errorCode: String,
+    ): Boolean {
+        val pending = mutation.mutation
+        require(nextAttemptAtEpochMillis >= 0) { "Retry time cannot be negative" }
+        val safeErrorCode = errorCode.trim().take(160)
+        require(safeErrorCode.isNotEmpty()) { "Failure code cannot be empty" }
+        return database.syncOutboxDao().markFailureExact(
+            ownerUserId = pending.subjectUserId,
+            entity = pending.entity.table,
+            recordId = pending.recordId,
+            modifiedAt = pending.modifiedAt,
+            baseVersion = pending.baseVersion,
+            deviceId = pending.deviceId,
+            attemptCount = mutation.attemptCount,
+            nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
+            errorCode = safeErrorCode,
+        ) == 1
+    }
+
     override suspend fun replacePullSnapshot(
         ownerUserId: UserId,
         entity: String,
@@ -300,4 +436,23 @@ class RoomLocalStore(
         hasPendingMutation = hasPendingMutation,
         receivedAtEpochMillis = receivedAtEpochMillis,
     )
+
+    private fun SyncOutboxEntity.toQueuedMutation(): QueuedMutation {
+        val cloudEntity = requireNotNull(CloudEntity.fromTable(entity)) { "Unknown outbox entity: $entity" }
+        return QueuedMutation(
+            mutation = PendingMutation(
+                entity = cloudEntity,
+                recordId = recordId,
+                subjectUserId = ownerUserId,
+                kind = MutationKind.valueOf(kind.uppercase()),
+                payload = payloadJson?.let { json.parseToJsonElement(it) as JsonObject },
+                modifiedAt = modifiedAt,
+                baseVersion = baseVersion,
+                deviceId = deviceId,
+            ),
+            attemptCount = attemptCount,
+            nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
+            lastError = lastError,
+        )
+    }
 }

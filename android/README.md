@@ -60,7 +60,10 @@ swift Scripts/generate-l10n.swift --input Mistia/Localizable.xcstrings --output 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
 
-APK 0 is intentionally pull-only. The write path stays disabled until its feature gate has contract/golden coverage.
+Cloud writes are enabled per domain only after that domain's contract, retry,
+conflict and physical-device gates pass. The wallet push path is wired but
+`ALLOW_WALLET_CLOUD_WRITES` remains disabled in the current build; the legacy
+global `ALLOW_CLOUD_WRITES` switch also remains disabled.
 
 ## Physical Samsung gate
 
