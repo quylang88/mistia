@@ -420,7 +420,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
         let fundingPostingID = InvestmentLedgerIdentity.derivedID(eventID: tradeID, component: "funding-posting")
         let v7Schema = Schema(versionedSchema: MistiaSchemaV7.self)
         let v7Configuration = ModelConfiguration("default", schema: v7Schema, url: storeURL)
-        do {
+        try autoreleasepool {
             let container = try ModelContainer(for: v7Schema, configurations: [v7Configuration])
             let context = ModelContext(container)
             let fundingWallet = LedgerWallet(

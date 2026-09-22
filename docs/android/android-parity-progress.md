@@ -61,3 +61,15 @@ APK 1–4/RC are NOT complete. Cloud financial writes remain disabled. The next
 session should implement APK 1 domain-by-domain, with exact Swift rules,
 atomic Room/outbox changes, contract serialization and device verification,
 then proceed to APK 2, 3, 4 and RC in sequence.
+
+## Swift gate correction — 2026-09-22
+
+- [x] Reproduced the V7 investment migration failure in an isolated fresh
+  scratch build instead of treating the earlier full-suite pass as sufficient.
+- [x] Fixed the legacy-store fixture lifecycle with `autoreleasepool`, ensuring
+  its CoreData coordinator is released before reopening the same URL with the
+  current staged migration plan.
+- [x] Re-ran the isolated fresh-scratch migration test and the full Swift suite:
+  1/1 and 597/597 passed. No production migration or schema was changed.
+
+Evidence: `docs/android/evidence/2026-09-22-swift-v7-migration-test-lifecycle.md`.
