@@ -560,3 +560,31 @@ cloud call/write/deployment occurred. All cloud-write gates remain `false`;
 APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-camerax.md`.
+
+## APK 1 receipt analysis coordinator — 2026-09-24
+
+- [x] Added the iOS-parity request builder for prepared receipt images,
+  including Base64/MIME data, locale/time zone/target language, active
+  owner-scoped child expense categories with localized hierarchy names, active
+  owner-scoped wallets and the JPY fallback currency.
+- [x] Excluded balance-adjustment categories and the deterministic
+  investment-profit wallet from AI candidates while preserving configured
+  category/wallet order.
+- [x] Added one-refresh-token sequential batch analysis with ordered per-bill
+  partial success, typed authentication failure before transport and strict
+  coroutine cancellation propagation.
+- [x] Verified 236 Android unit tests across 44 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Route the coordinator through a native analysis/review state and screen,
+  then implement reviewed item persistence as transactions.
+- [ ] Run the completed receipt flow on Samsung when device verification
+  resumes. Per the user's current direction, its absence does not block local
+  slice development.
+
+No live Edge Function/Gemini call, receipt/transaction persistence, production
+write, migration, deployment or cloud-write gate change occurred. All five
+cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-analysis-coordinator.md`.
