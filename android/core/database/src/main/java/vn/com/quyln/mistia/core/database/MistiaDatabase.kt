@@ -32,6 +32,8 @@ import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
 import vn.com.quyln.mistia.core.model.UserId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 @Entity(
     tableName = "cloud_records",
@@ -409,6 +411,22 @@ class RoomLocalStore(
     override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
         database.withTransaction {
             commitMutationRows(record, mutation)
+        }
+    }
+
+    override suspend fun commitCreditCardMutation(
+        walletRecord: CloudRecord,
+        walletMutation: PendingMutation,
+        profileRecord: CloudRecord,
+        profileMutation: PendingMutation,
+    ) {
+        require(walletRecord.entity == CloudEntity.LEDGER_WALLET.table)
+        require(profileRecord.entity == CloudEntity.CREDIT_CARD_PROFILE.table)
+        require(walletRecord.ownerUserId == profileRecord.ownerUserId)
+        require((profileRecord.payload["wallet_id"] as? JsonPrimitive)?.contentOrNull == walletRecord.id)
+        database.withTransaction {
+            commitMutationRows(walletRecord, walletMutation)
+            commitMutationRows(profileRecord, profileMutation)
         }
     }
 

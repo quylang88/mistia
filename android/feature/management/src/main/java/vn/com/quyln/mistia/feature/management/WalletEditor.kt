@@ -586,7 +586,7 @@ private fun walletIcon(symbolName: String, kind: WalletKind?): ImageVector = whe
     }
 }
 
-private fun parseMinorUnits(raw: String, currencyCode: String): Long? = runCatching {
+internal fun parseMinorUnits(raw: String, currencyCode: String): Long? = runCatching {
     val normalized = raw.trim().replace(",", "").ifEmpty { "0" }
     val fractionDigits = Currency.getInstance(currencyCode.uppercase(Locale.ROOT))
         .defaultFractionDigits.coerceAtLeast(0)
@@ -596,7 +596,7 @@ private fun parseMinorUnits(raw: String, currencyCode: String): Long? = runCatch
         .longValueExact()
 }.getOrNull()
 
-private fun formatMinorInput(minor: Long, currencyCode: String): String {
+internal fun formatMinorInput(minor: Long, currencyCode: String): String {
     val fractionDigits = runCatching {
         Currency.getInstance(currencyCode.uppercase(Locale.ROOT)).defaultFractionDigits.coerceAtLeast(0)
     }.getOrDefault(0)
@@ -612,7 +612,7 @@ internal fun colorFromHex(raw: String): Color {
     )
 }
 
-private val WALLET_COLORS = listOf(
+internal val WALLET_COLORS = listOf(
     "#2DAA9E",
     "#6BCB77",
     "#F26A5A",
@@ -625,7 +625,7 @@ private val WALLET_COLORS = listOf(
     "#8A8A8E",
 )
 
-private val WALLET_ICON_SYMBOLS = listOf(
+internal val WALLET_ICON_SYMBOLS = listOf(
     "mistia.wallet.cash",
     "mistia.wallet.paypay",
     "mistia.wallet.bank",

@@ -51,6 +51,8 @@ import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.CategoryDraft
 import vn.com.quyln.mistia.core.model.CategoryHierarchyRole
 import vn.com.quyln.mistia.core.model.CategoryNameLanguage
+import vn.com.quyln.mistia.core.model.CreditCardDraft
+import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.RecordId
@@ -58,6 +60,7 @@ import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
+import vn.com.quyln.mistia.core.model.WalletKind
 
 @Composable
 fun ManagementScreen(
@@ -73,7 +76,10 @@ fun ManagementScreen(
 ) {
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val creditCardProfiles by repository.observeCreditCardProfiles(ownerUserId)
+        .collectAsStateWithLifecycle(emptyList())
     var walletEditorTarget by remember { mutableStateOf<WalletEditorTarget?>(null) }
+    var creditCardEditorTarget by remember { mutableStateOf<CreditCardEditorTarget?>(null) }
     var categoryEditorTarget by remember { mutableStateOf<CategoryEditorTarget?>(null) }
     var selectedCategoryKind by remember { mutableStateOf(TransactionCategoryKind.EXPENSE) }
     val categoryLanguage = currentCategoryLanguage(LocalConfiguration.current.locales[0])
@@ -97,8 +103,16 @@ fun ManagementScreen(
         item {
             WalletsSection(
                 wallets = wallets,
-                onAdd = { walletEditorTarget = WalletEditorTarget(null) },
-                onEdit = { walletEditorTarget = WalletEditorTarget(it.id) },
+                creditCardProfiles = creditCardProfiles,
+                onAddWallet = { walletEditorTarget = WalletEditorTarget(null) },
+                onAddCreditCard = { creditCardEditorTarget = CreditCardEditorTarget(null) },
+                onEdit = { wallet ->
+                    if (wallet.kind == WalletKind.CREDIT_CARD) {
+                        creditCardEditorTarget = CreditCardEditorTarget(wallet.id)
+                    } else {
+                        walletEditorTarget = WalletEditorTarget(wallet.id)
+                    }
+                },
             )
         }
         item {
@@ -184,6 +198,28 @@ fun ManagementScreen(
                 repository.archiveWallet(
                     ownerUserId = ownerUserId,
                     walletId = RecordId(id),
+                    deviceId = deviceIdProvider(),
+                    now = Instant.now().toString(),
+                )
+            },
+        )
+    }
+
+    creditCardEditorTarget?.let { target ->
+        val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
+        val profile = wallet?.let { card -> creditCardProfiles.firstOrNull { it.walletId == card.id } }
+        CreditCardEditorSheet(
+            wallet = wallet,
+            profile = profile,
+            paymentSourceWallets = wallets.filter { candidate ->
+                candidate.id != wallet?.id && candidate.kind != null && candidate.kind != WalletKind.CREDIT_CARD
+            },
+            nextSortOrder = (wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1,
+            onDismiss = { creditCardEditorTarget = null },
+            onSave = { draft: CreditCardDraft ->
+                repository.saveCreditCard(
+                    ownerUserId = ownerUserId,
+                    draft = draft,
                     deviceId = deviceIdProvider(),
                     now = Instant.now().toString(),
                 )
@@ -458,7 +494,9 @@ private fun CategoryChildRow(
 @Composable
 private fun WalletsSection(
     wallets: List<LedgerWalletRecord>,
-    onAdd: () -> Unit,
+    creditCardProfiles: List<CreditCardProfileRecord>,
+    onAddWallet: () -> Unit,
+    onAddCreditCard: () -> Unit,
     onEdit: (LedgerWalletRecord) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -473,7 +511,7 @@ private fun WalletsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
             )
-            TextButton(onClick = onAdd) {
+            TextButton(onClick = onAddWallet) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Text(stringResource(R.string.management_management_add_wallet))
             }
@@ -496,26 +534,38 @@ private fun WalletsSection(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Button(onClick = onAdd) {
+                    Button(onClick = onAddWallet) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Text(stringResource(R.string.management_management_add_wallet))
+                    }
+                    OutlinedButton(onClick = onAddCreditCard) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Text(stringResource(R.string.planning_planning_add_credit_card))
                     }
                 }
             } else {
                 Column {
                     wallets.forEachIndexed { index, wallet ->
-                        WalletRow(wallet = wallet, onClick = { onEdit(wallet) })
+                        val profile = creditCardProfiles.firstOrNull { it.walletId == wallet.id }
+                        WalletRow(wallet = wallet, creditCardProfile = profile, onClick = { onEdit(wallet) })
                         if (index != wallets.lastIndex) {
                             HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                         }
                     }
                     HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                     TextButton(
-                        onClick = onAdd,
+                        onClick = onAddWallet,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Text(stringResource(R.string.management_management_add_wallet))
+                    }
+                    TextButton(
+                        onClick = onAddCreditCard,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Text(stringResource(R.string.planning_planning_add_credit_card))
                     }
                 }
             }
@@ -524,8 +574,13 @@ private fun WalletsSection(
 }
 
 @Composable
-private fun WalletRow(wallet: LedgerWalletRecord, onClick: () -> Unit) {
-    val editable = wallet.kind in WalletEditorState.supportedKinds
+private fun WalletRow(
+    wallet: LedgerWalletRecord,
+    creditCardProfile: CreditCardProfileRecord?,
+    onClick: () -> Unit,
+) {
+    val editable = wallet.kind in WalletEditorState.supportedKinds ||
+        (wallet.kind == WalletKind.CREDIT_CARD && creditCardProfile != null)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -543,8 +598,14 @@ private fun WalletRow(wallet: LedgerWalletRecord, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            val cardDetails = creditCardProfile?.let { profile ->
+                listOf(profile.issuerName, profile.last4.takeIf(String::isNotEmpty)?.let { "•••• $it" })
+                    .filterNotNull().filter(String::isNotEmpty).joinToString(" · ")
+            }
             Text(
-                wallet.kind?.let { walletKindTitle(it) } ?: wallet.kindWireValue,
+                cardDetails?.takeIf(String::isNotEmpty)
+                    ?: wallet.kind?.let { walletKindTitle(it) }
+                    ?: wallet.kindWireValue,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -552,8 +613,18 @@ private fun WalletRow(wallet: LedgerWalletRecord, onClick: () -> Unit) {
             )
         }
         Column(horizontalAlignment = Alignment.End) {
+            if (creditCardProfile != null) {
+                Text(
+                    stringResource(R.string.management_management_credit_limit),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
-                formatMinorUnits(wallet.openingBalanceMinor, wallet.currencyCode),
+                formatMinorUnits(
+                    creditCardProfile?.creditLimitMinor ?: wallet.openingBalanceMinor,
+                    wallet.currencyCode,
+                ),
                 style = MaterialTheme.typography.labelLarge,
             )
             if (editable) {
@@ -568,6 +639,7 @@ private fun WalletRow(wallet: LedgerWalletRecord, onClick: () -> Unit) {
 }
 
 private data class WalletEditorTarget(val walletId: String?)
+private data class CreditCardEditorTarget(val walletId: String?)
 private data class CategoryEditorTarget(
     val categoryId: String?,
     val kind: TransactionCategoryKind,

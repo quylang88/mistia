@@ -218,3 +218,27 @@ No live Edge Function call, Supabase write, production migration or deployment
 was performed. All cloud-write flags remain `false`; APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-category-translation.md`.
+
+## APK 1 offline credit-card profiles — 2026-09-23
+
+- [x] Added typed `credit_card_profiles` mapping with exact payload fields,
+  explicit nulls, signed 64-bit values and all iOS card-network wire values.
+- [x] Added owner-scoped offline create/edit of a linked credit-card wallet and
+  profile. Room commits both local records and both independent-version outbox
+  rows atomically; payment sources must be active, same-owner and non-card.
+- [x] Added a dedicated native Compose card editor and management routing for
+  issuer/network/last-four, limit/currency, closing/payment days, payment
+  source, notes and color. New cards use iOS defaults 10/26.
+- [x] Passed 131 Android unit tests across 27 suites, Room instrumentation
+  source compilation, lint, debug assembly, contract check and strict iOS/
+  Android localization checks.
+- [ ] Run the Room test and native create/edit/rotation/dark-mode verification
+  on Samsung. ADB reported no connected device.
+
+Card archive remains unavailable until transaction debt and statement data can
+enforce the iOS blockers. Credit-limit/debt and payment-source-change debt
+guards are deferred for the same reason. Credit-card push is the next separate
+domain-gated slice; all cloud-write flags remain `false`, no production write
+or deployment occurred, and APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-credit-card-offline.md`.

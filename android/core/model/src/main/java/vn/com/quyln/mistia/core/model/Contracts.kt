@@ -182,6 +182,7 @@ interface FinanceRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
+    fun observeCreditCardProfiles(ownerUserId: UserId): Flow<List<CreditCardProfileRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun saveWallet(
         ownerUserId: UserId,
@@ -195,6 +196,12 @@ interface FinanceRepository {
         deviceId: String,
         now: String,
     ): Result<Unit>
+    suspend fun saveCreditCard(
+        ownerUserId: UserId,
+        draft: CreditCardDraft,
+        deviceId: String,
+        now: String,
+    ): Result<CreditCardAccount>
     suspend fun saveCategory(
         ownerUserId: UserId,
         draft: CategoryDraft,
@@ -230,6 +237,15 @@ interface LocalStore {
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
+    suspend fun commitCreditCardMutation(
+        walletRecord: CloudRecord,
+        walletMutation: PendingMutation,
+        profileRecord: CloudRecord,
+        profileMutation: PendingMutation,
+    ) {
+        commitMutation(walletRecord, walletMutation)
+        commitMutation(profileRecord, profileMutation)
+    }
     suspend fun commitCategoryMutation(
         record: CloudRecord,
         mutation: PendingMutation,

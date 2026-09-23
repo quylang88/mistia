@@ -19,6 +19,9 @@ import vn.com.quyln.mistia.core.model.CategoryValidationError
 import vn.com.quyln.mistia.core.model.CategoryValidationException
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CloudRecord
+import vn.com.quyln.mistia.core.model.CreditCardAccount
+import vn.com.quyln.mistia.core.model.CreditCardDraft
+import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
@@ -61,6 +64,13 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
                 )
         }
 
+    override fun observeCreditCardProfiles(ownerUserId: UserId): Flow<List<CreditCardProfileRecord>> =
+        localStore.observe(CloudEntity.CREDIT_CARD_PROFILE.table, ownerUserId).map { records ->
+            records.mapNotNull { record ->
+                runCatching { CreditCardProfileRecord.fromCloudRecord(record) }.getOrNull()
+            }.sortedWith(compareBy(CreditCardProfileRecord::createdAt, CreditCardProfileRecord::id))
+        }
+
     override suspend fun saveWallet(
         ownerUserId: UserId,
         draft: WalletDraft,
@@ -89,6 +99,40 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
         ) ?: error("Wallet not found")
         val mutation = LedgerWalletRecord.fromCloudRecord(record).toArchiveMutation(deviceId, now)
         localStore.commitMutation(mutation.record, mutation.pending)
+    }
+
+    override suspend fun saveCreditCard(
+        ownerUserId: UserId,
+        draft: CreditCardDraft,
+        deviceId: String,
+        now: String,
+    ): Result<CreditCardAccount> = runCatching {
+        val wallets = walletSnapshot(ownerUserId)
+        val profiles = creditCardProfileSnapshot(ownerUserId)
+        val existingWallet = draft.walletId?.lowercase()?.let { id -> wallets.firstOrNull { it.id == id } }
+        val requestedProfileId = draft.profileId?.lowercase()
+        val existingProfile = requestedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
+            ?: existingWallet?.let { wallet -> profiles.firstOrNull { it.walletId == wallet.id } }
+        val paymentSource = draft.paymentSourceWalletId?.lowercase()?.let { id ->
+            wallets.firstOrNull { it.id == id }
+        }
+        val nextSortOrder = draft.sortOrder ?: existingWallet?.sortOrder
+            ?: ((wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1)
+        val mutation = draft.copy(sortOrder = nextSortOrder).toMutation(
+            ownerUserId = ownerUserId,
+            existingWallet = existingWallet,
+            existingProfile = existingProfile,
+            paymentSourceWallet = paymentSource,
+            deviceId = deviceId,
+            now = now,
+        )
+        localStore.commitCreditCardMutation(
+            walletRecord = mutation.wallet.record.toCloudRecord(),
+            walletMutation = mutation.wallet.pending,
+            profileRecord = mutation.profile.record.toCloudRecord(),
+            profileMutation = mutation.profile.pending,
+        )
+        CreditCardAccount(mutation.wallet.record, mutation.profile.record)
     }
 
     override suspend fun saveCategory(
@@ -207,6 +251,14 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
     private suspend fun categorySnapshot(ownerUserId: UserId): List<TransactionCategoryRecord> =
         localStore.observe(CloudEntity.TRANSACTION_CATEGORY.table, ownerUserId).first()
             .map(TransactionCategoryRecord::fromCloudRecord)
+
+    private suspend fun walletSnapshot(ownerUserId: UserId): List<LedgerWalletRecord> =
+        localStore.observe(CloudEntity.LEDGER_WALLET.table, ownerUserId).first()
+            .map(LedgerWalletRecord::fromCloudRecord)
+
+    private suspend fun creditCardProfileSnapshot(ownerUserId: UserId): List<CreditCardProfileRecord> =
+        localStore.observe(CloudEntity.CREDIT_CARD_PROFILE.table, ownerUserId).first()
+            .map(CreditCardProfileRecord::fromCloudRecord)
 
     private fun normalizeCategoryName(value: String): String = value.trim()
         .split(Regex("\\s+"))
