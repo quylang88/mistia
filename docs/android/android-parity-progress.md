@@ -266,3 +266,25 @@ cloud-write flags remain `false`; transaction/FX and receipt parity remain in
 APK 1, so APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-credit-card-push-foundation.md`.
+
+## APK 1 transaction and FX typed contract — 2026-09-23
+
+- [x] Added a complete typed `ledger_transactions` cloud record with explicit
+  nulls, signed 64-bit money/version fields and exact iOS enum wire values.
+- [x] Added ordinary expense/income/internal-transfer mutation rules for owner-
+  scoped active dependencies, posted versus draft completeness, category-kind
+  matching and credit-card direction restrictions.
+- [x] Added exact-decimal cross-currency validation and same-currency stale-FX
+  clearing. Family/debt transfers remain rejected until their APK 3 cloud-first
+  workflows exist.
+- [x] Passed 145 Android unit tests across 30 suites, Room instrumentation
+  source compilation, lint, debug assembly, contract check and both localization
+  generation checks.
+- [ ] Add atomic offline repository/editor flows, then a dependency-ordered and
+  separately gated transaction push pipeline. Run all UI/device behavior on
+  Samsung when ADB is available.
+
+No transaction cloud-write gate or live production request was added. Existing
+cloud-write flags remain `false`; APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-fx-contract.md`.
