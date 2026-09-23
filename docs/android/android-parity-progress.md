@@ -677,3 +677,22 @@ Samsung verification remains deferred and all five flags remain `false`; APK 1
 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-arithmetic.md`.
+
+## APK 1 receipt review mutations — 2026-09-24
+
+- [x] Added immutable bill-scoped transitions for wallet, payable total,
+  category, reviewed item replacement, proportional discount allocation and
+  explicit item removal.
+- [x] Preserved sibling bills, result metadata, full raw OCR and literal row text
+  through a concrete `3@` purchase plus standalone Japanese coupon edit chain.
+- [x] Verified 251 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind these transitions to native editors and item selection, then open the
+  existing transaction editor with the reviewed prefill and route the flow.
+
+No transaction/image persistence, live AI/production call, migration,
+deployment, device claim or cloud-write gate change occurred. Samsung remains
+deferred and all five flags remain `false`; APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-mutations.md`.

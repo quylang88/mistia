@@ -1,10 +1,12 @@
 package vn.com.quyln.mistia.feature.transactions
 
 import vn.com.quyln.mistia.core.model.BillItemAnalysisResult
+import vn.com.quyln.mistia.core.model.BillItemAnalysisItem
 import vn.com.quyln.mistia.core.model.PreparedReceiptImage
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisException
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisFailure
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisQuota
+import vn.com.quyln.mistia.core.model.allocateReceiptDiscount
 
 internal data class ReceiptReviewBill(
     val id: String,
@@ -80,6 +82,65 @@ internal data class ReceiptReviewState(
     fun remove(billId: String): ReceiptReviewState = copy(
         bills = bills.filterNot { it.id == billId },
     )
+
+    fun selectWallet(billId: String, walletId: String?): ReceiptReviewState =
+        updateBill(billId) { bill -> bill.copy(selectedWalletId = walletId) }
+
+    fun updateTotal(billId: String, totalMinor: Long): ReceiptReviewState =
+        updateBillResult(billId) { result -> result.copy(totalMinor = totalMinor) }
+
+    fun updateItemCategory(
+        billId: String,
+        itemId: String,
+        categoryId: String?,
+    ): ReceiptReviewState = updateBillResult(billId) { result ->
+        result.copy(
+            items = result.items.map { item ->
+                if (item.lineId == itemId) item.copy(categoryId = categoryId) else item
+            },
+        )
+    }
+
+    fun updateItem(
+        billId: String,
+        edited: BillItemAnalysisItem,
+    ): ReceiptReviewState = updateBillResult(billId) { result ->
+        result.copy(
+            items = result.items.map { item ->
+                if (item.lineId == edited.lineId) edited else item
+            },
+        )
+    }
+
+    fun allocateDiscount(
+        billId: String,
+        itemId: String,
+    ): ReceiptReviewState = updateBillResult(billId) { result ->
+        val allocated = allocateReceiptDiscount(itemId, result.items) ?: return@updateBillResult result
+        result.copy(items = allocated)
+    }
+
+    fun removeItem(
+        billId: String,
+        itemId: String,
+    ): ReceiptReviewState = updateBillResult(billId) { result ->
+        result.copy(items = result.items.filterNot { it.lineId == itemId })
+    }
+
+    private fun updateBill(
+        billId: String,
+        transform: (ReceiptReviewBill) -> ReceiptReviewBill,
+    ): ReceiptReviewState = copy(
+        bills = bills.map { bill -> if (bill.id == billId) transform(bill) else bill },
+    )
+
+    private fun updateBillResult(
+        billId: String,
+        transform: (BillItemAnalysisResult) -> BillItemAnalysisResult,
+    ): ReceiptReviewState = updateBill(billId) { bill ->
+        val result = bill.result ?: return@updateBill bill
+        bill.copy(result = transform(result))
+    }
 }
 
 internal data class ReceiptReviewAnalysisBatch(

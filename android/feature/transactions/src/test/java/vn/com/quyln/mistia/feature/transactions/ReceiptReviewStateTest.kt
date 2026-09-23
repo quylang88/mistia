@@ -187,6 +187,60 @@ class ReceiptReviewStateTest {
         assertTrue(failed.bills.drop(1).all { !it.isAnalyzing && it.quota == quota })
     }
 
+    @Test
+    fun `review edits mutate only targeted bill and preserve literal item evidence`() {
+        val purchase = item(
+            id = "purchase",
+            raw = "3@ ミルク 198",
+            name = "ミルク",
+            type = BillItemLineType.PURCHASE,
+            quantity = 3,
+            finalAmount = 594,
+            categoryId = null,
+        ).copy(
+            originalAmountMinor = 594,
+            missingFields = listOf("categoryID", "quantity"),
+        )
+        val discount = item(
+            id = "discount",
+            raw = "クーポン -41",
+            name = "クーポン",
+            type = BillItemLineType.DISCOUNT,
+            quantity = null,
+            finalAmount = -41,
+            categoryId = null,
+        ).copy(discountAmountMinor = 41)
+        val target = ReceiptReviewBill(
+            id = "target",
+            image = prepared(1),
+            result = result(items = listOf(purchase, discount), rawText = "literal"),
+        )
+        val sibling = ReceiptReviewBill(id = "sibling", image = prepared(2), result = result())
+
+        val editedItem = purchase.reviewed(594, 0, 3)!!
+        val edited = ReceiptReviewState(listOf(target, sibling))
+            .selectWallet("target", "wallet")
+            .updateTotal("target", 553)
+            .updateItem("target", editedItem)
+            .updateItemCategory("target", "purchase", "food")
+            .allocateDiscount("target", "discount")
+
+        val updated = edited.bills.first()
+        assertEquals("wallet", updated.selectedWalletId)
+        assertEquals(553L, updated.result?.totalMinor)
+        assertEquals("3@ ミルク 198", updated.result?.items?.first()?.rawLineText)
+        assertEquals("food", updated.result?.items?.first()?.categoryId)
+        assertEquals(41L, updated.result?.items?.first()?.discountAmountMinor)
+        assertEquals(553L, updated.result?.items?.first()?.finalAmountMinor)
+        assertEquals(0L, updated.result?.items?.last()?.finalAmountMinor)
+        assertEquals("literal", updated.result?.rawText)
+        assertSame(sibling, edited.bills.last())
+
+        val removed = edited.removeItem("target", "discount")
+        assertEquals(listOf("purchase"), removed.bills.first().result?.items?.map { it.lineId })
+        assertSame(sibling, removed.bills.last())
+    }
+
     private var generatedId = 0
 
     private fun indexId(): String = "bill-${++generatedId}"
