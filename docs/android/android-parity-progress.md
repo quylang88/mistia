@@ -441,3 +441,31 @@ changed. All cloud-write flags remain `false`. Receipt capture/analysis and
 other unfinished APK 1 workflows remain, so APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-automatic-exchange-rate.md`.
+
+## APK 1 receipt AI client foundation — 2026-09-24
+
+- [x] Added the typed Android contract for the existing itemized receipt Edge
+  Function, including literal OCR rows, purchase/discount arithmetic, candidate
+  IDs, multiple-bill state and daily quota metadata.
+- [x] Added an authenticated `analyze-bill-items` client using the configured
+  client key in `apikey` and the signed-in user JWT in `Authorization`. The
+  transport has AI-appropriate 170/180-second timeouts and cancellable OkHttp
+  execution.
+- [x] Added tolerant numeric decoding and candidate validation while preserving
+  raw OCR text. Typed failures distinguish auth, request, media, size, quota,
+  upstream, malformed-response and network cases without exposing raw error
+  bodies or credentials.
+- [x] Verified 209 Android unit tests across 39 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check, Android
+  localization generation and strict iOS localization code generation.
+- [ ] Connect CameraX/Photo Picker image acquisition and preprocessing, then
+  add the native itemized review/apply flow and transaction persistence.
+- [ ] Run the final receipt flow and its artifact on Samsung when device
+  verification resumes. Per the user's current direction, absence of a Samsung
+  does not block local slice development.
+
+No live Gemini/Supabase function invocation, production write, schema, RLS/RPC,
+Edge Function deployment or cloud-write gate change occurred. All cloud-write
+flags remain `false`; APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-ai-client.md`.

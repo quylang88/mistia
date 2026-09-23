@@ -32,6 +32,7 @@ import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.RemoteStore
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
 import vn.com.quyln.mistia.core.model.SyncEngine
 import vn.com.quyln.mistia.core.network.SupabaseConfig
 import vn.com.quyln.mistia.core.network.MistiaWireFormat
@@ -45,6 +46,7 @@ import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CategoryNameTranslator
 import vn.com.quyln.mistia.core.network.SupabaseCategoryNameTranslator
 import vn.com.quyln.mistia.core.network.FrankfurterExchangeRateRepository
+import vn.com.quyln.mistia.core.network.SupabaseReceiptAnalysisClient
 import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 
 @Module
@@ -156,6 +158,14 @@ object AppModule {
         client: OkHttpClient,
         json: Json,
     ): CategoryNameTranslator = SupabaseCategoryNameTranslator(config, client, json)
+
+    @Provides
+    @Singleton
+    fun provideReceiptAnalysisClient(
+        config: SupabaseConfig,
+        client: OkHttpClient,
+        json: Json,
+    ): ReceiptAnalysisClient = SupabaseReceiptAnalysisClient(config, client, json)
 
     @Provides
     @Singleton

@@ -41,11 +41,11 @@
 - Produces: request/candidate/result/item/quota types,
   `ReceiptAnalysisClient`, and typed failure categories.
 
-- [ ] Write failing tests for normalization, arithmetic/review invariants,
+- [x] Write failing tests for normalization, arithmetic/review invariants,
   candidate validation, and failure redaction.
-- [ ] Run the focused model test and confirm RED because the contract is absent.
-- [ ] Implement the smallest pure model contract that passes the tests.
-- [ ] Re-run focused model tests and confirm GREEN.
+- [x] Run the focused model test and confirm RED because the contract is absent.
+- [x] Implement the smallest pure model contract that passes the tests.
+- [x] Re-run focused model tests and confirm GREEN.
 
 ### Task 2: Authenticated Supabase Edge Function client
 
@@ -57,11 +57,11 @@
 - Consumes: Task 1 model contract, `SupabaseConfig`, shared OkHttp and JSON.
 - Produces: authenticated request execution, tolerant decode, and typed errors.
 
-- [ ] Write failing MockWebServer tests for exact headers/body, tolerant decode,
+- [x] Write failing MockWebServer tests for exact headers/body, tolerant decode,
   429 quota, status mapping, malformed success, redaction, and cancellation.
-- [ ] Run the focused network test and confirm RED because the client is absent.
-- [ ] Implement IO execution, wire mapping, validation, and error mapping.
-- [ ] Re-run focused model/network tests and confirm GREEN.
+- [x] Run the focused network test and confirm RED because the client is absent.
+- [x] Implement IO execution, wire mapping, validation, and error mapping.
+- [x] Re-run focused model/network tests and confirm GREEN.
 
 ### Task 3: Hilt integration
 
@@ -72,8 +72,8 @@
 - Consumes: `SupabaseReceiptAnalysisClient`.
 - Produces: singleton `ReceiptAnalysisClient` binding for the next UI slice.
 
-- [ ] Add the provider without coupling it to auth storage or a ViewModel.
-- [ ] Compile the app and verify the Hilt graph.
+- [x] Add the provider without coupling it to auth storage or a ViewModel.
+- [x] Compile the app and verify the Hilt graph.
 
 ### Task 4: Evidence and slice commit
 
@@ -85,11 +85,11 @@
 - Consumes: the completed client foundation.
 - Produces: auditable local evidence and an independent feature commit.
 
-- [ ] Run full Android unit tests, Room Android-test compilation, lint, and
+- [x] Run full Android unit tests, Room Android-test compilation, lint, and
   debug assembly with one Gradle worker.
-- [ ] Run Android contract, Android localization, and strict iOS String Catalog
+- [x] Run Android contract, Android localization, and strict iOS String Catalog
   checks, recording any environment-only limitation precisely.
-- [ ] Record test totals, APK SHA-256, security boundary, and deferred CameraX,
+- [x] Record test totals, APK SHA-256, security boundary, and deferred CameraX,
   Photo Picker, review UI, persistence, and Samsung checks.
-- [ ] Run `git diff --check`, self-review against Review Focus, and commit the
+- [x] Run `git diff --check`, self-review against Review Focus, and commit the
   slice independently.
