@@ -29,9 +29,11 @@ import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
+import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.ReadOnlyCloudCollection
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
 
@@ -69,6 +71,18 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
             records.mapNotNull { record ->
                 runCatching { CreditCardProfileRecord.fromCloudRecord(record) }.getOrNull()
             }.sortedWith(compareBy(CreditCardProfileRecord::createdAt, CreditCardProfileRecord::id))
+        }
+
+    override fun observeTransactions(ownerUserId: UserId): Flow<List<LedgerTransactionRecord>> =
+        localStore.observe(CloudEntity.LEDGER_TRANSACTION.table, ownerUserId).map { records ->
+            records.mapNotNull { record ->
+                runCatching { LedgerTransactionRecord.fromCloudRecord(record) }.getOrNull()
+            }.filterNot(LedgerTransactionRecord::isArchived)
+                .sortedWith(
+                    compareByDescending(LedgerTransactionRecord::occurredAt)
+                        .thenByDescending(LedgerTransactionRecord::createdAt)
+                        .thenBy(LedgerTransactionRecord::id)
+                )
         }
 
     override suspend fun saveWallet(
@@ -133,6 +147,34 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
             profileMutation = mutation.profile.pending,
         )
         CreditCardAccount(mutation.wallet.record, mutation.profile.record)
+    }
+
+    override suspend fun saveTransaction(
+        ownerUserId: UserId,
+        draft: TransactionDraft,
+        deviceId: String,
+        now: String,
+    ): Result<LedgerTransactionRecord> = runCatching {
+        val transactions = transactionSnapshot(ownerUserId)
+        val wallets = walletSnapshot(ownerUserId)
+        val categories = categorySnapshot(ownerUserId)
+        val existing = draft.id?.lowercase()?.let { id -> transactions.firstOrNull { it.id == id } }
+        val sourceWallet = draft.sourceWalletId?.lowercase()?.let { id -> wallets.firstOrNull { it.id == id } }
+        val destinationWallet = draft.destinationWalletId?.lowercase()?.let { id ->
+            wallets.firstOrNull { it.id == id }
+        }
+        val category = draft.categoryId?.lowercase()?.let { id -> categories.firstOrNull { it.id == id } }
+        val mutation = draft.toMutation(
+            ownerUserId = ownerUserId,
+            existing = existing,
+            sourceWallet = sourceWallet,
+            destinationWallet = destinationWallet,
+            category = category,
+            deviceId = deviceId,
+            now = now,
+        )
+        localStore.commitMutation(mutation.record.toCloudRecord(), mutation.pending)
+        mutation.record
     }
 
     override suspend fun saveCategory(
@@ -259,6 +301,10 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
     private suspend fun creditCardProfileSnapshot(ownerUserId: UserId): List<CreditCardProfileRecord> =
         localStore.observe(CloudEntity.CREDIT_CARD_PROFILE.table, ownerUserId).first()
             .map(CreditCardProfileRecord::fromCloudRecord)
+
+    private suspend fun transactionSnapshot(ownerUserId: UserId): List<LedgerTransactionRecord> =
+        localStore.observe(CloudEntity.LEDGER_TRANSACTION.table, ownerUserId).first()
+            .map(LedgerTransactionRecord::fromCloudRecord)
 
     private fun normalizeCategoryName(value: String): String = value.trim()
         .split(Regex("\\s+"))

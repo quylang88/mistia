@@ -18,3 +18,14 @@ fun CloudRecord.transactionDisplayMoney(
         ?: "JPY"
     return Money(amount, currency)
 }
+
+fun LedgerTransactionRecord.transactionDisplayMoney(
+    sourceWalletCurrency: String? = null,
+    destinationWalletCurrency: String? = null,
+): Money = Money(
+    amountMinor,
+    sourceCurrencyCode?.takeIf(String::isNotBlank)
+        ?: sourceWalletCurrency?.takeIf(String::isNotBlank)
+        ?: destinationWalletCurrency?.takeIf(String::isNotBlank)
+        ?: "JPY",
+)

@@ -288,3 +288,21 @@ No transaction cloud-write gate or live production request was added. Existing
 cloud-write flags remain `false`; APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-fx-contract.md`.
+
+## APK 1 offline transaction repository — 2026-09-23
+
+- [x] Added owner-scoped typed transaction observation and offline save through
+  the atomic Room record+outbox boundary.
+- [x] Added dependency lookup isolation, edit base-version retention and
+  explicit null propagation for removed FX fields.
+- [x] Replaced raw JSON parsing in the existing transaction list with typed
+  transaction/wallet streams and the source-leg amount/currency projection.
+- [x] Passed 148 Android unit tests across 31 suites, Room instrumentation
+  source compilation, lint, debug assembly, contract and localization checks.
+- [ ] Add the native create/edit transaction sheet, affordability validation
+  and visual verification on Samsung; ADB reported no connected device.
+
+Transaction cloud push and receipt capture/analysis remain later APK 1 slices.
+No production write or deployment occurred, and APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-offline-repository.md`.

@@ -18,8 +18,6 @@ import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
-import vn.com.quyln.mistia.core.designsystem.string
-import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.transactionDisplayMoney
@@ -30,11 +28,9 @@ fun TransactionsScreen(
     repository: FinanceRepository,
     modifier: Modifier = Modifier,
 ) {
-    val records by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
-        .collectAsStateWithLifecycle(emptyList())
-    val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
-        .collectAsStateWithLifecycle(emptyList())
-    val walletCurrencies = wallets.associate { it.id to it.string("currency_code") }
+    val records by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val walletCurrencies = wallets.associate { it.id to it.currencyCode }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -59,14 +55,15 @@ fun TransactionsScreen(
             items(records, key = { it.id }) { record ->
                 MistiaGlassCard { padding ->
                     val money = record.transactionDisplayMoney(
-                        walletCurrencies[record.string("source_wallet_id")],
-                        walletCurrencies[record.string("destination_wallet_id")],
+                        walletCurrencies[record.sourceWalletId],
+                        walletCurrencies[record.destinationWalletId],
                     )
                     MistiaRecordRow(
-                        title = record.string("title")
-                            ?: stringResource(R.string.shared_corelogic_transaction_unknown_name),
-                        subtitle = record.string("occurred_at"),
-                        trailing = money?.let { formatMinorUnits(it.minor, it.currencyCode) },
+                        title = record.title.ifBlank {
+                            stringResource(R.string.shared_corelogic_transaction_unknown_name)
+                        },
+                        subtitle = record.occurredAt,
+                        trailing = formatMinorUnits(money.minor, money.currencyCode),
                         modifier = Modifier.padding(padding),
                     )
                 }

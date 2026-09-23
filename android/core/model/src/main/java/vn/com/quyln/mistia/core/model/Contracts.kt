@@ -183,6 +183,7 @@ interface FinanceRepository {
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeCreditCardProfiles(ownerUserId: UserId): Flow<List<CreditCardProfileRecord>>
+    fun observeTransactions(ownerUserId: UserId): Flow<List<LedgerTransactionRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun saveWallet(
         ownerUserId: UserId,
@@ -202,6 +203,12 @@ interface FinanceRepository {
         deviceId: String,
         now: String,
     ): Result<CreditCardAccount>
+    suspend fun saveTransaction(
+        ownerUserId: UserId,
+        draft: TransactionDraft,
+        deviceId: String,
+        now: String,
+    ): Result<LedgerTransactionRecord>
     suspend fun saveCategory(
         ownerUserId: UserId,
         draft: CategoryDraft,
