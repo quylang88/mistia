@@ -511,3 +511,28 @@ No cloud call, production write, localization change or Samsung claim occurred.
 All cloud-write gates remain `false`; APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-android-codec.md`.
+
+## APK 1 receipt Photo Picker foundation — 2026-09-24
+
+- [x] Added an Android system Photo Picker control that chooses the single- or
+  multi-image contract from the remaining five-image capacity and requests
+  image media without broad storage permission.
+- [x] Connected selected content URIs directly to the bounded bitmap/preparation
+  pipeline while the temporary grants are valid. Processing is lifecycle-bound
+  and preserves coroutine cancellation.
+- [x] Preserved picker order and partial success: one unreadable/oversized image
+  does not discard other valid selections, while excess selections are
+  reported instead of decoded.
+- [x] Verified 227 Android unit tests across 42 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Add CameraX capture, then expose both sources only through the complete
+  native itemized review/apply flow. Device Photo Picker verification remains
+  deferred.
+
+The reusable picker is not shown in the ordinary transaction editor because
+receipt attachment persistence is not implemented there. No picker was opened
+on-device, no cloud call/write/deployment occurred, and all cloud-write gates
+remain `false`; APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-photo-picker.md`.
