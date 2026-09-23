@@ -299,10 +299,35 @@ Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-fx-contract.md`.
   transaction/wallet streams and the source-leg amount/currency projection.
 - [x] Passed 148 Android unit tests across 31 suites, Room instrumentation
   source compilation, lint, debug assembly, contract and localization checks.
-- [ ] Add the native create/edit transaction sheet, affordability validation
-  and visual verification on Samsung; ADB reported no connected device.
+- [x] Added the native create/edit transaction sheet in the next independently
+  verified slice.
+- [ ] Add current-balance affordability and paid-card-statement validation,
+  automatic app-rate lookup, and visual verification on Samsung; ADB reported
+  no connected device.
 
 Transaction cloud push and receipt capture/analysis remain later APK 1 slices.
 No production write or deployment occurred, and APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-offline-repository.md`.
+
+## APK 1 native transaction editor — 2026-09-23
+
+- [x] Added a Material 3 create/edit sheet for ordinary expense, income and
+  internal transfer records, including native date/time pickers, wallet and
+  child-category selection, notes, and exact-decimal cross-currency input.
+- [x] Enforced iOS category hierarchy and wallet direction rules at both the UI
+  and model boundaries. Family/debt, settlement-owned and archived records stay
+  read-only instead of entering an incomplete local flow.
+- [x] Connected saves to the owner-scoped atomic Room record+outbox repository;
+  all user-facing copy comes from generated String Catalog resources.
+- [x] Passed 156 Android unit tests across 32 suites, Room instrumentation
+  source compilation, lint, debug assembly, contract and localization checks.
+- [ ] Add the current-wallet-balance affordability engine, paid credit-card
+  statement guards and automatic app-rate resolution before claiming full iOS
+  transaction parity. Run visual and behavior checks on Samsung when available.
+
+No transaction cloud push, live Supabase write or deployment occurred. All
+cloud-write flags remain `false`; receipt work and the remaining transaction
+rules keep APK 1 incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-editor.md`.

@@ -291,6 +291,9 @@ data class TransactionDraft(
                 }
                 if (isPosted && category == null) transactionFail(TransactionValidationError.CATEGORY_REQUIRED)
                 if (category != null) {
+                    if (category.hierarchyRole != CategoryHierarchyRole.CHILD) {
+                        transactionFail(TransactionValidationError.CATEGORY_CHILD_REQUIRED)
+                    }
                     val expected = if (primaryKind == TransactionPrimaryKind.EXPENSE) {
                         TransactionCategoryKind.EXPENSE
                     } else {
@@ -418,6 +421,7 @@ enum class TransactionValidationError {
     INVALID_DESTINATION_WALLET,
     INVALID_CATEGORY,
     CATEGORY_KIND_MISMATCH,
+    CATEGORY_CHILD_REQUIRED,
     SAME_WALLET_TRANSFER,
     CREDIT_CARD_CANNOT_RECEIVE_INCOME,
     CREDIT_CARD_CANNOT_SEND_TRANSFER,

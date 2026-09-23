@@ -153,10 +153,16 @@ class TransactionModelsTest {
             sourceWallet = wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
             destinationWallet = wallet(DESTINATION_WALLET_ID, WalletKind.BANK, "VND"),
         )
+        val parentCategory = failureReason(
+            draft = baseDraft(TransactionPrimaryKind.EXPENSE, categoryId = CATEGORY_ID),
+            sourceWallet = wallet(SOURCE_WALLET_ID, WalletKind.CASH, "JPY"),
+            category = category(TransactionCategoryKind.EXPENSE, child = false),
+        )
 
         assertEquals(TransactionValidationError.CREDIT_CARD_CANNOT_RECEIVE_INCOME, incomeToCard)
         assertEquals(TransactionValidationError.SAME_WALLET_TRANSFER, sameWallet)
         assertEquals(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED, missingFx)
+        assertEquals(TransactionValidationError.CATEGORY_CHILD_REQUIRED, parentCategory)
     }
 
     @Test
@@ -274,7 +280,7 @@ class TransactionModelsTest {
         investmentLinkedWalletId = null,
     )
 
-    private fun category(kind: TransactionCategoryKind) = TransactionCategoryRecord(
+    private fun category(kind: TransactionCategoryKind, child: Boolean = true) = TransactionCategoryRecord(
         id = CATEGORY_ID,
         ownerUserId = OWNER,
         name = "Category",
@@ -285,8 +291,12 @@ class TransactionModelsTest {
         iconColorHex = kind.defaultColorHex,
         isFavorite = false,
         familyBudgetSpendingEnabled = false,
-        parentCategoryId = null,
-        hierarchyRoleWireValue = CategoryHierarchyRole.PARENT.wireValue,
+        parentCategoryId = if (child) PARENT_CATEGORY_ID else null,
+        hierarchyRoleWireValue = if (child) {
+            CategoryHierarchyRole.CHILD.wireValue
+        } else {
+            CategoryHierarchyRole.PARENT.wireValue
+        },
         systemKey = null,
         isSystem = false,
         sortOrder = 0,
@@ -305,6 +315,7 @@ class TransactionModelsTest {
         const val SOURCE_WALLET_ID = "33333333-3333-3333-3333-333333333333"
         const val DESTINATION_WALLET_ID = "44444444-4444-4444-4444-444444444444"
         const val CATEGORY_ID = "55555555-5555-5555-5555-555555555555"
+        const val PARENT_CATEGORY_ID = "88888888-8888-8888-8888-888888888888"
         const val DEVICE = "66666666-6666-6666-6666-666666666666"
         const val OCCURRED_AT = "2026-09-23T09:30:00.000Z"
         const val NOW = "2026-09-23T12:00:00.000Z"

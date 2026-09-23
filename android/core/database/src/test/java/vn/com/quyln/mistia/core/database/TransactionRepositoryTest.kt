@@ -93,10 +93,22 @@ class TransactionRepositoryTest {
         repository.saveCategory(
             UserId(owner),
             CategoryDraft(
-                id = CATEGORY_ID,
+                id = PARENT_CATEGORY_ID,
                 name = "Food",
                 kind = TransactionCategoryKind.EXPENSE,
                 hierarchyRole = CategoryHierarchyRole.PARENT,
+            ),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        repository.saveCategory(
+            UserId(owner),
+            CategoryDraft(
+                id = CATEGORY_ID,
+                name = "Lunch",
+                kind = TransactionCategoryKind.EXPENSE,
+                hierarchyRole = CategoryHierarchyRole.CHILD,
+                parentCategoryId = PARENT_CATEGORY_ID,
             ),
             DEVICE,
             NOW,
@@ -181,6 +193,7 @@ class TransactionRepositoryTest {
         const val SOURCE_WALLET_ID = "33333333-3333-3333-3333-333333333333"
         const val DESTINATION_WALLET_ID = "44444444-4444-4444-4444-444444444444"
         const val CATEGORY_ID = "55555555-5555-5555-5555-555555555555"
+        const val PARENT_CATEGORY_ID = "88888888-8888-8888-8888-888888888888"
         const val DEVICE = "66666666-6666-6666-6666-666666666666"
         const val OCCURRED_AT = "2026-09-23T09:30:00.000Z"
         const val NOW = "2026-09-23T12:00:00.000Z"

@@ -196,9 +196,10 @@ private fun SignedInRoot(
                         modifier,
                     )
                     RootTab.TRANSACTIONS -> TransactionsScreen(
-                        authState.session.userId,
-                        financeRepository,
-                        modifier,
+                        ownerUserId = authState.session.userId,
+                        repository = financeRepository,
+                        deviceIdProvider = { deviceIdStore.getOrCreate() },
+                        modifier = modifier,
                     )
                     RootTab.PLANNING -> PlanningScreen(
                         authState.session.userId,
