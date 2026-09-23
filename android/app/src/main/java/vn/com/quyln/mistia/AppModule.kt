@@ -39,6 +39,9 @@ import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.WalletPushCoordinator
 import vn.com.quyln.mistia.core.model.CloudEntity
+import vn.com.quyln.mistia.core.model.CategoryNameTranslator
+import vn.com.quyln.mistia.core.network.SupabaseCategoryNameTranslator
+import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -129,6 +132,26 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideCategoryNameTranslator(
+        config: SupabaseConfig,
+        client: OkHttpClient,
+        json: Json,
+    ): CategoryNameTranslator = SupabaseCategoryNameTranslator(config, client, json)
+
+    @Provides
+    @Singleton
+    fun provideCategoryTranslationCoordinator(
+        localStore: LocalStore,
+        translator: CategoryNameTranslator,
+        deviceIdStore: SecureDeviceIdStore,
+    ): CategoryTranslationCoordinator = CategoryTranslationCoordinator(
+        localStore = localStore,
+        translator = translator,
+        deviceIdProvider = deviceIdStore::getOrCreate,
+    )
+
+    @Provides
+    @Singleton
     fun provideWalletPushCoordinator(
         localStore: LocalStore,
         remoteStore: RemoteMutationStore,
@@ -173,11 +196,13 @@ object AppModule {
         remoteStore: RemoteStore,
         categoryPushCoordinator: CategoryPushCoordinator,
         walletPushCoordinator: WalletPushCoordinator,
+        categoryTranslationCoordinator: CategoryTranslationCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
         authRepository,
         localStore,
         remoteStore,
         listOf(categoryPushCoordinator, walletPushCoordinator),
+        categoryTranslationCoordinator,
     )
 }

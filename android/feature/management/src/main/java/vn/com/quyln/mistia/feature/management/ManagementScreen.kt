@@ -64,6 +64,7 @@ fun ManagementScreen(
     ownerUserId: UserId,
     repository: FinanceRepository,
     deviceIdProvider: suspend () -> String,
+    onTranslatePendingCategories: suspend () -> Unit,
     onSyncNow: () -> Unit,
     onSignOut: () -> Unit,
     onOpenFamily: () -> Unit,
@@ -76,6 +77,10 @@ fun ManagementScreen(
     var categoryEditorTarget by remember { mutableStateOf<CategoryEditorTarget?>(null) }
     var selectedCategoryKind by remember { mutableStateOf(TransactionCategoryKind.EXPENSE) }
     val categoryLanguage = currentCategoryLanguage(LocalConfiguration.current.locales[0])
+    val screenScope = rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(ownerUserId.value) {
+        onTranslatePendingCategories()
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -198,12 +203,16 @@ fun ManagementScreen(
             language = categoryLanguage,
             onDismiss = { categoryEditorTarget = null },
             onSave = { draft: CategoryDraft ->
-                repository.saveCategory(
+                val result = repository.saveCategory(
                     ownerUserId = ownerUserId,
                     draft = draft,
                     deviceId = deviceIdProvider(),
                     now = Instant.now().toString(),
                 )
+                if (result.isSuccess) {
+                    screenScope.launch { onTranslatePendingCategories() }
+                }
+                result
             },
             onArchive = archive@{
                 val id = target.categoryId

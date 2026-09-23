@@ -39,6 +39,7 @@ class PullOnlySyncEngine(
     private val localStore: LocalStore,
     private val remoteStore: RemoteStore,
     private val pushCoordinators: List<DomainPushCoordinator>,
+    private val categoryTranslationCoordinator: CategoryTranslationCoordinator? = null,
 ) : SyncEngine {
     private val mutex = Mutex()
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
@@ -47,6 +48,7 @@ class PullOnlySyncEngine(
     override suspend fun syncNow(): Result<Int> = mutex.withLock {
         runCatching {
             val session = signedInSession()
+            categoryTranslationCoordinator?.translatePending(session.userId, session.accessToken)
             val pushSummaries = pushCoordinators
                 .distinctBy(DomainPushCoordinator::entity)
                 .sortedBy { it.entity.pushPriority }

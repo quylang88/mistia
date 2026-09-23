@@ -24,6 +24,7 @@ import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.LocalStore
+import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.ReadOnlyCloudCollection
 import vn.com.quyln.mistia.core.model.RecordId
@@ -140,7 +141,18 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
             deviceId = deviceId,
             now = now,
         )
-        localStore.commitMutation(mutation.record.toCloudRecord(), mutation.pending)
+        localStore.commitCategoryMutation(
+            record = mutation.record.toCloudRecord(),
+            mutation = mutation.pending,
+            translation = PendingCategoryTranslation(
+                ownerUserId = ownerUserId.value,
+                categoryId = mutation.record.id,
+                inputName = draft.name.trim(),
+                sourceLanguage = draft.nameLanguage,
+                savedUpdatedAt = mutation.record.updatedAt,
+                deviceId = deviceId,
+            ),
+        )
         mutation.record
     }
 

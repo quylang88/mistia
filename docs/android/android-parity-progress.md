@@ -187,3 +187,34 @@ its iOS-equivalent fallback and stale-response guard can be implemented and
 tested together; APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-category-push-foundation.md`.
+
+## APK 1 category-name translation parity — 2026-09-23
+
+- [x] Matched the iOS save-first flow: the locale-specific fallback category,
+  category cloud mutation and account-scoped translation request are committed
+  atomically before the editor dismisses. Translation runs asynchronously and
+  creates a second coalesced category mutation only after a usable result.
+- [x] Added the existing `translate-category-name` Edge Function client with
+  the same `name`/`source_language` request and Vietnamese/English/Japanese
+  response contract. Android uses the remote branch because Apple's installed
+  Translation framework is not available on Android.
+- [x] Added an exact `updated_at` compare-and-apply guard. A response for an
+  older name cannot overwrite a later edit or delete its replacement request.
+  Failures and unchanged fallbacks remain queued with bounded backoff; auth
+  failures can recover after session refresh; cancellation still propagates.
+- [x] Added Room schema v2 and migration 1→2 for the category translation
+  outbox. Maintenance is owner-scoped, coalesces concurrent runs, infers the
+  same Vietnamese/English/Japanese retry source as iOS for older or pulled
+  categories with missing names, and never replaces a newer local request.
+- [x] Passed 120 Android unit tests across 24 suites, Room migration/
+  instrumentation source compilation, lint, debug assembly, contract check
+  and both localization checks. The focused Swift package test could not be
+  rerun after Xcode began requiring license acceptance; the same 22 Swift
+  category/outbox tests passed in the immediately preceding slice.
+- [ ] Run migration/Room tests and category create/edit/stale-response UI
+  verification on Samsung. ADB reported no connected device.
+
+No live Edge Function call, Supabase write, production migration or deployment
+was performed. All cloud-write flags remain `false`; APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-category-translation.md`.

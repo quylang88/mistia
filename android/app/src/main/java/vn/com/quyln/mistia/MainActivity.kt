@@ -55,6 +55,7 @@ import vn.com.quyln.mistia.feature.management.ManagementScreen
 import vn.com.quyln.mistia.feature.overview.OverviewScreen
 import vn.com.quyln.mistia.feature.planning.PlanningScreen
 import vn.com.quyln.mistia.feature.transactions.TransactionsScreen
+import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var syncEngine: SyncEngine
     @Inject lateinit var deviceRegistry: DeviceRegistry
     @Inject lateinit var deviceIdStore: SecureDeviceIdStore
+    @Inject lateinit var categoryTranslationCoordinator: CategoryTranslationCoordinator
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,6 +84,7 @@ class MainActivity : ComponentActivity() {
                     syncEngine = syncEngine,
                     deviceRegistry = deviceRegistry,
                     deviceIdStore = deviceIdStore,
+                    categoryTranslationCoordinator = categoryTranslationCoordinator,
                     openedFromFamilyInvite = openedFromFamilyInvite,
                 )
             }
@@ -98,6 +101,7 @@ private fun MistiaApp(
     syncEngine: SyncEngine,
     deviceRegistry: DeviceRegistry,
     deviceIdStore: SecureDeviceIdStore,
+    categoryTranslationCoordinator: CategoryTranslationCoordinator,
     openedFromFamilyInvite: Boolean,
 ) {
     val authState by authRepository.state.collectAsStateWithLifecycle()
@@ -135,6 +139,7 @@ private fun MistiaApp(
                 investmentRepository = investmentRepository,
                 syncEngine = syncEngine,
                 deviceIdStore = deviceIdStore,
+                categoryTranslationCoordinator = categoryTranslationCoordinator,
                 openedFromFamilyInvite = openedFromFamilyInvite,
             )
         }
@@ -157,6 +162,7 @@ private fun SignedInRoot(
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
     deviceIdStore: SecureDeviceIdStore,
+    categoryTranslationCoordinator: CategoryTranslationCoordinator,
     openedFromFamilyInvite: Boolean,
 ) {
     val navController = rememberNavController()
@@ -203,6 +209,13 @@ private fun SignedInRoot(
                         ownerUserId = authState.session.userId,
                         repository = financeRepository,
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
+                        onTranslatePendingCategories = {
+                            val session = authRepository.refreshIfNeeded().getOrNull() ?: authState.session
+                            categoryTranslationCoordinator.translatePending(
+                                ownerUserId = session.userId,
+                                accessToken = session.accessToken,
+                            )
+                        },
                         onSyncNow = { scope.launch { syncEngine.syncNow() } },
                         onSignOut = { scope.launch { authRepository.signOut() } },
                         onOpenFamily = { navController.navigate("family") },

@@ -19,6 +19,7 @@ import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.PendingMutation
+import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
 import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
@@ -40,6 +41,7 @@ class CategoryRepositoryTest {
         )
         assertEquals(listOf("Other"), repository.observeCategories(UserId(OWNER_B)).first().map { it.name })
         assertEquals(2, store.outboxRows(OWNER_A).size)
+        assertEquals(listOf("Later", "First"), store.translationRows(OWNER_A).map { it.inputName })
     }
 
     @Test
@@ -234,6 +236,7 @@ class CategoryRepositoryTest {
     private class CategoryMemoryStore : LocalStore {
         private val records = MutableStateFlow<Map<Triple<String, String, String>, CloudRecord>>(emptyMap())
         private val outbox = linkedMapOf<Triple<String, String, String>, PendingMutation>()
+        private val translations = linkedMapOf<Pair<String, String>, PendingCategoryTranslation>()
 
         override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> = records.map { rows ->
             rows.values.filter { it.ownerUserId == ownerUserId.value && it.entity == entity && it.deletedAt == null }
@@ -252,6 +255,15 @@ class CategoryRepositoryTest {
             require(key == Triple(mutation.subjectUserId, mutation.entity.table, mutation.recordId))
             records.value = records.value + (key to record)
             outbox[key] = mutation
+        }
+
+        override suspend fun commitCategoryMutation(
+            record: CloudRecord,
+            mutation: PendingMutation,
+            translation: PendingCategoryTranslation,
+        ) {
+            commitMutation(record, mutation)
+            translations[translation.ownerUserId to translation.categoryId] = translation
         }
 
         override suspend fun pendingMutations(
@@ -277,6 +289,7 @@ class CategoryRepositoryTest {
         override suspend fun clearAccount(ownerUserId: UserId) {
             records.value = records.value.filterKeys { it.first != ownerUserId.value }
             outbox.keys.removeAll { it.first == ownerUserId.value }
+            translations.keys.removeAll { it.first == ownerUserId.value }
         }
 
         fun seed(record: CloudRecord) {
@@ -285,6 +298,9 @@ class CategoryRepositoryTest {
 
         fun outboxRows(owner: String): List<PendingMutation> =
             outbox.filterKeys { it.first == owner }.values.toList()
+
+        fun translationRows(owner: String): List<PendingCategoryTranslation> =
+            translations.filterKeys { it.first == owner }.values.toList()
     }
 
     private companion object {

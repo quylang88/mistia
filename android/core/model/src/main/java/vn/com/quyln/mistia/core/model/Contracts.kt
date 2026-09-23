@@ -120,6 +120,22 @@ data class QueuedMutation(
     val lastError: String?,
 )
 
+data class PendingCategoryTranslation(
+    val ownerUserId: String,
+    val categoryId: String,
+    val inputName: String,
+    val sourceLanguage: CategoryNameLanguage,
+    val savedUpdatedAt: String,
+    val deviceId: String,
+)
+
+data class QueuedCategoryTranslation(
+    val translation: PendingCategoryTranslation,
+    val attemptCount: Int,
+    val nextAttemptAtEpochMillis: Long,
+    val lastError: String?,
+)
+
 data class AuthSession(
     val userId: UserId,
     val email: String?,
@@ -214,6 +230,13 @@ interface LocalStore {
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
+    suspend fun commitCategoryMutation(
+        record: CloudRecord,
+        mutation: PendingMutation,
+        translation: PendingCategoryTranslation,
+    ) {
+        commitMutation(record, mutation)
+    }
     suspend fun pendingMutations(
         ownerUserId: UserId,
         entity: CloudEntity,
@@ -226,6 +249,27 @@ interface LocalStore {
         nextAttemptAtEpochMillis: Long,
         errorCode: String,
     ): Boolean
+    suspend fun pendingCategoryTranslations(
+        ownerUserId: UserId,
+        dueAtEpochMillis: Long,
+        limit: Int = 16,
+    ): List<QueuedCategoryTranslation> = emptyList()
+    suspend fun enqueueMissingCategoryTranslations(
+        ownerUserId: UserId,
+        deviceId: String,
+        limit: Int = 200,
+    ): Int = 0
+    suspend fun applyCategoryTranslation(
+        task: QueuedCategoryTranslation,
+        record: CloudRecord,
+        mutation: PendingMutation,
+    ): Boolean = false
+    suspend fun discardCategoryTranslation(task: QueuedCategoryTranslation): Boolean = false
+    suspend fun recordCategoryTranslationFailure(
+        task: QueuedCategoryTranslation,
+        nextAttemptAtEpochMillis: Long,
+        errorCode: String,
+    ): Boolean = false
     suspend fun replacePullSnapshot(ownerUserId: UserId, entity: String, records: List<CloudRecord>)
     suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String): Set<String>
     suspend fun clearAccount(ownerUserId: UserId)

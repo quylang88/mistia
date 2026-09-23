@@ -36,7 +36,68 @@ enum class CategoryHierarchyRole(val wireValue: String) {
     }
 }
 
-enum class CategoryNameLanguage { VIETNAMESE, ENGLISH, JAPANESE }
+enum class CategoryNameLanguage(val wireValue: String) {
+    VIETNAMESE("vi"),
+    ENGLISH("en"),
+    JAPANESE("ja"),
+    ;
+
+    companion object {
+        fun fromWireValue(value: String): CategoryNameLanguage? = entries.firstOrNull { it.wireValue == value }
+    }
+}
+
+data class CategoryNameTranslations(
+    val name: String,
+    val nameEnglish: String?,
+    val nameJapanese: String?,
+) {
+    fun mergedWithFallback(fallback: CategoryNameTranslations): CategoryNameTranslations =
+        CategoryNameTranslations(
+            name = name.normalizedTranslation() ?: fallback.name,
+            nameEnglish = nameEnglish.normalizedTranslation() ?: fallback.nameEnglish,
+            nameJapanese = nameJapanese.normalizedTranslation() ?: fallback.nameJapanese,
+        )
+
+    companion object {
+        fun fallback(
+            inputName: String,
+            sourceLanguage: CategoryNameLanguage,
+            existing: CategoryNameTranslations?,
+        ): CategoryNameTranslations {
+            val value = requireNotNull(inputName.normalizedTranslation()) { "Category name cannot be blank" }
+            val existingName = existing?.name.normalizedTranslation()
+            val existingEnglish = existing?.nameEnglish.normalizedTranslation()
+            val existingJapanese = existing?.nameJapanese.normalizedTranslation()
+            return when (sourceLanguage) {
+                CategoryNameLanguage.VIETNAMESE -> CategoryNameTranslations(value, existingEnglish, existingJapanese)
+                CategoryNameLanguage.ENGLISH -> CategoryNameTranslations(
+                    existingName ?: value,
+                    value,
+                    existingJapanese,
+                )
+                CategoryNameLanguage.JAPANESE -> CategoryNameTranslations(
+                    existingName ?: value,
+                    existingEnglish,
+                    value,
+                )
+            }
+        }
+    }
+}
+
+interface CategoryNameTranslator {
+    suspend fun translate(
+        inputName: String,
+        sourceLanguage: CategoryNameLanguage,
+        accessToken: String,
+    ): CategoryNameTranslations
+}
+
+data class CategoryNameTranslationSource(
+    val inputName: String,
+    val language: CategoryNameLanguage,
+)
 
 data class TransactionCategoryRecord(
     val id: String,
@@ -75,6 +136,21 @@ data class TransactionCategoryRecord(
     val hidesWhenEmpty: Boolean
         get() = systemKey == UNCATEGORIZED_EXPENSE_PARENT_KEY ||
             systemKey == UNCATEGORIZED_INCOME_PARENT_KEY
+
+    fun translationRetrySource(): CategoryNameTranslationSource? {
+        if (deletedAt != null || isArchived || isSystem) return null
+        val vietnamese = name.normalizedTranslation()
+        val english = nameEnglish.normalizedTranslation()
+        val japanese = nameJapanese.normalizedTranslation()
+        if (vietnamese != null && english != null && japanese != null) return null
+        if (japanese != null && (vietnamese == japanese || vietnamese?.containsJapaneseCharacters() == true)) {
+            return CategoryNameTranslationSource(japanese, CategoryNameLanguage.JAPANESE)
+        }
+        if (english != null && vietnamese == english && japanese == null) {
+            return CategoryNameTranslationSource(english, CategoryNameLanguage.ENGLISH)
+        }
+        return vietnamese?.let { CategoryNameTranslationSource(it, CategoryNameLanguage.VIETNAMESE) }
+    }
 
     fun toPayload(): JsonObject = buildJsonObject {
         put("user_id", JsonPrimitive(ownerUserId))
@@ -288,10 +364,15 @@ data class CategoryDraft(
     private fun localizedNames(
         value: String,
         existing: TransactionCategoryRecord?,
-    ): Triple<String, String?, String?> = when (nameLanguage) {
-        CategoryNameLanguage.VIETNAMESE -> Triple(value, existing?.nameEnglish, existing?.nameJapanese)
-        CategoryNameLanguage.ENGLISH -> Triple(existing?.name?.takeIf(String::isNotBlank) ?: value, value, existing?.nameJapanese)
-        CategoryNameLanguage.JAPANESE -> Triple(existing?.name?.takeIf(String::isNotBlank) ?: value, existing?.nameEnglish, value)
+    ): Triple<String, String?, String?> {
+        val translations = CategoryNameTranslations.fallback(
+            inputName = value,
+            sourceLanguage = nameLanguage,
+            existing = existing?.let {
+                CategoryNameTranslations(it.name, it.nameEnglish, it.nameJapanese)
+            },
+        )
+        return Triple(translations.name, translations.nameEnglish, translations.nameJapanese)
     }
 }
 
@@ -329,3 +410,7 @@ private fun JsonObject.categoryLongOrNull(key: String): Long? = (get(key) as? Js
 private fun kotlinx.serialization.json.JsonObjectBuilder.putNullableCategoryString(key: String, value: String?) {
     put(key, value?.let(::JsonPrimitive) ?: JsonNull)
 }
+
+private fun String?.normalizedTranslation(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+private fun String.containsJapaneseCharacters(): Boolean = JAPANESE_CHARACTER_PATTERN.containsMatchIn(this)
+private val JAPANESE_CHARACTER_PATTERN = Regex("[ぁ-んァ-ン一-龯]")
