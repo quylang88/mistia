@@ -588,3 +588,26 @@ cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-analysis-coordinator.md`.
+
+## APK 1 receipt review state — 2026-09-24
+
+- [x] Added a stable-ID review session for up to five prepared receipt images,
+  ordered pending-only analysis batches and transient-work dismiss protection.
+- [x] Added ordered partial-result application with live category/wallet ID
+  validation, per-bill typed failure/quota state and multiple-receipt blocking.
+- [x] Preserved literal OCR review evidence, including `3@` quantity notation
+  and a standalone coupon discount row, without merging or reordering rows.
+- [x] Added isolated retry and remove transitions that preserve prepared image
+  identity and do not disturb sibling bills.
+- [x] Verified 240 Android unit tests across 45 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Build and route the Compose analysis/review screen using this state,
+  Photo Picker, CameraX and the analysis coordinator; reviewed transaction
+  apply/persistence remains separate follow-up work.
+
+No live AI call, receipt/transaction persistence, production write, migration,
+deployment or cloud-write gate change occurred. Samsung verification remains
+deferred and all five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-state.md`.
