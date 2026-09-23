@@ -34,11 +34,11 @@ import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.network.SupabaseHttpException
 
 class PullOnlySyncEngine(
-    private val appContext: Context,
+    private val appContext: Context?,
     private val authRepository: AuthRepository,
     private val localStore: LocalStore,
     private val remoteStore: RemoteStore,
-    private val walletPushCoordinator: WalletPushCoordinator,
+    private val pushCoordinators: List<DomainPushCoordinator>,
 ) : SyncEngine {
     private val mutex = Mutex()
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
@@ -47,14 +47,23 @@ class PullOnlySyncEngine(
     override suspend fun syncNow(): Result<Int> = mutex.withLock {
         runCatching {
             val session = signedInSession()
-            mutableStatus.value = SyncStatus.Pushing(CloudEntity.LEDGER_WALLET.table)
-            val push = walletPushCoordinator.pushPending(session.userId, session.accessToken)
+            val pushSummaries = pushCoordinators
+                .distinctBy(DomainPushCoordinator::entity)
+                .sortedBy { it.entity.pushPriority }
+                .map { coordinator ->
+                    mutableStatus.value = SyncStatus.Pushing(coordinator.entity.table)
+                    coordinator.entity to coordinator.pushPending(session.userId, session.accessToken)
+                }
             val totalRecords = pullAllTables(session.accessToken, session.userId)
+            val retryableFailures = pushSummaries.sumOf { it.second.retryableFailures }
+            val needsAttention = pushSummaries.sumOf {
+                it.second.conflicts + it.second.permanentFailures
+            }
             when {
-                push.retryableFailures > 0 -> throw WalletPushRetryException(push.retryableFailures)
-                push.conflicts + push.permanentFailures > 0 -> {
+                retryableFailures > 0 -> throw DomainPushRetryException(retryableFailures)
+                needsAttention > 0 -> {
                     mutableStatus.value = SyncStatus.Failed(
-                        message = "wallet_push_needs_attention",
+                        message = "cloud_push_needs_attention",
                         retryable = false,
                     )
                 }
@@ -84,6 +93,7 @@ class PullOnlySyncEngine(
     }
 
     override fun scheduleBackgroundSync() {
+        val context = checkNotNull(appContext) { "A Context is required to schedule background sync" }
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -91,7 +101,7 @@ class PullOnlySyncEngine(
             .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        WorkManager.getInstance(appContext).enqueueUniquePeriodicWork(
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             PERIODIC_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
             periodic,
@@ -191,8 +201,8 @@ class MistiaSyncWorker(
     }
 }
 
-private class WalletPushRetryException(failureCount: Int) :
-    IOException("$failureCount wallet mutation(s) are waiting to retry")
+private class DomainPushRetryException(failureCount: Int) :
+    IOException("$failureCount cloud mutation(s) are waiting to retry")
 
 internal fun Throwable.isRetryableSyncFailure(): Boolean = when (this) {
     is SupabaseHttpException -> statusCode >= 500 || statusCode == 408 || statusCode == 429

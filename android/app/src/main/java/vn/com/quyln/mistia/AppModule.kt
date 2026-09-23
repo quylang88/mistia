@@ -36,6 +36,7 @@ import vn.com.quyln.mistia.core.network.SupabaseConfig
 import vn.com.quyln.mistia.core.network.MistiaWireFormat
 import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
+import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.WalletPushCoordinator
 import vn.com.quyln.mistia.core.model.CloudEntity
 
@@ -112,10 +113,9 @@ object AppModule {
         config = config,
         client = client,
         json = json,
-        writableEntities = if (BuildConfig.ALLOW_WALLET_CLOUD_WRITES) {
-            setOf(CloudEntity.LEDGER_WALLET)
-        } else {
-            emptySet()
+        writableEntities = buildSet {
+            if (BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) add(CloudEntity.TRANSACTION_CATEGORY)
+            if (BuildConfig.ALLOW_WALLET_CLOUD_WRITES) add(CloudEntity.LEDGER_WALLET)
         },
     )
 
@@ -140,6 +140,17 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideCategoryPushCoordinator(
+        localStore: LocalStore,
+        remoteStore: RemoteMutationStore,
+    ): CategoryPushCoordinator = CategoryPushCoordinator(
+        localStore = localStore,
+        remoteStore = remoteStore,
+        writesEnabled = BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES,
+    )
+
+    @Provides
+    @Singleton
     fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
         OfflineFirstFinanceRepository(localStore)
 
@@ -160,12 +171,13 @@ object AppModule {
         authRepository: AuthRepository,
         localStore: LocalStore,
         remoteStore: RemoteStore,
+        categoryPushCoordinator: CategoryPushCoordinator,
         walletPushCoordinator: WalletPushCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
         authRepository,
         localStore,
         remoteStore,
-        walletPushCoordinator,
+        listOf(categoryPushCoordinator, walletPushCoordinator),
     )
 }

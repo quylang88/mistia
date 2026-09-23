@@ -157,3 +157,33 @@ remain later domain-gated work. Category writes were not added to the wallet
 allowlist, and no production write, migration, RPC or deployment occurred.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-category-offline.md`.
+
+## APK 1 category push foundation — 2026-09-23
+
+- [x] Added a dedicated `ALLOW_CATEGORY_CLOUD_WRITES` build gate, defaulting
+  to `false`. Category is independently allowlisted at the PostgREST boundary
+  and was not folded into the wallet gate; the legacy global gate also remains
+  `false`.
+- [x] Added owner-scoped category fetch/create/conditional-update push with
+  explicit nullable fields and signed 64-bit `sync_version` preservation.
+  Category and wallet now share the same reviewed outbox state machine for
+  semantic ACK, create race, conditional-update race, deterministic authority,
+  unresolved conflict retention, bounded retry, cancellation and exact stale
+  response protection.
+- [x] Matched iOS dependency ordering: category parents push before children,
+  and the sync engine orders the category domain before wallet regardless of
+  dependency-injection list order. Pull still starts only after both gated
+  push coordinators have run.
+- [x] Passed 107 Android unit tests, lint, debug assembly, Room instrumented-test
+  compilation, contract/localization checks and 22 focused Swift category/
+  outbox tests.
+- [ ] Install with `adb install -r` and verify category create/edit/conflict
+  behavior on Samsung in an explicitly category-enabled test build. The SDK
+  ADB reported no connected device for this slice.
+
+No production category request, migration, RPC, Edge Function or deployment
+was performed. Remote category-name translation remains a separate slice so
+its iOS-equivalent fallback and stale-response guard can be implemented and
+tested together; APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-category-push-foundation.md`.
