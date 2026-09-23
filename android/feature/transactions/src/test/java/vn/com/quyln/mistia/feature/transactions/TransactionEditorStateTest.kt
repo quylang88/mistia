@@ -8,11 +8,56 @@ import org.junit.Test
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
 import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
 import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
+import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionEntryStatus
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test
+    fun `receipt expense draft maps every supported editor field`() {
+        val state = ReceiptItemTransactionDraft(
+            primaryKind = TransactionPrimaryKind.EXPENSE,
+            transferSubtype = null,
+            debtIntent = null,
+            amountMinor = 1_570,
+            title = "FamilyMart",
+            walletId = SOURCE_WALLET_ID,
+            categoryId = CATEGORY_ID,
+            occurredAt = NOW,
+            receiptAttachmentBillId = "bill-1",
+        ).toExpenseEditorState(currencyCode = "JPY")
+
+        requireNotNull(state)
+        assertNull(state.id)
+        assertEquals(TransactionPrimaryKind.EXPENSE, state.primaryKind)
+        assertNull(state.transferSubtype)
+        assertEquals(TransactionEntryStatus.POSTED, state.entryStatus)
+        assertEquals("FamilyMart", state.title)
+        assertEquals("1570", state.amountText)
+        assertEquals(NOW, state.occurredAt)
+        assertEquals(SOURCE_WALLET_ID, state.sourceWalletId)
+        assertEquals(CATEGORY_ID, state.categoryId)
+        assertNull(state.destinationWalletId)
+    }
+
+    @Test
+    fun `receipt lend draft stays outside unsupported native persistence`() {
+        val state = ReceiptItemTransactionDraft(
+            primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.DEBT,
+            debtIntent = TransactionDebtIntent.LEND,
+            amountMinor = 1_570,
+            title = "FamilyMart",
+            walletId = SOURCE_WALLET_ID,
+            categoryId = null,
+            occurredAt = NOW,
+            receiptAttachmentBillId = "bill-1",
+        ).toExpenseEditorState(currencyCode = "JPY")
+
+        assertNull(state)
+    }
+
     @Test
     fun `new editor defaults to posted expense at supplied time`() {
         val state = TransactionEditorState.new(NOW)

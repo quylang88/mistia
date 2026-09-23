@@ -327,6 +327,37 @@ private fun formatMinorInput(minor: Long, currencyCode: String?): String {
     return BigDecimal.valueOf(minor, fractionDigits).stripTrailingZeros().toPlainString()
 }
 
+internal fun ReceiptItemTransactionDraft.toExpenseEditorState(
+    currencyCode: String,
+): TransactionEditorState? {
+    if (
+        primaryKind != TransactionPrimaryKind.EXPENSE ||
+        transferSubtype != null ||
+        debtIntent != null ||
+        categoryId == null
+    ) {
+        return null
+    }
+    return TransactionEditorState(
+        id = null,
+        primaryKind = TransactionPrimaryKind.EXPENSE,
+        transferSubtype = null,
+        entryStatus = TransactionEntryStatus.POSTED,
+        title = title,
+        note = "",
+        amountText = formatMinorInput(amountMinor, currencyCode),
+        occurredAt = occurredAt,
+        sourceWalletId = walletId,
+        destinationWalletId = null,
+        categoryId = categoryId,
+        destinationAmountText = "",
+        conversionMode = null,
+        exchangeRateText = "",
+        exchangeRateProvider = null,
+        exchangeRateDate = null,
+    )
+}
+
 internal fun LedgerTransactionRecord.supportsNativeTransactionEditor(): Boolean {
     val kind = primaryKind ?: return false
     if (isArchived || deletedAt != null || entryStatus == null) return false

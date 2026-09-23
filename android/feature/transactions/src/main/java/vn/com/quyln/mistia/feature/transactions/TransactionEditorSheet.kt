@@ -70,11 +70,16 @@ fun TransactionEditorSheet(
     categories: List<TransactionCategoryRecord>,
     exchangeRates: List<ExchangeRateSnapshot>,
     now: String,
+    initialState: TransactionEditorState? = null,
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
 ) {
-    var state by rememberSaveable(transaction?.id, stateSaver = TransactionEditorState.Saver) {
-        mutableStateOf(transaction?.let(TransactionEditorState::edit) ?: TransactionEditorState.new(now))
+    var state by rememberSaveable(transaction?.id, initialState, stateSaver = TransactionEditorState.Saver) {
+        mutableStateOf(
+            transaction?.let(TransactionEditorState::edit)
+                ?: initialState
+                ?: TransactionEditorState.new(now)
+        )
     }
     var validation by remember { mutableStateOf<TransactionEditorValidation?>(null) }
     var operationError by remember { mutableStateOf<TransactionValidationError?>(null) }
