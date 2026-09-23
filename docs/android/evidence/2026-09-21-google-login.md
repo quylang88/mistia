@@ -102,3 +102,23 @@ expected oversell test and must not be presented as this test's root cause.
 Latest user direction, 2026-09-22: do NOT require live account-switch testing.
 Continue APK 1–4 and substantially complete Android UI/functionality to match
 iOS; the current signed-in screens are only a read-only baseline, not parity.
+
+## Current-Mac debug-key follow-up — 2026-09-23
+
+The APK reinstalled from the current Mac was signed with SHA-1
+`84:EE:48:1E:2A:17:C4:5E:0E:52:27:71:2F:5F:58:7F:7B:19:0B:4E`, so the
+older `35:4E:93:...` Android OAuth client could not authorize it. After the user
+registered the current package/SHA-1 as a second Android client, a new Samsung
+attempt produced:
+
+```
+GOOGLE_PICKER_STARTED
+GOOGLE_TOKEN_RECEIVED
+GOOGLE_EXCHANGE_STARTED
+GOOGLE_EXCHANGE_SUCCEEDED
+```
+
+The resumed activity was Mistia `MainActivity`; the authenticated transaction
+screen showed pulled cloud records and the native transaction editor opened.
+No iOS/web client, Supabase provider setting, RLS policy or cloud-write gate was
+changed to obtain this result.

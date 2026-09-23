@@ -54,5 +54,25 @@ project `mistia-492216`. Android client ID:
 `741455632256-12uieac1sm1v17am9ro25gkrjrii9vgr.apps.googleusercontent.com`.
 Google token retrieval and Supabase exchange succeeded on Samsung version 3,
 and the user confirmed signed-in navigation. See the resolution section in
-`docs/android/evidence/2026-09-21-google-login.md`. Do not create a duplicate
-client or repeat OAuth setup in the next session.
+`docs/android/evidence/2026-09-21-google-login.md`. Do not duplicate this
+client for the same certificate; a different signing certificate needs its own
+Android client as recorded below.
+
+## Current Mac debug certificate — 2026-09-23
+
+Reinstalling from the current Mac used a different debug keystore from the
+2026-09-21 APK. Google Play services therefore rejected the first post-install
+attempt before returning an ID token. The user retained the older Android
+client and created an additional Android client in the same Google Cloud
+project with:
+
+- Name: `Mistia Android debug - Mac 2026-09 SHA84`
+- Package: `vn.com.quyln.mistia.debug`
+- SHA-1: `84:EE:48:1E:2A:17:C4:5E:0E:52:27:71:2F:5F:58:7F:7B:19:0B:4E`
+- SHA-256: `33:42:69:BE:54:79:82:B5:5C:EF:95:0F:81:8B:E7:5F:79:12:50:A0:79:34:4F:BA:02:09:51:B4:F5:EA:25:00`
+
+No iOS client, web/server client or Supabase provider setting was changed. On
+the same installed APK, Samsung logs then recorded
+`GOOGLE_TOKEN_RECEIVED`, `GOOGLE_EXCHANGE_STARTED` and
+`GOOGLE_EXCHANGE_SUCCEEDED`; the authenticated transaction list displayed
+pulled cloud data. This supersedes the current-Mac registration blocker.
