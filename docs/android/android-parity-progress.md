@@ -635,3 +635,25 @@ occurred. Samsung verification remains deferred and all five cloud-write flags
 remain `false`; APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-ui.md`.
+
+## APK 1 receipt item selection contract — 2026-09-24
+
+- [x] Ported iOS item selection rules for expense and lend modes: one wallet,
+  same purchase category for expense, standalone discount compatibility and
+  exclusion of created/locked/unavailable/zero rows.
+- [x] Added exact minor-unit quantity allocation, normalized mode changes and
+  locked groups that reject nonpositive totals.
+- [x] Added expense/debt-lend transaction-prefill semantics for amount,
+  category, merchant, occurred date and single-bill receipt attachment.
+- [x] Verified 247 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind item editing/selection/group confirmation into the review sheet and
+  persist supported reviewed drafts before routing the flow.
+
+No transaction was persisted, no live AI/production request was sent and no
+migration, deployment, device claim or cloud-write gate change occurred.
+Samsung verification remains deferred and all five flags remain `false`; APK 1
+is not complete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-item-selection.md`.
