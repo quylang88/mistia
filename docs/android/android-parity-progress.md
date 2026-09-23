@@ -657,3 +657,23 @@ Samsung verification remains deferred and all five flags remain `false`; APK 1
 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-item-selection.md`.
+
+## APK 1 receipt review arithmetic — 2026-09-24
+
+- [x] Ported purchase/discount review validation and exact final-amount
+  recomputation, including targeted missing-field cleanup.
+- [x] Ported proportional standalone-discount allocation with exact minor-unit
+  quotient/remainder handling, deterministic row-order tie-break and preserved
+  discount-row identity/literal OCR.
+- [x] Verified 250 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind these correction operations and item selection to Compose editors,
+  then persist supported reviewed transaction drafts and route the full flow.
+
+No UI edit, receipt/transaction persistence, live AI/production call,
+migration, deployment, device claim or cloud-write gate change occurred.
+Samsung verification remains deferred and all five flags remain `false`; APK 1
+is not complete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-arithmetic.md`.

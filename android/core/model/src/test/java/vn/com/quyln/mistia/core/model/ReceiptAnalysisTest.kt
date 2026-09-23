@@ -181,4 +181,93 @@ class ReceiptAnalysisTest {
         assertEquals("Receipt analysis failed (UPSTREAM_UNAVAILABLE, HTTP 502)", error.message)
         assertFalse(error.message.orEmpty().contains("private"))
     }
+
+    @Test
+    fun `reviewed purchase recomputes exact total and clears item review fields`() {
+        val reviewed = item(
+            id = "purchase",
+            type = BillItemLineType.PURCHASE,
+            original = 0,
+            discount = 0,
+            final = 0,
+            categoryId = "category",
+            missing = listOf("sourceText", "quantity", "categoryID"),
+        ).reviewed(originalAmountMinor = 594, discountAmountMinor = 30, quantity = 3)!!
+
+        assertEquals(3, reviewed.quantity)
+        assertEquals(594L, reviewed.originalAmountMinor)
+        assertEquals(30L, reviewed.discountAmountMinor)
+        assertEquals(564L, reviewed.finalAmountMinor)
+        assertEquals(listOf("categoryID"), reviewed.missingFields)
+        assertFalse(reviewed.requiresReview)
+    }
+
+    @Test
+    fun `reviewed discount stays standalone and rejects invalid purchase arithmetic`() {
+        val reviewedDiscount = item(
+            id = "discount",
+            type = BillItemLineType.DISCOUNT,
+            original = null,
+            discount = 50,
+            final = -50,
+            categoryId = "must-clear",
+            missing = listOf("discountAmountMinor"),
+        ).reviewed(originalAmountMinor = 0, discountAmountMinor = 75, quantity = 9)!!
+
+        assertNull(reviewedDiscount.quantity)
+        assertNull(reviewedDiscount.originalAmountMinor)
+        assertNull(reviewedDiscount.categoryId)
+        assertEquals(75L, reviewedDiscount.discountAmountMinor)
+        assertEquals(-75L, reviewedDiscount.finalAmountMinor)
+        assertTrue(reviewedDiscount.missingFields.isEmpty())
+
+        assertNull(
+            item(
+                id = "invalid",
+                type = BillItemLineType.PURCHASE,
+                original = 100,
+                discount = 0,
+                final = 100,
+                categoryId = "category",
+            ).reviewed(originalAmountMinor = 100, discountAmountMinor = 101, quantity = 1),
+        )
+    }
+
+    @Test
+    fun `standalone discount allocation preserves total and deterministic remainder`() {
+        val first = item("a", BillItemLineType.PURCHASE, 100, 0, 100, "category")
+        val second = item("b", BillItemLineType.PURCHASE, 300, 0, 300, "category")
+        val discount = item("discount", BillItemLineType.DISCOUNT, null, 41, -41, null)
+
+        val allocated = allocateReceiptDiscount("discount", listOf(first, second, discount))!!
+
+        assertEquals(listOf(10L, 31L), allocated.take(2).map { it.discountAmountMinor })
+        assertEquals(listOf(90L, 269L, 0L), allocated.map { it.finalAmountMinor })
+        assertEquals(359L, allocated.sumOf { it.finalAmountMinor })
+        assertEquals(BillItemLineType.DISCOUNT, allocated.last().lineType)
+        assertEquals(41L, allocated.last().discountAmountMinor)
+    }
+
+    private fun item(
+        id: String,
+        type: BillItemLineType,
+        original: Long?,
+        discount: Long,
+        final: Long,
+        categoryId: String?,
+        missing: List<String> = emptyList(),
+    ) = BillItemAnalysisItem(
+        lineId = id,
+        rawLineText = id,
+        originalName = id,
+        translatedName = null,
+        lineType = type,
+        quantity = null,
+        originalAmountMinor = original,
+        discountAmountMinor = discount,
+        finalAmountMinor = final,
+        categoryId = categoryId,
+        confidence = 1.0,
+        missingFields = missing,
+    )
 }

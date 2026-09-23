@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.core.model
 
 import java.io.IOException
+import java.math.BigInteger
 import java.util.Locale
 import java.util.UUID
 import kotlinx.serialization.SerialName
@@ -125,6 +126,98 @@ data class BillItemAnalysisItem(
                 }
             }
         }
+
+    fun reviewed(
+        originalAmountMinor: Long,
+        discountAmountMinor: Long,
+        quantity: Int,
+    ): BillItemAnalysisItem? {
+        if (
+            originalAmountMinor < 0 ||
+            discountAmountMinor < 0 ||
+            quantity <= 0 ||
+            originalName.isBlank() ||
+            (
+                lineType != BillItemLineType.DISCOUNT &&
+                    (originalAmountMinor <= 0 || discountAmountMinor > originalAmountMinor)
+                )
+        ) {
+            return null
+        }
+        return copy(
+            quantity = quantity.takeIf { lineType == BillItemLineType.PURCHASE && it > 1 },
+            originalAmountMinor = originalAmountMinor.takeIf { lineType == BillItemLineType.PURCHASE },
+            discountAmountMinor = discountAmountMinor,
+            finalAmountMinor = if (lineType == BillItemLineType.PURCHASE) {
+                originalAmountMinor - discountAmountMinor
+            } else {
+                -discountAmountMinor
+            },
+            categoryId = categoryId.takeIf { lineType == BillItemLineType.PURCHASE },
+            missingFields = missingFields.filterNot { it in ITEM_REVIEW_FIELDS },
+        )
+    }
+}
+
+fun allocateReceiptDiscount(
+    itemId: String,
+    items: List<BillItemAnalysisItem>,
+): List<BillItemAnalysisItem>? {
+    val discountIndex = items.indexOfFirst {
+        it.lineId == itemId && it.lineType == BillItemLineType.DISCOUNT
+    }
+    if (discountIndex < 0) return null
+    val discountItem = items[discountIndex]
+    val discountAmount = maxOf(
+        discountItem.discountAmountMinor.safeAbsoluteValue(),
+        discountItem.finalAmountMinor.safeAbsoluteValue(),
+    )
+    if (discountItem.finalAmountMinor >= 0 || discountAmount <= 0) return null
+    val eligibleIndexes = items.indices.filter { index ->
+        items[index].lineType == BillItemLineType.PURCHASE && items[index].finalAmountMinor > 0
+    }
+    val baseTotal = eligibleIndexes.sumOf { items[it].finalAmountMinor }
+    if (baseTotal <= 0 || discountAmount > baseTotal) return null
+
+    data class Allocation(
+        val index: Int,
+        var floor: Long,
+        val remainder: BigInteger,
+    )
+
+    val divisor = BigInteger.valueOf(baseTotal)
+    val discount = BigInteger.valueOf(discountAmount)
+    val allocations = eligibleIndexes.map { index ->
+        val division = BigInteger.valueOf(items[index].finalAmountMinor)
+            .multiply(discount)
+            .divideAndRemainder(divisor)
+        Allocation(index = index, floor = division[0].longValueExact(), remainder = division[1])
+    }
+    var remaining = discountAmount - allocations.sumOf(Allocation::floor)
+    allocations
+        .sortedWith(compareByDescending<Allocation> { it.remainder }.thenBy { it.index })
+        .forEach { allocation ->
+            if (remaining > 0) {
+                allocation.floor += 1
+                remaining -= 1
+            }
+        }
+
+    val updated = items.toMutableList()
+    allocations.forEach { allocation ->
+        val item = updated[allocation.index]
+        updated[allocation.index] = item.copy(
+            originalAmountMinor = item.originalAmountMinor
+                ?: item.finalAmountMinor + item.discountAmountMinor,
+            discountAmountMinor = item.discountAmountMinor + allocation.floor,
+            finalAmountMinor = (item.finalAmountMinor - allocation.floor).coerceAtLeast(0),
+        )
+    }
+    updated[discountIndex] = updated[discountIndex].copy(
+        discountAmountMinor = discountAmount,
+        finalAmountMinor = 0,
+    )
+    return updated
 }
 
 data class BillItemAnalysisResult(
