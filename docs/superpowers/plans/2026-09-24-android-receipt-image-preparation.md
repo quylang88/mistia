@@ -26,11 +26,11 @@
 - Create: `android/core/model/src/main/java/vn/com/quyln/mistia/core/model/ReceiptImagePreparation.kt`
 - Create: `android/core/model/src/test/java/vn/com/quyln/mistia/core/model/ReceiptImagePreparationTest.kt`
 
-- [ ] Write failing tests for dimension/quality policy, exact byte boundary,
+- [x] Write failing tests for dimension/quality policy, exact byte boundary,
   fallback resizing, failure paths, thumbnail policy and cancellation.
-- [ ] Run the focused test and confirm RED because the contract is absent.
-- [ ] Implement the smallest generic algorithm that passes.
-- [ ] Re-run focused tests and confirm GREEN.
+- [x] Run the focused test and confirm RED because the contract is absent.
+- [x] Implement the smallest generic algorithm that passes.
+- [x] Re-run focused tests and confirm GREEN.
 
 ### Task 2: Evidence and independent commit
 
@@ -38,7 +38,7 @@
 - Modify: `docs/android/android-parity-progress.md`
 - Create: `docs/android/evidence/2026-09-24-apk1-receipt-image-preparation.md`
 
-- [ ] Run the full Android gate, contract/localization checks and artifact
+- [x] Run the full Android gate, contract/localization checks and artifact
   checksum.
-- [ ] Record the Android-codec/UI/device boundary without claiming it complete.
-- [ ] Run `git diff --check`, self-review and commit independently.
+- [x] Record the Android-codec/UI/device boundary without claiming it complete.
+- [x] Run `git diff --check`, self-review and commit independently.

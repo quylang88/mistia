@@ -469,3 +469,25 @@ Edge Function deployment or cloud-write gate change occurred. All cloud-write
 flags remain `false`; APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-ai-client.md`.
+
+## APK 1 receipt image preparation policy — 2026-09-24
+
+- [x] Ported the iOS itemized-bill image budget into a platform-neutral,
+  cancellable Android contract: 3,000 px analysis image, JPEG quality descent,
+  0.86 dimension retries down to the 900 px OCR floor and a 3.8 MB ceiling.
+- [x] Added deterministic thumbnail generation policy at 240 px/0.68 quality
+  and typed decode/dimension/scale/encode/too-large failures.
+- [x] Kept bitmap decoding, orientation correction and opaque white rendering
+  behind a codec boundary so the next Android framework slice can be tested
+  independently from the sizing algorithm.
+- [x] Verified 217 Android unit tests across 40 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Implement the Android bitmap/URI codec, then connect Photo Picker and
+  CameraX before exposing receipt analysis in the native UI.
+
+No cloud call, production write, localization change or device claim occurred.
+Samsung verification remains deferred per the user's current direction, and
+APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-image-preparation.md`.
