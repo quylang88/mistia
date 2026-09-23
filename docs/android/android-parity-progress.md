@@ -322,12 +322,52 @@ Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-offline-repository.
   all user-facing copy comes from generated String Catalog resources.
 - [x] Passed 156 Android unit tests across 32 suites, Room instrumentation
   source compilation, lint, debug assembly, contract and localization checks.
-- [ ] Add the current-wallet-balance affordability engine, paid credit-card
-  statement guards and automatic app-rate resolution before claiming full iOS
-  transaction parity. Run visual and behavior checks on Samsung when available.
+- [x] Added the current-wallet-balance affordability engine in the next
+  independently verified slice.
+- [ ] Add paid credit-card statement guards and automatic app-rate resolution
+  before claiming full iOS transaction parity. Complete visual/behavior checks
+  after the Samsung debug-signature mismatch is resolved without deleting data.
 
 No transaction cloud push, live Supabase write or deployment occurred. All
 cloud-write flags remain `false`; receipt work and the remaining transaction
 rules keep APK 1 incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-editor.md`.
+
+## APK 1 transaction affordability — 2026-09-23
+
+- [x] Ported the iOS wallet-balance index: non-card wallets seed from opening
+  balance, cards seed at zero debt, and all posted/non-archived transactions
+  contribute regardless of entered date.
+- [x] Enforced current-balance affordability for expense and internal-transfer
+  outflows. Editing excludes the replaced record, so it validates the proposed
+  amount against the wallet state before that record.
+- [x] Enforced credit-card available credit from the linked profile limit minus
+  current debt; transfer payments into cards reduce debt using the destination
+  amount for cross-currency transfers.
+- [x] Passed 164 Android unit tests across 33 suites, Room instrumentation
+  source compilation, lint, debug assembly, contract and localization checks.
+- [x] Passed the focused Room transaction instrumentation test directly on
+  Samsung `SM-F776Q` and opened the authenticated native transaction editor.
+- [ ] Add paid statement-period locks before claiming credit-card transaction
+  parity. Preserve iOS investment-fund confirmation semantics when APK 4 adds
+  the corresponding Android investment write flows.
+
+A Samsung `SM-F776Q` connected during verification. After the user explicitly
+allowed replacing the old debug install, that package was uninstalled and this
+slice's APK installed successfully. After registering this Mac's debug SHA-1,
+device logs proved Google token retrieval and Supabase exchange success. The
+signed-in transaction list showed pulled cloud records, and the localized native
+editor rendered without crash or overflow at 1080×2520. No transaction was
+submitted during the visual check.
+
+The focused `TransactionRoomTest` passed on the Samsung. The unfiltered 12-test
+database instrumentation run also exposed one separate known test-fixture gap:
+`MistiaDatabaseMigrationTest` lacks the packaged `MistiaDatabase/1.json` Room
+schema asset. That unrelated failure remains visible and is not claimed fixed by
+this slice.
+
+All cloud-write flags remain `false`; no production write or deployment
+occurred, and APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-affordability.md`.

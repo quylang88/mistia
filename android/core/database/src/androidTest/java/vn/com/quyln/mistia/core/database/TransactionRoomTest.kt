@@ -51,6 +51,7 @@ class TransactionRoomTest {
                 name = "Cash",
                 kind = WalletKind.CASH,
                 currencyCode = "JPY",
+                openingBalanceMinor = 2_000,
             ),
             DEVICE,
             NOW,

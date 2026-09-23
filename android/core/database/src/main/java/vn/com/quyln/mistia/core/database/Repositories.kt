@@ -34,6 +34,7 @@ import vn.com.quyln.mistia.core.model.ReadOnlyCloudCollection
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
 import vn.com.quyln.mistia.core.model.TransactionDraft
+import vn.com.quyln.mistia.core.model.requireAffordable
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
 
@@ -158,6 +159,7 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
         val transactions = transactionSnapshot(ownerUserId)
         val wallets = walletSnapshot(ownerUserId)
         val categories = categorySnapshot(ownerUserId)
+        val creditCardProfiles = creditCardProfileSnapshot(ownerUserId)
         val existing = draft.id?.lowercase()?.let { id -> transactions.firstOrNull { it.id == id } }
         val sourceWallet = draft.sourceWalletId?.lowercase()?.let { id -> wallets.firstOrNull { it.id == id } }
         val destinationWallet = draft.destinationWalletId?.lowercase()?.let { id ->
@@ -172,6 +174,12 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
             category = category,
             deviceId = deviceId,
             now = now,
+        )
+        mutation.record.requireAffordable(
+            wallets = wallets,
+            records = transactions,
+            creditCardProfiles = creditCardProfiles,
+            excludingTransactionId = existing?.id,
         )
         localStore.commitMutation(mutation.record.toCloudRecord(), mutation.pending)
         mutation.record

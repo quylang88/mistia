@@ -13,6 +13,7 @@ import vn.com.quyln.mistia.core.model.CategoryDraft
 import vn.com.quyln.mistia.core.model.CategoryHierarchyRole
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CloudRecord
+import vn.com.quyln.mistia.core.model.CreditCardDraft
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.LocalStore
@@ -22,6 +23,8 @@ import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
+import vn.com.quyln.mistia.core.model.TransactionValidationError
+import vn.com.quyln.mistia.core.model.TransactionValidationException
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
@@ -88,8 +91,105 @@ class TransactionRepositoryTest {
         assertTrue(repository.observeTransactions(UserId(OWNER)).first().isEmpty())
     }
 
-    private suspend fun seedExpenseDependencies(repository: OfflineFirstFinanceRepository, owner: String) {
-        repository.saveWallet(UserId(owner), walletDraft(SOURCE_WALLET_ID, "JPY"), DEVICE, NOW).getOrThrow()
+    @Test
+    fun `backdated expense is rejected when current wallet balance is insufficient`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        seedExpenseDependencies(repository, OWNER, openingBalanceMinor = 1_500)
+        repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(id = FIRST_TRANSACTION_ID, amountMinor = 1_000, occurredAt = "2030-01-01T00:00:00Z"),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(id = TRANSACTION_ID, amountMinor = 501, occurredAt = "2020-01-01T00:00:00Z"),
+            DEVICE,
+            LATER,
+        )
+
+        assertEquals(
+            TransactionValidationError.INSUFFICIENT_WALLET_BALANCE,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+        assertEquals(1, repository.observeTransactions(UserId(OWNER)).first().size)
+    }
+
+    @Test
+    fun `editing affordability excludes the transaction being replaced`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        seedExpenseDependencies(repository, OWNER, openingBalanceMinor = 1_000)
+        repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 400),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val edited = repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 800),
+            DEVICE,
+            LATER,
+        ).getOrThrow()
+
+        assertEquals(800L, edited.amountMinor)
+    }
+
+    @Test
+    fun `credit card expense uses linked profile available credit`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        repository.saveCreditCard(
+            UserId(OWNER),
+            CreditCardDraft(
+                walletId = SOURCE_WALLET_ID,
+                profileId = PROFILE_ID,
+                name = "Card",
+                creditLimitMinor = 10_000,
+            ),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        seedExpenseCategories(repository, OWNER)
+        repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(id = FIRST_TRANSACTION_ID, amountMinor = 7_000),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 3_001),
+            DEVICE,
+            LATER,
+        )
+
+        assertEquals(
+            TransactionValidationError.CREDIT_LIMIT_EXCEEDED,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+    }
+
+    private suspend fun seedExpenseDependencies(
+        repository: OfflineFirstFinanceRepository,
+        owner: String,
+        openingBalanceMinor: Long = 100_000,
+    ) {
+        repository.saveWallet(
+            UserId(owner),
+            walletDraft(SOURCE_WALLET_ID, "JPY", openingBalanceMinor),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        seedExpenseCategories(repository, owner)
+    }
+
+    private suspend fun seedExpenseCategories(repository: OfflineFirstFinanceRepository, owner: String) {
         repository.saveCategory(
             UserId(owner),
             CategoryDraft(
@@ -115,12 +215,16 @@ class TransactionRepositoryTest {
         ).getOrThrow()
     }
 
-    private fun expenseDraft() = TransactionDraft(
-        id = TRANSACTION_ID,
+    private fun expenseDraft(
+        id: String = TRANSACTION_ID,
+        amountMinor: Long = 1_250,
+        occurredAt: String = OCCURRED_AT,
+    ) = TransactionDraft(
+        id = id,
         primaryKind = TransactionPrimaryKind.EXPENSE,
         title = "Lunch",
-        amountMinor = 1_250,
-        occurredAt = OCCURRED_AT,
+        amountMinor = amountMinor,
+        occurredAt = occurredAt,
         sourceWalletId = SOURCE_WALLET_ID,
         categoryId = CATEGORY_ID,
     )
@@ -139,11 +243,12 @@ class TransactionRepositoryTest {
         exchangeRateDecimalString = rate,
     )
 
-    private fun walletDraft(id: String, currency: String) = WalletDraft(
+    private fun walletDraft(id: String, currency: String, openingBalanceMinor: Long = 100_000) = WalletDraft(
         id = id,
         name = "Wallet",
         kind = WalletKind.BANK,
         currencyCode = currency,
+        openingBalanceMinor = openingBalanceMinor,
         institutionDisplayName = "Bank",
     )
 
@@ -190,6 +295,8 @@ class TransactionRepositoryTest {
         const val OWNER = "11111111-1111-1111-1111-111111111111"
         const val OTHER_OWNER = "77777777-7777-7777-7777-777777777777"
         const val TRANSACTION_ID = "22222222-2222-2222-2222-222222222222"
+        const val FIRST_TRANSACTION_ID = "99999999-9999-9999-9999-999999999999"
+        const val PROFILE_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         const val SOURCE_WALLET_ID = "33333333-3333-3333-3333-333333333333"
         const val DESTINATION_WALLET_ID = "44444444-4444-4444-4444-444444444444"
         const val CATEGORY_ID = "55555555-5555-5555-5555-555555555555"

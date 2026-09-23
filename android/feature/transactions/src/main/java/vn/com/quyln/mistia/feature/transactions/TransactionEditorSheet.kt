@@ -536,6 +536,10 @@ private fun transactionEditorError(
             R.string.transactions_transactioneditor_credit_cards_cannot_receive_income_please_select
         operationError == TransactionValidationError.CREDIT_CARD_CANNOT_SEND_TRANSFER ->
             R.string.transactions_transactioneditor_credit_cards_cannot_send_money_via_transfer
+        operationError == TransactionValidationError.CREDIT_LIMIT_EXCEEDED ->
+            R.string.transactions_transactioneditor_the_amount_exceeds_the_available_credit_on
+        operationError == TransactionValidationError.INSUFFICIENT_WALLET_BALANCE ->
+            R.string.transactions_transactioneditor_insufficient_wallet_balance_to_perform_the_transaction
         operationError == TransactionValidationError.INVALID_AMOUNT ->
             R.string.transactions_transactioneditor_enter_an_amount_greater_than
         operationError == TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED ||
