@@ -536,3 +536,27 @@ on-device, no cloud call/write/deployment occurred, and all cloud-write gates
 remain `false`; APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-photo-picker.md`.
+
+## APK 1 receipt CameraX foundation — 2026-09-24
+
+- [x] Added stable CameraX 1.6.2 preview/capture dependencies and a native
+  lifecycle-bound back-camera sheet using `PreviewView`, `ImageCapture` and
+  `ProcessCameraProvider`.
+- [x] Added hardware-first camera entry, runtime permission handling and typed
+  permission/unavailable/bind/capture failure outcomes for the future receipt
+  analysis screen.
+- [x] Captured quality-oriented JPEGs into isolated app cache, routed them
+  through the shared EXIF/bitmap preparation pipeline and deleted every
+  temporary file on success, failure, cancellation or sheet disposal.
+- [x] Verified 232 Android unit tests across 43 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Build and route the native itemized analysis/review/apply flow that owns
+  both Photo Picker and CameraX controls. Physical capture verification remains
+  deferred.
+
+No camera was opened on-device, no receipt was analyzed or persisted, and no
+cloud call/write/deployment occurred. All cloud-write gates remain `false`;
+APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-camerax.md`.
