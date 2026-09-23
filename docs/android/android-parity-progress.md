@@ -696,3 +696,22 @@ deployment, device claim or cloud-write gate change occurred. Samsung remains
 deferred and all five flags remain `false`; APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-mutations.md`.
+
+## APK 1 receipt selection projection — 2026-09-24
+
+- [x] Projected ordered review bills/items into stable selection candidates with
+  wallet/category/merchant/date metadata and exact partial-quantity amounts.
+- [x] Added whole-line toggle semantics with same-bill enforcement and shared
+  wallet/category/discount normalization.
+- [x] Verified 253 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Render selection controls, open the native transaction editor with the
+  reviewed prefill, mark saved allocations and route the complete flow.
+
+No transaction/image persistence, live AI/production call, migration,
+deployment, device claim or cloud-write gate change occurred. Samsung remains
+deferred and all five flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-selection-projection.md`.

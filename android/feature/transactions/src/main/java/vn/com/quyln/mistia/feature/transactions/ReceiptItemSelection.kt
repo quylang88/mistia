@@ -128,6 +128,25 @@ internal object ReceiptItemSelectionLogic {
         }
     }
 
+    fun toggleSelection(
+        selection: Map<ReceiptItemSelectionId, Int>,
+        candidateId: ReceiptItemSelectionId,
+        candidates: List<ReceiptItemSelectionCandidate>,
+        mode: ReceiptTransactionMode,
+    ): Map<ReceiptItemSelectionId, Int> {
+        if (candidateId in selection) return selection - candidateId
+        val candidate = candidates.firstOrNull { it.id == candidateId } ?: return selection
+        val anchorBillId = selection.keys.firstOrNull()?.billId
+        if (anchorBillId != null && candidate.id.billId != anchorBillId) return selection
+        val selectedCandidates = candidates.filter { it.id in selection }
+        if (!canSelect(candidate, selectedCandidates, mode)) return selection
+        return normalizedSelection(
+            selection = selection + (candidate.id to candidate.availableQuantity),
+            candidates = candidates,
+            mode = mode,
+        )
+    }
+
     fun lockedGroup(
         selected: List<ReceiptItemSelectionCandidate>,
         mode: ReceiptTransactionMode,
@@ -208,6 +227,46 @@ internal object ReceiptItemSelectionLogic {
             categoryId = categoryId,
             occurredAt = occurredAt,
             receiptAttachmentBillId = billIds.singleOrNull(),
+        )
+    }
+}
+
+internal fun ReceiptReviewState.selectionCandidates(
+    selection: Map<ReceiptItemSelectionId, Int>,
+): List<ReceiptItemSelectionCandidate> = bills.flatMap { bill ->
+    val result = bill.result ?: return@flatMap emptyList()
+    result.items.map { item ->
+        val id = ReceiptItemSelectionId(bill.id, item.lineId)
+        val totalQuantity = if (item.lineType == BillItemLineType.PURCHASE) {
+            maxOf(1, item.quantity ?: 1)
+        } else {
+            1
+        }
+        val selectedQuantity = (selection[id] ?: 0).coerceIn(0, totalQuantity)
+        val representedQuantity = selectedQuantity.takeIf { it > 0 } ?: totalQuantity
+        ReceiptItemSelectionCandidate(
+            id = id,
+            walletId = bill.selectedWalletId,
+            categoryId = item.categoryId.takeIf { item.lineType == BillItemLineType.PURCHASE },
+            lineType = item.lineType,
+            amountMinor = if (item.lineType == BillItemLineType.DISCOUNT) {
+                item.finalAmountMinor
+            } else {
+                ReceiptItemSelectionLogic.allocationAmount(
+                    totalAmountMinor = item.finalAmountMinor,
+                    totalQuantity = totalQuantity,
+                    allocatedQuantity = representedQuantity,
+                )
+            },
+            totalQuantity = totalQuantity,
+            availableQuantity = totalQuantity,
+            selectedQuantity = selectedQuantity,
+            createdQuantity = 0,
+            lockedQuantity = 0,
+            merchantName = result.merchantName,
+            occurredAt = result.occurredAt,
+            isCreated = false,
+            isLocked = false,
         )
     }
 }

@@ -5,7 +5,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vn.com.quyln.mistia.core.model.BillItemAnalysisItem
+import vn.com.quyln.mistia.core.model.BillItemAnalysisResult
 import vn.com.quyln.mistia.core.model.BillItemLineType
+import vn.com.quyln.mistia.core.model.PreparedReceiptImage
 import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
@@ -160,6 +163,88 @@ class ReceiptItemSelectionTest {
         assertEquals(setOf(purchase.id, discountOnly.id), ReceiptItemSelectionLogic.lockedItemIds(listOf(group)))
     }
 
+    @Test
+    fun `review projection preserves bill order and selected quantity amount`() {
+        val first = reviewBill(
+            id = "bill-a",
+            walletId = "wallet",
+            items = listOf(reviewItem("milk", quantity = 3, amountMinor = 101)),
+        )
+        val second = reviewBill(
+            id = "bill-b",
+            walletId = "wallet",
+            items = listOf(reviewItem("bread", quantity = null, amountMinor = 200)),
+        )
+        val selection = mapOf(ReceiptItemSelectionId("bill-a", "milk") to 2)
+
+        val candidates = ReceiptReviewState(listOf(first, second)).selectionCandidates(selection)
+
+        assertEquals(listOf("bill-a", "bill-b"), candidates.map { it.id.billId })
+        assertEquals(3, candidates[0].totalQuantity)
+        assertEquals(2, candidates[0].selectedQuantity)
+        assertEquals(68L, candidates[0].amountMinor)
+        assertEquals(1, candidates[1].availableQuantity)
+        assertEquals(200L, candidates[1].amountMinor)
+    }
+
+    @Test
+    fun `selection toggle keeps one bill and normalizes category compatibility`() {
+        val first = candidate("a", billId = "bill-a", walletId = "wallet", categoryId = "food")
+        val discount = candidate(
+            "discount",
+            billId = "bill-a",
+            walletId = "wallet",
+            categoryId = null,
+            lineType = BillItemLineType.DISCOUNT,
+            amountMinor = -50,
+        )
+        val otherBill = candidate("b", billId = "bill-b", walletId = "wallet", categoryId = "food")
+        val otherCategory = candidate("c", billId = "bill-a", walletId = "wallet", categoryId = "travel")
+        val candidates = listOf(first, discount, otherBill, otherCategory)
+
+        val withFirst = ReceiptItemSelectionLogic.toggleSelection(
+            selection = emptyMap(),
+            candidateId = first.id,
+            candidates = candidates,
+            mode = ReceiptTransactionMode.EXPENSE,
+        )
+        val withDiscount = ReceiptItemSelectionLogic.toggleSelection(
+            selection = withFirst,
+            candidateId = discount.id,
+            candidates = candidates,
+            mode = ReceiptTransactionMode.EXPENSE,
+        )
+
+        assertEquals(mapOf(first.id to 1, discount.id to 1), withDiscount)
+        assertEquals(
+            withDiscount,
+            ReceiptItemSelectionLogic.toggleSelection(
+                withDiscount,
+                otherBill.id,
+                candidates,
+                ReceiptTransactionMode.EXPENSE,
+            ),
+        )
+        assertEquals(
+            withDiscount,
+            ReceiptItemSelectionLogic.toggleSelection(
+                withDiscount,
+                otherCategory.id,
+                candidates,
+                ReceiptTransactionMode.EXPENSE,
+            ),
+        )
+        assertEquals(
+            mapOf(first.id to 1),
+            ReceiptItemSelectionLogic.toggleSelection(
+                withDiscount,
+                discount.id,
+                candidates,
+                ReceiptTransactionMode.EXPENSE,
+            ),
+        )
+    }
+
     private fun candidate(
         itemId: String,
         billId: String = "bill",
@@ -184,5 +269,53 @@ class ReceiptItemSelectionTest {
         occurredAt = occurredAt,
         isCreated = false,
         isLocked = false,
+    )
+
+    private fun reviewBill(
+        id: String,
+        walletId: String,
+        items: List<BillItemAnalysisItem>,
+    ) = ReceiptReviewBill(
+        id = id,
+        image = PreparedReceiptImage(
+            imageData = byteArrayOf(1),
+            thumbnailData = byteArrayOf(2),
+            mimeType = "image/jpeg",
+            width = 10,
+            height = 20,
+        ),
+        result = BillItemAnalysisResult(
+            merchantName = "Store",
+            totalMinor = items.sumOf { it.finalAmountMinor },
+            currencyCode = "JPY",
+            occurredAt = "2026-05-19T21:34:00Z",
+            walletId = walletId,
+            multipleBillsDetected = false,
+            confidence = 1.0,
+            missingFields = emptyList(),
+            rawText = null,
+            items = items,
+            quota = null,
+        ),
+        selectedWalletId = walletId,
+    )
+
+    private fun reviewItem(
+        id: String,
+        quantity: Int?,
+        amountMinor: Long,
+    ) = BillItemAnalysisItem(
+        lineId = id,
+        rawLineText = id,
+        originalName = id,
+        translatedName = null,
+        lineType = BillItemLineType.PURCHASE,
+        quantity = quantity,
+        originalAmountMinor = amountMinor,
+        discountAmountMinor = 0,
+        finalAmountMinor = amountMinor,
+        categoryId = "food",
+        confidence = 1.0,
+        missingFields = emptyList(),
     )
 }
