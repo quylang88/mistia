@@ -324,9 +324,10 @@ Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-offline-repository.
   source compilation, lint, debug assembly, contract and localization checks.
 - [x] Added the current-wallet-balance affordability engine in the next
   independently verified slice.
-- [ ] Add paid credit-card statement guards and automatic app-rate resolution
-  before claiming full iOS transaction parity. Complete visual/behavior checks
-  after the Samsung debug-signature mismatch is resolved without deleting data.
+- [x] Added paid credit-card statement guards in a later independently verified
+  slice, including a Samsung check against an actual locked transaction.
+- [ ] Add automatic app-rate resolution before claiming full iOS transaction
+  parity.
 
 No transaction cloud push, live Supabase write or deployment occurred. All
 cloud-write flags remain `false`; receipt work and the remaining transaction
@@ -349,9 +350,9 @@ Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-editor.md`.
   source compilation, lint, debug assembly, contract and localization checks.
 - [x] Passed the focused Room transaction instrumentation test directly on
   Samsung `SM-F776Q` and opened the authenticated native transaction editor.
-- [ ] Add paid statement-period locks before claiming credit-card transaction
-  parity. Preserve iOS investment-fund confirmation semantics when APK 4 adds
-  the corresponding Android investment write flows.
+- [x] Added paid statement-period locks in a later independently verified slice.
+  Preserve iOS investment-fund confirmation semantics when APK 4 adds the
+  corresponding Android investment write flows.
 
 A Samsung `SM-F776Q` connected during verification. After the user explicitly
 allowed replacing the old debug install, that package was uninstalled and this
@@ -389,7 +390,27 @@ Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-affordability.md`.
   crash.
 
 No live Supabase write, migration, RLS/RPC change or deployment occurred.
-Paid credit-card statement guards, automatic app-rate resolution and receipt
-capture/analysis remain APK 1 work; APK 1 is not complete.
+Automatic app-rate resolution and receipt capture/analysis remain APK 1 work;
+APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-push-foundation.md`.
+
+## APK 1 paid credit-card statement guards — 2026-09-23
+
+- [x] Ported the iOS paid-statement lock for credit-card expenses using the
+  statement month, card closing day, posted charges and covering payment.
+- [x] Preserved direct paid-occurrence links and the legacy localized card
+  payment-title fallback used by iOS.
+- [x] Enforced the lock in the owner-scoped repository before any Room/outbox
+  mutation, for both edits and new expenses inserted into a closed cycle.
+- [x] Marked locked rows with the existing localized explanation and disabled
+  entry into the native editor.
+- [x] Verified 177 unit tests across 35 suites, Room Android-test compilation,
+  lint, debug assembly, contract and localization checks.
+- [x] Installed the APK on Samsung `SM-F776Q`; an actual paid-statement row
+  rendered the lock explanation and ignored a tap without opening the editor.
+
+No live Supabase write, migration, RLS/RPC change or deployment occurred. All
+cloud-write gates remain disabled, and APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-paid-statement-guards.md`.

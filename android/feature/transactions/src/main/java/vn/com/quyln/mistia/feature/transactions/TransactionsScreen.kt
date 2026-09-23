@@ -26,8 +26,10 @@ import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
+import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.UserId
+import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
 import vn.com.quyln.mistia.core.model.transactionDisplayMoney
 
 @Composable
@@ -40,6 +42,10 @@ fun TransactionsScreen(
     val records by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val creditCardProfiles by repository.observeCreditCardProfiles(ownerUserId)
+        .collectAsStateWithLifecycle(emptyList())
+    val dueOccurrences by repository.observe(CloudEntity.DUE_OCCURRENCE_RECORD, ownerUserId)
+        .collectAsStateWithLifecycle(emptyList())
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editorTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
     val walletCurrencies = wallets.associate { it.id to it.currencyCode }
@@ -78,7 +84,14 @@ fun TransactionsScreen(
             }
         } else {
             items(records, key = { it.id }) { record ->
-                val isEditable = record.supportsNativeTransactionEditor()
+                val isLockedByPaidStatement = record.isLockedByPaidCreditCardStatement(
+                    wallets = wallets,
+                    creditCardProfiles = creditCardProfiles,
+                    categories = categories,
+                    transactions = records,
+                    dueOccurrences = dueOccurrences,
+                )
+                val isEditable = record.supportsNativeTransactionEditor() && !isLockedByPaidStatement
                 MistiaGlassCard(
                     modifier = Modifier.clickable(enabled = isEditable) {
                         editorTransactionId = record.id
@@ -93,7 +106,13 @@ fun TransactionsScreen(
                         title = record.title.ifBlank {
                             stringResource(R.string.shared_corelogic_transaction_unknown_name)
                         },
-                        subtitle = record.occurredAt,
+                        subtitle = if (isLockedByPaidStatement) {
+                            stringResource(
+                                R.string.transactions_transactioneditor_this_transaction_is_part_of_a_paid
+                            )
+                        } else {
+                            record.occurredAt
+                        },
                         trailing = formatMinorUnits(money.minor, money.currencyCode),
                         modifier = Modifier.padding(padding),
                     )

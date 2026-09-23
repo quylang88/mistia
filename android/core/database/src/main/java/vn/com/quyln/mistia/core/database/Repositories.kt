@@ -34,6 +34,10 @@ import vn.com.quyln.mistia.core.model.ReadOnlyCloudCollection
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
 import vn.com.quyln.mistia.core.model.TransactionDraft
+import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
+import vn.com.quyln.mistia.core.model.TransactionValidationError
+import vn.com.quyln.mistia.core.model.TransactionValidationException
+import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
 import vn.com.quyln.mistia.core.model.requireAffordable
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
@@ -160,7 +164,18 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
         val wallets = walletSnapshot(ownerUserId)
         val categories = categorySnapshot(ownerUserId)
         val creditCardProfiles = creditCardProfileSnapshot(ownerUserId)
+        val dueOccurrences = dueOccurrenceSnapshot(ownerUserId)
         val existing = draft.id?.lowercase()?.let { id -> transactions.firstOrNull { it.id == id } }
+        if (existing?.isLockedByPaidCreditCardStatement(
+                wallets = wallets,
+                creditCardProfiles = creditCardProfiles,
+                categories = categories,
+                transactions = transactions,
+                dueOccurrences = dueOccurrences,
+            ) == true
+        ) {
+            throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
+        }
         val sourceWallet = draft.sourceWalletId?.lowercase()?.let { id -> wallets.firstOrNull { it.id == id } }
         val destinationWallet = draft.destinationWalletId?.lowercase()?.let { id ->
             wallets.firstOrNull { it.id == id }
@@ -175,6 +190,19 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
             deviceId = deviceId,
             now = now,
         )
+        if (mutation.record.primaryKind == TransactionPrimaryKind.EXPENSE) {
+            val proposedTransactions = transactions.filterNot { it.id == mutation.record.id } + mutation.record
+            if (mutation.record.isLockedByPaidCreditCardStatement(
+                    wallets = wallets,
+                    creditCardProfiles = creditCardProfiles,
+                    categories = categories,
+                    transactions = proposedTransactions,
+                    dueOccurrences = dueOccurrences,
+                )
+            ) {
+                throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
+            }
+        }
         mutation.record.requireAffordable(
             wallets = wallets,
             records = transactions,
@@ -313,6 +341,9 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
     private suspend fun transactionSnapshot(ownerUserId: UserId): List<LedgerTransactionRecord> =
         localStore.observe(CloudEntity.LEDGER_TRANSACTION.table, ownerUserId).first()
             .map(LedgerTransactionRecord::fromCloudRecord)
+
+    private suspend fun dueOccurrenceSnapshot(ownerUserId: UserId): List<CloudRecord> =
+        localStore.observe(CloudEntity.DUE_OCCURRENCE_RECORD.table, ownerUserId).first()
 
     private fun normalizeCategoryName(value: String): String = value.trim()
         .split(Regex("\\s+"))

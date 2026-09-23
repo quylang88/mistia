@@ -382,7 +382,7 @@ fun TransactionEditorSheet(
                 )
             }
 
-            transactionEditorError(validation, operationError, genericFailure)?.let { message ->
+            transactionEditorError(validation, operationError, genericFailure, state.occurredAt)?.let { message ->
                 Text(
                     text = message,
                     color = MaterialTheme.colorScheme.error,
@@ -501,7 +501,15 @@ private fun transactionEditorError(
     validation: TransactionEditorValidation?,
     operationError: TransactionValidationError?,
     genericFailure: Boolean,
+    occurredAt: String,
 ): String? {
+    if (operationError == TransactionValidationError.PAID_CREDIT_CARD_STATEMENT) {
+        val statementMonth = transactionLocalDateTime(occurredAt).format(DateTimeFormatter.ofPattern("MM/yyyy"))
+        return stringResource(
+            R.string.transactions_transactioneditor_the_value_statement_for_this_card_has,
+            statementMonth,
+        )
+    }
     val resource = when {
         validation == TransactionEditorValidation.SOURCE_WALLET_REQUIRED ->
             R.string.transactions_transactioneditor_choose_the_source_wallet

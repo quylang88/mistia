@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -175,6 +177,105 @@ class TransactionRepositoryTest {
         )
     }
 
+    @Test
+    fun `editing expense from paid credit card statement is rejected`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        seedCreditCardExpenseDependencies(repository)
+        repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 7_000, occurredAt = "2026-02-12T03:00:00Z"),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        repository.saveTransaction(
+            UserId(OWNER),
+            cardPaymentDraft(amountMinor = 7_000),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 6_000, occurredAt = "2026-02-12T03:00:00Z"),
+            DEVICE,
+            LATER,
+        )
+
+        assertEquals(
+            TransactionValidationError.PAID_CREDIT_CARD_STATEMENT,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+        assertEquals(
+            7_000L,
+            repository.observeTransactions(UserId(OWNER)).first().first { it.id == TRANSACTION_ID }.amountMinor,
+        )
+    }
+
+    @Test
+    fun `new expense cannot be added when existing payment still covers closed statement`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        seedCreditCardExpenseDependencies(repository)
+        repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 5_000, occurredAt = "2026-02-12T03:00:00Z"),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        repository.saveTransaction(
+            UserId(OWNER),
+            cardPaymentDraft(amountMinor = 7_000),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(
+                id = SECOND_TRANSACTION_ID,
+                amountMinor = 2_000,
+                occurredAt = "2026-02-15T03:00:00Z",
+            ),
+            DEVICE,
+            LATER,
+        )
+
+        assertEquals(
+            TransactionValidationError.PAID_CREDIT_CARD_STATEMENT,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+        assertTrue(
+            repository.observeTransactions(UserId(OWNER)).first().none { it.id == SECOND_TRANSACTION_ID }
+        )
+    }
+
+    @Test
+    fun `paid occurrence directly locks linked payment transaction`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        seedCreditCardExpenseDependencies(repository)
+        repository.saveTransaction(
+            UserId(OWNER),
+            cardPaymentDraft(amountMinor = 7_000),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        store.seed(paidOccurrence(PAYMENT_TRANSACTION_ID))
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            cardPaymentDraft(amountMinor = 6_000),
+            DEVICE,
+            LATER,
+        )
+
+        assertEquals(
+            TransactionValidationError.PAID_CREDIT_CARD_STATEMENT,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+    }
+
     private suspend fun seedExpenseDependencies(
         repository: OfflineFirstFinanceRepository,
         owner: String,
@@ -187,6 +288,30 @@ class TransactionRepositoryTest {
             NOW,
         ).getOrThrow()
         seedExpenseCategories(repository, owner)
+    }
+
+    private suspend fun seedCreditCardExpenseDependencies(repository: OfflineFirstFinanceRepository) {
+        repository.saveWallet(
+            UserId(OWNER),
+            walletDraft(DESTINATION_WALLET_ID, "JPY"),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        repository.saveCreditCard(
+            UserId(OWNER),
+            CreditCardDraft(
+                walletId = SOURCE_WALLET_ID,
+                profileId = PROFILE_ID,
+                name = "Card",
+                creditLimitMinor = 100_000,
+                statementClosingDay = 10,
+                paymentDueDay = 26,
+                paymentSourceWalletId = DESTINATION_WALLET_ID,
+            ),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        seedExpenseCategories(repository, OWNER)
     }
 
     private suspend fun seedExpenseCategories(repository: OfflineFirstFinanceRepository, owner: String) {
@@ -243,6 +368,45 @@ class TransactionRepositoryTest {
         exchangeRateDecimalString = rate,
     )
 
+    private fun cardPaymentDraft(amountMinor: Long) = TransactionDraft(
+        id = PAYMENT_TRANSACTION_ID,
+        primaryKind = TransactionPrimaryKind.TRANSFER,
+        transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+        title = "Card payment 02/2026",
+        amountMinor = amountMinor,
+        occurredAt = "2026-02-26T03:00:00Z",
+        sourceWalletId = DESTINATION_WALLET_ID,
+        destinationWalletId = SOURCE_WALLET_ID,
+    )
+
+    private fun paidOccurrence(linkedTransactionId: String) = CloudRecord(
+        entity = CloudEntity.DUE_OCCURRENCE_RECORD.table,
+        id = OCCURRENCE_ID,
+        ownerUserId = OWNER,
+        payload = JsonObject(
+            mapOf(
+                "user_id" to JsonPrimitive(OWNER),
+                "id" to JsonPrimitive(OCCURRENCE_ID),
+                "source_kind_raw_value" to JsonPrimitive("creditCard"),
+                "source_id" to JsonPrimitive(SOURCE_WALLET_ID),
+                "selected_month_key" to JsonPrimitive("2026-02"),
+                "scheduled_date" to JsonPrimitive("2026-02-26T00:00:00Z"),
+                "amount_minor_snapshot" to JsonPrimitive(7_000),
+                "status_raw_value" to JsonPrimitive("paid"),
+                "paid_at" to JsonPrimitive("2026-02-26T03:00:00Z"),
+                "linked_transaction_id" to JsonPrimitive(linkedTransactionId),
+                "created_at" to JsonPrimitive(NOW),
+                "updated_at" to JsonPrimitive(NOW),
+                "deleted_at" to JsonNull,
+                "sync_version" to JsonPrimitive(1),
+                "last_modified_by_device_id" to JsonPrimitive(DEVICE),
+            )
+        ),
+        updatedAt = NOW,
+        deletedAt = null,
+        syncVersion = 1,
+    )
+
     private fun walletDraft(id: String, currency: String, openingBalanceMinor: Long = 100_000) = WalletDraft(
         id = id,
         name = "Wallet",
@@ -296,6 +460,9 @@ class TransactionRepositoryTest {
         const val OTHER_OWNER = "77777777-7777-7777-7777-777777777777"
         const val TRANSACTION_ID = "22222222-2222-2222-2222-222222222222"
         const val FIRST_TRANSACTION_ID = "99999999-9999-9999-9999-999999999999"
+        const val SECOND_TRANSACTION_ID = "12121212-1212-1212-1212-121212121212"
+        const val PAYMENT_TRANSACTION_ID = "13131313-1313-1313-1313-131313131313"
+        const val OCCURRENCE_ID = "14141414-1414-1414-1414-141414141414"
         const val PROFILE_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         const val SOURCE_WALLET_ID = "33333333-3333-3333-3333-333333333333"
         const val DESTINATION_WALLET_ID = "44444444-4444-4444-4444-444444444444"
