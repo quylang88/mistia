@@ -22,11 +22,12 @@ import vn.com.quyln.mistia.core.model.UserId
 
 class PullOnlySyncEnginePushOrderTest {
     @Test
-    fun `sync pushes category then wallet then card profile before pull`() = runTest {
+    fun `sync pushes category wallet card profile then transaction before pull`() = runTest {
         val events = mutableListOf<String>()
         val category = RecordingPushCoordinator(CloudEntity.TRANSACTION_CATEGORY, events)
         val wallet = RecordingPushCoordinator(CloudEntity.LEDGER_WALLET, events)
         val card = RecordingPushCoordinator(CloudEntity.CREDIT_CARD_PROFILE, events)
+        val transaction = RecordingPushCoordinator(CloudEntity.LEDGER_TRANSACTION, events)
         val remote = object : RemoteStore {
             override suspend fun pullPage(
                 table: String,
@@ -44,7 +45,7 @@ class PullOnlySyncEnginePushOrderTest {
             authRepository = SignedInAuthRepository(),
             localStore = EmptyLocalStore(),
             remoteStore = remote,
-            pushCoordinators = listOf(card, wallet, category),
+            pushCoordinators = listOf(transaction, card, wallet, category),
         )
 
         val result = engine.syncNow()
@@ -53,7 +54,8 @@ class PullOnlySyncEnginePushOrderTest {
         assertEquals("push:transaction_categories", events[0])
         assertEquals("push:ledger_wallets", events[1])
         assertEquals("push:credit_card_profiles", events[2])
-        assertEquals("pull:transaction_categories", events[3])
+        assertEquals("push:ledger_transactions", events[3])
+        assertEquals("pull:transaction_categories", events[4])
     }
 
     private class RecordingPushCoordinator(

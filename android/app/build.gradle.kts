@@ -55,6 +55,7 @@ android {
         buildConfigField("boolean", "ALLOW_CATEGORY_CLOUD_WRITES", "false")
         buildConfigField("boolean", "ALLOW_WALLET_CLOUD_WRITES", "false")
         buildConfigField("boolean", "ALLOW_CREDIT_CARD_CLOUD_WRITES", "false")
+        buildConfigField("boolean", "ALLOW_TRANSACTION_CLOUD_WRITES", "false")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.trim().asBuildConfigString())
     }
 

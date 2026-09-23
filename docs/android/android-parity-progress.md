@@ -371,3 +371,25 @@ All cloud-write flags remain `false`; no production write or deployment
 occurred, and APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-affordability.md`.
+
+## APK 1 transaction push foundation — 2026-09-23
+
+- [x] Added a transaction-domain coordinator on the shared outbox push engine,
+  preserving create/update versioning, semantic acknowledgement, conflicts,
+  retries and stale-response protection.
+- [x] Enforced dependency ordering: category, wallet and credit-card profile
+  mutations run before `ledger_transactions`; pull starts only afterward.
+- [x] Added a separately gated PostgREST transaction write allowlist. The
+  transaction path also requires category and wallet write gates, and every
+  gate remains `false` in the generated debug build.
+- [x] Verified 168 unit tests across 34 suites, Room Android-test compilation,
+  lint, debug assembly, contract and localization checks.
+- [x] Installed the new APK with `adb install -r` on Samsung `SM-F776Q`; app
+  data/session remained intact and authenticated cold launch rendered without
+  crash.
+
+No live Supabase write, migration, RLS/RPC change or deployment occurred.
+Paid credit-card statement guards, automatic app-rate resolution and receipt
+capture/analysis remain APK 1 work; APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-transaction-push-foundation.md`.
