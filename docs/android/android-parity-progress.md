@@ -242,3 +242,27 @@ domain-gated slice; all cloud-write flags remain `false`, no production write
 or deployment occurred, and APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-credit-card-offline.md`.
+
+## APK 1 credit-card push foundation — 2026-09-23
+
+- [x] Added an independent `ALLOW_CREDIT_CARD_CLOUD_WRITES` gate, defaulting to
+  `false`, plus a PostgREST allowlist entry and dedicated coordinator. Runtime
+  injection additionally requires the wallet gate so profiles cannot be pushed
+  before their linked wallet domain is enabled.
+- [x] Added owner-scoped profile fetch/create/conditional-update with explicit
+  nulls, signed 64-bit values and the shared semantic-ACK/conflict/retry/stale-
+  response state machine.
+- [x] Verified sync priority as category → wallet → credit-card profile → pull,
+  regardless of dependency-injection list order.
+- [x] Passed 139 Android unit tests across 29 suites, Room instrumentation
+  source compilation, lint, debug assembly, contract check and both localization
+  generation checks.
+- [ ] Enable wallet + credit-card gates only in a deliberate device-test build,
+  then verify create/edit/semantic-ACK/conflict behavior on Samsung. ADB
+  reported no connected device.
+
+No live Supabase write, migration, RLS/RPC change or deployment occurred. All
+cloud-write flags remain `false`; transaction/FX and receipt parity remain in
+APK 1, so APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-credit-card-push-foundation.md`.

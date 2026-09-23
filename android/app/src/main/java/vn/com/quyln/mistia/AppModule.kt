@@ -37,6 +37,7 @@ import vn.com.quyln.mistia.core.network.MistiaWireFormat
 import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
+import vn.com.quyln.mistia.core.sync.CreditCardPushCoordinator
 import vn.com.quyln.mistia.core.sync.WalletPushCoordinator
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CategoryNameTranslator
@@ -119,6 +120,7 @@ object AppModule {
         writableEntities = buildSet {
             if (BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) add(CloudEntity.TRANSACTION_CATEGORY)
             if (BuildConfig.ALLOW_WALLET_CLOUD_WRITES) add(CloudEntity.LEDGER_WALLET)
+            if (BuildConfig.ALLOW_CREDIT_CARD_CLOUD_WRITES) add(CloudEntity.CREDIT_CARD_PROFILE)
         },
     )
 
@@ -174,6 +176,18 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideCreditCardPushCoordinator(
+        localStore: LocalStore,
+        remoteStore: RemoteMutationStore,
+    ): CreditCardPushCoordinator = CreditCardPushCoordinator(
+        localStore = localStore,
+        remoteStore = remoteStore,
+        writesEnabled = BuildConfig.ALLOW_CREDIT_CARD_CLOUD_WRITES &&
+            BuildConfig.ALLOW_WALLET_CLOUD_WRITES,
+    )
+
+    @Provides
+    @Singleton
     fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
         OfflineFirstFinanceRepository(localStore)
 
@@ -196,13 +210,14 @@ object AppModule {
         remoteStore: RemoteStore,
         categoryPushCoordinator: CategoryPushCoordinator,
         walletPushCoordinator: WalletPushCoordinator,
+        creditCardPushCoordinator: CreditCardPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
         authRepository,
         localStore,
         remoteStore,
-        listOf(categoryPushCoordinator, walletPushCoordinator),
+        listOf(categoryPushCoordinator, walletPushCoordinator, creditCardPushCoordinator),
         categoryTranslationCoordinator,
     )
 }
