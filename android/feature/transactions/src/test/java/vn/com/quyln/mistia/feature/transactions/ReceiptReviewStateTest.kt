@@ -12,6 +12,7 @@ import vn.com.quyln.mistia.core.model.BillItemLineType
 import vn.com.quyln.mistia.core.model.PreparedReceiptImage
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisException
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisFailure
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisQuota
 
 class ReceiptReviewStateTest {
     @Test
@@ -152,6 +153,38 @@ class ReceiptReviewStateTest {
         val removed = retry.remove("first")
         assertEquals(listOf("second"), removed.bills.map { it.id })
         assertSame(secondImage, removed.bills.single().image)
+    }
+
+    @Test
+    fun `fatal batch failure clears progress for only started bills`() {
+        val ready = ReceiptReviewBill(id = "ready", image = prepared(1), result = result())
+        val initial = ReceiptReviewState(listOf(ready))
+            .append(listOf(prepared(2), prepared(3))) { indexId() }
+        val batch = initial.beginPendingAnalysis()
+        val quota = ReceiptAnalysisQuota(
+            allowed = false,
+            usedCount = 5,
+            limitCount = 5,
+            remainingCount = 0,
+            usageDate = "2026-09-24",
+            resetTimeZone = "Asia/Tokyo",
+            retryAfter = null,
+        )
+
+        val failed = batch.fail(
+            ReceiptAnalysisException(
+                reason = ReceiptAnalysisFailure.DAILY_LIMIT_REACHED,
+                quota = quota,
+            ),
+        )
+
+        assertSame(ready.result, failed.bills[0].result)
+        assertNull(failed.bills[0].failure)
+        assertEquals(
+            listOf(ReceiptAnalysisFailure.DAILY_LIMIT_REACHED, ReceiptAnalysisFailure.DAILY_LIMIT_REACHED),
+            failed.bills.drop(1).map { it.failure },
+        )
+        assertTrue(failed.bills.drop(1).all { !it.isAnalyzing && it.quota == quota })
     }
 
     private var generatedId = 0

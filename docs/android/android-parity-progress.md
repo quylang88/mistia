@@ -611,3 +611,27 @@ deployment or cloud-write gate change occurred. Samsung verification remains
 deferred and all five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-state.md`.
+
+## APK 1 native receipt review UI — 2026-09-24
+
+- [x] Composed Photo Picker, CameraX, image preparation, authenticated analysis
+  and review state into one native Material 3 receipt-analysis sheet.
+- [x] Added per-bill thumbnail/result/error rendering, literal OCR/quantity/
+  discount rows, typed failure messages, multiple-receipt blocking and targeted
+  reanalysis/removal.
+- [x] Added active-analysis dismissal protection and confirmation before
+  discarding any acquired/reviewed image state.
+- [x] Reused generated String Catalog resources throughout and verified 241
+  Android unit tests across 45 suites, Room Android-test compilation, lint,
+  debug assembly, the 15-entity contract check and Android/strict iOS
+  localization code generation.
+- [ ] Add editable item review and reviewed transaction apply/persistence, then
+  route the complete sheet from Transactions. Keeping the current read-only
+  sheet internal avoids exposing a dead-end workflow.
+
+No live AI request, receipt/transaction persistence, production write,
+migration, deployment, emulator/device visual check or cloud-write gate change
+occurred. Samsung verification remains deferred and all five cloud-write flags
+remain `false`; APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-review-ui.md`.

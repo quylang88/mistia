@@ -40,10 +40,30 @@ internal fun buildReceiptAnalysisRequest(
     locale: Locale,
     timeZoneIdentifier: String,
 ): BillItemAnalysisRequest {
+    val categoryCandidates = receiptAnalysisCategoryCandidates(ownerUserId, categories, locale)
+    val walletCandidates = receiptAnalysisWalletCandidates(ownerUserId, wallets)
+
+    return BillItemAnalysisRequest(
+        imageBase64 = Base64.getEncoder().encodeToString(image.imageData),
+        mimeType = image.mimeType,
+        localeIdentifier = locale.toLanguageTag(),
+        timeZoneIdentifier = timeZoneIdentifier,
+        currencyCode = walletCandidates.firstOrNull()?.currencyCode ?: DEFAULT_CURRENCY_CODE,
+        targetLanguageCode = locale.receiptLanguageCode(),
+        categories = categoryCandidates,
+        wallets = walletCandidates,
+    )
+}
+
+internal fun receiptAnalysisCategoryCandidates(
+    ownerUserId: String,
+    categories: List<TransactionCategoryRecord>,
+    locale: Locale,
+): List<ReceiptAnalysisCategoryCandidate> {
     val parentCategories = categories
         .filter { it.ownerUserId == ownerUserId }
         .associateBy(TransactionCategoryRecord::id)
-    val categoryCandidates = categories
+    return categories
         .asSequence()
         .filter { category ->
             category.ownerUserId == ownerUserId &&
@@ -65,37 +85,30 @@ internal fun buildReceiptAnalysisRequest(
             )
         }
         .toList()
-    val walletCandidates = wallets
-        .asSequence()
-        .filter { wallet ->
-            wallet.ownerUserId == ownerUserId &&
-                wallet.deletedAt == null &&
-                !wallet.isArchived &&
-                wallet.systemPurposeRawValue != INVESTMENT_PROFIT_SYSTEM_PURPOSE
-        }
-        .sortedWith(compareBy(LedgerWalletRecord::sortOrder, LedgerWalletRecord::createdAt))
-        .map { wallet ->
-            ReceiptAnalysisWalletCandidate(
-                id = wallet.id,
-                name = wallet.name,
-                kindRawValue = wallet.kindWireValue,
-                currencyCode = wallet.currencyCode,
-                institutionDisplayName = wallet.institutionDisplayName,
-            )
-        }
-        .toList()
-
-    return BillItemAnalysisRequest(
-        imageBase64 = Base64.getEncoder().encodeToString(image.imageData),
-        mimeType = image.mimeType,
-        localeIdentifier = locale.toLanguageTag(),
-        timeZoneIdentifier = timeZoneIdentifier,
-        currencyCode = walletCandidates.firstOrNull()?.currencyCode ?: DEFAULT_CURRENCY_CODE,
-        targetLanguageCode = locale.receiptLanguageCode(),
-        categories = categoryCandidates,
-        wallets = walletCandidates,
-    )
 }
+
+internal fun receiptAnalysisWalletCandidates(
+    ownerUserId: String,
+    wallets: List<LedgerWalletRecord>,
+): List<ReceiptAnalysisWalletCandidate> = wallets
+    .asSequence()
+    .filter { wallet ->
+        wallet.ownerUserId == ownerUserId &&
+            wallet.deletedAt == null &&
+            !wallet.isArchived &&
+            wallet.systemPurposeRawValue != INVESTMENT_PROFIT_SYSTEM_PURPOSE
+    }
+    .sortedWith(compareBy(LedgerWalletRecord::sortOrder, LedgerWalletRecord::createdAt))
+    .map { wallet ->
+        ReceiptAnalysisWalletCandidate(
+            id = wallet.id,
+            name = wallet.name,
+            kindRawValue = wallet.kindWireValue,
+            currencyCode = wallet.currencyCode,
+            institutionDisplayName = wallet.institutionDisplayName,
+        )
+    }
+    .toList()
 
 internal suspend fun analyzePreparedReceipts(
     images: List<PreparedReceiptImage>,

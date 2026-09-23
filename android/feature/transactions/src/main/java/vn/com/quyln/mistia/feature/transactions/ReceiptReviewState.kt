@@ -2,6 +2,7 @@ package vn.com.quyln.mistia.feature.transactions
 
 import vn.com.quyln.mistia.core.model.BillItemAnalysisResult
 import vn.com.quyln.mistia.core.model.PreparedReceiptImage
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisException
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisFailure
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisQuota
 
@@ -86,6 +87,26 @@ internal data class ReceiptReviewAnalysisBatch(
     val billIds: List<String>,
     val images: List<PreparedReceiptImage>,
 ) {
+    fun fail(error: ReceiptAnalysisException): ReceiptReviewState {
+        val startedIds = billIds.toSet()
+        return state.copy(
+            bills = state.bills.map { bill ->
+                if (bill.id in startedIds) {
+                    bill.copy(
+                        result = null,
+                        selectedWalletId = null,
+                        quota = error.quota,
+                        isAnalyzing = false,
+                        isMultipleBillImage = false,
+                        failure = error.reason,
+                    )
+                } else {
+                    bill
+                }
+            },
+        )
+    }
+
     fun complete(
         attempts: List<ReceiptAnalysisAttempt>,
         categoryIds: Set<String>,
