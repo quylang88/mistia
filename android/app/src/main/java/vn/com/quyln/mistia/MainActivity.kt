@@ -46,6 +46,7 @@ import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.DeviceRegistration
 import vn.com.quyln.mistia.core.model.DeviceRegistry
 import vn.com.quyln.mistia.core.model.FinanceRepository
+import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.SyncEngine
 import vn.com.quyln.mistia.core.auth.SecureDeviceIdStore
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var deviceRegistry: DeviceRegistry
     @Inject lateinit var deviceIdStore: SecureDeviceIdStore
     @Inject lateinit var categoryTranslationCoordinator: CategoryTranslationCoordinator
+    @Inject lateinit var exchangeRateRepository: ExchangeRateRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +87,7 @@ class MainActivity : ComponentActivity() {
                     deviceRegistry = deviceRegistry,
                     deviceIdStore = deviceIdStore,
                     categoryTranslationCoordinator = categoryTranslationCoordinator,
+                    exchangeRateRepository = exchangeRateRepository,
                     openedFromFamilyInvite = openedFromFamilyInvite,
                 )
             }
@@ -102,6 +105,7 @@ private fun MistiaApp(
     deviceRegistry: DeviceRegistry,
     deviceIdStore: SecureDeviceIdStore,
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
+    exchangeRateRepository: ExchangeRateRepository,
     openedFromFamilyInvite: Boolean,
 ) {
     val authState by authRepository.state.collectAsStateWithLifecycle()
@@ -140,6 +144,7 @@ private fun MistiaApp(
                 syncEngine = syncEngine,
                 deviceIdStore = deviceIdStore,
                 categoryTranslationCoordinator = categoryTranslationCoordinator,
+                exchangeRateRepository = exchangeRateRepository,
                 openedFromFamilyInvite = openedFromFamilyInvite,
             )
         }
@@ -163,6 +168,7 @@ private fun SignedInRoot(
     syncEngine: SyncEngine,
     deviceIdStore: SecureDeviceIdStore,
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
+    exchangeRateRepository: ExchangeRateRepository,
     openedFromFamilyInvite: Boolean,
 ) {
     val navController = rememberNavController()
@@ -198,6 +204,7 @@ private fun SignedInRoot(
                     RootTab.TRANSACTIONS -> TransactionsScreen(
                         ownerUserId = authState.session.userId,
                         repository = financeRepository,
+                        exchangeRateRepository = exchangeRateRepository,
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
                         modifier = modifier,
                     )

@@ -50,6 +50,7 @@ import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.CategoryHierarchyRole
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
+import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
 import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
@@ -59,6 +60,7 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionValidationError
 import vn.com.quyln.mistia.core.model.TransactionValidationException
 import vn.com.quyln.mistia.core.model.WalletKind
+import vn.com.quyln.mistia.core.model.matchingExchangeRateSnapshot
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -66,6 +68,7 @@ fun TransactionEditorSheet(
     transaction: LedgerTransactionRecord?,
     wallets: List<LedgerWalletRecord>,
     categories: List<TransactionCategoryRecord>,
+    exchangeRates: List<ExchangeRateSnapshot>,
     now: String,
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
@@ -102,6 +105,15 @@ fun TransactionEditorSheet(
     val isCrossCurrency = state.primaryKind == TransactionPrimaryKind.TRANSFER &&
         sourceWallet != null && destinationWallet != null &&
         !sourceWallet.currencyCode.equals(destinationWallet.currencyCode, ignoreCase = true)
+    val displayedFxState = if (isCrossCurrency) {
+        state.withCurrentAppRate(
+            sourceWallet.currencyCode,
+            destinationWallet.currencyCode,
+            exchangeRates,
+        )
+    } else {
+        state
+    }
 
     ModalBottomSheet(onDismissRequest = { if (!isSaving) onDismiss() }) {
         Column(
@@ -133,6 +145,7 @@ fun TransactionEditorSheet(
                         val result = state.toDraft(
                             sourceCurrencyCode = sourceWallet?.currencyCode,
                             destinationCurrencyCode = destinationWallet?.currencyCode,
+                            rates = exchangeRates,
                         )
                         validation = result.validation
                         operationError = null
@@ -196,7 +209,18 @@ fun TransactionEditorSheet(
                     )
                     OutlinedTextField(
                         value = state.amountText,
-                        onValueChange = { state = state.copy(amountText = it) },
+                        onValueChange = { value ->
+                            val changed = state.copy(amountText = value)
+                            state = if (changed.conversionMode == CurrencyConversionMode.APP_RATE) {
+                                changed.withCurrentAppRate(
+                                    sourceWallet?.currencyCode,
+                                    destinationWallet?.currencyCode,
+                                    exchangeRates,
+                                )
+                            } else {
+                                changed
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         label = {
                             Text(
@@ -261,11 +285,16 @@ fun TransactionEditorSheet(
                                 FilterChip(
                                     selected = state.sourceWalletId == wallet.id,
                                     onClick = {
+                                        val selectedDestination = destinationWallet
+                                            ?.takeIf { it.id != wallet.id }
                                         state = state.copy(
                                             sourceWalletId = wallet.id,
-                                            destinationWalletId = state.destinationWalletId
-                                                ?.takeIf { it != wallet.id },
-                                        ).withManualFxIfNeeded(wallet, destinationWallet)
+                                            destinationWalletId = selectedDestination?.id,
+                                        ).withFxPair(
+                                            wallet.currencyCode,
+                                            selectedDestination?.currencyCode,
+                                            exchangeRates,
+                                        )
                                         validation = null
                                     },
                                     label = { Text(walletPickerTitle(wallet)) },
@@ -288,7 +317,11 @@ fun TransactionEditorSheet(
                                     selected = state.destinationWalletId == wallet.id,
                                     onClick = {
                                         state = state.copy(destinationWalletId = wallet.id)
-                                            .withManualFxIfNeeded(sourceWallet, wallet)
+                                            .withFxPair(
+                                                sourceWallet?.currencyCode,
+                                                wallet.currencyCode,
+                                                exchangeRates,
+                                            )
                                         validation = null
                                     },
                                     label = { Text(walletPickerTitle(wallet)) },
@@ -328,10 +361,22 @@ fun TransactionEditorSheet(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val appRateAvailable = matchingExchangeRateSnapshot(
+                                sourceWallet.currencyCode,
+                                destinationWallet.currencyCode,
+                                exchangeRates,
+                            ) != null
                             FilterChip(
                                 selected = state.conversionMode == CurrencyConversionMode.APP_RATE,
-                                enabled = state.conversionMode == CurrencyConversionMode.APP_RATE,
-                                onClick = {},
+                                enabled = appRateAvailable,
+                                onClick = {
+                                    state = state.withFxPair(
+                                        sourceWallet.currencyCode,
+                                        destinationWallet.currencyCode,
+                                        exchangeRates,
+                                    )
+                                    validation = null
+                                },
                                 label = { Text(stringResource(R.string.transactions_transactioneditor_use_app_rate)) },
                             )
                             FilterChip(
@@ -339,15 +384,18 @@ fun TransactionEditorSheet(
                                 onClick = {
                                     state = state.copy(
                                         conversionMode = CurrencyConversionMode.MANUAL,
+                                        destinationAmountText = "",
+                                        exchangeRateText = "",
                                         exchangeRateProvider = "manual",
                                         exchangeRateDate = null,
                                     )
+                                    validation = null
                                 },
                                 label = { Text(stringResource(R.string.transactions_transactioneditor_enter_manually)) },
                             )
                         }
                         OutlinedTextField(
-                            value = state.destinationAmountText,
+                            value = displayedFxState.destinationAmountText,
                             onValueChange = { state = state.copy(destinationAmountText = it) },
                             modifier = Modifier.fillMaxWidth(),
                             label = {
@@ -357,14 +405,16 @@ fun TransactionEditorSheet(
                                 )
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            readOnly = state.conversionMode == CurrencyConversionMode.APP_RATE,
                             singleLine = true,
                         )
                         OutlinedTextField(
-                            value = state.exchangeRateText,
+                            value = displayedFxState.exchangeRateText,
                             onValueChange = { state = state.copy(exchangeRateText = it) },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text(stringResource(R.string.settings_currency_rate_value)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            readOnly = state.conversionMode == CurrencyConversionMode.APP_RATE,
                             singleLine = true,
                         )
                     }
@@ -566,19 +616,6 @@ private fun sourceWalletsForKind(
     kind: TransactionPrimaryKind,
 ): List<LedgerWalletRecord> = wallets.filter {
     kind == TransactionPrimaryKind.EXPENSE || it.kind != WalletKind.CREDIT_CARD
-}
-
-private fun TransactionEditorState.withManualFxIfNeeded(
-    source: LedgerWalletRecord?,
-    destination: LedgerWalletRecord?,
-): TransactionEditorState {
-    val isCrossCurrency = source != null && destination != null &&
-        !source.currencyCode.equals(destination.currencyCode, ignoreCase = true)
-    return if (isCrossCurrency && conversionMode == null) {
-        copy(conversionMode = CurrencyConversionMode.MANUAL, exchangeRateProvider = "manual")
-    } else {
-        this
-    }
 }
 
 private fun walletPickerTitle(wallet: LedgerWalletRecord): String =

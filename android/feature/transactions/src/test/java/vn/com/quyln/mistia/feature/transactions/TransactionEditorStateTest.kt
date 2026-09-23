@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
+import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
 import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.TransactionEntryStatus
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
@@ -59,12 +60,117 @@ class TransactionEditorStateTest {
             destinationAmountText = "1650000",
             conversionMode = CurrencyConversionMode.MANUAL,
             exchangeRateText = "165.000000",
+            exchangeRateProvider = "manual",
+            exchangeRateDate = "2026-09-23",
         ).toDraft(sourceCurrencyCode = "JPY", destinationCurrencyCode = "VND")
 
         assertNull(result.validation)
         assertEquals(10_000L, result.draft?.amountMinor)
         assertEquals(1_650_000L, result.draft?.destinationAmountMinor)
         assertEquals("165.000000", result.draft?.exchangeRateDecimalString)
+        assertEquals("manual", result.draft?.exchangeRateProvider)
+        assertEquals("2026-09-23", result.draft?.exchangeRateDate)
+    }
+
+    @Test
+    fun `app rate draft derives destination and exact snapshot metadata`() {
+        val result = TransactionEditorState.new(NOW).copy(
+            primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+            title = "Exchange",
+            amountText = "10000",
+            sourceWalletId = SOURCE_WALLET_ID,
+            destinationWalletId = DESTINATION_WALLET_ID,
+            destinationAmountText = "1",
+            conversionMode = CurrencyConversionMode.APP_RATE,
+            exchangeRateText = "stale-manual-rate",
+            exchangeRateProvider = "manual",
+        ).toDraft(
+            sourceCurrencyCode = "JPY",
+            destinationCurrencyCode = "VND",
+            rates = listOf(rate()),
+        )
+
+        assertNull(result.validation)
+        assertEquals(1_655_000L, result.draft?.destinationAmountMinor)
+        assertEquals(CurrencyConversionMode.APP_RATE, result.draft?.conversionMode)
+        assertEquals("165.5", result.draft?.exchangeRateDecimalString)
+        assertEquals("frankfurter", result.draft?.exchangeRateProvider)
+        assertEquals("2026-09-22", result.draft?.exchangeRateDate)
+    }
+
+    @Test
+    fun `app rate draft fails when selected pair has no cached rate`() {
+        val result = TransactionEditorState.new(NOW).copy(
+            primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+            amountText = "10000",
+            sourceWalletId = SOURCE_WALLET_ID,
+            destinationWalletId = DESTINATION_WALLET_ID,
+            conversionMode = CurrencyConversionMode.APP_RATE,
+        ).toDraft("JPY", "VND", emptyList())
+
+        assertNull(result.draft)
+        assertEquals(TransactionEditorValidation.INVALID_EXCHANGE_RATE, result.validation)
+    }
+
+    @Test
+    fun `wallet pair change clears stale app metadata and falls back to manual`() {
+        val state = TransactionEditorState.new(NOW).copy(
+            primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+            amountText = "10000",
+            destinationAmountText = "1655000",
+            conversionMode = CurrencyConversionMode.APP_RATE,
+            exchangeRateText = "165.5",
+            exchangeRateProvider = "frankfurter",
+            exchangeRateDate = "2026-09-22",
+        )
+
+        val changed = state.withFxPair("USD", "VND", listOf(rate()))
+
+        assertEquals(CurrencyConversionMode.MANUAL, changed.conversionMode)
+        assertEquals("", changed.destinationAmountText)
+        assertEquals("", changed.exchangeRateText)
+        assertEquals("manual", changed.exchangeRateProvider)
+        assertNull(changed.exchangeRateDate)
+    }
+
+    @Test
+    fun `same currency pair clears every conversion field`() {
+        val changed = TransactionEditorState.new(NOW).copy(
+            destinationAmountText = "1655000",
+            conversionMode = CurrencyConversionMode.APP_RATE,
+            exchangeRateText = "165.5",
+            exchangeRateProvider = "frankfurter",
+            exchangeRateDate = "2026-09-22",
+        ).withFxPair("JPY", "JPY", listOf(rate()))
+
+        assertEquals("", changed.destinationAmountText)
+        assertNull(changed.conversionMode)
+        assertEquals("", changed.exchangeRateText)
+        assertNull(changed.exchangeRateProvider)
+        assertNull(changed.exchangeRateDate)
+    }
+
+    @Test
+    fun `display state refreshes an existing app rate from the current snapshot`() {
+        val stale = TransactionEditorState.new(NOW).copy(
+            amountText = "10000",
+            conversionMode = CurrencyConversionMode.APP_RATE,
+            destinationAmountText = "1655000",
+            exchangeRateText = "165.5",
+            exchangeRateProvider = "frankfurter",
+            exchangeRateDate = "2026-09-22",
+        )
+        val current = rate().copy(rateDecimalString = "164.77", rateDate = "2026-09-23")
+
+        val refreshed = stale.withCurrentAppRate("JPY", "VND", listOf(current))
+
+        assertEquals(CurrencyConversionMode.APP_RATE, refreshed.conversionMode)
+        assertEquals("1647700", refreshed.destinationAmountText)
+        assertEquals("164.77", refreshed.exchangeRateText)
+        assertEquals("2026-09-23", refreshed.exchangeRateDate)
     }
 
     @Test
@@ -150,6 +256,15 @@ class TransactionEditorStateTest {
         archivedAt = null,
         syncVersion = 0,
         lastModifiedByDeviceId = DEVICE,
+    )
+
+    private fun rate() = ExchangeRateSnapshot(
+        baseCurrencyCode = "JPY",
+        quoteCurrencyCode = "VND",
+        rateDecimalString = "165.5",
+        provider = "frankfurter",
+        fetchedAtEpochMillis = 1L,
+        rateDate = "2026-09-22",
     )
 
     private companion object {

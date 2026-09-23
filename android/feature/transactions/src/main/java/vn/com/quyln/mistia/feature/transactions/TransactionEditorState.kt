@@ -7,11 +7,14 @@ import java.math.RoundingMode
 import java.util.Currency
 import java.util.Locale
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
+import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
 import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionEntryStatus
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
+import vn.com.quyln.mistia.core.model.matchingExchangeRateSnapshot
+import vn.com.quyln.mistia.core.model.resolveExchangeRate
 
 data class TransactionEditorState(
     val id: String?,
@@ -53,6 +56,7 @@ data class TransactionEditorState(
     fun toDraft(
         sourceCurrencyCode: String?,
         destinationCurrencyCode: String?,
+        rates: List<ExchangeRateSnapshot> = emptyList(),
     ): TransactionEditorDraftResult {
         if (sourceWalletId == null) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.SOURCE_WALLET_REQUIRED)
@@ -74,18 +78,33 @@ data class TransactionEditorState(
         val isCrossCurrency = primaryKind == TransactionPrimaryKind.TRANSFER &&
             sourceCurrencyCode != null && destinationCurrencyCode != null &&
             !sourceCurrencyCode.equals(destinationCurrencyCode, ignoreCase = true)
-        val destinationAmount = if (isCrossCurrency) {
-            parseMinorInput(destinationAmountText, destinationCurrencyCode)?.takeIf { it > 0 }
+        val appRate = if (isCrossCurrency && conversionMode == CurrencyConversionMode.APP_RATE) {
+            resolveExchangeRate(
+                amountMinor = amount,
+                sourceCurrencyCode = sourceCurrencyCode!!,
+                destinationCurrencyCode = destinationCurrencyCode!!,
+                rates = rates,
+            )?.takeIf { it.destinationAmountMinor > 0 }
+                ?: return TransactionEditorDraftResult(
+                    validation = TransactionEditorValidation.INVALID_EXCHANGE_RATE,
+                )
+        } else null
+        val destinationAmount = when {
+            !isCrossCurrency -> null
+            appRate != null -> appRate.destinationAmountMinor
+            else -> parseMinorInput(destinationAmountText, destinationCurrencyCode)?.takeIf { it > 0 }
                 ?: return TransactionEditorDraftResult(
                     validation = TransactionEditorValidation.INVALID_DESTINATION_AMOUNT,
                 )
-        } else {
-            null
         }
-        val rate = if (isCrossCurrency) exchangeRateText.trim().takeIf(String::isNotEmpty) else null
-        if (isCrossCurrency && (conversionMode == null || rate == null ||
-                runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1)
-        ) {
+        val manualRate = if (isCrossCurrency && conversionMode == CurrencyConversionMode.MANUAL) {
+            exchangeRateText.trim().takeIf(String::isNotEmpty)?.takeIf {
+                runCatching { BigDecimal(it) }.getOrNull()?.signum() == 1
+            } ?: return TransactionEditorDraftResult(
+                validation = TransactionEditorValidation.INVALID_EXCHANGE_RATE,
+            )
+        } else null
+        if (isCrossCurrency && conversionMode == null) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.INVALID_EXCHANGE_RATE)
         }
         return TransactionEditorDraftResult(
@@ -103,10 +122,82 @@ data class TransactionEditorState(
                 categoryId = categoryId,
                 destinationAmountMinor = destinationAmount,
                 conversionMode = if (isCrossCurrency) conversionMode else null,
-                exchangeRateDecimalString = rate,
-                exchangeRateProvider = if (isCrossCurrency) exchangeRateProvider else null,
-                exchangeRateDate = if (isCrossCurrency) exchangeRateDate else null,
+                exchangeRateDecimalString = appRate?.rateDecimalString ?: manualRate,
+                exchangeRateProvider = when {
+                    appRate != null -> appRate.provider
+                    isCrossCurrency -> exchangeRateProvider
+                    else -> null
+                },
+                exchangeRateDate = appRate?.rateDate
+                    ?: exchangeRateDate.takeIf { isCrossCurrency },
             ),
+        )
+    }
+
+    fun withFxPair(
+        sourceCurrencyCode: String?,
+        destinationCurrencyCode: String?,
+        rates: List<ExchangeRateSnapshot>,
+    ): TransactionEditorState {
+        val source = sourceCurrencyCode?.trim()
+        val destination = destinationCurrencyCode?.trim()
+        val isCrossCurrency = !source.isNullOrEmpty() && !destination.isNullOrEmpty() &&
+            !source.equals(destination, ignoreCase = true)
+        if (!isCrossCurrency) {
+            return copy(
+                destinationAmountText = "",
+                conversionMode = null,
+                exchangeRateText = "",
+                exchangeRateProvider = null,
+                exchangeRateDate = null,
+            )
+        }
+        val snapshot = matchingExchangeRateSnapshot(source!!, destination!!, rates)
+            ?: return copy(
+                destinationAmountText = "",
+                conversionMode = CurrencyConversionMode.MANUAL,
+                exchangeRateText = "",
+                exchangeRateProvider = "manual",
+                exchangeRateDate = null,
+            )
+        val amount = parseMinorInput(amountText, source)
+        val resolved = amount?.let { resolveExchangeRate(it, source, destination, rates) }
+        return copy(
+            destinationAmountText = resolved?.destinationAmountMinor
+                ?.let { formatMinorInput(it, destination) }.orEmpty(),
+            conversionMode = CurrencyConversionMode.APP_RATE,
+            exchangeRateText = snapshot.rateDecimalString,
+            exchangeRateProvider = snapshot.provider,
+            exchangeRateDate = snapshot.rateDate,
+        )
+    }
+
+    fun withCurrentAppRate(
+        sourceCurrencyCode: String?,
+        destinationCurrencyCode: String?,
+        rates: List<ExchangeRateSnapshot>,
+    ): TransactionEditorState {
+        if (conversionMode != CurrencyConversionMode.APP_RATE) return this
+        val source = sourceCurrencyCode?.trim()
+        val destination = destinationCurrencyCode?.trim()
+        val isCrossCurrency = !source.isNullOrEmpty() && !destination.isNullOrEmpty() &&
+            !source.equals(destination, ignoreCase = true)
+        if (!isCrossCurrency) return withFxPair(source, destination, rates)
+        val snapshot = matchingExchangeRateSnapshot(source!!, destination!!, rates)
+            ?: return copy(
+                destinationAmountText = "",
+                exchangeRateText = "",
+                exchangeRateProvider = null,
+                exchangeRateDate = null,
+            )
+        val amount = parseMinorInput(amountText, source)
+        val resolved = amount?.let { resolveExchangeRate(it, source, destination, rates) }
+        return copy(
+            destinationAmountText = resolved?.destinationAmountMinor
+                ?.let { formatMinorInput(it, destination) }.orEmpty(),
+            exchangeRateText = snapshot.rateDecimalString,
+            exchangeRateProvider = snapshot.provider,
+            exchangeRateDate = snapshot.rateDate,
         )
     }
 

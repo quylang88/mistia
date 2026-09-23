@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,6 +29,7 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
+import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
 import vn.com.quyln.mistia.core.model.transactionDisplayMoney
@@ -36,6 +38,7 @@ import vn.com.quyln.mistia.core.model.transactionDisplayMoney
 fun TransactionsScreen(
     ownerUserId: UserId,
     repository: FinanceRepository,
+    exchangeRateRepository: ExchangeRateRepository,
     deviceIdProvider: suspend () -> String,
     modifier: Modifier = Modifier,
 ) {
@@ -46,6 +49,10 @@ fun TransactionsScreen(
         .collectAsStateWithLifecycle(emptyList())
     val dueOccurrences by repository.observe(CloudEntity.DUE_OCCURRENCE_RECORD, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
+    val exchangeRates by exchangeRateRepository.rates.collectAsStateWithLifecycle()
+    LaunchedEffect(exchangeRateRepository) {
+        exchangeRateRepository.refreshIfStale()
+    }
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editorTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
     val walletCurrencies = wallets.associate { it.id to it.currencyCode }
@@ -128,6 +135,7 @@ fun TransactionsScreen(
                 transaction = transaction,
                 wallets = wallets,
                 categories = categories,
+                exchangeRates = exchangeRates,
                 now = Instant.now().toString(),
                 onDismiss = { editorOpen = false },
                 onSave = { draft ->

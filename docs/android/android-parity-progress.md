@@ -414,3 +414,30 @@ No live Supabase write, migration, RLS/RPC change or deployment occurred. All
 cloud-write gates remain disabled, and APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-23-apk1-paid-statement-guards.md`.
+
+## APK 1 automatic transaction exchange rate — 2026-09-23
+
+- [x] Added the iOS-equivalent JPY/VND Frankfurter snapshot contract, direct
+  and inverse exact-decimal conversion, `HALF_UP` minor-unit rounding and
+  overflow/invalid-rate rejection.
+- [x] Added a SharedPreferences-backed repository that exposes the last good
+  rate immediately, validates responses before atomic replacement and refreshes
+  at most once per local day after 07:00. Cache commits run off the caller
+  thread and coroutine cancellation is preserved.
+- [x] Enabled App rate in the native transaction editor. Destination amount,
+  decimal rate, provider and rate date are derived from the current snapshot;
+  refreshed snapshots cannot leave display and saved draft out of sync.
+  Manual conversion and same-currency metadata clearing remain intact.
+- [x] Verified 194 Android unit tests across 37 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check, Android
+  localization generation and strict iOS localization code generation.
+- [x] Final-artifact Samsung verification was skipped under the user's current
+  direction because no Samsung is connected. An earlier pre-final diagnostic
+  build fetched and persisted a real `JPY/VND=164.77` Frankfurter snapshot,
+  but that observation is not claimed as the final APK device gate.
+
+No Supabase schema, RLS/RPC, Edge Function, production write or deployment was
+changed. All cloud-write flags remain `false`. Receipt capture/analysis and
+other unfinished APK 1 workflows remain, so APK 1 is not complete.
+
+Evidence: `docs/android/evidence/2026-09-23-apk1-automatic-exchange-rate.md`.

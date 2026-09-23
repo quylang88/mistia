@@ -38,10 +38,10 @@
 **Interfaces:**
 - Produces: `ExchangeRateSnapshot`, `ExchangeRateRepository`, and `resolveExchangeRate(amountMinor, sourceCurrencyCode, destinationCurrencyCode, rates)`.
 
-- [ ] Write failing tests for direct/inverse conversion, half-up rounding, invalid rates, unsupported pairs, and overflow.
-- [ ] Run `./gradlew :core:model:testDebugUnitTest --tests '*ExchangeRatesTest'` and confirm failure because the API is absent.
-- [ ] Implement the immutable types and pure resolver with `BigDecimal` and exact `Long` conversion.
-- [ ] Re-run the focused model tests and confirm they pass.
+- [x] Write failing tests for direct/inverse conversion, half-up rounding, invalid rates, unsupported pairs, and overflow.
+- [x] Run `./gradlew :core:model:testDebugUnitTest --tests '*ExchangeRatesTest'` and confirm failure because the API is absent.
+- [x] Implement the immutable types and pure resolver with `BigDecimal` and exact `Long` conversion.
+- [x] Re-run the focused model tests and confirm they pass.
 
 ### Task 2: Cached Frankfurter repository
 
@@ -54,10 +54,10 @@
 - Consumes: `ExchangeRateRepository` and `ExchangeRateSnapshot` from Task 1.
 - Produces: a singleton Hilt binding backed by SharedPreferences and OkHttp.
 
-- [ ] Write failing MockWebServer tests for the exact path, validated cache replacement, cache retention on malformed data, and once-daily refresh after 07:00.
-- [ ] Run the focused network test and confirm failure because the repository is absent.
-- [ ] Implement response validation, atomic cache persistence, `StateFlow`, and stale-refresh policy.
-- [ ] Bind the implementation in `AppModule` and re-run focused network and app compilation checks.
+- [x] Write failing MockWebServer tests for the exact path, validated cache replacement, cache retention on malformed data, and once-daily refresh after 07:00.
+- [x] Run the focused network test and confirm failure because the repository is absent.
+- [x] Implement response validation, atomic cache persistence, `StateFlow`, and stale-refresh policy.
+- [x] Bind the implementation in `AppModule` and re-run focused network and app compilation checks.
 
 ### Task 3: Transaction editor App-rate flow
 
@@ -72,10 +72,10 @@
 - Consumes: repository snapshots and `resolveExchangeRate` from Tasks 1-2.
 - Produces: an App-rate `TransactionDraft` with resolved destination amount and rate/provider/date metadata.
 
-- [ ] Write failing editor-state tests for exact App-rate draft metadata, missing-rate validation, and wallet-pair recomputation.
-- [ ] Run the focused transaction-feature tests and confirm the new expectations fail.
-- [ ] Inject/collect the repository, trigger bounded stale refresh, enable both mode chips, and make App-rate fields derived/read-only.
-- [ ] Re-run focused tests and compile the app.
+- [x] Write failing editor-state tests for exact App-rate draft metadata, missing-rate validation, and wallet-pair recomputation.
+- [x] Run the focused transaction-feature tests and confirm the new expectations fail.
+- [x] Inject/collect the repository, trigger bounded stale refresh, enable both mode chips, and make App-rate fields derived/read-only.
+- [x] Re-run focused tests and compile the app.
 
 ### Task 4: Evidence and release gate
 
@@ -87,8 +87,8 @@
 - Consumes: the completed automatic-rate flow.
 - Produces: auditable local and Samsung evidence plus one independent feature commit.
 
-- [ ] Run full Android unit tests, Room Android-test compilation, lint, and debug assembly with one Gradle worker.
-- [ ] Run Android contract, Android localization, and strict iOS String Catalog checks.
-- [ ] Record test totals, APK SHA-256, cache/network boundary, and all remaining APK 1 work.
-- [ ] Install with `adb install -r`, verify authenticated launch and cross-currency editor behavior when matching device data exists, and clearly distinguish any unverified live-rate UI branch.
-- [ ] Run `git diff --check`, review the staged diff, and commit `feat(android): resolve transaction app exchange rates`.
+- [x] Run full Android unit tests, Room Android-test compilation, lint, and debug assembly with one Gradle worker.
+- [x] Run Android contract, Android localization, and strict iOS String Catalog checks.
+- [x] Record test totals, APK SHA-256, cache/network boundary, and all remaining APK 1 work.
+- [x] Skip final-artifact Samsung verification per the user's current direction; distinguish the earlier pre-final diagnostic from the release gate.
+- [x] Run `git diff --check`, review the staged diff, and commit `feat(android): resolve transaction app exchange rates`.

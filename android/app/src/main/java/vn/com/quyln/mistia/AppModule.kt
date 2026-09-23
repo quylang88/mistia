@@ -28,6 +28,7 @@ import vn.com.quyln.mistia.core.model.DeviceRegistry
 import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
+import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.RemoteStore
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
@@ -43,6 +44,7 @@ import vn.com.quyln.mistia.core.sync.WalletPushCoordinator
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CategoryNameTranslator
 import vn.com.quyln.mistia.core.network.SupabaseCategoryNameTranslator
+import vn.com.quyln.mistia.core.network.FrankfurterExchangeRateRepository
 import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 
 @Module
@@ -55,6 +57,14 @@ object AppModule {
     @Provides
     @Singleton
     fun provideHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
+
+    @Provides
+    @Singleton
+    fun provideExchangeRateRepository(
+        @ApplicationContext context: Context,
+        client: OkHttpClient,
+        json: Json,
+    ): ExchangeRateRepository = FrankfurterExchangeRateRepository(context, client, json)
 
     @Provides
     @Singleton
