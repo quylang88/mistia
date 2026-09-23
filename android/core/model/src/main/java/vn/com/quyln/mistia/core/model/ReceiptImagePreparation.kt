@@ -47,6 +47,9 @@ interface ReceiptImageCodec<Frame> {
     fun renderOpaqueScaled(frame: Frame, maxDimension: Int): Frame?
 
     fun encodeJpeg(frame: Frame, quality: Double): ByteArray?
+
+    /** Releases native resources owned by [frame]. Implementations must not throw. */
+    fun release(frame: Frame) = Unit
 }
 
 enum class ReceiptImagePreparationFailure {
@@ -54,6 +57,7 @@ enum class ReceiptImagePreparationFailure {
     INVALID_DIMENSIONS,
     SCALE_FAILED,
     ENCODE_FAILED,
+    SOURCE_TOO_LARGE,
     TOO_LARGE,
 }
 
@@ -65,62 +69,71 @@ class ReceiptImagePreparer<Frame>(
     private val codec: ReceiptImageCodec<Frame>,
 ) {
     suspend fun prepare(sourceData: ByteArray): PreparedReceiptImage {
-        currentCoroutineContext().ensureActive()
-        val source = codec.decode(sourceData)
-            ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.DECODE_FAILED)
-        val sourceDimensions = codec.dimensions(source)
-        if (!sourceDimensions.isValid) {
-            throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.INVALID_DIMENSIONS)
+        val ownedFrames = mutableListOf<Frame>()
+        fun <T : Frame> T.owned(): T {
+            if (ownedFrames.none { it === this }) ownedFrames += this
+            return this
         }
-
-        val normalized = codec.renderOpaqueScaled(source, MAX_ANALYSIS_DIMENSION)
-            ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.SCALE_FAILED)
-        val normalizedDimensions = codec.dimensions(normalized)
-        if (!normalizedDimensions.isValid || normalizedDimensions.longestSide > MAX_ANALYSIS_DIMENSION) {
-            throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.INVALID_DIMENSIONS)
-        }
-
-        var candidate = normalized
-        var candidateDimensions = normalizedDimensions
-        var preparedData: ByteArray? = null
-
-        while (true) {
+        try {
             currentCoroutineContext().ensureActive()
-            preparedData = encodeWithinBudget(candidate)
-            if (preparedData.size <= MAX_ANALYSIS_BYTES) break
-
-            if (candidateDimensions.longestSide <= MIN_ANALYSIS_DIMENSION) {
-                preparedData = null
-                break
-            }
-            val nextDimension = (candidateDimensions.longestSide * DIMENSION_RETRY_FACTOR).toInt()
-            if (nextDimension < MIN_ANALYSIS_DIMENSION) {
-                preparedData = null
-                break
-            }
-            candidate = codec.renderOpaqueScaled(normalized, nextDimension)
-                ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.SCALE_FAILED)
-            candidateDimensions = codec.dimensions(candidate)
-            if (!candidateDimensions.isValid || candidateDimensions.longestSide > nextDimension) {
+            val source = codec.decode(sourceData)?.owned()
+                ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.DECODE_FAILED)
+            val sourceDimensions = codec.dimensions(source)
+            if (!sourceDimensions.isValid) {
                 throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.INVALID_DIMENSIONS)
             }
+
+            val normalized = codec.renderOpaqueScaled(source, MAX_ANALYSIS_DIMENSION)?.owned()
+                ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.SCALE_FAILED)
+            val normalizedDimensions = codec.dimensions(normalized)
+            if (!normalizedDimensions.isValid || normalizedDimensions.longestSide > MAX_ANALYSIS_DIMENSION) {
+                throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.INVALID_DIMENSIONS)
+            }
+
+            var candidate = normalized
+            var candidateDimensions = normalizedDimensions
+            var preparedData: ByteArray? = null
+
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                preparedData = encodeWithinBudget(candidate)
+                if (preparedData.size <= MAX_ANALYSIS_BYTES) break
+
+                if (candidateDimensions.longestSide <= MIN_ANALYSIS_DIMENSION) {
+                    preparedData = null
+                    break
+                }
+                val nextDimension = (candidateDimensions.longestSide * DIMENSION_RETRY_FACTOR).toInt()
+                if (nextDimension < MIN_ANALYSIS_DIMENSION) {
+                    preparedData = null
+                    break
+                }
+                candidate = codec.renderOpaqueScaled(normalized, nextDimension)?.owned()
+                    ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.SCALE_FAILED)
+                candidateDimensions = codec.dimensions(candidate)
+                if (!candidateDimensions.isValid || candidateDimensions.longestSide > nextDimension) {
+                    throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.INVALID_DIMENSIONS)
+                }
+            }
+
+            val imageData = preparedData?.takeIf { it.size <= MAX_ANALYSIS_BYTES }
+                ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.TOO_LARGE)
+            currentCoroutineContext().ensureActive()
+            val thumbnail = codec.renderOpaqueScaled(normalized, THUMBNAIL_DIMENSION)?.owned()
+                ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.SCALE_FAILED)
+            val thumbnailData = codec.encodeJpeg(thumbnail, THUMBNAIL_QUALITY)
+                ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.ENCODE_FAILED)
+
+            return PreparedReceiptImage(
+                imageData = imageData,
+                thumbnailData = thumbnailData,
+                mimeType = JPEG_MIME_TYPE,
+                width = candidateDimensions.width,
+                height = candidateDimensions.height,
+            )
+        } finally {
+            ownedFrames.asReversed().forEach { frame -> runCatching { codec.release(frame) } }
         }
-
-        val imageData = preparedData?.takeIf { it.size <= MAX_ANALYSIS_BYTES }
-            ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.TOO_LARGE)
-        currentCoroutineContext().ensureActive()
-        val thumbnail = codec.renderOpaqueScaled(normalized, THUMBNAIL_DIMENSION)
-            ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.SCALE_FAILED)
-        val thumbnailData = codec.encodeJpeg(thumbnail, THUMBNAIL_QUALITY)
-            ?: throw ReceiptImagePreparationException(ReceiptImagePreparationFailure.ENCODE_FAILED)
-
-        return PreparedReceiptImage(
-            imageData = imageData,
-            thumbnailData = thumbnailData,
-            mimeType = JPEG_MIME_TYPE,
-            width = candidateDimensions.width,
-            height = candidateDimensions.height,
-        )
     }
 
     private suspend fun encodeWithinBudget(frame: Frame): ByteArray {

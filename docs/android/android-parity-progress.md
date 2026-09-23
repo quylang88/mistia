@@ -491,3 +491,23 @@ Samsung verification remains deferred per the user's current direction, and
 APK 1 remains incomplete.
 
 Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-image-preparation.md`.
+
+## APK 1 Android receipt bitmap and URI codec — 2026-09-24
+
+- [x] Added a concrete Android receipt-image loader for `content://`/URI input,
+  with a 24 MiB streaming source cap before decode.
+- [x] Added bounds-first power-of-two bitmap sampling, EXIF orientation
+  normalization, opaque white-background rendering, scaling and JPEG encoding
+  behind the existing preparation policy.
+- [x] Added deterministic recycling of every decoded/rendered native bitmap on
+  success, failure and cancellation paths.
+- [x] Verified 222 Android unit tests across 41 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Connect this loader to Photo Picker and CameraX, then implement the native
+  review/apply flow. Device visual verification remains deferred.
+
+No cloud call, production write, localization change or Samsung claim occurred.
+All cloud-write gates remain `false`; APK 1 remains incomplete.
+
+Evidence: `docs/android/evidence/2026-09-24-apk1-receipt-android-codec.md`.

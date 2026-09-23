@@ -126,6 +126,18 @@ class ReceiptImagePreparationTest {
         assertTrue(failure is CancellationException)
     }
 
+    @Test
+    fun `releases decoded and rendered frames after success`() = runBlocking {
+        val codec = FakeCodec()
+
+        ReceiptImagePreparer(codec).prepare(byteArrayOf(1))
+
+        assertEquals(
+            setOf("source", "analysis", "thumbnail"),
+            codec.releasedFrames.map(FakeFrame::label).toSet(),
+        )
+    }
+
     private fun roundedQuality(value: Double): Double = "%.2f".format(java.util.Locale.ROOT, value).toDouble()
 
     private data class FakeFrame(
@@ -145,6 +157,7 @@ class ReceiptImagePreparationTest {
     ) : ReceiptImageCodec<FakeFrame> {
         val scaleRequests = mutableListOf<Int>()
         val qualities = mutableListOf<Double>()
+        val releasedFrames = mutableListOf<FakeFrame>()
 
         override fun decode(data: ByteArray): FakeFrame? =
             if (decodeSucceeds) FakeFrame(sourceWidth, sourceHeight, "source") else null
@@ -167,6 +180,10 @@ class ReceiptImagePreparationTest {
         override fun encodeJpeg(frame: FakeFrame, quality: Double): ByteArray? {
             qualities += quality
             return encodedSize(frame, quality)?.let(::ByteArray)
+        }
+
+        override fun release(frame: FakeFrame) {
+            releasedFrames += frame
         }
     }
 }
