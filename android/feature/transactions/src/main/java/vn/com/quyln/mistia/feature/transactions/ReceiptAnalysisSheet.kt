@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +41,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.Instant
@@ -75,6 +78,7 @@ internal fun ReceiptAnalysisSheet(
     var selection by remember { mutableStateOf<Map<ReceiptItemSelectionId, Int>>(emptyMap()) }
     var preparationFailure by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
+    var totalEditorBillId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val locale = Locale.getDefault()
     val categoryChoices = remember(ownerUserId, categories, locale) {
@@ -265,6 +269,7 @@ internal fun ReceiptAnalysisSheet(
                             state = update.state
                             selection = update.selection
                         },
+                        onEditTotal = { totalEditorBillId = bill.id },
                         onRemove = {
                             state = state.remove(bill.id)
                             selection = selection.filterKeys { it.billId != bill.id }
@@ -355,6 +360,30 @@ internal fun ReceiptAnalysisSheet(
             },
         )
     }
+
+    totalEditorBillId?.let { billId ->
+        val bill = state.bills.firstOrNull { it.id == billId }
+        val result = bill?.result
+        if (result != null) {
+            ReceiptTotalEditorDialog(
+                billId = billId,
+                totalMinor = result.totalMinor,
+                currencyCode = result.currencyCode ?: "JPY",
+                onDismiss = { totalEditorBillId = null },
+                onSave = { amountText, currencyCode ->
+                    val update = state.updateTotalForReview(
+                        billId = billId,
+                        amountText = amountText,
+                        currencyCode = currencyCode,
+                        selection = selection,
+                    ) ?: return@ReceiptTotalEditorDialog
+                    state = update.state
+                    selection = update.selection
+                    totalEditorBillId = null
+                },
+            )
+        }
+    }
 }
 
 @Composable
@@ -369,6 +398,7 @@ private fun ReceiptReviewBillCard(
     onToggleItem: (ReceiptItemSelectionId) -> Unit,
     onSelectWallet: (String) -> Unit,
     onSelectCategory: (String, String) -> Unit,
+    onEditTotal: () -> Unit,
     onRemove: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -418,6 +448,11 @@ private fun ReceiptReviewBillCard(
                             text = formatMinorUnits(total, currencyCode),
                             style = MaterialTheme.typography.titleLarge,
                         )
+                    }
+                    if (result != null) {
+                        TextButton(onClick = onEditTotal) {
+                            Text(stringResource(R.string.transactions_aibill_edit_total))
+                        }
                     }
                 }
                 if (bill.isAnalyzing) {
@@ -504,6 +539,57 @@ private fun ReceiptReviewBillCard(
             }
         }
     }
+}
+
+@Composable
+private fun ReceiptTotalEditorDialog(
+    billId: String,
+    totalMinor: Long?,
+    currencyCode: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit,
+) {
+    var amountText by remember(billId, totalMinor, currencyCode) {
+        mutableStateOf(totalMinor?.let { formatMinorInput(it, currencyCode) }.orEmpty())
+    }
+    val parsedTotal = parseMinorInput(amountText, currencyCode)?.takeIf { it > 0 }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.transactions_aibill_edit_total)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("${stringResource(R.string.transactions_aibill_receipt_total)} ($currencyCode)")
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    isError = amountText.isNotBlank() && parsedTotal == null,
+                )
+                Text(
+                    text = stringResource(R.string.transactions_aibill_receipt_total_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(amountText, currencyCode) },
+                enabled = parsedTotal != null,
+            ) {
+                Text(stringResource(R.string.common_save))
+            }
+        },
+    )
 }
 
 @Composable

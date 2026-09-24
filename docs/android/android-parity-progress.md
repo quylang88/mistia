@@ -781,3 +781,24 @@ All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-wallet-category-review.md`.
+
+## APK 1 receipt total editor — 2026-09-24
+
+- [x] Added a native printed-total editor with generated localized copy and
+  currency-aware initial formatting.
+- [x] Reused the transaction editor's exact minor-unit parser: valid currency
+  precision maps without rounding, while zero/negative/excess precision is
+  rejected.
+- [x] Updated only the target bill and invalidated only its stale selection.
+- [x] Verified 261 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Add item-fact editing and discount allocation controls, then receipt-image
+  persistence and the debt/lend path.
+
+No live AI/production request, production write, migration or deployment
+occurred. `adb` remains unavailable, so no emulator/Samsung UI claim is made.
+All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-total-editor.md`.

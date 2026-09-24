@@ -167,6 +167,19 @@ internal fun ReceiptReviewState.updateItemCategoryForReview(
     selection = selection.filterKeys { it.billId != billId },
 )
 
+internal fun ReceiptReviewState.updateTotalForReview(
+    billId: String,
+    amountText: String,
+    currencyCode: String,
+    selection: Map<ReceiptItemSelectionId, Int>,
+): ReceiptReviewEditUpdate? {
+    val totalMinor = parseMinorInput(amountText, currencyCode)?.takeIf { it > 0 } ?: return null
+    return ReceiptReviewEditUpdate(
+        state = updateTotal(billId, totalMinor),
+        selection = selection.filterKeys { it.billId != billId },
+    )
+}
+
 internal data class ReceiptReviewAnalysisBatch(
     val state: ReceiptReviewState,
     val billIds: List<String>,

@@ -276,6 +276,35 @@ class ReceiptReviewStateTest {
         assertEquals(mapOf(siblingItem to 1), update.selection)
     }
 
+    @Test
+    fun `total review parses currency precision and clears only edited bill selection`() {
+        val target = ReceiptReviewBill(id = "target", image = prepared(1), result = result())
+        val sibling = ReceiptReviewBill(id = "sibling", image = prepared(2), result = result())
+        val targetItem = ReceiptItemSelectionId("target", "item")
+        val siblingItem = ReceiptItemSelectionId("sibling", "item")
+
+        val update = ReceiptReviewState(listOf(target, sibling)).updateTotalForReview(
+            billId = "target",
+            amountText = "12.34",
+            currencyCode = "USD",
+            selection = mapOf(targetItem to 1, siblingItem to 1),
+        )
+
+        requireNotNull(update)
+        assertEquals(1_234L, update.state.bills.first().result?.totalMinor)
+        assertEquals(mapOf(siblingItem to 1), update.selection)
+    }
+
+    @Test
+    fun `total review rejects nonpositive and excessive currency precision`() {
+        val state = ReceiptReviewState(
+            listOf(ReceiptReviewBill(id = "target", image = prepared(1), result = result())),
+        )
+
+        assertNull(state.updateTotalForReview("target", "0", "USD", emptyMap()))
+        assertNull(state.updateTotalForReview("target", "12.345", "USD", emptyMap()))
+    }
+
     private var generatedId = 0
 
     private fun indexId(): String = "bill-${++generatedId}"

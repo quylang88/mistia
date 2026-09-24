@@ -308,7 +308,7 @@ enum class TransactionEditorValidation {
     INVALID_EXCHANGE_RATE,
 }
 
-private fun parseMinorInput(text: String, currencyCode: String?): Long? {
+internal fun parseMinorInput(text: String, currencyCode: String?): Long? {
     val code = currencyCode?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.length == 3 } ?: return null
     val fractionDigits = runCatching { Currency.getInstance(code).defaultFractionDigits }.getOrNull()
         ?.takeIf { it >= 0 } ?: return null
@@ -320,7 +320,7 @@ private fun parseMinorInput(text: String, currencyCode: String?): Long? {
     }.getOrNull()
 }
 
-private fun formatMinorInput(minor: Long, currencyCode: String?): String {
+internal fun formatMinorInput(minor: Long, currencyCode: String?): String {
     val fractionDigits = currencyCode?.let { code ->
         runCatching { Currency.getInstance(code.uppercase(Locale.ROOT)).defaultFractionDigits }.getOrNull()
     }?.takeIf { it >= 0 } ?: 0
