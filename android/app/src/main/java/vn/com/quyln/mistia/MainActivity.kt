@@ -48,6 +48,7 @@ import vn.com.quyln.mistia.core.model.DeviceRegistry
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
 import vn.com.quyln.mistia.core.model.SyncEngine
 import vn.com.quyln.mistia.core.auth.SecureDeviceIdStore
 import vn.com.quyln.mistia.feature.family.FamilyScreen
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var deviceIdStore: SecureDeviceIdStore
     @Inject lateinit var categoryTranslationCoordinator: CategoryTranslationCoordinator
     @Inject lateinit var exchangeRateRepository: ExchangeRateRepository
+    @Inject lateinit var receiptAnalysisClient: ReceiptAnalysisClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,6 +90,7 @@ class MainActivity : ComponentActivity() {
                     deviceIdStore = deviceIdStore,
                     categoryTranslationCoordinator = categoryTranslationCoordinator,
                     exchangeRateRepository = exchangeRateRepository,
+                    receiptAnalysisClient = receiptAnalysisClient,
                     openedFromFamilyInvite = openedFromFamilyInvite,
                 )
             }
@@ -106,6 +109,7 @@ private fun MistiaApp(
     deviceIdStore: SecureDeviceIdStore,
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
     exchangeRateRepository: ExchangeRateRepository,
+    receiptAnalysisClient: ReceiptAnalysisClient,
     openedFromFamilyInvite: Boolean,
 ) {
     val authState by authRepository.state.collectAsStateWithLifecycle()
@@ -145,6 +149,7 @@ private fun MistiaApp(
                 deviceIdStore = deviceIdStore,
                 categoryTranslationCoordinator = categoryTranslationCoordinator,
                 exchangeRateRepository = exchangeRateRepository,
+                receiptAnalysisClient = receiptAnalysisClient,
                 openedFromFamilyInvite = openedFromFamilyInvite,
             )
         }
@@ -169,6 +174,7 @@ private fun SignedInRoot(
     deviceIdStore: SecureDeviceIdStore,
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
     exchangeRateRepository: ExchangeRateRepository,
+    receiptAnalysisClient: ReceiptAnalysisClient,
     openedFromFamilyInvite: Boolean,
 ) {
     val navController = rememberNavController()
@@ -205,6 +211,10 @@ private fun SignedInRoot(
                         ownerUserId = authState.session.userId,
                         repository = financeRepository,
                         exchangeRateRepository = exchangeRateRepository,
+                        receiptAnalysisClient = receiptAnalysisClient,
+                        accessTokenProvider = {
+                            (authRepository.refreshIfNeeded().getOrNull() ?: authState.session).accessToken
+                        },
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
                         modifier = modifier,
                     )

@@ -245,6 +245,63 @@ class ReceiptItemSelectionTest {
         )
     }
 
+    @Test
+    fun `review state creates expense draft only from one valid selected bill`() {
+        val bill = reviewBill(
+            id = "bill-a",
+            walletId = "wallet",
+            items = listOf(
+                reviewItem("milk", quantity = 3, amountMinor = 300),
+                reviewItem("bread", quantity = null, amountMinor = 200),
+            ),
+        )
+        val selection = mapOf(ReceiptItemSelectionId("bill-a", "milk") to 2)
+
+        val draft = ReceiptReviewState(listOf(bill)).expenseTransactionDraft(
+            selection = selection,
+            fallbackOccurredAt = "1970-01-01T00:00:00Z",
+        )
+
+        requireNotNull(draft)
+        assertEquals(200L, draft.amountMinor)
+        assertEquals("wallet", draft.walletId)
+        assertEquals("food", draft.categoryId)
+        assertEquals("bill-a", draft.receiptAttachmentBillId)
+    }
+
+    @Test
+    fun `review state rejects flagged incompatible and cross bill selections`() {
+        val valid = reviewBill(
+            id = "bill-a",
+            walletId = "wallet",
+            items = listOf(reviewItem("milk", quantity = null, amountMinor = 300)),
+        )
+        val flagged = reviewBill(
+            id = "bill-flagged",
+            walletId = "wallet",
+            items = listOf(
+                reviewItem("unknown", quantity = null, amountMinor = 100).copy(originalName = ""),
+            ),
+        )
+        val state = ReceiptReviewState(listOf(valid, flagged))
+
+        assertNull(
+            state.expenseTransactionDraft(
+                selection = mapOf(ReceiptItemSelectionId("bill-flagged", "unknown") to 1),
+                fallbackOccurredAt = NOW_FALLBACK,
+            ),
+        )
+        assertNull(
+            state.expenseTransactionDraft(
+                selection = mapOf(
+                    ReceiptItemSelectionId("bill-a", "milk") to 1,
+                    ReceiptItemSelectionId("bill-flagged", "unknown") to 1,
+                ),
+                fallbackOccurredAt = NOW_FALLBACK,
+            ),
+        )
+    }
+
     private fun candidate(
         itemId: String,
         billId: String = "bill",
@@ -318,4 +375,8 @@ class ReceiptItemSelectionTest {
         confidence = 1.0,
         missingFields = emptyList(),
     )
+
+    private companion object {
+        const val NOW_FALLBACK = "1970-01-01T00:00:00Z"
+    }
 }

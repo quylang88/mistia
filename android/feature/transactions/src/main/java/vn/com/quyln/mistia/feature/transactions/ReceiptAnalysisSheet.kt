@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
@@ -61,9 +63,11 @@ internal fun ReceiptAnalysisSheet(
     wallets: List<LedgerWalletRecord>,
     client: ReceiptAnalysisClient,
     accessTokenProvider: suspend () -> String?,
+    onCreateTransaction: (ReceiptItemTransactionDraft) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var state by remember { mutableStateOf(ReceiptReviewState()) }
+    var selection by remember { mutableStateOf<Map<ReceiptItemSelectionId, Int>>(emptyMap()) }
     var preparationFailure by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -75,6 +79,10 @@ internal fun ReceiptAnalysisSheet(
         receiptAnalysisWalletCandidates(ownerUserId, wallets).map { it.id }.toSet()
     }
     val isAnalyzing = state.bills.any(ReceiptReviewBill::isAnalyzing)
+    val fallbackOccurredAt = remember { Instant.now().toString() }
+    val candidates = state.selectionCandidates(selection)
+    val selectedCandidates = candidates.filter { it.id in selection }
+    val expenseDraft = state.expenseTransactionDraft(selection, fallbackOccurredAt)
 
     fun appendResult(result: ReceiptPhotoSelectionResult) {
         state = state.append(result.images) { UUID.randomUUID().toString() }
@@ -219,8 +227,23 @@ internal fun ReceiptAnalysisSheet(
                         bill = bill,
                         index = index,
                         wallets = wallets,
-                        onRemove = { state = state.remove(bill.id) },
+                        candidates = candidates.filter { it.id.billId == bill.id },
+                        selection = selection,
+                        selectedCandidates = selectedCandidates,
+                        onToggleItem = { candidateId ->
+                            selection = ReceiptItemSelectionLogic.toggleSelection(
+                                selection = selection,
+                                candidateId = candidateId,
+                                candidates = candidates,
+                                mode = ReceiptTransactionMode.EXPENSE,
+                            )
+                        },
+                        onRemove = {
+                            state = state.remove(bill.id)
+                            selection = selection.filterKeys { it.billId != bill.id }
+                        },
                         onRetry = {
+                            selection = selection.filterKeys { it.billId != bill.id }
                             val retryState = state.retry(bill.id)
                             state = retryState
                             analyze(retryState)
@@ -273,6 +296,18 @@ internal fun ReceiptAnalysisSheet(
                     )
                 }
             }
+
+            item {
+                Button(
+                    onClick = { expenseDraft?.let(onCreateTransaction) },
+                    enabled = expenseDraft != null && !isAnalyzing,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                ) {
+                    Text(stringResource(R.string.transactions_aibill_create_transaction))
+                }
+            }
         }
     }
 
@@ -300,6 +335,10 @@ private fun ReceiptReviewBillCard(
     bill: ReceiptReviewBill,
     index: Int,
     wallets: List<LedgerWalletRecord>,
+    candidates: List<ReceiptItemSelectionCandidate>,
+    selection: Map<ReceiptItemSelectionId, Int>,
+    selectedCandidates: List<ReceiptItemSelectionCandidate>,
+    onToggleItem: (ReceiptItemSelectionId) -> Unit,
     onRemove: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -381,7 +420,26 @@ private fun ReceiptReviewBillCard(
                 }
                 result.items.forEachIndexed { itemIndex, item ->
                     if (itemIndex > 0) HorizontalDivider()
-                    ReceiptAnalysisItemRow(item, currencyCode)
+                    val candidate = candidates.firstOrNull { it.id.itemId == item.lineId }
+                    val isSelected = candidate?.id in selection
+                    val selectedBillId = selection.keys.firstOrNull()?.billId
+                    val canSelect = candidate != null &&
+                        !result.requiresReview &&
+                        (selectedBillId == null || selectedBillId == bill.id) &&
+                        (
+                            isSelected || ReceiptItemSelectionLogic.canSelect(
+                                candidate = candidate,
+                                selected = selectedCandidates,
+                                mode = ReceiptTransactionMode.EXPENSE,
+                            )
+                        )
+                    ReceiptAnalysisItemRow(
+                        item = item,
+                        currencyCode = currencyCode,
+                        isSelected = isSelected,
+                        selectionEnabled = canSelect,
+                        onSelectionChange = { candidate?.id?.let(onToggleItem) },
+                    )
                 }
                 result.rawText?.let { rawText ->
                     Text(
@@ -420,6 +478,9 @@ private fun ReceiptReviewBillCard(
 private fun ReceiptAnalysisItemRow(
     item: BillItemAnalysisItem,
     currencyCode: String,
+    isSelected: Boolean,
+    selectionEnabled: Boolean,
+    onSelectionChange: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -429,8 +490,14 @@ private fun ReceiptAnalysisItemRow(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onSelectionChange() },
+                enabled = selectionEnabled,
+            )
             Text(
                 text = item.originalName.ifBlank {
                     stringResource(R.string.transactions_aibill_needs_review)

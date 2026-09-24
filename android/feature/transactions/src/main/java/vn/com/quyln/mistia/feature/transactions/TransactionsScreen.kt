@@ -2,6 +2,7 @@ package vn.com.quyln.mistia.feature.transactions
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,11 +12,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -30,6 +33,7 @@ import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.ExchangeRateRepository
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
 import vn.com.quyln.mistia.core.model.transactionDisplayMoney
@@ -39,6 +43,8 @@ fun TransactionsScreen(
     ownerUserId: UserId,
     repository: FinanceRepository,
     exchangeRateRepository: ExchangeRateRepository,
+    receiptAnalysisClient: ReceiptAnalysisClient,
+    accessTokenProvider: suspend () -> String?,
     deviceIdProvider: suspend () -> String,
     modifier: Modifier = Modifier,
 ) {
@@ -55,6 +61,8 @@ fun TransactionsScreen(
     }
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editorTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editorInitialState by remember { mutableStateOf<TransactionEditorState?>(null) }
+    var receiptOpen by rememberSaveable { mutableStateOf(false) }
     val walletCurrencies = wallets.associate { it.id to it.currencyCode }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -62,21 +70,34 @@ fun TransactionsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = stringResource(R.string.app_roottab_transactions),
                     style = MaterialTheme.typography.headlineMedium,
                 )
-                Button(
-                    onClick = {
-                        editorTransactionId = null
-                        editorOpen = true
-                    },
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(stringResource(R.string.shared_sync_mistiasynccoordinator_new_transaction))
+                    OutlinedButton(
+                        onClick = { receiptOpen = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.transactions_aibill_ai_bill))
+                    }
+                    Button(
+                        onClick = {
+                            editorTransactionId = null
+                            editorInitialState = null
+                            editorOpen = true
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.shared_sync_mistiasynccoordinator_new_transaction))
+                    }
                 }
             }
         }
@@ -102,6 +123,7 @@ fun TransactionsScreen(
                 MistiaGlassCard(
                     modifier = Modifier.clickable(enabled = isEditable) {
                         editorTransactionId = record.id
+                        editorInitialState = null
                         editorOpen = true
                     },
                 ) { padding ->
@@ -128,6 +150,27 @@ fun TransactionsScreen(
         }
     }
 
+    if (receiptOpen) {
+        ReceiptAnalysisSheet(
+            ownerUserId = ownerUserId.value,
+            categories = categories,
+            wallets = wallets,
+            client = receiptAnalysisClient,
+            accessTokenProvider = accessTokenProvider,
+            onCreateTransaction = { draft ->
+                val currencyCode = wallets.firstOrNull { it.id == draft.walletId }?.currencyCode
+                val prefill = currencyCode?.let(draft::toExpenseEditorState)
+                if (prefill != null) {
+                    receiptOpen = false
+                    editorTransactionId = null
+                    editorInitialState = prefill
+                    editorOpen = true
+                }
+            },
+            onDismiss = { receiptOpen = false },
+        )
+    }
+
     if (editorOpen) {
         val transaction = editorTransactionId?.let { id -> records.firstOrNull { it.id == id } }
         if (editorTransactionId == null || transaction != null) {
@@ -137,7 +180,11 @@ fun TransactionsScreen(
                 categories = categories,
                 exchangeRates = exchangeRates,
                 now = Instant.now().toString(),
-                onDismiss = { editorOpen = false },
+                initialState = editorInitialState,
+                onDismiss = {
+                    editorOpen = false
+                    editorInitialState = null
+                },
                 onSave = { draft ->
                     repository.saveTransaction(
                         ownerUserId = ownerUserId,

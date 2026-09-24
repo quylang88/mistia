@@ -270,3 +270,29 @@ internal fun ReceiptReviewState.selectionCandidates(
         )
     }
 }
+
+internal fun ReceiptReviewState.expenseTransactionDraft(
+    selection: Map<ReceiptItemSelectionId, Int>,
+    fallbackOccurredAt: String,
+): ReceiptItemTransactionDraft? {
+    val requested = selection.filterValues { it > 0 }
+    val billId = requested.keys.map(ReceiptItemSelectionId::billId).toSet().singleOrNull()
+        ?: return null
+    val bill = bills.firstOrNull { it.id == billId } ?: return null
+    val result = bill.result ?: return null
+    if (bill.isMultipleBillImage || result.requiresReview) return null
+
+    val candidates = selectionCandidates(requested)
+    val normalized = ReceiptItemSelectionLogic.normalizedSelection(
+        selection = requested,
+        candidates = candidates,
+        mode = ReceiptTransactionMode.EXPENSE,
+    )
+    if (normalized.keys != requested.keys) return null
+    val selected = selectionCandidates(normalized).filter { it.id in normalized }
+    return ReceiptItemSelectionLogic.transactionDraft(
+        selected = selected,
+        mode = ReceiptTransactionMode.EXPENSE,
+        fallbackOccurredAt = fallbackOccurredAt,
+    )
+}

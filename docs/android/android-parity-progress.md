@@ -715,3 +715,48 @@ deferred and all five flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-selection-projection.md`.
+
+## APK 1 receipt transaction prefill bridge — 2026-09-24
+
+- [x] Added a currency-aware bridge from a supported receipt expense draft to
+  the existing native transaction editor, preserving merchant, exact amount,
+  date, wallet and child expense category.
+- [x] Added optional initial editor state without changing ordinary new/edit
+  behavior or restored-state precedence.
+- [x] Kept debt-lend drafts outside persistence because the current Android
+  repository does not support debt-transfer semantics.
+- [x] Verified 255 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind reviewed selection to the sheet and route supported expense prefills
+  from Transactions; debt/lend and receipt image persistence remain later work.
+
+No transaction/image was persisted, no live AI/production request was sent and
+no migration, deployment, device claim or cloud-write gate change occurred.
+Samsung remains deferred and all five flags remain `false`; APK 1 is not
+complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-transaction-prefill.md`.
+
+## APK 1 receipt selection and editor routing — 2026-09-24
+
+- [x] Exposed the native AI Bill sheet from Transactions with the injected
+  receipt client and refreshed signed-in access token.
+- [x] Added native checkbox selection constrained to one reviewed bill, wallet
+  and purchase category while preserving compatible standalone discounts.
+- [x] Added a guarded expense-draft action that rejects flagged/cross-bill
+  selections and opens the native transaction editor with reviewed data
+  prefilled for the existing offline save path.
+- [x] Verified 257 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Add editable total/wallet/category/item review controls and receipt-image
+  persistence. Debt/lend remains blocked until its repository contract exists.
+
+No live AI/production request, production write, migration or deployment
+occurred. `adb` is not installed on this host, so no emulator/Samsung UI claim
+is made. All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-selection-routing.md`.
