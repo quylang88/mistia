@@ -28,6 +28,18 @@ class MistiaDatabaseMigrationTest {
         ).close()
     }
 
+    @Test
+    @Throws(IOException::class)
+    fun migrateTwoToThreeCreatesLocalTransactionReceiptMetadata() {
+        helper.createDatabase(DATABASE_NAME, 2).close()
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            3,
+            true,
+            MistiaDatabase.MIGRATION_2_3,
+        ).close()
+    }
+
     private companion object {
         const val DATABASE_NAME = "mistia-migration-test"
     }

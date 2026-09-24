@@ -870,3 +870,26 @@ All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-discount-allocation-control.md`.
+
+## APK 1 local receipt-image persistence foundation — 2026-09-24
+
+- [x] Added a local receipt-image repository matching iOS's file-plus-metadata
+  design, with private app-files storage for full JPEG and thumbnail data.
+- [x] Added Room metadata schema v3 and an explicit 2→3 migration, unique
+  transaction ownership, owner-scoped cleanup and generated schema evidence.
+- [x] Protected replacement failure: new files are cleaned while the previous
+  metadata/files remain readable; successful replacement removes superseded
+  files, and delete removes both files and metadata.
+- [x] Registered the repository in Hilt and verified 273 Android unit tests
+  across 48 suites, Room Android-test compilation, lint, debug assembly, the
+  15-entity contract check and Android/strict iOS localization code generation.
+- [ ] Attach the selected bill image only after its expense transaction saves,
+  surface saved-receipt preview/removal in the editor, then implement debt/lend.
+
+No receipt was attached to a transaction yet, no live AI/production request or
+cloud write occurred, and no production database migration/deployment ran.
+`adb` remains unavailable, so the Room migration and files were not exercised
+on a device. All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-image-persistence-foundation.md`.

@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia
 
 import android.content.Context
+import java.io.File
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,6 +20,7 @@ import vn.com.quyln.mistia.core.auth.GoogleSignInBridge
 import vn.com.quyln.mistia.core.auth.GoogleSignInProvider
 import vn.com.quyln.mistia.core.auth.AuthDiagnostics
 import vn.com.quyln.mistia.core.database.MistiaDatabase
+import vn.com.quyln.mistia.core.database.LocalTransactionReceiptImageRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstFamilyRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstFinanceRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstInvestmentRepository
@@ -34,6 +36,7 @@ import vn.com.quyln.mistia.core.model.RemoteStore
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
 import vn.com.quyln.mistia.core.model.SyncEngine
+import vn.com.quyln.mistia.core.model.TransactionReceiptImageRepository
 import vn.com.quyln.mistia.core.network.SupabaseConfig
 import vn.com.quyln.mistia.core.network.MistiaWireFormat
 import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
@@ -78,6 +81,16 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MistiaDatabase = MistiaDatabase.create(context)
+
+    @Provides
+    @Singleton
+    fun provideTransactionReceiptImageRepository(
+        @ApplicationContext context: Context,
+        database: MistiaDatabase,
+    ): TransactionReceiptImageRepository = LocalTransactionReceiptImageRepository(
+        database = database,
+        baseDirectory = File(context.filesDir, "ReceiptImages"),
+    )
 
     @Provides
     @Singleton

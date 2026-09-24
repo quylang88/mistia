@@ -29,6 +29,7 @@ import vn.com.quyln.mistia.core.model.PendingMutation
 import vn.com.quyln.mistia.core.model.QueuedCategoryTranslation
 import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.TransactionReceiptImageRecord
 import vn.com.quyln.mistia.core.model.UserId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -100,6 +101,25 @@ data class SyncCursorEntity(
     val entity: String,
     @ColumnInfo(name = "last_full_pull_epoch_millis") val lastFullPullEpochMillis: Long,
     @ColumnInfo(name = "last_record_count") val lastRecordCount: Int,
+)
+
+@Entity(
+    tableName = "transaction_receipt_images",
+    indices = [
+        Index(value = ["owner_user_id"]),
+        Index(value = ["transaction_id"], unique = true),
+    ],
+)
+data class TransactionReceiptImageEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "owner_user_id") val ownerUserId: String,
+    @ColumnInfo(name = "transaction_id") val transactionId: String,
+    @ColumnInfo(name = "image_file_name") val imageFileName: String,
+    @ColumnInfo(name = "thumbnail_file_name") val thumbnailFileName: String,
+    @ColumnInfo(name = "content_type") val contentType: String,
+    @ColumnInfo(name = "byte_count") val byteCount: Int,
+    @ColumnInfo(name = "created_at") val createdAt: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: String,
 )
 
 data class EntityCountProjection(
@@ -332,14 +352,39 @@ interface SyncCursorDao {
     suspend fun deleteAccount(ownerUserId: String)
 }
 
+@Dao
+interface TransactionReceiptImageDao {
+    @Query(
+        """
+        SELECT * FROM transaction_receipt_images
+        WHERE transaction_id = :transactionId
+        LIMIT 1
+        """
+    )
+    suspend fun receipt(transactionId: String): TransactionReceiptImageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun replace(receipt: TransactionReceiptImageEntity)
+
+    @Query("DELETE FROM transaction_receipt_images WHERE transaction_id = :transactionId")
+    suspend fun delete(transactionId: String)
+
+    @Query("SELECT * FROM transaction_receipt_images WHERE owner_user_id = :ownerUserId")
+    suspend fun receipts(ownerUserId: String): List<TransactionReceiptImageEntity>
+
+    @Query("DELETE FROM transaction_receipt_images WHERE owner_user_id = :ownerUserId")
+    suspend fun deleteAccount(ownerUserId: String)
+}
+
 @Database(
     entities = [
         CloudRecordEntity::class,
         SyncOutboxEntity::class,
         SyncCursorEntity::class,
         CategoryTranslationOutboxEntity::class,
+        TransactionReceiptImageEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class MistiaDatabase : RoomDatabase() {
@@ -347,11 +392,12 @@ abstract class MistiaDatabase : RoomDatabase() {
     abstract fun syncOutboxDao(): SyncOutboxDao
     abstract fun categoryTranslationOutboxDao(): CategoryTranslationOutboxDao
     abstract fun syncCursorDao(): SyncCursorDao
+    abstract fun transactionReceiptImageDao(): TransactionReceiptImageDao
 
     companion object {
         fun create(context: Context): MistiaDatabase =
             Room.databaseBuilder(context, MistiaDatabase::class.java, "mistia-android.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -378,8 +424,83 @@ abstract class MistiaDatabase : RoomDatabase() {
                 )
             }
         }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `transaction_receipt_images` (
+                        `id` TEXT NOT NULL,
+                        `owner_user_id` TEXT NOT NULL,
+                        `transaction_id` TEXT NOT NULL,
+                        `image_file_name` TEXT NOT NULL,
+                        `thumbnail_file_name` TEXT NOT NULL,
+                        `content_type` TEXT NOT NULL,
+                        `byte_count` INTEGER NOT NULL,
+                        `created_at` TEXT NOT NULL,
+                        `updated_at` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_transaction_receipt_images_owner_user_id` " +
+                        "ON `transaction_receipt_images` (`owner_user_id`)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_transaction_receipt_images_transaction_id` " +
+                        "ON `transaction_receipt_images` (`transaction_id`)"
+                )
+            }
+        }
     }
 }
+
+internal class RoomTransactionReceiptMetadataStore(
+    private val dao: TransactionReceiptImageDao,
+) : TransactionReceiptMetadataStore {
+    override suspend fun receipt(transactionId: String): TransactionReceiptImageRecord? =
+        dao.receipt(transactionId)?.toRecord()
+
+    override suspend fun replace(record: TransactionReceiptImageRecord) {
+        dao.replace(record.toEntity())
+    }
+
+    override suspend fun delete(transactionId: String) {
+        dao.delete(transactionId)
+    }
+
+    override suspend fun receipts(ownerUserId: String): List<TransactionReceiptImageRecord> =
+        dao.receipts(ownerUserId).map(TransactionReceiptImageEntity::toRecord)
+
+    override suspend fun deleteAccount(ownerUserId: String) {
+        dao.deleteAccount(ownerUserId)
+    }
+}
+
+private fun TransactionReceiptImageEntity.toRecord() = TransactionReceiptImageRecord(
+    id = id,
+    ownerUserId = ownerUserId,
+    transactionId = transactionId,
+    imageFileName = imageFileName,
+    thumbnailFileName = thumbnailFileName,
+    contentType = contentType,
+    byteCount = byteCount,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+private fun TransactionReceiptImageRecord.toEntity() = TransactionReceiptImageEntity(
+    id = id,
+    ownerUserId = ownerUserId,
+    transactionId = transactionId,
+    imageFileName = imageFileName,
+    thumbnailFileName = thumbnailFileName,
+    contentType = contentType,
+    byteCount = byteCount,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
 
 class RoomLocalStore(
     private val database: MistiaDatabase,
