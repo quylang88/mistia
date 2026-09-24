@@ -93,6 +93,7 @@ internal fun TransactionEditorSheet(
     receiptLoading: Boolean = false,
     receiptLoadFailed: Boolean = false,
     onRemoveReceipt: () -> Unit = {},
+    onSaveSuccess: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
 ) {
@@ -185,7 +186,10 @@ internal fun TransactionEditorSheet(
                         isSaving = true
                         scope.launch {
                             onSave(draft).fold(
-                                onSuccess = { onDismiss() },
+                                onSuccess = {
+                                    onSaveSuccess()
+                                    onDismiss()
+                                },
                                 onFailure = { error ->
                                     isSaving = false
                                     operationError = (error as? TransactionValidationException)?.reason

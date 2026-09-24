@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,8 @@ internal fun ReceiptAnalysisSheet(
     wallets: List<LedgerWalletRecord>,
     client: ReceiptAnalysisClient,
     accessTokenProvider: suspend () -> String?,
+    completedGroupId: String?,
+    onCompletedGroupConsumed: () -> Unit,
     onCreateTransaction: (ReceiptTransactionEditorLaunch) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -97,7 +100,17 @@ internal fun ReceiptAnalysisSheet(
     val fallbackOccurredAt = remember { Instant.now().toString() }
     val candidates = state.selectionCandidates(selection)
     val selectedCandidates = candidates.filter { it.id in selection }
-    val editorLaunch = state.transactionLaunch(selection, mode, fallbackOccurredAt)
+
+    LaunchedEffect(completedGroupId) {
+        val groupId = completedGroupId ?: return@LaunchedEffect
+        state = state.markLockedGroupCreated(groupId)
+        selection = ReceiptItemSelectionLogic.normalizedSelection(
+            selection = selection,
+            candidates = state.selectionCandidates(selection),
+            mode = mode,
+        )
+        onCompletedGroupConsumed()
+    }
 
     fun selectMode(selectedMode: ReceiptTransactionMode) {
         if (mode == selectedMode) return
@@ -285,6 +298,38 @@ internal fun ReceiptAnalysisSheet(
                                 mode = mode,
                             )
                         },
+                        onSelectItemQuantity = { candidateId, quantity ->
+                            selection = ReceiptItemSelectionLogic.selectQuantity(
+                                selection = selection,
+                                candidateId = candidateId,
+                                quantity = quantity,
+                                candidates = candidates,
+                                mode = mode,
+                            )
+                        },
+                        onConfirmSelection = {
+                            val update = state.lockSelection(
+                                selection = selection,
+                                mode = mode,
+                                groupId = UUID.randomUUID().toString().lowercase(),
+                            )
+                            if (update != null) {
+                                state = update.state
+                                selection = update.selection
+                            }
+                        },
+                        onCancelLockedGroup = { groupId ->
+                            state = state.cancelLockedGroup(bill.id, groupId)
+                            selection = ReceiptItemSelectionLogic.normalizedSelection(
+                                selection = selection,
+                                candidates = state.selectionCandidates(selection),
+                                mode = mode,
+                            )
+                        },
+                        onCreateLockedGroup = { groupId ->
+                            state.transactionLaunch(groupId, fallbackOccurredAt)
+                                ?.let(onCreateTransaction)
+                        },
                         onSelectWallet = { walletId ->
                             val update = state.selectWalletForReview(
                                 billId = bill.id,
@@ -382,17 +427,6 @@ internal fun ReceiptAnalysisSheet(
                 }
             }
 
-            item {
-                Button(
-                    onClick = { editorLaunch?.let(onCreateTransaction) },
-                    enabled = editorLaunch != null && !isAnalyzing,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                ) {
-                    Text(stringResource(R.string.transactions_aibill_create_transaction))
-                }
-            }
         }
     }
 
@@ -487,6 +521,10 @@ private fun ReceiptReviewBillCard(
     selection: Map<ReceiptItemSelectionId, Int>,
     selectedCandidates: List<ReceiptItemSelectionCandidate>,
     onToggleItem: (ReceiptItemSelectionId) -> Unit,
+    onSelectItemQuantity: (ReceiptItemSelectionId, Int) -> Unit,
+    onConfirmSelection: () -> Unit,
+    onCancelLockedGroup: (String) -> Unit,
+    onCreateLockedGroup: (String) -> Unit,
     onSelectWallet: (String) -> Unit,
     onSelectCategory: (String, String) -> Unit,
     onEditTotal: () -> Unit,
@@ -505,6 +543,13 @@ private fun ReceiptReviewBillCard(
     }
     val result = bill.result
     val currencyCode = result?.currencyCode ?: "JPY"
+    val billSelectedCandidates = selectedCandidates.filter { it.id.billId == bill.id }
+    val selectedAmountMinor = billSelectedCandidates.sumOf(ReceiptItemSelectionCandidate::amountMinor)
+    val createdAmountMinor = bill.createdAllocations.values.sumOf(ReceiptItemQuantityAllocation::amountMinor)
+    val lockedAmountMinor = bill.lockedGroups.sumOf(ReceiptItemLockedGroup::amountMinor)
+    val remainingAmountMinor = (
+        (result?.totalMinor ?: 0L) - createdAmountMinor - lockedAmountMinor - selectedAmountMinor
+    )
     MistiaGlassCard(modifier = modifier) { padding ->
         Column(
             modifier = Modifier.padding(padding),
@@ -543,7 +588,7 @@ private fun ReceiptReviewBillCard(
                         )
                     }
                     if (result != null) {
-                        TextButton(onClick = onEditTotal) {
+                        TextButton(onClick = onEditTotal, enabled = bill.canRevise) {
                             Text(stringResource(R.string.transactions_aibill_edit_total))
                         }
                     }
@@ -575,6 +620,14 @@ private fun ReceiptReviewBillCard(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+                bill.lockedGroups.forEach { group ->
+                    ReceiptLockedGroupRow(
+                        group = group,
+                        currencyCode = currencyCode,
+                        onCancel = { onCancelLockedGroup(group.id) },
+                        onCreate = { onCreateLockedGroup(group.id) },
+                    )
+                }
                 result.items.forEachIndexed { itemIndex, item ->
                     if (itemIndex > 0) HorizontalDivider()
                     val candidate = candidates.firstOrNull { it.id.itemId == item.lineId }
@@ -596,18 +649,62 @@ private fun ReceiptReviewBillCard(
                         isSelected = isSelected,
                         selectionEnabled = canSelect,
                         onSelectionChange = { candidate?.id?.let(onToggleItem) },
+                        candidate = candidate,
+                        onSelectQuantity = { quantity ->
+                            candidate?.id?.let { onSelectItemQuantity(it, quantity) }
+                        },
                         categoryLabel = categoryChoices.firstOrNull { it.id == item.categoryId }?.name,
                         categoryChoices = categoryChoices,
                         categoryEditingEnabled = mode == ReceiptTransactionMode.EXPENSE,
                         onSelectCategory = { categoryId -> onSelectCategory(item.lineId, categoryId) },
                         onEdit = { onEditItem(item) },
                         canAllocateDiscount = item.lineType == BillItemLineType.DISCOUNT &&
+                            bill.canRevise &&
                             allocateReceiptDiscount(
                                 itemId = item.lineId,
                                 items = result.items,
                             ) != null,
                         onAllocateDiscount = { onAllocateDiscount(item.lineId) },
+                        editingEnabled = candidate?.let {
+                            it.createdQuantity == 0 && it.lockedQuantity == 0
+                        } == true,
                     )
+                }
+                if (billSelectedCandidates.isNotEmpty()) {
+                    MistiaGlassCard { summaryPadding ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(summaryPadding),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.transactions_aibill_selected_amount_value,
+                                        formatMinorUnits(selectedAmountMinor, currencyCode),
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.transactions_aibill_remaining_amount_value,
+                                        formatMinorUnits(remainingAmountMinor, currencyCode),
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Button(
+                                onClick = onConfirmSelection,
+                                enabled = selectedAmountMinor > 0 && !result.requiresReview,
+                            ) {
+                                Text(stringResource(R.string.common_ok))
+                            }
+                        }
+                    }
                 }
                 result.rawText?.let { rawText ->
                     Text(
@@ -633,7 +730,7 @@ private fun ReceiptReviewBillCard(
                     }
                 }
                 if ((result != null || bill.failure != null || bill.isMultipleBillImage) && !bill.isAnalyzing) {
-                    OutlinedButton(onClick = onRetry) {
+                    OutlinedButton(onClick = onRetry, enabled = bill.canRevise) {
                         Text(stringResource(R.string.transactions_aibill_analyze_again))
                     }
                 }
@@ -700,6 +797,8 @@ private fun ReceiptAnalysisItemRow(
     isSelected: Boolean,
     selectionEnabled: Boolean,
     onSelectionChange: () -> Unit,
+    candidate: ReceiptItemSelectionCandidate?,
+    onSelectQuantity: (Int) -> Unit,
     categoryLabel: String?,
     categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
     categoryEditingEnabled: Boolean,
@@ -707,7 +806,14 @@ private fun ReceiptAnalysisItemRow(
     onEdit: () -> Unit,
     canAllocateDiscount: Boolean,
     onAllocateDiscount: () -> Unit,
+    editingEnabled: Boolean,
 ) {
+    val isCreated = candidate?.isCreated == true
+    val isLocked = candidate?.isLocked == true
+    val displayAmountMinor = candidate?.amountMinor ?: item.finalAmountMinor
+    val displayQuantity = candidate?.let {
+        it.selectedQuantity.takeIf { quantity -> quantity > 0 } ?: it.availableQuantity
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -733,7 +839,7 @@ private fun ReceiptAnalysisItemRow(
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                text = formatMinorUnits(item.finalAmountMinor, currencyCode),
+                text = formatMinorUnits(displayAmountMinor, currencyCode),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -746,19 +852,12 @@ private fun ReceiptAnalysisItemRow(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            item.quantity?.let { quantity ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = stringResource(R.string.transactions_aibill_quantity),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = quantity.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            if (item.quantity != null && candidate != null) {
+                ReceiptQuantityControl(
+                    candidate = candidate,
+                    displayedQuantity = displayQuantity ?: item.quantity ?: 1,
+                    onSelectQuantity = onSelectQuantity,
+                )
             }
             if (item.lineType == BillItemLineType.DISCOUNT) {
                 Text(
@@ -781,7 +880,7 @@ private fun ReceiptAnalysisItemRow(
                 selectedLabel = categoryLabel,
                 choices = categoryChoices.map { it.id to it.name },
                 placeholder = stringResource(R.string.transactions_transactioneditor_choose_category),
-                enabled = categoryEditingEnabled,
+                enabled = categoryEditingEnabled && !isCreated && !isLocked,
                 onSelect = onSelectCategory,
             )
         } else if (canAllocateDiscount) {
@@ -795,8 +894,108 @@ private fun ReceiptAnalysisItemRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        TextButton(onClick = onEdit) {
-            Text(stringResource(R.string.transactions_aibill_edit_item))
+        when {
+            isCreated -> Text(
+                text = stringResource(R.string.transactions_aibill_created),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            isLocked -> Text(
+                text = stringResource(R.string.transactions_aibill_locked),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            editingEnabled -> TextButton(onClick = onEdit) {
+                Text(stringResource(R.string.transactions_aibill_edit_item))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReceiptQuantityControl(
+    candidate: ReceiptItemSelectionCandidate,
+    displayedQuantity: Int,
+    onSelectQuantity: (Int) -> Unit,
+) {
+    var expanded by remember(candidate.id) { mutableStateOf(false) }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.transactions_aibill_quantity),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (candidate.availableQuantity >= 2 && !candidate.isCreated && !candidate.isLocked) {
+            Box {
+                OutlinedButton(onClick = { expanded = true }) {
+                    Text("x$displayedQuantity")
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    (1..candidate.availableQuantity).forEach { quantity ->
+                        DropdownMenuItem(
+                            text = { Text("x$quantity") },
+                            onClick = {
+                                expanded = false
+                                onSelectQuantity(quantity)
+                            },
+                        )
+                    }
+                }
+            }
+        } else {
+            Text(
+                text = "x$displayedQuantity",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReceiptLockedGroupRow(
+    group: ReceiptItemLockedGroup,
+    currencyCode: String,
+    onCancel: () -> Unit,
+    onCreate: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(
+                    R.string.transactions_aibill_locked_group_value,
+                    formatMinorUnits(group.amountMinor, currencyCode),
+                ),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(
+                    if (group.mode == ReceiptTransactionMode.EXPENSE) {
+                        R.string.shared_corelogic_financeenums_expense
+                    } else {
+                        R.string.shared_corelogic_financeenums_lend
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onCancel) {
+            Text(stringResource(R.string.common_cancel))
+        }
+        Button(onClick = onCreate) {
+            Text(stringResource(R.string.transactions_aibill_create_transaction))
         }
     }
 }

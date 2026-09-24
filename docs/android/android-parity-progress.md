@@ -1034,7 +1034,7 @@ Evidence:
 - [x] Verified 307 Android unit tests across 50 suites, Room Android-test
   compilation, lint, debug assembly, the 15-entity contract check and Android/
   strict iOS localization code generation.
-- [ ] Bind iOS-style locked allocation groups and created-allocation completion
+- [x] Bind iOS-style locked allocation groups and created-allocation completion
   state to the Compose receipt review before closing APK 1.
 
 No live AI/cloud write, migration or deployment occurred. `adb` remains
@@ -1043,3 +1043,35 @@ cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-25-apk1-receipt-lend-editor-routing.md`.
+
+## APK 1 receipt allocation groups and completion — 2026-09-25
+
+- [x] Added native partial-quantity selection (`x1...xN`) and exact remaining
+  quantity/minor-unit projection after locked or created allocations.
+- [x] Replaced direct editor launch with iOS-parity confirmed allocation groups.
+  Each group retains its Expense/Lend mode, exact item allocations and total.
+- [x] Added locked-group rows with cancel and create actions. Cancel restores
+  availability without creating anything; opening then canceling the editor
+  keeps the group available for retry.
+- [x] Kept the receipt review session underneath the transaction editor and
+  mark a group created only after receipt plus transaction persistence returns
+  success. Save failure and editor cancellation do not advance allocation
+  state.
+- [x] Disabled incompatible receipt revision actions after a group is locked or
+  created, and exposed localized Locked/Created row state with exact remaining
+  amounts.
+- [x] Verified 311 Android unit tests across 50 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation. Independent review reported no
+  Critical, Important or Minor finding.
+- [ ] Audit the complete APK 1 checklist against the current iOS contracts and
+  close any remaining local gap before moving to APK 2.
+
+No live AI/cloud write, migration or deployment occurred. `adb` remains
+unavailable, so the stacked receipt/editor sheets, quantity menu, allocation
+states and dark-mode presentation are not claimed as device-verified. All five
+cloud-write flags remain `false`; APK 1 closure still requires the explicit
+parity audit.
+
+Evidence:
+`docs/android/evidence/2026-09-25-apk1-receipt-allocation-completion.md`.

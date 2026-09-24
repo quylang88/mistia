@@ -17,6 +17,8 @@ internal data class ReceiptReviewBill(
     val isAnalyzing: Boolean = false,
     val isMultipleBillImage: Boolean = false,
     val failure: ReceiptAnalysisFailure? = null,
+    val createdAllocations: Map<String, ReceiptItemQuantityAllocation> = emptyMap(),
+    val lockedGroups: List<ReceiptItemLockedGroup> = emptyList(),
 )
 
 internal data class ReceiptReviewState(
@@ -64,7 +66,7 @@ internal data class ReceiptReviewState(
 
     fun retry(billId: String): ReceiptReviewState = copy(
         bills = bills.map { bill ->
-            if (bill.id == billId) {
+            if (bill.id == billId && bill.canRevise) {
                 bill.copy(
                     result = null,
                     selectedWalletId = null,
@@ -87,13 +89,17 @@ internal data class ReceiptReviewState(
         updateBill(billId) { bill -> bill.copy(selectedWalletId = walletId) }
 
     fun updateTotal(billId: String, totalMinor: Long): ReceiptReviewState =
-        updateBillResult(billId) { result -> result.copy(totalMinor = totalMinor) }
+        updateBill(billId) { bill ->
+            if (!bill.canRevise) return@updateBill bill
+            val result = bill.result ?: return@updateBill bill
+            bill.copy(result = result.copy(totalMinor = totalMinor))
+        }
 
     fun updateItemCategory(
         billId: String,
         itemId: String,
         categoryId: String?,
-    ): ReceiptReviewState = updateBillResult(billId) { result ->
+    ): ReceiptReviewState = updateBillResultIfPresent(billId) { result ->
         result.copy(
             items = result.items.map { item ->
                 if (item.lineId == itemId) item.copy(categoryId = categoryId) else item
@@ -104,26 +110,33 @@ internal data class ReceiptReviewState(
     fun updateItem(
         billId: String,
         edited: BillItemAnalysisItem,
-    ): ReceiptReviewState = updateBillResult(billId) { result ->
-        result.copy(
+    ): ReceiptReviewState = updateBill(billId) { bill ->
+        val itemId = ReceiptItemSelectionId(billId, edited.lineId)
+        if (edited.lineId in bill.createdAllocations ||
+            bill.lockedGroups.any { itemId in it.itemAllocations }
+        ) {
+            return@updateBill bill
+        }
+        val result = bill.result ?: return@updateBill bill
+        bill.copy(result = result.copy(
             items = result.items.map { item ->
                 if (item.lineId == edited.lineId) edited else item
             },
-        )
+        ))
     }
 
     fun allocateDiscount(
         billId: String,
         itemId: String,
-    ): ReceiptReviewState = updateBillResult(billId) { result ->
-        val allocated = allocateReceiptDiscount(itemId, result.items) ?: return@updateBillResult result
+    ): ReceiptReviewState = updateBillResultIfRevisable(billId) transform@{ result ->
+        val allocated = allocateReceiptDiscount(itemId, result.items) ?: return@transform result
         result.copy(items = allocated)
     }
 
     fun removeItem(
         billId: String,
         itemId: String,
-    ): ReceiptReviewState = updateBillResult(billId) { result ->
+    ): ReceiptReviewState = updateBillResultIfRevisable(billId) { result ->
         result.copy(items = result.items.filterNot { it.lineId == itemId })
     }
 
@@ -134,14 +147,26 @@ internal data class ReceiptReviewState(
         bills = bills.map { bill -> if (bill.id == billId) transform(bill) else bill },
     )
 
-    private fun updateBillResult(
+    private fun updateBillResultIfPresent(
         billId: String,
         transform: (BillItemAnalysisResult) -> BillItemAnalysisResult,
     ): ReceiptReviewState = updateBill(billId) { bill ->
         val result = bill.result ?: return@updateBill bill
         bill.copy(result = transform(result))
     }
+
+    private fun updateBillResultIfRevisable(
+        billId: String,
+        transform: (BillItemAnalysisResult) -> BillItemAnalysisResult,
+    ): ReceiptReviewState = updateBill(billId) { bill ->
+        if (!bill.canRevise) return@updateBill bill
+        val result = bill.result ?: return@updateBill bill
+        bill.copy(result = transform(result))
+    }
 }
+
+internal val ReceiptReviewBill.canRevise: Boolean
+    get() = createdAllocations.isEmpty() && lockedGroups.isEmpty()
 
 internal data class ReceiptReviewEditUpdate(
     val state: ReceiptReviewState,

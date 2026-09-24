@@ -63,6 +63,7 @@ internal data class ReceiptItemTransactionDraft(
 internal data class ReceiptTransactionEditorLaunch(
     val draft: ReceiptItemTransactionDraft,
     val receiptImage: PreparedReceiptImage,
+    val lockedGroupId: String? = null,
 )
 
 internal object ReceiptItemSelectionLogic {
@@ -153,6 +154,27 @@ internal object ReceiptItemSelectionLogic {
         )
     }
 
+    fun selectQuantity(
+        selection: Map<ReceiptItemSelectionId, Int>,
+        candidateId: ReceiptItemSelectionId,
+        quantity: Int,
+        candidates: List<ReceiptItemSelectionCandidate>,
+        mode: ReceiptTransactionMode,
+    ): Map<ReceiptItemSelectionId, Int> {
+        val candidate = candidates.firstOrNull { it.id == candidateId } ?: return selection
+        val anchorBillId = selection.keys.firstOrNull()?.billId
+        if (anchorBillId != null && candidate.id.billId != anchorBillId) return selection
+        val otherSelected = candidates.filter { it.id != candidateId && it.id in selection }
+        if (!canSelect(candidate, otherSelected, mode)) return selection
+        return normalizedSelection(
+            selection = selection + (
+                candidate.id to quantity.coerceIn(1, candidate.availableQuantity)
+            ),
+            candidates = candidates,
+            mode = mode,
+        )
+    }
+
     fun lockedGroup(
         selected: List<ReceiptItemSelectionCandidate>,
         mode: ReceiptTransactionMode,
@@ -184,6 +206,23 @@ internal object ReceiptItemSelectionLogic {
 
     fun lockedItemIds(groups: List<ReceiptItemLockedGroup>): Set<ReceiptItemSelectionId> =
         groups.flatMapTo(mutableSetOf()) { it.itemIds }
+
+    fun lockedAllocations(
+        groups: List<ReceiptItemLockedGroup>,
+    ): Map<ReceiptItemSelectionId, ReceiptItemQuantityAllocation> = buildMap {
+        groups.forEach { group ->
+            group.itemAllocations.forEach { (id, allocation) ->
+                val existing = get(id) ?: ReceiptItemQuantityAllocation(0, 0)
+                put(
+                    id,
+                    ReceiptItemQuantityAllocation(
+                        quantity = existing.quantity + allocation.quantity,
+                        amountMinor = existing.amountMinor + allocation.amountMinor,
+                    ),
+                )
+            }
+        }
+    }
 
     fun transactionDraft(
         selected: List<ReceiptItemSelectionCandidate>,
@@ -241,6 +280,8 @@ internal fun ReceiptReviewState.selectionCandidates(
     selection: Map<ReceiptItemSelectionId, Int>,
 ): List<ReceiptItemSelectionCandidate> = bills.flatMap { bill ->
     val result = bill.result ?: return@flatMap emptyList()
+    val lockedItemIds = ReceiptItemSelectionLogic.lockedItemIds(bill.lockedGroups)
+    val lockedAllocations = ReceiptItemSelectionLogic.lockedAllocations(bill.lockedGroups)
     result.items.map { item ->
         val id = ReceiptItemSelectionId(bill.id, item.lineId)
         val totalQuantity = if (item.lineType == BillItemLineType.PURCHASE) {
@@ -248,8 +289,19 @@ internal fun ReceiptReviewState.selectionCandidates(
         } else {
             1
         }
-        val selectedQuantity = (selection[id] ?: 0).coerceIn(0, totalQuantity)
-        val representedQuantity = selectedQuantity.takeIf { it > 0 } ?: totalQuantity
+        val createdAllocation = bill.createdAllocations[item.lineId]
+            ?: ReceiptItemQuantityAllocation(0, 0)
+        val lockedAllocation = lockedAllocations[id] ?: ReceiptItemQuantityAllocation(0, 0)
+        val usedQuantity = minOf(
+            totalQuantity,
+            createdAllocation.quantity + lockedAllocation.quantity,
+        )
+        val availableQuantity = (totalQuantity - usedQuantity).coerceAtLeast(0)
+        val remainingAmount = (
+            item.finalAmountMinor - createdAllocation.amountMinor - lockedAllocation.amountMinor
+        ).coerceAtLeast(0)
+        val selectedQuantity = (selection[id] ?: 0).coerceIn(0, availableQuantity)
+        val representedQuantity = selectedQuantity.takeIf { it > 0 } ?: availableQuantity
         ReceiptItemSelectionCandidate(
             id = id,
             walletId = bill.selectedWalletId,
@@ -259,22 +311,117 @@ internal fun ReceiptReviewState.selectionCandidates(
                 item.finalAmountMinor
             } else {
                 ReceiptItemSelectionLogic.allocationAmount(
-                    totalAmountMinor = item.finalAmountMinor,
-                    totalQuantity = totalQuantity,
+                    totalAmountMinor = remainingAmount,
+                    totalQuantity = availableQuantity,
                     allocatedQuantity = representedQuantity,
                 )
             },
             totalQuantity = totalQuantity,
-            availableQuantity = totalQuantity,
-            selectedQuantity = selectedQuantity,
-            createdQuantity = 0,
-            lockedQuantity = 0,
+            availableQuantity = availableQuantity,
+            selectedQuantity = if (item.lineType == BillItemLineType.DISCOUNT) {
+                minOf(selectedQuantity, 1)
+            } else {
+                selectedQuantity
+            },
+            createdQuantity = minOf(createdAllocation.quantity, totalQuantity),
+            lockedQuantity = minOf(lockedAllocation.quantity, totalQuantity),
             merchantName = result.merchantName,
             occurredAt = result.occurredAt,
+            isCreated = availableQuantity == 0 && createdAllocation.quantity > 0,
+            isLocked = availableQuantity == 0 && id in lockedItemIds,
+        )
+    }
+}
+
+internal fun ReceiptReviewState.lockSelection(
+    selection: Map<ReceiptItemSelectionId, Int>,
+    mode: ReceiptTransactionMode,
+    groupId: String,
+): ReceiptReviewEditUpdate? {
+    if (bills.any { bill -> bill.lockedGroups.any { it.id == groupId } }) return null
+    val requested = selection.filterValues { it > 0 }
+    val billId = requested.keys.map(ReceiptItemSelectionId::billId).toSet().singleOrNull()
+        ?: return null
+    val bill = bills.firstOrNull { it.id == billId } ?: return null
+    if (bill.result?.requiresReview != false) return null
+    val candidates = selectionCandidates(requested)
+    val normalized = ReceiptItemSelectionLogic.normalizedSelection(requested, candidates, mode)
+    if (normalized != requested) return null
+    val selected = selectionCandidates(normalized).filter { it.id in normalized }
+    val group = ReceiptItemSelectionLogic.lockedGroup(selected, mode, groupId) ?: return null
+    return ReceiptReviewEditUpdate(
+        state = copy(
+            bills = bills.map { candidateBill ->
+                if (candidateBill.id == billId) {
+                    candidateBill.copy(lockedGroups = candidateBill.lockedGroups + group)
+                } else {
+                    candidateBill
+                }
+            },
+        ),
+        selection = selection - group.itemIds,
+    )
+}
+
+internal fun ReceiptReviewState.cancelLockedGroup(
+    billId: String,
+    groupId: String,
+): ReceiptReviewState = copy(
+    bills = bills.map { bill ->
+        if (bill.id == billId) {
+            bill.copy(lockedGroups = bill.lockedGroups.filterNot { it.id == groupId })
+        } else {
+            bill
+        }
+    },
+)
+
+internal fun ReceiptReviewState.markLockedGroupCreated(groupId: String): ReceiptReviewState = copy(
+    bills = bills.map { bill ->
+        val group = bill.lockedGroups.firstOrNull { it.id == groupId } ?: return@map bill
+        val created = bill.createdAllocations.toMutableMap()
+        group.itemAllocations.forEach { (id, allocation) ->
+            val existing = created[id.itemId] ?: ReceiptItemQuantityAllocation(0, 0)
+            created[id.itemId] = ReceiptItemQuantityAllocation(
+                quantity = existing.quantity + allocation.quantity,
+                amountMinor = existing.amountMinor + allocation.amountMinor,
+            )
+        }
+        bill.copy(
+            createdAllocations = created,
+            lockedGroups = bill.lockedGroups.filterNot { it.id == groupId },
+        )
+    },
+)
+
+internal fun ReceiptReviewState.transactionLaunch(
+    groupId: String,
+    fallbackOccurredAt: String,
+): ReceiptTransactionEditorLaunch? {
+    val bill = bills.singleOrNull { candidate -> candidate.lockedGroups.any { it.id == groupId } }
+        ?: return null
+    val group = bill.lockedGroups.singleOrNull { it.id == groupId } ?: return null
+    if (bill.result?.requiresReview != false) return null
+    val candidates = selectionCandidates(emptyMap()).mapNotNull { candidate ->
+        val allocation = group.itemAllocations[candidate.id] ?: return@mapNotNull null
+        candidate.copy(
+            amountMinor = allocation.amountMinor,
+            availableQuantity = allocation.quantity,
+            selectedQuantity = allocation.quantity,
             isCreated = false,
             isLocked = false,
         )
     }
+    val draft = ReceiptItemSelectionLogic.transactionDraft(
+        selected = candidates,
+        mode = group.mode,
+        fallbackOccurredAt = fallbackOccurredAt,
+    ) ?: return null
+    return ReceiptTransactionEditorLaunch(
+        draft = draft,
+        receiptImage = bill.image,
+        lockedGroupId = group.id,
+    )
 }
 
 internal fun ReceiptReviewState.expenseTransactionDraft(

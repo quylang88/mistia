@@ -188,6 +188,106 @@ class ReceiptItemSelectionTest {
     }
 
     @Test
+    fun `review projection subtracts exact created and locked allocations`() {
+        val itemId = ReceiptItemSelectionId("bill-a", "milk")
+        val locked = ReceiptItemLockedGroup(
+            id = "locked",
+            mode = ReceiptTransactionMode.EXPENSE,
+            itemAllocations = mapOf(
+                itemId to ReceiptItemQuantityAllocation(quantity = 1, amountMinor = 34),
+            ),
+            amountMinor = 34,
+        )
+        val bill = reviewBill(
+            id = "bill-a",
+            walletId = "wallet",
+            items = listOf(reviewItem("milk", quantity = 3, amountMinor = 101)),
+        ).copy(
+            createdAllocations = mapOf(
+                "milk" to ReceiptItemQuantityAllocation(quantity = 1, amountMinor = 34),
+            ),
+            lockedGroups = listOf(locked),
+        )
+
+        val candidate = ReceiptReviewState(listOf(bill)).selectionCandidates(emptyMap()).single()
+
+        assertEquals(1, candidate.availableQuantity)
+        assertEquals(1, candidate.createdQuantity)
+        assertEquals(1, candidate.lockedQuantity)
+        assertEquals(33L, candidate.amountMinor)
+        assertFalse(candidate.isCreated)
+        assertFalse(candidate.isLocked)
+    }
+
+    @Test
+    fun `locked group launches exact allocation and becomes created only after completion`() {
+        val itemId = ReceiptItemSelectionId("bill-a", "milk")
+        val initial = ReceiptReviewState(
+            listOf(
+                reviewBill(
+                    id = "bill-a",
+                    walletId = "wallet",
+                    items = listOf(reviewItem("milk", quantity = 3, amountMinor = 101)),
+                ),
+            ),
+        )
+
+        val locked = initial.lockSelection(
+            selection = mapOf(itemId to 2),
+            mode = ReceiptTransactionMode.EXPENSE,
+            groupId = "group-a",
+        )!!
+        assertTrue(locked.selection.isEmpty())
+        assertEquals(68L, locked.state.bills.single().lockedGroups.single().amountMinor)
+        assertTrue(locked.state.bills.single().createdAllocations.isEmpty())
+
+        val launch = locked.state.transactionLaunch(
+            groupId = "group-a",
+            fallbackOccurredAt = NOW_FALLBACK,
+        )!!
+        assertEquals("group-a", launch.lockedGroupId)
+        assertEquals(68L, launch.draft.amountMinor)
+        assertEquals(locked.state.bills.single().image, launch.receiptImage)
+
+        val completed = locked.state.markLockedGroupCreated("group-a")
+        assertTrue(completed.bills.single().lockedGroups.isEmpty())
+        assertEquals(
+            ReceiptItemQuantityAllocation(quantity = 2, amountMinor = 68),
+            completed.bills.single().createdAllocations["milk"],
+        )
+        val remainder = completed.selectionCandidates(emptyMap()).single()
+        assertEquals(1, remainder.availableQuantity)
+        assertEquals(33L, remainder.amountMinor)
+    }
+
+    @Test
+    fun `cancelling locked group restores availability without creating allocation`() {
+        val itemId = ReceiptItemSelectionId("bill-a", "milk")
+        val initial = ReceiptReviewState(
+            listOf(
+                reviewBill(
+                    id = "bill-a",
+                    walletId = "wallet",
+                    items = listOf(reviewItem("milk", quantity = 3, amountMinor = 101)),
+                ),
+            ),
+        )
+        val locked = initial.lockSelection(
+            selection = mapOf(itemId to 2),
+            mode = ReceiptTransactionMode.EXPENSE,
+            groupId = "group-a",
+        )!!.state
+
+        val cancelled = locked.cancelLockedGroup("bill-a", "group-a")
+
+        assertTrue(cancelled.bills.single().lockedGroups.isEmpty())
+        assertTrue(cancelled.bills.single().createdAllocations.isEmpty())
+        val candidate = cancelled.selectionCandidates(emptyMap()).single()
+        assertEquals(3, candidate.availableQuantity)
+        assertEquals(101L, candidate.amountMinor)
+    }
+
+    @Test
     fun `selection toggle keeps one bill and normalizes category compatibility`() {
         val first = candidate("a", billId = "bill-a", walletId = "wallet", categoryId = "food")
         val discount = candidate(
@@ -241,6 +341,52 @@ class ReceiptItemSelectionTest {
                 discount.id,
                 candidates,
                 ReceiptTransactionMode.EXPENSE,
+            ),
+        )
+    }
+
+    @Test
+    fun `quantity selection clamps to availability and enforces selection compatibility`() {
+        val first = candidate(
+            "a",
+            billId = "bill-a",
+            walletId = "wallet",
+            categoryId = "food",
+        ).copy(totalQuantity = 3, availableQuantity = 3, selectedQuantity = 0)
+        val otherBill = candidate(
+            "b",
+            billId = "bill-b",
+            walletId = "wallet",
+            categoryId = "food",
+        ).copy(totalQuantity = 4, availableQuantity = 4, selectedQuantity = 0)
+        val candidates = listOf(first, otherBill)
+
+        val selected = ReceiptItemSelectionLogic.selectQuantity(
+            selection = emptyMap(),
+            candidateId = first.id,
+            quantity = 2,
+            candidates = candidates,
+            mode = ReceiptTransactionMode.EXPENSE,
+        )
+        assertEquals(mapOf(first.id to 2), selected)
+        assertEquals(
+            mapOf(first.id to 3),
+            ReceiptItemSelectionLogic.selectQuantity(
+                selection = selected,
+                candidateId = first.id,
+                quantity = 99,
+                candidates = candidates,
+                mode = ReceiptTransactionMode.EXPENSE,
+            ),
+        )
+        assertEquals(
+            selected,
+            ReceiptItemSelectionLogic.selectQuantity(
+                selection = selected,
+                candidateId = otherBill.id,
+                quantity = 1,
+                candidates = candidates,
+                mode = ReceiptTransactionMode.EXPENSE,
             ),
         )
     }

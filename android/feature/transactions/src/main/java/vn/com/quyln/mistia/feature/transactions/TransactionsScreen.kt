@@ -72,6 +72,8 @@ fun TransactionsScreen(
     var editorReceiptLoading by remember { mutableStateOf(false) }
     var editorReceiptLoadFailed by remember { mutableStateOf(false) }
     var receiptOpen by rememberSaveable { mutableStateOf(false) }
+    var pendingReceiptGroupId by remember { mutableStateOf<String?>(null) }
+    var completedReceiptGroupId by remember { mutableStateOf<String?>(null) }
     val walletCurrencies = wallets.associate { it.id to it.currencyCode }
     LaunchedEffect(editorOpen, editorTransactionId, editorReceiptState.deleteStoredOnSave) {
         val transactionId = editorTransactionId
@@ -198,11 +200,13 @@ fun TransactionsScreen(
             wallets = wallets,
             client = receiptAnalysisClient,
             accessTokenProvider = accessTokenProvider,
+            completedGroupId = completedReceiptGroupId,
+            onCompletedGroupConsumed = { completedReceiptGroupId = null },
             onCreateTransaction = { launch ->
                 val currencyCode = wallets.firstOrNull { it.id == launch.draft.walletId }?.currencyCode
                 val prefill = currencyCode?.let(launch.draft::toTransactionEditorState)
                 if (prefill != null) {
-                    receiptOpen = false
+                    pendingReceiptGroupId = launch.lockedGroupId
                     editorTransactionId = null
                     editorInitialState = prefill
                     editorReceiptState = TransactionReceiptEditorState.pending(launch.receiptImage)
@@ -210,7 +214,11 @@ fun TransactionsScreen(
                     editorOpen = true
                 }
             },
-            onDismiss = { receiptOpen = false },
+            onDismiss = {
+                receiptOpen = false
+                pendingReceiptGroupId = null
+                completedReceiptGroupId = null
+            },
         )
     }
 
@@ -231,11 +239,15 @@ fun TransactionsScreen(
                     editorReceiptState = editorReceiptState.remove()
                     editorReceiptLoadFailed = false
                 },
+                onSaveSuccess = {
+                    completedReceiptGroupId = pendingReceiptGroupId
+                },
                 onDismiss = {
                     editorOpen = false
                     editorInitialState = null
                     editorReceiptState = TransactionReceiptEditorState.none()
                     editorReceiptLoadFailed = false
+                    pendingReceiptGroupId = null
                 },
                 onSave = { draft ->
                     val now = Instant.now().toString()
