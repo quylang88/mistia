@@ -305,6 +305,58 @@ class ReceiptReviewStateTest {
         assertNull(state.updateTotalForReview("target", "12.345", "USD", emptyMap()))
     }
 
+    @Test
+    fun `discount allocation review distributes exact minor units and clears target selection`() {
+        val first = item("first", "First 100", "First", BillItemLineType.PURCHASE, null, 100, "food")
+        val second = item("second", "Second 300", "Second", BillItemLineType.PURCHASE, null, 300, "food")
+        val discount = item(
+            "discount",
+            "Coupon -41",
+            "Coupon",
+            BillItemLineType.DISCOUNT,
+            null,
+            -41,
+            null,
+        ).copy(discountAmountMinor = 41)
+        val target = ReceiptReviewBill(
+            id = "target",
+            image = prepared(1),
+            result = result(items = listOf(first, second, discount)),
+        )
+        val sibling = ReceiptReviewBill(id = "sibling", image = prepared(2), result = result())
+        val siblingSelection = ReceiptItemSelectionId("sibling", "item")
+
+        val update = ReceiptReviewState(listOf(target, sibling)).allocateDiscountForReview(
+            billId = "target",
+            itemId = "discount",
+            selection = mapOf(
+                ReceiptItemSelectionId("target", "first") to 1,
+                ReceiptItemSelectionId("target", "discount") to 1,
+                siblingSelection to 1,
+            ),
+        )
+
+        requireNotNull(update)
+        assertEquals(listOf(90L, 269L, 0L), update.state.bills.first().result?.items?.map { it.finalAmountMinor })
+        assertEquals(listOf(10L, 31L, 41L), update.state.bills.first().result?.items?.map { it.discountAmountMinor })
+        assertSame(sibling, update.state.bills.last())
+        assertEquals(mapOf(siblingSelection to 1), update.selection)
+    }
+
+    @Test
+    fun `discount allocation review rejects ineligible row without invalidating selection`() {
+        val target = ReceiptReviewBill(id = "target", image = prepared(1), result = result())
+        val selection = mapOf(ReceiptItemSelectionId("target", "item") to 1)
+
+        assertNull(
+            ReceiptReviewState(listOf(target)).allocateDiscountForReview(
+                billId = "target",
+                itemId = "item",
+                selection = selection,
+            ),
+        )
+    }
+
     private var generatedId = 0
 
     private fun indexId(): String = "bill-${++generatedId}"

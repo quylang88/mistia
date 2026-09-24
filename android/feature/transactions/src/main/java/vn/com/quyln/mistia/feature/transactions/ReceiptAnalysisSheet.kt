@@ -62,6 +62,7 @@ import vn.com.quyln.mistia.core.model.ReceiptAnalysisFailure
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisCategoryCandidate
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisWalletCandidate
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.allocateReceiptDiscount
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -278,6 +279,17 @@ internal fun ReceiptAnalysisSheet(
                                 currencyCode = resultCurrencyCode(bill),
                             )
                         },
+                        onAllocateDiscount = { itemId ->
+                            val update = state.allocateDiscountForReview(
+                                billId = bill.id,
+                                itemId = itemId,
+                                selection = selection,
+                            )
+                            if (update != null) {
+                                state = update.state
+                                selection = update.selection
+                            }
+                        },
                         onRemove = {
                             state = state.remove(bill.id)
                             selection = selection.filterKeys { it.billId != bill.id }
@@ -445,6 +457,7 @@ private fun ReceiptReviewBillCard(
     onSelectCategory: (String, String) -> Unit,
     onEditTotal: () -> Unit,
     onEditItem: (BillItemAnalysisItem) -> Unit,
+    onAllocateDiscount: (String) -> Unit,
     onRemove: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -553,6 +566,12 @@ private fun ReceiptReviewBillCard(
                         categoryChoices = categoryChoices,
                         onSelectCategory = { categoryId -> onSelectCategory(item.lineId, categoryId) },
                         onEdit = { onEditItem(item) },
+                        canAllocateDiscount = item.lineType == BillItemLineType.DISCOUNT &&
+                            allocateReceiptDiscount(
+                                itemId = item.lineId,
+                                items = result.items,
+                            ) != null,
+                        onAllocateDiscount = { onAllocateDiscount(item.lineId) },
                     )
                 }
                 result.rawText?.let { rawText ->
@@ -650,6 +669,8 @@ private fun ReceiptAnalysisItemRow(
     categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
     onSelectCategory: (String) -> Unit,
     onEdit: () -> Unit,
+    canAllocateDiscount: Boolean,
+    onAllocateDiscount: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -725,6 +746,16 @@ private fun ReceiptAnalysisItemRow(
                 choices = categoryChoices.map { it.id to it.name },
                 placeholder = stringResource(R.string.transactions_transactioneditor_choose_category),
                 onSelect = onSelectCategory,
+            )
+        } else if (canAllocateDiscount) {
+            TextButton(onClick = onAllocateDiscount) {
+                Text(stringResource(R.string.transactions_aibill_allocate_discount))
+            }
+        } else if (item.finalAmountMinor == 0L) {
+            Text(
+                text = stringResource(R.string.transactions_aibill_allocated),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         TextButton(onClick = onEdit) {

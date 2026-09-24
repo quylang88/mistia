@@ -849,3 +849,24 @@ complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-item-editor-ui.md`.
+
+## APK 1 receipt discount allocation control — 2026-09-24
+
+- [x] Added the native proportional-allocation action only when a standalone
+  discount can be distributed across positive purchase rows.
+- [x] Reused the exact minor-unit allocator with deterministic remainder order;
+  allocated discount rows become zero and render a localized allocated state.
+- [x] Rejected ineligible allocation without changing state or selection, and
+  invalidated only the target bill's selection after a valid allocation.
+- [x] Verified 269 Android unit tests across 47 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Persist receipt images for reviewed expense transactions, then implement
+  the debt/lend path and remaining APK 1 closure checks.
+
+No live AI/production request, production write, migration or deployment
+occurred. `adb` remains unavailable, so no emulator/Samsung UI claim is made.
+All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-discount-allocation-control.md`.

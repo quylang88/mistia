@@ -185,6 +185,19 @@ internal fun ReceiptReviewState.removeItemForReview(
     selection = selection.filterKeys { it.billId != billId },
 )
 
+internal fun ReceiptReviewState.allocateDiscountForReview(
+    billId: String,
+    itemId: String,
+    selection: Map<ReceiptItemSelectionId, Int>,
+): ReceiptReviewEditUpdate? {
+    val items = bills.firstOrNull { it.id == billId }?.result?.items ?: return null
+    if (allocateReceiptDiscount(itemId, items) == null) return null
+    return ReceiptReviewEditUpdate(
+        state = allocateDiscount(billId, itemId),
+        selection = selection.filterKeys { it.billId != billId },
+    )
+}
+
 internal fun ReceiptReviewState.updateTotalForReview(
     billId: String,
     amountText: String,
