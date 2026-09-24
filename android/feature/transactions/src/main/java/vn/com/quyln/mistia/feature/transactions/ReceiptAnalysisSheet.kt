@@ -79,6 +79,7 @@ internal fun ReceiptAnalysisSheet(
     var preparationFailure by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
     var totalEditorBillId by remember { mutableStateOf<String?>(null) }
+    var itemEditorTarget by remember { mutableStateOf<ReceiptItemEditorTarget?>(null) }
     val scope = rememberCoroutineScope()
     val locale = Locale.getDefault()
     val categoryChoices = remember(ownerUserId, categories, locale) {
@@ -270,6 +271,13 @@ internal fun ReceiptAnalysisSheet(
                             selection = update.selection
                         },
                         onEditTotal = { totalEditorBillId = bill.id },
+                        onEditItem = { item ->
+                            itemEditorTarget = ReceiptItemEditorTarget(
+                                billId = bill.id,
+                                item = item,
+                                currencyCode = resultCurrencyCode(bill),
+                            )
+                        },
                         onRemove = {
                             state = state.remove(bill.id)
                             selection = selection.filterKeys { it.billId != bill.id }
@@ -384,7 +392,44 @@ internal fun ReceiptAnalysisSheet(
             )
         }
     }
+
+    itemEditorTarget?.let { target ->
+        ReceiptItemEditorDialog(
+            billId = target.billId,
+            item = target.item,
+            currencyCode = target.currencyCode,
+            onDismiss = { itemEditorTarget = null },
+            onDelete = {
+                val update = state.removeItemForReview(
+                    billId = target.billId,
+                    itemId = target.item.lineId,
+                    selection = selection,
+                )
+                state = update.state
+                selection = update.selection
+                itemEditorTarget = null
+            },
+            onSave = { edited ->
+                val update = state.updateItemForReview(
+                    billId = target.billId,
+                    edited = edited,
+                    selection = selection,
+                )
+                state = update.state
+                selection = update.selection
+                itemEditorTarget = null
+            },
+        )
+    }
 }
+
+private data class ReceiptItemEditorTarget(
+    val billId: String,
+    val item: BillItemAnalysisItem,
+    val currencyCode: String,
+)
+
+private fun resultCurrencyCode(bill: ReceiptReviewBill): String = bill.result?.currencyCode ?: "JPY"
 
 @Composable
 private fun ReceiptReviewBillCard(
@@ -399,6 +444,7 @@ private fun ReceiptReviewBillCard(
     onSelectWallet: (String) -> Unit,
     onSelectCategory: (String, String) -> Unit,
     onEditTotal: () -> Unit,
+    onEditItem: (BillItemAnalysisItem) -> Unit,
     onRemove: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -506,6 +552,7 @@ private fun ReceiptReviewBillCard(
                         categoryLabel = categoryChoices.firstOrNull { it.id == item.categoryId }?.name,
                         categoryChoices = categoryChoices,
                         onSelectCategory = { categoryId -> onSelectCategory(item.lineId, categoryId) },
+                        onEdit = { onEditItem(item) },
                     )
                 }
                 result.rawText?.let { rawText ->
@@ -602,6 +649,7 @@ private fun ReceiptAnalysisItemRow(
     categoryLabel: String?,
     categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
     onSelectCategory: (String) -> Unit,
+    onEdit: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -678,6 +726,9 @@ private fun ReceiptAnalysisItemRow(
                 placeholder = stringResource(R.string.transactions_transactioneditor_choose_category),
                 onSelect = onSelectCategory,
             )
+        }
+        TextButton(onClick = onEdit) {
+            Text(stringResource(R.string.transactions_aibill_edit_item))
         }
     }
 }

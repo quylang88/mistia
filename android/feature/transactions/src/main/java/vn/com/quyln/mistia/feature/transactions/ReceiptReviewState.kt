@@ -176,6 +176,15 @@ internal fun ReceiptReviewState.updateItemForReview(
     selection = selection.filterKeys { it.billId != billId },
 )
 
+internal fun ReceiptReviewState.removeItemForReview(
+    billId: String,
+    itemId: String,
+    selection: Map<ReceiptItemSelectionId, Int>,
+): ReceiptReviewEditUpdate = ReceiptReviewEditUpdate(
+    state = removeItem(billId, itemId),
+    selection = selection.filterKeys { it.billId != billId },
+)
+
 internal fun ReceiptReviewState.updateTotalForReview(
     billId: String,
     amountText: String,

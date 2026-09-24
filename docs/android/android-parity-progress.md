@@ -825,3 +825,27 @@ All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-item-editor-contract.md`.
+
+## APK 1 native receipt item editor — 2026-09-24
+
+- [x] Bound every analyzed row to a scrollable native Material 3 editor for
+  original/translated names, purchase/discount type, quantity and exact row
+  amounts, using generated String Catalog resources throughout.
+- [x] Kept literal printed OCR visible and immutable, showed the recomputed
+  final amount, and disabled Save until the tested item-review contract accepts
+  the complete draft.
+- [x] Added reviewed row replacement and deletion paths that invalidate only
+  the edited bill's selection while leaving sibling bills untouched.
+- [x] Verified 267 Android unit tests across 47 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Add proportional discount-allocation controls, then receipt-image
+  persistence and the debt/lend path.
+
+No live AI/production request, production write, migration or deployment
+occurred. `adb` remains unavailable, so no emulator/Samsung UI or dark-mode
+visual claim is made. All five cloud-write flags remain `false`; APK 1 is not
+complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-item-editor-ui.md`.

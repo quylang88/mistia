@@ -113,6 +113,25 @@ class ReceiptItemEditorStateTest {
         assertEquals(mapOf(siblingSelection to 1), update.selection)
     }
 
+    @Test
+    fun `review item removal deletes target and clears only its bill selection`() {
+        val source = item()
+        val target = bill("target", source, 1)
+        val sibling = bill("sibling", source.copy(lineId = "sibling-item"), 2)
+        val targetSelection = ReceiptItemSelectionId("target", "item")
+        val siblingSelection = ReceiptItemSelectionId("sibling", "sibling-item")
+
+        val update = ReceiptReviewState(listOf(target, sibling)).removeItemForReview(
+            billId = "target",
+            itemId = "item",
+            selection = mapOf(targetSelection to 1, siblingSelection to 1),
+        )
+
+        assertEquals(emptyList<BillItemAnalysisItem>(), update.state.bills.first().result?.items)
+        assertSame(sibling, update.state.bills.last())
+        assertEquals(mapOf(siblingSelection to 1), update.selection)
+    }
+
     private fun item(
         raw: String = "Item 100",
         name: String = "Item",
