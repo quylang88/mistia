@@ -1064,7 +1064,7 @@ Evidence:
   compilation, lint, debug assembly, the 15-entity contract check and Android/
   strict iOS localization code generation. Independent review reported no
   Critical, Important or Minor finding.
-- [ ] Audit the complete APK 1 checklist against the current iOS contracts and
+- [x] Audit the complete APK 1 checklist against the current iOS contracts and
   close any remaining local gap before moving to APK 2.
 
 No live AI/cloud write, migration or deployment occurred. `adb` remains
@@ -1075,3 +1075,34 @@ parity audit.
 
 Evidence:
 `docs/android/evidence/2026-09-25-apk1-receipt-allocation-completion.md`.
+
+## APK 1 local closure audit — 2026-09-25
+
+- [x] Audited the gate against `contracts/feature-parity.yml`, the current iOS
+  reference behavior, Android repositories/editors/push coordinators and the
+  complete APK 1 evidence chain.
+- [x] Confirmed local implementation for wallets, credit-card profiles,
+  category hierarchy/translation, expense/income/internal transfer, gated
+  standalone receipt Lend, affordability, paid-statement protection,
+  multi-currency app/manual rates and receipt capture/analyze/review/persist.
+- [x] Confirmed scope boundaries: statements/payments, due maintenance and
+  notifications remain APK 2; family transfer, other debt intents and
+  settlement remain APK 3; investment-backed transaction semantics remain APK
+  4. These are not APK 1 closure gaps.
+- [x] Promoted only the APK 1 contract status from `planned` to
+  `build_verified_device_pending`. `writes_enabled` is explicitly `false` and
+  every generated domain flag remains `false`; this is not a production-write
+  or physical-device claim.
+- [x] Reused the immediately preceding final gate: 311 JVM tests across 50
+  suites, Room Android-test compilation, lint, debug APK assembly, 15-entity
+  contract check and Android/strict iOS localization generation all passed.
+- [ ] Begin APK 2 with the first dependency-bounded planning domain slice.
+
+No Samsung/emulator is connected (`adb` is unavailable), which the user has
+explicitly asked not to block continued implementation on. No live receipt AI
+request, Supabase write, migration or deployment occurred. APK 1 is locally
+build-verified and device verification remains pending rather than waived as
+evidence.
+
+Evidence:
+`docs/android/evidence/2026-09-25-apk1-local-closure-audit.md`.

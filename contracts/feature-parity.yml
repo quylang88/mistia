@@ -25,8 +25,16 @@ release_gates:
       family_read_only: implemented
       investment_read_only: implemented
   apk1:
-    status: planned
-    features: [wallets, credit_cards, categories, transactions, transfers, multi_currency, receipt_ai]
+    status: build_verified_device_pending
+    writes_enabled: false
+    features:
+      wallets: implemented
+      credit_cards: implemented
+      categories: implemented
+      transactions: implemented
+      transfers: implemented
+      multi_currency: implemented
+      receipt_ai: implemented
   apk2:
     status: planned
     features: [budgets, savings, recurring_bills, installments, card_statements, due_maintenance, local_notifications]
