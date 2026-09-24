@@ -167,6 +167,15 @@ internal fun ReceiptReviewState.updateItemCategoryForReview(
     selection = selection.filterKeys { it.billId != billId },
 )
 
+internal fun ReceiptReviewState.updateItemForReview(
+    billId: String,
+    edited: BillItemAnalysisItem,
+    selection: Map<ReceiptItemSelectionId, Int>,
+): ReceiptReviewEditUpdate = ReceiptReviewEditUpdate(
+    state = updateItem(billId, edited),
+    selection = selection.filterKeys { it.billId != billId },
+)
+
 internal fun ReceiptReviewState.updateTotalForReview(
     billId: String,
     amountText: String,

@@ -802,3 +802,26 @@ All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-total-editor.md`.
+
+## APK 1 receipt item editor contract — 2026-09-24
+
+- [x] Added an immutable item-editor draft seeded from analyzed receipt facts,
+  with exact currency-aware amount formatting/parsing and explicit purchase or
+  standalone-discount normalization through the shared reviewed-item model.
+- [x] Preserved literal OCR evidence while allowing reviewed names, translation,
+  quantity and amounts to change; invalid names, quantities, precision,
+  over-discounting and zero discounts cannot enter review state.
+- [x] Added target-bill item replacement that invalidates only that bill's
+  stale row selection while preserving sibling bill identity and selection.
+- [x] Verified 266 Android unit tests across 47 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind this contract to the native item editor and add discount-allocation
+  controls, then receipt-image persistence and the debt/lend path.
+
+No live AI/production request, production write, migration or deployment
+occurred. `adb` remains unavailable, so no emulator/Samsung UI claim is made.
+All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-item-editor-contract.md`.
