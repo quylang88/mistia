@@ -143,6 +143,30 @@ internal data class ReceiptReviewState(
     }
 }
 
+internal data class ReceiptReviewEditUpdate(
+    val state: ReceiptReviewState,
+    val selection: Map<ReceiptItemSelectionId, Int>,
+)
+
+internal fun ReceiptReviewState.selectWalletForReview(
+    billId: String,
+    walletId: String?,
+    selection: Map<ReceiptItemSelectionId, Int>,
+): ReceiptReviewEditUpdate = ReceiptReviewEditUpdate(
+    state = selectWallet(billId, walletId),
+    selection = selection.filterKeys { it.billId != billId },
+)
+
+internal fun ReceiptReviewState.updateItemCategoryForReview(
+    billId: String,
+    itemId: String,
+    categoryId: String?,
+    selection: Map<ReceiptItemSelectionId, Int>,
+): ReceiptReviewEditUpdate = ReceiptReviewEditUpdate(
+    state = updateItemCategory(billId, itemId, categoryId),
+    selection = selection.filterKeys { it.billId != billId },
+)
+
 internal data class ReceiptReviewAnalysisBatch(
     val state: ReceiptReviewState,
     val billIds: List<String>,

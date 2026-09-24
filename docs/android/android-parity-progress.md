@@ -760,3 +760,24 @@ is made. All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-selection-routing.md`.
+
+## APK 1 receipt wallet/category review — 2026-09-24
+
+- [x] Added native wallet and purchase-category menus using the same ordered,
+  active, owner-scoped, localized candidates supplied to receipt analysis.
+- [x] Excluded archived/deleted/system-only records consistently and kept
+  discount rows uncategorized.
+- [x] Invalidated only target-bill selection after a wallet/category correction
+  so stale grouping cannot be applied while sibling selection survives.
+- [x] Verified 259 Android unit tests across 46 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Add receipt-total and item-fact editors plus discount allocation, then
+  persist receipt images and implement the debt/lend path.
+
+No live AI/production request, production write, migration or deployment
+occurred. `adb` remains unavailable, so no emulator/Samsung UI claim is made.
+All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-wallet-category-review.md`.

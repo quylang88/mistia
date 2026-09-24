@@ -241,6 +241,41 @@ class ReceiptReviewStateTest {
         assertSame(sibling, removed.bills.last())
     }
 
+    @Test
+    fun `wallet review change clears only the edited bill selection`() {
+        val target = ReceiptReviewBill(id = "target", image = prepared(1), result = result())
+        val sibling = ReceiptReviewBill(id = "sibling", image = prepared(2), result = result())
+        val targetItem = ReceiptItemSelectionId("target", "item")
+        val siblingItem = ReceiptItemSelectionId("sibling", "item")
+
+        val update = ReceiptReviewState(listOf(target, sibling)).selectWalletForReview(
+            billId = "target",
+            walletId = "wallet",
+            selection = mapOf(targetItem to 1, siblingItem to 1),
+        )
+
+        assertEquals("wallet", update.state.bills.first().selectedWalletId)
+        assertEquals(mapOf(siblingItem to 1), update.selection)
+    }
+
+    @Test
+    fun `category review change clears only the edited bill selection`() {
+        val target = ReceiptReviewBill(id = "target", image = prepared(1), result = result())
+        val sibling = ReceiptReviewBill(id = "sibling", image = prepared(2), result = result())
+        val targetItem = ReceiptItemSelectionId("target", "item")
+        val siblingItem = ReceiptItemSelectionId("sibling", "item")
+
+        val update = ReceiptReviewState(listOf(target, sibling)).updateItemCategoryForReview(
+            billId = "target",
+            itemId = "item",
+            categoryId = "food",
+            selection = mapOf(targetItem to 1, siblingItem to 1),
+        )
+
+        assertEquals("food", update.state.bills.first().result?.items?.first()?.categoryId)
+        assertEquals(mapOf(siblingItem to 1), update.selection)
+    }
+
     private var generatedId = 0
 
     private fun indexId(): String = "bill-${++generatedId}"

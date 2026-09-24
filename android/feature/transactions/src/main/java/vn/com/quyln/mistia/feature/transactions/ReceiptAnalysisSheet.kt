@@ -3,6 +3,7 @@ package vn.com.quyln.mistia.feature.transactions
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,6 +17,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +56,8 @@ import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisException
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisFailure
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisCategoryCandidate
+import vn.com.quyln.mistia.core.model.ReceiptAnalysisWalletCandidate
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,12 +77,14 @@ internal fun ReceiptAnalysisSheet(
     var confirmDismiss by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val locale = Locale.getDefault()
-    val eligibleCategoryIds = remember(ownerUserId, categories, locale) {
-        receiptAnalysisCategoryCandidates(ownerUserId, categories, locale).map { it.id }.toSet()
+    val categoryChoices = remember(ownerUserId, categories, locale) {
+        receiptAnalysisCategoryCandidates(ownerUserId, categories, locale)
     }
-    val eligibleWalletIds = remember(ownerUserId, wallets) {
-        receiptAnalysisWalletCandidates(ownerUserId, wallets).map { it.id }.toSet()
+    val walletChoices = remember(ownerUserId, wallets) {
+        receiptAnalysisWalletCandidates(ownerUserId, wallets)
     }
+    val eligibleCategoryIds = categoryChoices.mapTo(mutableSetOf()) { it.id }
+    val eligibleWalletIds = walletChoices.mapTo(mutableSetOf()) { it.id }
     val isAnalyzing = state.bills.any(ReceiptReviewBill::isAnalyzing)
     val fallbackOccurredAt = remember { Instant.now().toString() }
     val candidates = state.selectionCandidates(selection)
@@ -226,7 +233,8 @@ internal fun ReceiptAnalysisSheet(
                     ReceiptReviewBillCard(
                         bill = bill,
                         index = index,
-                        wallets = wallets,
+                        walletChoices = walletChoices,
+                        categoryChoices = categoryChoices,
                         candidates = candidates.filter { it.id.billId == bill.id },
                         selection = selection,
                         selectedCandidates = selectedCandidates,
@@ -237,6 +245,25 @@ internal fun ReceiptAnalysisSheet(
                                 candidates = candidates,
                                 mode = ReceiptTransactionMode.EXPENSE,
                             )
+                        },
+                        onSelectWallet = { walletId ->
+                            val update = state.selectWalletForReview(
+                                billId = bill.id,
+                                walletId = walletId,
+                                selection = selection,
+                            )
+                            state = update.state
+                            selection = update.selection
+                        },
+                        onSelectCategory = { itemId, categoryId ->
+                            val update = state.updateItemCategoryForReview(
+                                billId = bill.id,
+                                itemId = itemId,
+                                categoryId = categoryId,
+                                selection = selection,
+                            )
+                            state = update.state
+                            selection = update.selection
                         },
                         onRemove = {
                             state = state.remove(bill.id)
@@ -334,11 +361,14 @@ internal fun ReceiptAnalysisSheet(
 private fun ReceiptReviewBillCard(
     bill: ReceiptReviewBill,
     index: Int,
-    wallets: List<LedgerWalletRecord>,
+    walletChoices: List<ReceiptAnalysisWalletCandidate>,
+    categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
     candidates: List<ReceiptItemSelectionCandidate>,
     selection: Map<ReceiptItemSelectionId, Int>,
     selectedCandidates: List<ReceiptItemSelectionCandidate>,
     onToggleItem: (ReceiptItemSelectionId) -> Unit,
+    onSelectWallet: (String) -> Unit,
+    onSelectCategory: (String, String) -> Unit,
     onRemove: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -403,14 +433,13 @@ private fun ReceiptReviewBillCard(
             }
 
             if (result != null) {
-                val walletName = wallets.firstOrNull { it.id == bill.selectedWalletId }?.name
-                if (walletName != null) {
-                    Text(
-                        text = walletName,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                ReceiptReviewChoiceMenu(
+                    title = stringResource(R.string.transactions_aibill_wallet_for_bill),
+                    selectedLabel = walletChoices.firstOrNull { it.id == bill.selectedWalletId }?.name,
+                    choices = walletChoices.map { it.id to it.name },
+                    placeholder = stringResource(R.string.transactions_transactioneditor_choose_wallet),
+                    onSelect = onSelectWallet,
+                )
                 if (result.requiresReview) {
                     Text(
                         text = stringResource(R.string.transactions_aibill_needs_review),
@@ -439,6 +468,9 @@ private fun ReceiptReviewBillCard(
                         isSelected = isSelected,
                         selectionEnabled = canSelect,
                         onSelectionChange = { candidate?.id?.let(onToggleItem) },
+                        categoryLabel = categoryChoices.firstOrNull { it.id == item.categoryId }?.name,
+                        categoryChoices = categoryChoices,
+                        onSelectCategory = { categoryId -> onSelectCategory(item.lineId, categoryId) },
                     )
                 }
                 result.rawText?.let { rawText ->
@@ -481,6 +513,9 @@ private fun ReceiptAnalysisItemRow(
     isSelected: Boolean,
     selectionEnabled: Boolean,
     onSelectionChange: () -> Unit,
+    categoryLabel: String?,
+    categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
+    onSelectCategory: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -547,6 +582,55 @@ private fun ReceiptAnalysisItemRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+        if (item.lineType == BillItemLineType.PURCHASE) {
+            ReceiptReviewChoiceMenu(
+                title = stringResource(R.string.transactions_transactioneditor_category),
+                selectedLabel = categoryLabel,
+                choices = categoryChoices.map { it.id to it.name },
+                placeholder = stringResource(R.string.transactions_transactioneditor_choose_category),
+                onSelect = onSelectCategory,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReceiptReviewChoiceMenu(
+    title: String,
+    selectedLabel: String?,
+    choices: List<Pair<String, String>>,
+    placeholder: String,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                enabled = choices.isNotEmpty(),
+            ) {
+                Text(selectedLabel ?: placeholder)
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                choices.forEach { (id, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            expanded = false
+                            onSelect(id)
+                        },
+                    )
+                }
             }
         }
     }
