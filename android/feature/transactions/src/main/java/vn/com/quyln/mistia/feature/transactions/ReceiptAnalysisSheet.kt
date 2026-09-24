@@ -72,7 +72,7 @@ internal fun ReceiptAnalysisSheet(
     wallets: List<LedgerWalletRecord>,
     client: ReceiptAnalysisClient,
     accessTokenProvider: suspend () -> String?,
-    onCreateTransaction: (ReceiptItemTransactionDraft) -> Unit,
+    onCreateTransaction: (ReceiptTransactionEditorLaunch) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var state by remember { mutableStateOf(ReceiptReviewState()) }
@@ -95,7 +95,7 @@ internal fun ReceiptAnalysisSheet(
     val fallbackOccurredAt = remember { Instant.now().toString() }
     val candidates = state.selectionCandidates(selection)
     val selectedCandidates = candidates.filter { it.id in selection }
-    val expenseDraft = state.expenseTransactionDraft(selection, fallbackOccurredAt)
+    val editorLaunch = state.expenseTransactionLaunch(selection, fallbackOccurredAt)
 
     fun appendResult(result: ReceiptPhotoSelectionResult) {
         state = state.append(result.images) { UUID.randomUUID().toString() }
@@ -351,8 +351,8 @@ internal fun ReceiptAnalysisSheet(
 
             item {
                 Button(
-                    onClick = { expenseDraft?.let(onCreateTransaction) },
-                    enabled = expenseDraft != null && !isAnalyzing,
+                    onClick = { editorLaunch?.let(onCreateTransaction) },
+                    enabled = editorLaunch != null && !isAnalyzing,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),

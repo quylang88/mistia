@@ -883,7 +883,7 @@ Evidence:
 - [x] Registered the repository in Hilt and verified 273 Android unit tests
   across 48 suites, Room Android-test compilation, lint, debug assembly, the
   15-entity contract check and Android/strict iOS localization code generation.
-- [ ] Attach the selected bill image only after its expense transaction saves,
+- [ ] Attach the selected bill image during the same expense-editor save,
   surface saved-receipt preview/removal in the editor, then implement debt/lend.
 
 No receipt was attached to a transaction yet, no live AI/production request or
@@ -893,3 +893,36 @@ on a device. All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-image-persistence-foundation.md`.
+
+## APK 1 analyzed-receipt save flow — 2026-09-24
+
+- [x] Routed the exact source bill image selected by the reviewed item group
+  into the expense editor; another bill's image cannot be substituted.
+- [x] Preassigned one transaction UUID and persisted the prepared JPEG and
+  thumbnail before saving the transaction with that same UUID, matching iOS's
+  receipt-before-context-save ordering without creating a duplicate on retry.
+- [x] Prevented transaction persistence when receipt persistence fails and
+  best-effort removed the newly persisted receipt when transaction saving
+  fails, preserving the original transaction error and attaching cleanup
+  failure as suppressed diagnostic context.
+- [x] Wired the receipt repository through Hilt into the native transaction
+  screen and cleared pending image state when the editor is dismissed or a
+  normal new/edit flow starts.
+- [x] Preserved the receipt-required marker across Activity recreation, so a
+  restored editor whose in-memory image is unavailable refuses to save instead
+  of silently creating a receipt-less transaction.
+- [x] Propagated coroutine cancellation after compensating receipt cleanup in
+  `NonCancellable`, including the ambiguous receipt-persistence boundary.
+- [x] Verified 281 Android unit tests across 49 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Add saved-receipt preview/removal to the editor, then implement the
+  receipt debt/lend path and remaining APK 1 closure checks.
+
+No live AI/production request, cloud write, migration or deployment occurred.
+`adb` remains unavailable, so the save flow and local files were not exercised
+on an Android device. All five cloud-write flags remain `false`; APK 1 is not
+complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-image-save-flow.md`.

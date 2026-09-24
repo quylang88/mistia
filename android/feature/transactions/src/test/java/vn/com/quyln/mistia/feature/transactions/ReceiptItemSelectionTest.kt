@@ -270,6 +270,24 @@ class ReceiptItemSelectionTest {
     }
 
     @Test
+    fun `review state launches expense editor with the exact selected bill image`() {
+        val bill = reviewBill(
+            id = "bill-a",
+            walletId = "wallet",
+            items = listOf(reviewItem("milk", quantity = null, amountMinor = 300)),
+        )
+
+        val launch = ReceiptReviewState(listOf(bill)).expenseTransactionLaunch(
+            selection = mapOf(ReceiptItemSelectionId("bill-a", "milk") to 1),
+            fallbackOccurredAt = NOW_FALLBACK,
+        )
+
+        requireNotNull(launch)
+        assertEquals("bill-a", launch.draft.receiptAttachmentBillId)
+        assertEquals(bill.image, launch.receiptImage)
+    }
+
+    @Test
     fun `review state rejects flagged incompatible and cross bill selections`() {
         val valid = reviewBill(
             id = "bill-a",

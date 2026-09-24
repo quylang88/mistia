@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
+import java.util.UUID
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.R
@@ -34,6 +35,8 @@ import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
+import vn.com.quyln.mistia.core.model.PreparedReceiptImage
+import vn.com.quyln.mistia.core.model.TransactionReceiptImageRepository
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
 import vn.com.quyln.mistia.core.model.transactionDisplayMoney
@@ -44,6 +47,7 @@ fun TransactionsScreen(
     repository: FinanceRepository,
     exchangeRateRepository: ExchangeRateRepository,
     receiptAnalysisClient: ReceiptAnalysisClient,
+    receiptImageRepository: TransactionReceiptImageRepository,
     accessTokenProvider: suspend () -> String?,
     deviceIdProvider: suspend () -> String,
     modifier: Modifier = Modifier,
@@ -62,6 +66,8 @@ fun TransactionsScreen(
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editorTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
     var editorInitialState by remember { mutableStateOf<TransactionEditorState?>(null) }
+    var editorReceiptImage by remember { mutableStateOf<PreparedReceiptImage?>(null) }
+    var editorReceiptRequired by rememberSaveable { mutableStateOf(false) }
     var receiptOpen by rememberSaveable { mutableStateOf(false) }
     val walletCurrencies = wallets.associate { it.id to it.currencyCode }
     LazyColumn(
@@ -92,6 +98,8 @@ fun TransactionsScreen(
                         onClick = {
                             editorTransactionId = null
                             editorInitialState = null
+                            editorReceiptImage = null
+                            editorReceiptRequired = false
                             editorOpen = true
                         },
                         modifier = Modifier.weight(1f),
@@ -124,6 +132,8 @@ fun TransactionsScreen(
                     modifier = Modifier.clickable(enabled = isEditable) {
                         editorTransactionId = record.id
                         editorInitialState = null
+                        editorReceiptImage = null
+                        editorReceiptRequired = false
                         editorOpen = true
                     },
                 ) { padding ->
@@ -157,13 +167,15 @@ fun TransactionsScreen(
             wallets = wallets,
             client = receiptAnalysisClient,
             accessTokenProvider = accessTokenProvider,
-            onCreateTransaction = { draft ->
-                val currencyCode = wallets.firstOrNull { it.id == draft.walletId }?.currencyCode
-                val prefill = currencyCode?.let(draft::toExpenseEditorState)
+            onCreateTransaction = { launch ->
+                val currencyCode = wallets.firstOrNull { it.id == launch.draft.walletId }?.currencyCode
+                val prefill = currencyCode?.let(launch.draft::toExpenseEditorState)
                 if (prefill != null) {
                     receiptOpen = false
                     editorTransactionId = null
                     editorInitialState = prefill
+                    editorReceiptImage = launch.receiptImage
+                    editorReceiptRequired = true
                     editorOpen = true
                 }
             },
@@ -184,13 +196,52 @@ fun TransactionsScreen(
                 onDismiss = {
                     editorOpen = false
                     editorInitialState = null
+                    editorReceiptImage = null
+                    editorReceiptRequired = false
                 },
                 onSave = { draft ->
-                    repository.saveTransaction(
-                        ownerUserId = ownerUserId,
-                        draft = draft,
-                        deviceId = deviceIdProvider(),
-                        now = Instant.now().toString(),
+                    val now = Instant.now().toString()
+                    val deviceId = deviceIdProvider()
+                    resolveReceiptImageForSave(
+                        receiptRequired = editorReceiptRequired,
+                        receiptImage = editorReceiptImage,
+                    ).fold(
+                        onSuccess = { receiptImage ->
+                            if (receiptImage == null) {
+                                repository.saveTransaction(
+                                    ownerUserId = ownerUserId,
+                                    draft = draft,
+                                    deviceId = deviceId,
+                                    now = now,
+                                )
+                            } else {
+                                saveReceiptBackedTransaction(
+                                    draft = draft,
+                                    receiptImage = receiptImage,
+                                    transactionIdProvider = { UUID.randomUUID().toString().lowercase() },
+                                    persistReceipt = { transactionId, image ->
+                                        receiptImageRepository.replaceReceipt(
+                                            ownerUserId = ownerUserId,
+                                            transactionId = transactionId,
+                                            imageData = image.imageData,
+                                            thumbnailData = image.thumbnailData,
+                                            contentType = image.mimeType,
+                                            now = now,
+                                        ).map { Unit }
+                                    },
+                                    saveTransaction = { transactionDraft ->
+                                        repository.saveTransaction(
+                                            ownerUserId = ownerUserId,
+                                            draft = transactionDraft,
+                                            deviceId = deviceId,
+                                            now = now,
+                                        )
+                                    },
+                                    deleteReceipt = receiptImageRepository::deleteReceipt,
+                                )
+                            }
+                        },
+                        onFailure = { Result.failure(it) },
                     )
                 },
             )

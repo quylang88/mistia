@@ -50,6 +50,7 @@ import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
 import vn.com.quyln.mistia.core.model.SyncEngine
+import vn.com.quyln.mistia.core.model.TransactionReceiptImageRepository
 import vn.com.quyln.mistia.core.auth.SecureDeviceIdStore
 import vn.com.quyln.mistia.feature.family.FamilyScreen
 import vn.com.quyln.mistia.feature.investment.InvestmentScreen
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var categoryTranslationCoordinator: CategoryTranslationCoordinator
     @Inject lateinit var exchangeRateRepository: ExchangeRateRepository
     @Inject lateinit var receiptAnalysisClient: ReceiptAnalysisClient
+    @Inject lateinit var receiptImageRepository: TransactionReceiptImageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +93,7 @@ class MainActivity : ComponentActivity() {
                     categoryTranslationCoordinator = categoryTranslationCoordinator,
                     exchangeRateRepository = exchangeRateRepository,
                     receiptAnalysisClient = receiptAnalysisClient,
+                    receiptImageRepository = receiptImageRepository,
                     openedFromFamilyInvite = openedFromFamilyInvite,
                 )
             }
@@ -110,6 +113,7 @@ private fun MistiaApp(
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
     exchangeRateRepository: ExchangeRateRepository,
     receiptAnalysisClient: ReceiptAnalysisClient,
+    receiptImageRepository: TransactionReceiptImageRepository,
     openedFromFamilyInvite: Boolean,
 ) {
     val authState by authRepository.state.collectAsStateWithLifecycle()
@@ -150,6 +154,7 @@ private fun MistiaApp(
                 categoryTranslationCoordinator = categoryTranslationCoordinator,
                 exchangeRateRepository = exchangeRateRepository,
                 receiptAnalysisClient = receiptAnalysisClient,
+                receiptImageRepository = receiptImageRepository,
                 openedFromFamilyInvite = openedFromFamilyInvite,
             )
         }
@@ -175,6 +180,7 @@ private fun SignedInRoot(
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
     exchangeRateRepository: ExchangeRateRepository,
     receiptAnalysisClient: ReceiptAnalysisClient,
+    receiptImageRepository: TransactionReceiptImageRepository,
     openedFromFamilyInvite: Boolean,
 ) {
     val navController = rememberNavController()
@@ -212,6 +218,7 @@ private fun SignedInRoot(
                         repository = financeRepository,
                         exchangeRateRepository = exchangeRateRepository,
                         receiptAnalysisClient = receiptAnalysisClient,
+                        receiptImageRepository = receiptImageRepository,
                         accessTokenProvider = {
                             (authRepository.refreshIfNeeded().getOrNull() ?: authState.session).accessToken
                         },

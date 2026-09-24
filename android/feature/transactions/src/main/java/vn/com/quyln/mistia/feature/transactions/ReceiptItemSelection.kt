@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.feature.transactions
 
 import vn.com.quyln.mistia.core.model.BillItemLineType
+import vn.com.quyln.mistia.core.model.PreparedReceiptImage
 import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
@@ -57,6 +58,11 @@ internal data class ReceiptItemTransactionDraft(
     val categoryId: String?,
     val occurredAt: String,
     val receiptAttachmentBillId: String?,
+)
+
+internal data class ReceiptTransactionEditorLaunch(
+    val draft: ReceiptItemTransactionDraft,
+    val receiptImage: PreparedReceiptImage,
 )
 
 internal object ReceiptItemSelectionLogic {
@@ -295,4 +301,14 @@ internal fun ReceiptReviewState.expenseTransactionDraft(
         mode = ReceiptTransactionMode.EXPENSE,
         fallbackOccurredAt = fallbackOccurredAt,
     )
+}
+
+internal fun ReceiptReviewState.expenseTransactionLaunch(
+    selection: Map<ReceiptItemSelectionId, Int>,
+    fallbackOccurredAt: String,
+): ReceiptTransactionEditorLaunch? {
+    val draft = expenseTransactionDraft(selection, fallbackOccurredAt) ?: return null
+    val billId = draft.receiptAttachmentBillId ?: return null
+    val image = bills.firstOrNull { it.id == billId }?.image ?: return null
+    return ReceiptTransactionEditorLaunch(draft = draft, receiptImage = image)
 }
