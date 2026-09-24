@@ -21,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -76,6 +77,7 @@ internal fun ReceiptAnalysisSheet(
     onDismiss: () -> Unit,
 ) {
     var state by remember { mutableStateOf(ReceiptReviewState()) }
+    var mode by remember { mutableStateOf(ReceiptTransactionMode.EXPENSE) }
     var selection by remember { mutableStateOf<Map<ReceiptItemSelectionId, Int>>(emptyMap()) }
     var preparationFailure by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
@@ -95,7 +97,17 @@ internal fun ReceiptAnalysisSheet(
     val fallbackOccurredAt = remember { Instant.now().toString() }
     val candidates = state.selectionCandidates(selection)
     val selectedCandidates = candidates.filter { it.id in selection }
-    val editorLaunch = state.expenseTransactionLaunch(selection, fallbackOccurredAt)
+    val editorLaunch = state.transactionLaunch(selection, mode, fallbackOccurredAt)
+
+    fun selectMode(selectedMode: ReceiptTransactionMode) {
+        if (mode == selectedMode) return
+        mode = selectedMode
+        selection = ReceiptItemSelectionLogic.normalizedSelection(
+            selection = selection,
+            candidates = candidates,
+            mode = selectedMode,
+        )
+    }
 
     fun appendResult(result: ReceiptPhotoSelectionResult) {
         state = state.append(result.images) { UUID.randomUUID().toString() }
@@ -181,6 +193,26 @@ internal fun ReceiptAnalysisSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = mode == ReceiptTransactionMode.EXPENSE,
+                        onClick = { selectMode(ReceiptTransactionMode.EXPENSE) },
+                        label = { Text(stringResource(R.string.shared_corelogic_financeenums_expense)) },
+                    )
+                    FilterChip(
+                        selected = mode == ReceiptTransactionMode.LEND,
+                        onClick = { selectMode(ReceiptTransactionMode.LEND) },
+                        label = { Text(stringResource(R.string.shared_corelogic_financeenums_lend)) },
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     ReceiptPhotoPickerButton(
@@ -242,6 +274,7 @@ internal fun ReceiptAnalysisSheet(
                         walletChoices = walletChoices,
                         categoryChoices = categoryChoices,
                         candidates = candidates.filter { it.id.billId == bill.id },
+                        mode = mode,
                         selection = selection,
                         selectedCandidates = selectedCandidates,
                         onToggleItem = { candidateId ->
@@ -249,7 +282,7 @@ internal fun ReceiptAnalysisSheet(
                                 selection = selection,
                                 candidateId = candidateId,
                                 candidates = candidates,
-                                mode = ReceiptTransactionMode.EXPENSE,
+                                mode = mode,
                             )
                         },
                         onSelectWallet = { walletId ->
@@ -450,6 +483,7 @@ private fun ReceiptReviewBillCard(
     walletChoices: List<ReceiptAnalysisWalletCandidate>,
     categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
     candidates: List<ReceiptItemSelectionCandidate>,
+    mode: ReceiptTransactionMode,
     selection: Map<ReceiptItemSelectionId, Int>,
     selectedCandidates: List<ReceiptItemSelectionCandidate>,
     onToggleItem: (ReceiptItemSelectionId) -> Unit,
@@ -553,7 +587,7 @@ private fun ReceiptReviewBillCard(
                             isSelected || ReceiptItemSelectionLogic.canSelect(
                                 candidate = candidate,
                                 selected = selectedCandidates,
-                                mode = ReceiptTransactionMode.EXPENSE,
+                                mode = mode,
                             )
                         )
                     ReceiptAnalysisItemRow(
@@ -564,6 +598,7 @@ private fun ReceiptReviewBillCard(
                         onSelectionChange = { candidate?.id?.let(onToggleItem) },
                         categoryLabel = categoryChoices.firstOrNull { it.id == item.categoryId }?.name,
                         categoryChoices = categoryChoices,
+                        categoryEditingEnabled = mode == ReceiptTransactionMode.EXPENSE,
                         onSelectCategory = { categoryId -> onSelectCategory(item.lineId, categoryId) },
                         onEdit = { onEditItem(item) },
                         canAllocateDiscount = item.lineType == BillItemLineType.DISCOUNT &&
@@ -667,6 +702,7 @@ private fun ReceiptAnalysisItemRow(
     onSelectionChange: () -> Unit,
     categoryLabel: String?,
     categoryChoices: List<ReceiptAnalysisCategoryCandidate>,
+    categoryEditingEnabled: Boolean,
     onSelectCategory: (String) -> Unit,
     onEdit: () -> Unit,
     canAllocateDiscount: Boolean,
@@ -745,6 +781,7 @@ private fun ReceiptAnalysisItemRow(
                 selectedLabel = categoryLabel,
                 choices = categoryChoices.map { it.id to it.name },
                 placeholder = stringResource(R.string.transactions_transactioneditor_choose_category),
+                enabled = categoryEditingEnabled,
                 onSelect = onSelectCategory,
             )
         } else if (canAllocateDiscount) {
@@ -770,6 +807,7 @@ private fun ReceiptReviewChoiceMenu(
     selectedLabel: String?,
     choices: List<Pair<String, String>>,
     placeholder: String,
+    enabled: Boolean = true,
     onSelect: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -782,7 +820,7 @@ private fun ReceiptReviewChoiceMenu(
         Box {
             OutlinedButton(
                 onClick = { expanded = true },
-                enabled = choices.isNotEmpty(),
+                enabled = enabled && choices.isNotEmpty(),
             ) {
                 Text(selectedLabel ?: placeholder)
             }

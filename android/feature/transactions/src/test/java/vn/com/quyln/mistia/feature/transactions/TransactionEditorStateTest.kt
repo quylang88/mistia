@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.feature.transactions
 
+import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -26,7 +27,7 @@ class TransactionEditorStateTest {
             categoryId = CATEGORY_ID,
             occurredAt = NOW,
             receiptAttachmentBillId = "bill-1",
-        ).toExpenseEditorState(currencyCode = "JPY")
+        ).toTransactionEditorState(currencyCode = "JPY")
 
         requireNotNull(state)
         assertNull(state.id)
@@ -42,7 +43,7 @@ class TransactionEditorStateTest {
     }
 
     @Test
-    fun `receipt lend draft stays outside unsupported native persistence`() {
+    fun `receipt lend draft maps locked debt editor and requires counterparty`() {
         val state = ReceiptItemTransactionDraft(
             primaryKind = TransactionPrimaryKind.TRANSFER,
             transferSubtype = TransactionTransferSubtype.DEBT,
@@ -53,9 +54,34 @@ class TransactionEditorStateTest {
             categoryId = null,
             occurredAt = NOW,
             receiptAttachmentBillId = "bill-1",
-        ).toExpenseEditorState(currencyCode = "JPY")
+        ).toTransactionEditorState(currencyCode = "JPY")
 
-        assertNull(state)
+        requireNotNull(state)
+        assertEquals(TransactionPrimaryKind.TRANSFER, state.primaryKind)
+        assertEquals(TransactionTransferSubtype.DEBT, state.transferSubtype)
+        assertEquals(TransactionDebtIntent.LEND, state.debtIntent)
+        assertEquals("FamilyMart", state.title)
+        assertEquals("1570", state.amountText)
+        assertEquals(SOURCE_WALLET_ID, state.sourceWalletId)
+        assertNull(state.destinationWalletId)
+        assertNull(state.categoryId)
+        assertEquals("", state.counterpartyName)
+
+        val missingCounterparty = state.toDraft("JPY", null)
+        assertNull(missingCounterparty.draft)
+        assertEquals(TransactionEditorValidation.COUNTERPARTY_REQUIRED, missingCounterparty.validation)
+
+        val normalizedEmptyCounterparty = state.copy(counterpartyName = "！ -- ").toDraft("JPY", null)
+        assertNull(normalizedEmptyCounterparty.draft)
+        assertEquals(
+            TransactionEditorValidation.COUNTERPARTY_REQUIRED,
+            normalizedEmptyCounterparty.validation,
+        )
+
+        val ready = state.copy(counterpartyName = " Trang ").toDraft("JPY", null)
+        assertNull(ready.validation)
+        assertEquals(TransactionDebtIntent.LEND, ready.draft?.debtIntent)
+        assertEquals(" Trang ", ready.draft?.counterpartyName)
     }
 
     @Test
@@ -228,6 +254,50 @@ class TransactionEditorStateTest {
         assertEquals("1650000", state.destinationAmountText)
         assertEquals(CurrencyConversionMode.MANUAL, state.conversionMode)
         assertEquals("165.000000", state.exchangeRateText)
+    }
+
+    @Test
+    fun `edit maps standalone lend fields and keeps debt editor supported`() {
+        val transaction = transaction().copy(
+            transferSubtypeWireValue = TransactionTransferSubtype.DEBT.wireValue,
+            debtIntentWireValue = TransactionDebtIntent.LEND.wireValue,
+            counterpartyName = "Trang",
+            normalizedCounterpartyKey = "trang",
+            destinationWalletId = null,
+            destinationCurrencyCode = null,
+            destinationAmountMinor = null,
+            conversionModeWireValue = null,
+            exchangeRateDecimalString = null,
+            exchangeRateProvider = null,
+            exchangeRateDate = null,
+        )
+
+        val state = TransactionEditorState.edit(transaction)
+
+        assertEquals(TransactionTransferSubtype.DEBT, state.transferSubtype)
+        assertEquals(TransactionDebtIntent.LEND, state.debtIntent)
+        assertEquals("Trang", state.counterpartyName)
+        assertTrue(transaction.supportsNativeTransactionEditor())
+    }
+
+    @Test
+    fun `state saver restores debt intent counterparty and wallet identifiers`() {
+        val state = TransactionEditorState.new(NOW).copy(
+            primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.DEBT,
+            debtIntent = TransactionDebtIntent.LEND,
+            title = "FamilyMart",
+            amountText = "1570",
+            sourceWalletId = SOURCE_WALLET_ID,
+            counterpartyName = "Trang",
+        )
+        val saved = with(TransactionEditorState.Saver) {
+            with(SaverScope { true }) { save(state) }
+        }
+
+        val restored = saved?.let(TransactionEditorState.Saver::restore)
+
+        assertEquals(state, restored)
     }
 
     @Test

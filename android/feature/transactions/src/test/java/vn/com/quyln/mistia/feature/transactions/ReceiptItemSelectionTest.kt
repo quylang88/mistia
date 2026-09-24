@@ -277,12 +277,42 @@ class ReceiptItemSelectionTest {
             items = listOf(reviewItem("milk", quantity = null, amountMinor = 300)),
         )
 
-        val launch = ReceiptReviewState(listOf(bill)).expenseTransactionLaunch(
+        val launch = ReceiptReviewState(listOf(bill)).transactionLaunch(
             selection = mapOf(ReceiptItemSelectionId("bill-a", "milk") to 1),
+            mode = ReceiptTransactionMode.EXPENSE,
             fallbackOccurredAt = NOW_FALLBACK,
         )
 
         requireNotNull(launch)
+        assertEquals("bill-a", launch.draft.receiptAttachmentBillId)
+        assertEquals(bill.image, launch.receiptImage)
+    }
+
+    @Test
+    fun `review state launches lend editor with exact selected bill image`() {
+        val bill = reviewBill(
+            id = "bill-a",
+            walletId = "wallet",
+            items = listOf(
+                reviewItem("milk", quantity = null, amountMinor = 300),
+                reviewItem("train", quantity = null, amountMinor = 500).copy(categoryId = "travel"),
+            ),
+        )
+
+        val launch = ReceiptReviewState(listOf(bill)).transactionLaunch(
+            selection = mapOf(
+                ReceiptItemSelectionId("bill-a", "milk") to 1,
+                ReceiptItemSelectionId("bill-a", "train") to 1,
+            ),
+            mode = ReceiptTransactionMode.LEND,
+            fallbackOccurredAt = NOW_FALLBACK,
+        )
+
+        requireNotNull(launch)
+        assertEquals(TransactionPrimaryKind.TRANSFER, launch.draft.primaryKind)
+        assertEquals(TransactionTransferSubtype.DEBT, launch.draft.transferSubtype)
+        assertEquals(TransactionDebtIntent.LEND, launch.draft.debtIntent)
+        assertNull(launch.draft.categoryId)
         assertEquals("bill-a", launch.draft.receiptAttachmentBillId)
         assertEquals(bill.image, launch.receiptImage)
     }

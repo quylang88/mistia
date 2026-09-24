@@ -200,7 +200,7 @@ fun TransactionsScreen(
             accessTokenProvider = accessTokenProvider,
             onCreateTransaction = { launch ->
                 val currencyCode = wallets.firstOrNull { it.id == launch.draft.walletId }?.currencyCode
-                val prefill = currencyCode?.let(launch.draft::toExpenseEditorState)
+                val prefill = currencyCode?.let(launch.draft::toTransactionEditorState)
                 if (prefill != null) {
                     receiptOpen = false
                     editorTransactionId = null

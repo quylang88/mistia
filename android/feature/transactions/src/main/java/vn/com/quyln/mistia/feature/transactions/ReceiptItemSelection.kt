@@ -280,6 +280,16 @@ internal fun ReceiptReviewState.selectionCandidates(
 internal fun ReceiptReviewState.expenseTransactionDraft(
     selection: Map<ReceiptItemSelectionId, Int>,
     fallbackOccurredAt: String,
+): ReceiptItemTransactionDraft? = transactionDraft(
+    selection = selection,
+    mode = ReceiptTransactionMode.EXPENSE,
+    fallbackOccurredAt = fallbackOccurredAt,
+)
+
+internal fun ReceiptReviewState.transactionDraft(
+    selection: Map<ReceiptItemSelectionId, Int>,
+    mode: ReceiptTransactionMode,
+    fallbackOccurredAt: String,
 ): ReceiptItemTransactionDraft? {
     val requested = selection.filterValues { it > 0 }
     val billId = requested.keys.map(ReceiptItemSelectionId::billId).toSet().singleOrNull()
@@ -292,13 +302,13 @@ internal fun ReceiptReviewState.expenseTransactionDraft(
     val normalized = ReceiptItemSelectionLogic.normalizedSelection(
         selection = requested,
         candidates = candidates,
-        mode = ReceiptTransactionMode.EXPENSE,
+        mode = mode,
     )
     if (normalized.keys != requested.keys) return null
     val selected = selectionCandidates(normalized).filter { it.id in normalized }
     return ReceiptItemSelectionLogic.transactionDraft(
         selected = selected,
-        mode = ReceiptTransactionMode.EXPENSE,
+        mode = mode,
         fallbackOccurredAt = fallbackOccurredAt,
     )
 }
@@ -306,8 +316,18 @@ internal fun ReceiptReviewState.expenseTransactionDraft(
 internal fun ReceiptReviewState.expenseTransactionLaunch(
     selection: Map<ReceiptItemSelectionId, Int>,
     fallbackOccurredAt: String,
+): ReceiptTransactionEditorLaunch? = transactionLaunch(
+    selection = selection,
+    mode = ReceiptTransactionMode.EXPENSE,
+    fallbackOccurredAt = fallbackOccurredAt,
+)
+
+internal fun ReceiptReviewState.transactionLaunch(
+    selection: Map<ReceiptItemSelectionId, Int>,
+    mode: ReceiptTransactionMode,
+    fallbackOccurredAt: String,
 ): ReceiptTransactionEditorLaunch? {
-    val draft = expenseTransactionDraft(selection, fallbackOccurredAt) ?: return null
+    val draft = transactionDraft(selection, mode, fallbackOccurredAt) ?: return null
     val billId = draft.receiptAttachmentBillId ?: return null
     val image = bills.firstOrNull { it.id == billId }?.image ?: return null
     return ReceiptTransactionEditorLaunch(draft = draft, receiptImage = image)

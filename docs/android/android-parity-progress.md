@@ -1013,3 +1013,33 @@ cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-offline-debt-lend-foundation.md`.
+
+## APK 1 receipt Lend editor routing — 2026-09-25
+
+- [x] Added native Expense/Lend mode selection to receipt review and reused the
+  existing mode-normalization contract so Lend accepts mixed categories while
+  still enforcing one bill and one wallet.
+- [x] Generalized the guarded review projection and editor bridge for
+  `transfer/debt/lend`, resolving the exact selected bill image before the
+  create action can open the editor.
+- [x] Added debt intent and counterparty to saveable editor state. A receipt
+  Lend opens as a locked Lend context, permits credit-card source wallets,
+  requires a normalizable counterparty and emits no destination/category/FX.
+- [x] Enabled native editing only for standalone posted Lend records without
+  settlement ownership; family transfer and other debt intents remain outside
+  this bounded editor contract.
+- [x] Reused the receipt-first save coordinator and shared transaction UUID, so
+  Lend has the same attachment failure, compensation and lifecycle guard as
+  reviewed Expense creation.
+- [x] Verified 307 Android unit tests across 50 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind iOS-style locked allocation groups and created-allocation completion
+  state to the Compose receipt review before closing APK 1.
+
+No live AI/cloud write, migration or deployment occurred. `adb` remains
+unavailable, so no emulator/Samsung UI or dark-mode claim is made. All five
+cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-25-apk1-receipt-lend-editor-routing.md`.

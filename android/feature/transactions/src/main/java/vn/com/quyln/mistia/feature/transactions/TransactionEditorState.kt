@@ -9,17 +9,20 @@ import java.util.Locale
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
 import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
 import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
+import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionEntryStatus
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 import vn.com.quyln.mistia.core.model.matchingExchangeRateSnapshot
+import vn.com.quyln.mistia.core.model.normalizeCounterpartyName
 import vn.com.quyln.mistia.core.model.resolveExchangeRate
 
 data class TransactionEditorState(
     val id: String?,
     val primaryKind: TransactionPrimaryKind,
     val transferSubtype: TransactionTransferSubtype?,
+    val debtIntent: TransactionDebtIntent?,
     val entryStatus: TransactionEntryStatus,
     val title: String,
     val note: String,
@@ -28,6 +31,7 @@ data class TransactionEditorState(
     val sourceWalletId: String?,
     val destinationWalletId: String?,
     val categoryId: String?,
+    val counterpartyName: String,
     val destinationAmountText: String,
     val conversionMode: CurrencyConversionMode?,
     val exchangeRateText: String,
@@ -38,13 +42,17 @@ data class TransactionEditorState(
         TransactionPrimaryKind.TRANSFER -> copy(
             primaryKind = selected,
             transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+            debtIntent = null,
             categoryId = null,
+            counterpartyName = "",
         )
         TransactionPrimaryKind.EXPENSE, TransactionPrimaryKind.INCOME -> copy(
             primaryKind = selected,
             transferSubtype = null,
+            debtIntent = null,
             destinationWalletId = null,
             categoryId = null,
+            counterpartyName = "",
             destinationAmountText = "",
             conversionMode = null,
             exchangeRateText = "",
@@ -61,21 +69,29 @@ data class TransactionEditorState(
         if (sourceWalletId == null) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.SOURCE_WALLET_REQUIRED)
         }
+        val isInternalTransfer = primaryKind == TransactionPrimaryKind.TRANSFER &&
+            transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER
+        val isDebtLend = primaryKind == TransactionPrimaryKind.TRANSFER &&
+            transferSubtype == TransactionTransferSubtype.DEBT &&
+            debtIntent == TransactionDebtIntent.LEND
         if (primaryKind != TransactionPrimaryKind.TRANSFER && categoryId == null) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.CATEGORY_REQUIRED)
         }
-        if (primaryKind == TransactionPrimaryKind.TRANSFER && destinationWalletId == null) {
+        if (isInternalTransfer && destinationWalletId == null) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.DESTINATION_WALLET_REQUIRED)
         }
-        if (primaryKind == TransactionPrimaryKind.TRANSFER && sourceWalletId == destinationWalletId) {
+        if (isInternalTransfer && sourceWalletId == destinationWalletId) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.SAME_WALLET)
+        }
+        if (isDebtLend && normalizeCounterpartyName(counterpartyName) == null) {
+            return TransactionEditorDraftResult(validation = TransactionEditorValidation.COUNTERPARTY_REQUIRED)
         }
         val amount = parseMinorInput(amountText, sourceCurrencyCode)
             ?: return TransactionEditorDraftResult(validation = TransactionEditorValidation.INVALID_AMOUNT)
         if (amount <= 0) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.INVALID_AMOUNT)
         }
-        val isCrossCurrency = primaryKind == TransactionPrimaryKind.TRANSFER &&
+        val isCrossCurrency = isInternalTransfer &&
             sourceCurrencyCode != null && destinationCurrencyCode != null &&
             !sourceCurrencyCode.equals(destinationCurrencyCode, ignoreCase = true)
         val appRate = if (isCrossCurrency && conversionMode == CurrencyConversionMode.APP_RATE) {
@@ -112,6 +128,8 @@ data class TransactionEditorState(
                 id = id,
                 primaryKind = primaryKind,
                 transferSubtype = transferSubtype,
+                debtIntent = debtIntent,
+                counterpartyName = counterpartyName,
                 entryStatus = entryStatus,
                 title = title,
                 note = note,
@@ -206,6 +224,7 @@ data class TransactionEditorState(
             id = null,
             primaryKind = TransactionPrimaryKind.EXPENSE,
             transferSubtype = null,
+            debtIntent = null,
             entryStatus = TransactionEntryStatus.POSTED,
             title = "",
             note = "",
@@ -214,6 +233,7 @@ data class TransactionEditorState(
             sourceWalletId = null,
             destinationWalletId = null,
             categoryId = null,
+            counterpartyName = "",
             destinationAmountText = "",
             conversionMode = null,
             exchangeRateText = "",
@@ -228,6 +248,7 @@ data class TransactionEditorState(
                 id = transaction.id,
                 primaryKind = primaryKind,
                 transferSubtype = transaction.transferSubtype,
+                debtIntent = transaction.debtIntent,
                 entryStatus = entryStatus,
                 title = transaction.title,
                 note = transaction.note.orEmpty(),
@@ -236,6 +257,7 @@ data class TransactionEditorState(
                 sourceWalletId = transaction.sourceWalletId,
                 destinationWalletId = transaction.destinationWalletId,
                 categoryId = transaction.categoryId,
+                counterpartyName = transaction.counterpartyName.orEmpty(),
                 destinationAmountText = transaction.destinationAmountMinor?.let {
                     formatMinorInput(it, transaction.destinationCurrencyCode)
                 }.orEmpty(),
@@ -252,6 +274,7 @@ data class TransactionEditorState(
                     it.id.orEmpty(),
                     it.primaryKind.wireValue,
                     it.transferSubtype?.wireValue.orEmpty(),
+                    it.debtIntent?.wireValue.orEmpty(),
                     it.entryStatus.wireValue,
                     it.title,
                     it.note,
@@ -260,6 +283,7 @@ data class TransactionEditorState(
                     it.sourceWalletId.orEmpty(),
                     it.destinationWalletId.orEmpty(),
                     it.categoryId.orEmpty(),
+                    it.counterpartyName,
                     it.destinationAmountText,
                     it.conversionMode?.wireValue.orEmpty(),
                     it.exchangeRateText,
@@ -273,20 +297,22 @@ data class TransactionEditorState(
                     primaryKind = TransactionPrimaryKind.fromWireValue(values[1] as String)
                         ?: TransactionPrimaryKind.EXPENSE,
                     transferSubtype = TransactionTransferSubtype.fromWireValue(values[2] as String),
-                    entryStatus = TransactionEntryStatus.fromWireValue(values[3] as String)
+                    debtIntent = TransactionDebtIntent.fromWireValue(values[3] as String),
+                    entryStatus = TransactionEntryStatus.fromWireValue(values[4] as String)
                         ?: TransactionEntryStatus.POSTED,
-                    title = values[4] as String,
-                    note = values[5] as String,
-                    amountText = values[6] as String,
-                    occurredAt = values[7] as String,
-                    sourceWalletId = (values[8] as String).takeIf(String::isNotEmpty),
-                    destinationWalletId = (values[9] as String).takeIf(String::isNotEmpty),
-                    categoryId = (values[10] as String).takeIf(String::isNotEmpty),
-                    destinationAmountText = values[11] as String,
-                    conversionMode = CurrencyConversionMode.fromWireValue(values[12] as String),
-                    exchangeRateText = values[13] as String,
-                    exchangeRateProvider = (values[14] as String).takeIf(String::isNotEmpty),
-                    exchangeRateDate = (values[15] as String).takeIf(String::isNotEmpty),
+                    title = values[5] as String,
+                    note = values[6] as String,
+                    amountText = values[7] as String,
+                    occurredAt = values[8] as String,
+                    sourceWalletId = (values[9] as String).takeIf(String::isNotEmpty),
+                    destinationWalletId = (values[10] as String).takeIf(String::isNotEmpty),
+                    categoryId = (values[11] as String).takeIf(String::isNotEmpty),
+                    counterpartyName = values[12] as String,
+                    destinationAmountText = values[13] as String,
+                    conversionMode = CurrencyConversionMode.fromWireValue(values[14] as String),
+                    exchangeRateText = values[15] as String,
+                    exchangeRateProvider = (values[16] as String).takeIf(String::isNotEmpty),
+                    exchangeRateDate = (values[17] as String).takeIf(String::isNotEmpty),
                 )
             },
         )
@@ -302,6 +328,7 @@ enum class TransactionEditorValidation {
     SOURCE_WALLET_REQUIRED,
     DESTINATION_WALLET_REQUIRED,
     CATEGORY_REQUIRED,
+    COUNTERPARTY_REQUIRED,
     SAME_WALLET,
     INVALID_AMOUNT,
     INVALID_DESTINATION_AMOUNT,
@@ -327,21 +354,20 @@ internal fun formatMinorInput(minor: Long, currencyCode: String?): String {
     return BigDecimal.valueOf(minor, fractionDigits).stripTrailingZeros().toPlainString()
 }
 
-internal fun ReceiptItemTransactionDraft.toExpenseEditorState(
+internal fun ReceiptItemTransactionDraft.toTransactionEditorState(
     currencyCode: String,
 ): TransactionEditorState? {
-    if (
-        primaryKind != TransactionPrimaryKind.EXPENSE ||
-        transferSubtype != null ||
-        debtIntent != null ||
-        categoryId == null
-    ) {
-        return null
-    }
+    val isExpense = primaryKind == TransactionPrimaryKind.EXPENSE &&
+        transferSubtype == null && debtIntent == null && categoryId != null
+    val isLend = primaryKind == TransactionPrimaryKind.TRANSFER &&
+        transferSubtype == TransactionTransferSubtype.DEBT &&
+        debtIntent == TransactionDebtIntent.LEND && categoryId == null
+    if (!isExpense && !isLend) return null
     return TransactionEditorState(
         id = null,
-        primaryKind = TransactionPrimaryKind.EXPENSE,
-        transferSubtype = null,
+        primaryKind = primaryKind,
+        transferSubtype = transferSubtype,
+        debtIntent = debtIntent,
         entryStatus = TransactionEntryStatus.POSTED,
         title = title,
         note = "",
@@ -350,6 +376,7 @@ internal fun ReceiptItemTransactionDraft.toExpenseEditorState(
         sourceWalletId = walletId,
         destinationWalletId = null,
         categoryId = categoryId,
+        counterpartyName = "",
         destinationAmountText = "",
         conversionMode = null,
         exchangeRateText = "",
@@ -361,11 +388,17 @@ internal fun ReceiptItemTransactionDraft.toExpenseEditorState(
 internal fun LedgerTransactionRecord.supportsNativeTransactionEditor(): Boolean {
     val kind = primaryKind ?: return false
     if (isArchived || deletedAt != null || entryStatus == null) return false
-    if (settlementGroupId != null || settlementObligationId != null || settlementRoleWireValue != null) return false
+    if (settlementGroupId != null || settlementObligationId != null || settlementRoleWireValue != null ||
+        reportingExpenseMinor != null || reportingIncomeMinor != null
+    ) return false
     return when (kind) {
         TransactionPrimaryKind.EXPENSE, TransactionPrimaryKind.INCOME ->
             transferSubtype == null && debtIntent == null
-        TransactionPrimaryKind.TRANSFER ->
-            transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER && debtIntent == null
+        TransactionPrimaryKind.TRANSFER -> when (transferSubtype) {
+            TransactionTransferSubtype.INTERNAL_TRANSFER -> debtIntent == null
+            TransactionTransferSubtype.DEBT ->
+                entryStatus == TransactionEntryStatus.POSTED && debtIntent == TransactionDebtIntent.LEND
+            TransactionTransferSubtype.FAMILY_TRANSFER, null -> false
+        }
     }
 }

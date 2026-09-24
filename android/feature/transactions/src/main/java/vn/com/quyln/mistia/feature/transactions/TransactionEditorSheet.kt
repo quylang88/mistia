@@ -71,8 +71,10 @@ import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
+import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 import vn.com.quyln.mistia.core.model.TransactionValidationError
 import vn.com.quyln.mistia.core.model.TransactionValidationException
 import vn.com.quyln.mistia.core.model.WalletKind
@@ -109,10 +111,14 @@ internal fun TransactionEditorSheet(
     var showsTimePicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val activeWallets = wallets.filter { !it.isArchived && it.deletedAt == null && it.kind != null }
+    val isDebtLend = state.primaryKind == TransactionPrimaryKind.TRANSFER &&
+        state.transferSubtype == TransactionTransferSubtype.DEBT &&
+        state.debtIntent == TransactionDebtIntent.LEND
     val sourceWallets = activeWallets.filter {
         when (state.primaryKind) {
             TransactionPrimaryKind.EXPENSE -> true
-            TransactionPrimaryKind.INCOME, TransactionPrimaryKind.TRANSFER -> it.kind != WalletKind.CREDIT_CARD
+            TransactionPrimaryKind.INCOME -> it.kind != WalletKind.CREDIT_CARD
+            TransactionPrimaryKind.TRANSFER -> isDebtLend || it.kind != WalletKind.CREDIT_CARD
         }
     }
     val destinationWallets = activeWallets.filter { it.id != state.sourceWalletId }
@@ -127,7 +133,7 @@ internal fun TransactionEditorSheet(
     }
     val sourceWallet = activeWallets.firstOrNull { it.id == state.sourceWalletId }
     val destinationWallet = activeWallets.firstOrNull { it.id == state.destinationWalletId }
-    val isCrossCurrency = state.primaryKind == TransactionPrimaryKind.TRANSFER &&
+    val isCrossCurrency = state.transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER &&
         sourceWallet != null && destinationWallet != null &&
         !sourceWallet.currencyCode.equals(destinationWallet.currencyCode, ignoreCase = true)
     val displayedFxState = if (isCrossCurrency) {
@@ -206,23 +212,34 @@ internal fun TransactionEditorSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        TransactionPrimaryKind.entries.forEach { kind ->
+                        if (isDebtLend) {
                             FilterChip(
-                                selected = state.primaryKind == kind,
-                                onClick = {
-                                    val selected = state.selectKind(kind)
-                                    state = if (selected.sourceWalletId != null &&
-                                        sourceWalletsForKind(activeWallets, kind).none { it.id == selected.sourceWalletId }
-                                    ) {
-                                        selected.copy(sourceWalletId = null)
-                                    } else {
-                                        selected
-                                    }
-                                    validation = null
-                                    operationError = null
-                                },
-                                label = { Text(transactionKindTitle(kind)) },
+                                selected = true,
+                                onClick = {},
+                                enabled = false,
+                                label = { Text(stringResource(R.string.shared_corelogic_financeenums_lend)) },
                             )
+                        } else {
+                            TransactionPrimaryKind.entries.forEach { kind ->
+                                FilterChip(
+                                    selected = state.primaryKind == kind,
+                                    onClick = {
+                                        val selected = state.selectKind(kind)
+                                        state = if (selected.sourceWalletId != null &&
+                                            sourceWalletsForKind(activeWallets, kind).none {
+                                                it.id == selected.sourceWalletId
+                                            }
+                                        ) {
+                                            selected.copy(sourceWalletId = null)
+                                        } else {
+                                            selected
+                                        }
+                                        validation = null
+                                        operationError = null
+                                    },
+                                    label = { Text(transactionKindTitle(kind)) },
+                                )
+                            }
                         }
                     }
                     OutlinedTextField(
@@ -277,7 +294,9 @@ internal fun TransactionEditorSheet(
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         stringResource(
-                            if (state.primaryKind == TransactionPrimaryKind.TRANSFER) {
+                            if (isDebtLend) {
+                                R.string.transactions_transactioneditor_counterparty
+                            } else if (state.primaryKind == TransactionPrimaryKind.TRANSFER) {
                                 R.string.transactions_transactioneditor_transfer_flow
                             } else {
                                 R.string.transactions_transactioneditor_funding_source
@@ -288,7 +307,9 @@ internal fun TransactionEditorSheet(
                     )
                     Text(
                         stringResource(
-                            if (state.primaryKind == TransactionPrimaryKind.TRANSFER) {
+                            if (isDebtLend) {
+                                R.string.transactions_transactioneditor_wallet_used
+                            } else if (state.primaryKind == TransactionPrimaryKind.TRANSFER) {
                                 R.string.transactions_transactioneditor_from_wallet
                             } else {
                                 R.string.transactions_transactioneditor_wallet
@@ -311,7 +332,7 @@ internal fun TransactionEditorSheet(
                                     selected = state.sourceWalletId == wallet.id,
                                     onClick = {
                                         val selectedDestination = destinationWallet
-                                            ?.takeIf { it.id != wallet.id }
+                                            ?.takeIf { !isDebtLend && it.id != wallet.id }
                                         state = state.copy(
                                             sourceWalletId = wallet.id,
                                             destinationWalletId = selectedDestination?.id,
@@ -328,7 +349,20 @@ internal fun TransactionEditorSheet(
                         }
                     }
 
-                    if (state.primaryKind == TransactionPrimaryKind.TRANSFER) {
+                    if (isDebtLend) {
+                        OutlinedTextField(
+                            value = state.counterpartyName,
+                            onValueChange = {
+                                state = state.copy(counterpartyName = it)
+                                validation = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = {
+                                Text(stringResource(R.string.transactions_transactioneditor_counterparty_name))
+                            },
+                            singleLine = true,
+                        )
+                    } else if (state.primaryKind == TransactionPrimaryKind.TRANSFER) {
                         Text(
                             stringResource(R.string.transactions_transactioneditor_to_wallet),
                             style = MaterialTheme.typography.labelLarge,
@@ -738,6 +772,8 @@ private fun transactionEditorError(
             R.string.transactions_transactioneditor_choose_the_destination_wallet
         validation == TransactionEditorValidation.CATEGORY_REQUIRED ->
             R.string.transactions_transactioneditor_choose_a_category_for_this_transaction
+        validation == TransactionEditorValidation.COUNTERPARTY_REQUIRED ->
+            R.string.transactions_transactioneditor_enter_the_counterparty_name
         validation == TransactionEditorValidation.SAME_WALLET ->
             R.string.transactions_transactioneditor_source_and_destination_wallets_must_be_different
         validation == TransactionEditorValidation.INVALID_AMOUNT ->
@@ -759,6 +795,8 @@ private fun transactionEditorError(
             R.string.transactions_transactioneditor_choose_a_category_for_this_transaction
         operationError == TransactionValidationError.CATEGORY_CHILD_REQUIRED ->
             R.string.transactions_transactioneditor_expenses_and_income_must_use_a_child
+        operationError == TransactionValidationError.COUNTERPARTY_REQUIRED ->
+            R.string.transactions_transactioneditor_enter_the_counterparty_name
         operationError == TransactionValidationError.SAME_WALLET_TRANSFER ->
             R.string.transactions_transactioneditor_source_and_destination_wallets_must_be_different
         operationError == TransactionValidationError.CREDIT_CARD_CANNOT_RECEIVE_INCOME ->
