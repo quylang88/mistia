@@ -30,14 +30,21 @@ fun LedgerTransactionRecord.isLockedByPaidCreditCardStatement(
         TransactionPrimaryKind.EXPENSE -> sourceWalletId?.takeIf {
             walletKinds[it] == WalletKind.CREDIT_CARD
         }
-        TransactionPrimaryKind.TRANSFER -> destinationWalletId?.takeIf {
-            transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER &&
+        TransactionPrimaryKind.TRANSFER -> when (transferSubtype) {
+            TransactionTransferSubtype.INTERNAL_TRANSFER -> destinationWalletId?.takeIf {
                 walletKinds[it] == WalletKind.CREDIT_CARD
+            }
+            TransactionTransferSubtype.DEBT -> sourceWalletId?.takeIf {
+                debtIntent == TransactionDebtIntent.LEND && walletKinds[it] == WalletKind.CREDIT_CARD
+            }
+            TransactionTransferSubtype.FAMILY_TRANSFER, null -> null
         }
         TransactionPrimaryKind.INCOME -> null
     } ?: return false
 
-    if (kind == TransactionPrimaryKind.EXPENSE &&
+    val isStatementCharge = kind == TransactionPrimaryKind.EXPENSE ||
+        (transferSubtype == TransactionTransferSubtype.DEBT && debtIntent == TransactionDebtIntent.LEND)
+    if (isStatementCharge &&
         isPaidStatementExpense(
             cardWalletId = creditCardWalletId,
             creditCardProfiles = creditCardProfiles,

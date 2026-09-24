@@ -23,6 +23,7 @@ import vn.com.quyln.mistia.core.model.PendingMutation
 import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionDraft
+import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 import vn.com.quyln.mistia.core.model.TransactionValidationError
@@ -91,6 +92,94 @@ class TransactionRepositoryTest {
 
         assertTrue(result.isFailure)
         assertTrue(repository.observeTransactions(UserId(OWNER)).first().isEmpty())
+    }
+
+    @Test
+    fun `debt lend save is owner scoped and queues normalized counterparty`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        repository.saveWallet(
+            UserId(OWNER),
+            walletDraft(SOURCE_WALLET_ID, "JPY", openingBalanceMinor = 2_000),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val saved = repository.saveTransaction(
+            UserId(OWNER),
+            debtLendDraft(amountMinor = 1_500),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        assertEquals(TransactionDebtIntent.LEND, saved.debtIntent)
+        assertEquals("Trang", saved.counterpartyName)
+        assertEquals("trang", saved.normalizedCounterpartyKey)
+        assertTrue(repository.observeTransactions(UserId(OTHER_OWNER)).first().isEmpty())
+        val mutation = store.outbox.getValue(key(OWNER, CloudEntity.LEDGER_TRANSACTION, TRANSACTION_ID))
+        assertEquals("lend", mutation.payload?.get("debt_intent_raw_value")?.toString()?.trim('"'))
+        assertEquals("trang", mutation.payload?.get("normalized_counterparty_key")?.toString()?.trim('"'))
+    }
+
+    @Test
+    fun `debt lend enforces current balance`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        repository.saveWallet(
+            UserId(OWNER),
+            walletDraft(SOURCE_WALLET_ID, "JPY", openingBalanceMinor = 1_500),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            debtLendDraft(amountMinor = 1_501, occurredAt = "2020-01-01T00:00:00Z"),
+            DEVICE,
+            NOW,
+        )
+
+        assertEquals(
+            TransactionValidationError.INSUFFICIENT_WALLET_BALANCE,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+        assertTrue(repository.observeTransactions(UserId(OWNER)).first().isEmpty())
+    }
+
+    @Test
+    fun `new credit card debt lend cannot change a paid statement`() = runTest {
+        val store = TransactionMemoryStore()
+        val repository = OfflineFirstFinanceRepository(store)
+        seedCreditCardExpenseDependencies(repository)
+        repository.saveTransaction(
+            UserId(OWNER),
+            expenseDraft(amountMinor = 6_000, occurredAt = "2026-02-12T03:00:00Z"),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+        repository.saveTransaction(
+            UserId(OWNER),
+            cardPaymentDraft(amountMinor = 6_000),
+            DEVICE,
+            NOW,
+        ).getOrThrow()
+
+        val result = repository.saveTransaction(
+            UserId(OWNER),
+            debtLendDraft(
+                id = SECOND_TRANSACTION_ID,
+                amountMinor = 1_000,
+                occurredAt = "2026-02-13T03:00:00Z",
+            ),
+            DEVICE,
+            LATER,
+        )
+
+        assertEquals(
+            TransactionValidationError.PAID_CREDIT_CARD_STATEMENT,
+            (result.exceptionOrNull() as? TransactionValidationException)?.reason,
+        )
+        assertTrue(repository.observeTransactions(UserId(OWNER)).first().none { it.debtIntent == TransactionDebtIntent.LEND })
     }
 
     @Test
@@ -366,6 +455,22 @@ class TransactionRepositoryTest {
         destinationAmountMinor = destinationAmountMinor,
         conversionMode = CurrencyConversionMode.MANUAL,
         exchangeRateDecimalString = rate,
+    )
+
+    private fun debtLendDraft(
+        id: String = TRANSACTION_ID,
+        amountMinor: Long,
+        occurredAt: String = OCCURRED_AT,
+    ) = TransactionDraft(
+        id = id,
+        primaryKind = TransactionPrimaryKind.TRANSFER,
+        transferSubtype = TransactionTransferSubtype.DEBT,
+        debtIntent = TransactionDebtIntent.LEND,
+        counterpartyName = "Trang",
+        title = "FamilyMart",
+        amountMinor = amountMinor,
+        occurredAt = occurredAt,
+        sourceWalletId = SOURCE_WALLET_ID,
     )
 
     private fun cardPaymentDraft(amountMinor: Long) = TransactionDraft(

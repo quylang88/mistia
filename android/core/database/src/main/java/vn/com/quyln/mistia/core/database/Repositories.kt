@@ -33,8 +33,10 @@ import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.ReadOnlyCloudCollection
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.TransactionDebtIntent
 import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
+import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 import vn.com.quyln.mistia.core.model.TransactionValidationError
 import vn.com.quyln.mistia.core.model.TransactionValidationException
 import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
@@ -190,7 +192,10 @@ class OfflineFirstFinanceRepository(private val localStore: LocalStore) : Financ
             deviceId = deviceId,
             now = now,
         )
-        if (mutation.record.primaryKind == TransactionPrimaryKind.EXPENSE) {
+        val canChangeCreditCardStatement = mutation.record.primaryKind == TransactionPrimaryKind.EXPENSE ||
+            (mutation.record.transferSubtype == TransactionTransferSubtype.DEBT &&
+                mutation.record.debtIntent == TransactionDebtIntent.LEND)
+        if (canChangeCreditCardStatement) {
             val proposedTransactions = transactions.filterNot { it.id == mutation.record.id } + mutation.record
             if (mutation.record.isLockedByPaidCreditCardStatement(
                     wallets = wallets,

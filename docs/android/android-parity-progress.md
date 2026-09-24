@@ -981,3 +981,35 @@ occurred. All five cloud-write flags remain `false`; APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-preview-removal-ui.md`.
+
+## APK 1 offline debt-lend foundation — 2026-09-24
+
+- [x] Added typed offline `transfer/debt/lend` persistence with a required
+  source wallet and counterparty, derived normalized counterparty key, explicit
+  nulls for destination/category/FX fields and the existing atomic record+
+  outbox commit boundary.
+- [x] Matched the iOS counterparty fold across compatibility-width, case,
+  diacritics and repeated punctuation/separators while preserving the trimmed
+  display name, including dotless-I, sharp-S, final-sigma and Greek
+  iota-subscript vectors checked against Foundation.
+- [x] Limited this foundation to standalone posted lending: non-posted debt and
+  settlement-owned records are rejected, while edits explicitly clear stale
+  reporting, settlement, destination, category and FX fields.
+- [x] Applied current wallet balance to cash lending and available credit to
+  credit-card lending regardless of the entered transaction date.
+- [x] Included credit-card lending in paid-statement protection, including a
+  proposed new lend that would change an already covered statement.
+- [x] Kept `borrow`, `collect`, `repay` and family transfer unsupported by this
+  bounded create contract rather than silently persisting partial semantics.
+- [x] Verified 304 Android unit tests across 50 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind the reviewed receipt Lend selection to the native debt editor with
+  counterparty input and exact receipt attachment/save completion semantics.
+
+No live cloud write, migration or deployment occurred. `adb` remains
+unavailable, so no emulator/Samsung behavior claim is made. All five
+cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-offline-debt-lend-foundation.md`.

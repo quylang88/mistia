@@ -67,9 +67,11 @@ fun LedgerTransactionRecord.requireAffordable(
     if (entryStatus != TransactionEntryStatus.POSTED) return
     val kind = primaryKind ?: return
     if (kind == TransactionPrimaryKind.INCOME) return
-    if (kind == TransactionPrimaryKind.TRANSFER &&
-        transferSubtype != TransactionTransferSubtype.INTERNAL_TRANSFER
-    ) {
+    val requiresOutflow = kind == TransactionPrimaryKind.EXPENSE ||
+        transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER ||
+        (transferSubtype == TransactionTransferSubtype.DEBT &&
+            (debtIntent == TransactionDebtIntent.LEND || debtIntent == TransactionDebtIntent.REPAY))
+    if (!requiresOutflow) {
         return
     }
     val sourceId = sourceWalletId ?: return

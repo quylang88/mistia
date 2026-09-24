@@ -189,6 +189,16 @@ class PaidCreditCardStatementGuardTest {
                 dueOccurrences = emptyList(),
             )
         )
+
+        val coveringPayment = payment.copy(amountMinor = 7_000)
+        assertTrue(
+            lending.isLockedByPaidCreditCardStatement(
+                wallets = listOf(cardWallet()),
+                creditCardProfiles = listOf(cardProfile()),
+                transactions = listOf(expense, lending, coveringPayment),
+                dueOccurrences = emptyList(),
+            )
+        )
     }
 
     private fun transaction(

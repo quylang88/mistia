@@ -7,6 +7,20 @@ import org.junit.Test
 
 class TransactionModelsTest {
     @Test
+    fun `counterparty normalization matches Foundation folding vectors`() {
+        assertEquals("đang", normalizeCounterpartyName("  Đặng  "))
+        assertEquals("strasse", normalizeCounterpartyName("Straße"))
+        assertEquals("ngoc a", normalizeCounterpartyName("ＮＧỌＣ！Ａ"))
+        assertEquals("alpha beta", normalizeCounterpartyName("--Alpha___  Beta!!"))
+        assertEquals("οσ", normalizeCounterpartyName("ΟΣ"))
+        assertEquals("isık", normalizeCounterpartyName("Işık"))
+        assertEquals("ısık", normalizeCounterpartyName("ışık"))
+        assertEquals("ss", normalizeCounterpartyName("ẞ"))
+        assertEquals("α", normalizeCounterpartyName("ᾲ"))
+        assertNull(normalizeCounterpartyName("！ -- "))
+    }
+
+    @Test
     fun `transaction payload round trip preserves explicit nulls and signed longs`() {
         val record = transactionRecord(
             amountMinor = Long.MAX_VALUE,
@@ -128,6 +142,131 @@ class TransactionModelsTest {
         assertNull(mutation.record.exchangeRateDecimalString)
         assertNull(mutation.record.exchangeRateProvider)
         assertNull(mutation.record.exchangeRateDate)
+    }
+
+    @Test
+    fun `posted debt lend stores normalized counterparty and clears incompatible fields`() {
+        val mutation = TransactionDraft(
+            id = TRANSACTION_ID,
+            primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.DEBT,
+            debtIntent = TransactionDebtIntent.LEND,
+            title = "FamilyMart",
+            amountMinor = 1_500,
+            occurredAt = OCCURRED_AT,
+            sourceWalletId = SOURCE_WALLET_ID,
+            counterpartyName = "  Ngọc Đặng！Ａ  ",
+        ).toMutation(
+            UserId(OWNER),
+            existing = null,
+            sourceWallet = wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
+            destinationWallet = null,
+            category = null,
+            deviceId = DEVICE,
+            now = NOW,
+        )
+
+        assertEquals(TransactionTransferSubtype.DEBT, mutation.record.transferSubtype)
+        assertEquals(TransactionDebtIntent.LEND, mutation.record.debtIntent)
+        assertEquals("Ngọc Đặng！Ａ", mutation.record.counterpartyName)
+        assertEquals("ngoc đang a", mutation.record.normalizedCounterpartyKey)
+        assertEquals("JPY", mutation.record.sourceCurrencyCode)
+        assertNull(mutation.record.destinationWalletId)
+        assertNull(mutation.record.destinationCurrencyCode)
+        assertNull(mutation.record.destinationAmountMinor)
+        assertNull(mutation.record.categoryId)
+        assertEquals("ngoc đang a", mutation.pending.payload?.get("normalized_counterparty_key")?.toString()?.trim('"'))
+    }
+
+    @Test
+    fun `posted debt lend rejects missing counterparty and unsupported intents`() {
+        val missingCounterparty = failureReason(
+            draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(
+                transferSubtype = TransactionTransferSubtype.DEBT,
+                debtIntent = TransactionDebtIntent.LEND,
+            ),
+            sourceWallet = wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
+        )
+        val unsupportedIntent = failureReason(
+            draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(
+                transferSubtype = TransactionTransferSubtype.DEBT,
+                debtIntent = TransactionDebtIntent.BORROW,
+                counterpartyName = "Trang",
+            ),
+            sourceWallet = wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
+        )
+        val unsupportedDraft = failureReason(
+            draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(
+                transferSubtype = TransactionTransferSubtype.DEBT,
+                debtIntent = TransactionDebtIntent.LEND,
+                counterpartyName = "Trang",
+                entryStatus = TransactionEntryStatus.DRAFT,
+            ),
+            sourceWallet = wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
+        )
+
+        assertEquals(TransactionValidationError.COUNTERPARTY_REQUIRED, missingCounterparty)
+        assertEquals(TransactionValidationError.UNSUPPORTED_DEBT_INTENT, unsupportedIntent)
+        assertEquals(TransactionValidationError.UNSUPPORTED_DEBT_DRAFT, unsupportedDraft)
+    }
+
+    @Test
+    fun `standalone debt lend edit clears reporting fields and rejects settlement ownership`() {
+        val existing = transactionRecord(
+            primaryKindWireValue = TransactionPrimaryKind.TRANSFER.wireValue,
+            transferSubtypeWireValue = TransactionTransferSubtype.INTERNAL_TRANSFER.wireValue,
+        ).copy(
+            reportingCurrencyCode = "VND",
+            reportingAmountMinor = 25_000,
+            destinationCurrencyCode = "VND",
+            destinationAmountMinor = 25_000,
+            conversionModeWireValue = CurrencyConversionMode.MANUAL.wireValue,
+            exchangeRateDecimalString = "25",
+            exchangeRateProvider = "manual",
+            exchangeRateDate = "2026-09-23",
+        )
+        val draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(
+            transferSubtype = TransactionTransferSubtype.DEBT,
+            debtIntent = TransactionDebtIntent.LEND,
+            counterpartyName = "Trang",
+        )
+
+        val mutation = draft.toMutation(
+            UserId(OWNER),
+            existing,
+            wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
+            null,
+            null,
+            DEVICE,
+            NOW,
+        )
+
+        assertNull(mutation.record.reportingCurrencyCode)
+        assertNull(mutation.record.reportingAmountMinor)
+        assertNull(mutation.record.settlementGroupId)
+        assertNull(mutation.record.settlementObligationId)
+        assertNull(mutation.record.settlementRoleWireValue)
+        assertNull(mutation.record.reportingExpenseMinor)
+        assertNull(mutation.record.reportingIncomeMinor)
+        assertEquals(JsonNull, mutation.pending.payload?.get("reporting_currency_code"))
+        assertEquals(JsonNull, mutation.pending.payload?.get("settlement_group_id"))
+
+        val failure = runCatching {
+            draft.toMutation(
+                UserId(OWNER),
+                existing.copy(
+                    settlementGroupId = PARENT_CATEGORY_ID,
+                    settlementRoleWireValue = "sharedExpenseReceivable",
+                    reportingExpenseMinor = 100,
+                ),
+                wallet(SOURCE_WALLET_ID, WalletKind.BANK, "JPY"),
+                null,
+                null,
+                DEVICE,
+                NOW,
+            )
+        }.exceptionOrNull() as TransactionValidationException
+        assertEquals(TransactionValidationError.SETTLEMENT_OWNED_TRANSACTION, failure.reason)
     }
 
     @Test

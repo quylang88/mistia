@@ -75,6 +75,33 @@ class TransactionBalanceTest {
     }
 
     @Test
+    fun `debt lending uses current cash balance and credit card available credit`() {
+        val cash = wallet(SOURCE_WALLET_ID, WalletKind.BANK, openingBalanceMinor = 1_000)
+        val cashLend = debtLend(TRANSACTION_ID, 1_001)
+        assertEquals(
+            TransactionValidationError.INSUFFICIENT_WALLET_BALANCE,
+            affordabilityFailure(cashLend, wallets = listOf(cash), records = emptyList()),
+        )
+
+        val card = wallet(SOURCE_WALLET_ID, WalletKind.CREDIT_CARD, openingBalanceMinor = 0)
+        val existingCharge = transaction(
+            id = "10000000-0000-0000-0000-000000000001",
+            kind = TransactionPrimaryKind.EXPENSE,
+            amount = 7_000,
+        )
+        val cardLend = debtLend(TRANSACTION_ID, 3_001)
+        assertEquals(
+            TransactionValidationError.CREDIT_LIMIT_EXCEEDED,
+            affordabilityFailure(
+                cardLend,
+                wallets = listOf(card),
+                records = listOf(existingCharge),
+                profiles = listOf(creditCardProfile(limit = 10_000)),
+            ),
+        )
+    }
+
+    @Test
     fun `transfer into credit card reduces debt by destination amount`() {
         val card = wallet(DESTINATION_WALLET_ID, WalletKind.CREDIT_CARD, openingBalanceMinor = 0)
         val debt = transaction(
@@ -203,6 +230,14 @@ class TransactionBalanceTest {
         syncVersion = 0,
         lastModifiedByDeviceId = DEVICE,
     )
+
+    private fun debtLend(id: String, amount: Long) =
+        transaction(id, TransactionPrimaryKind.TRANSFER, amount).copy(
+            transferSubtypeWireValue = TransactionTransferSubtype.DEBT.wireValue,
+            debtIntentWireValue = TransactionDebtIntent.LEND.wireValue,
+            destinationWalletId = null,
+            destinationCurrencyCode = null,
+        )
 
     private fun creditCardProfile(limit: Long) = CreditCardProfileRecord(
         id = PROFILE_ID,

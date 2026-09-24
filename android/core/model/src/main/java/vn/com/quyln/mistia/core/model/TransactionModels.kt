@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.core.model
 
 import java.math.BigDecimal
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
@@ -227,6 +228,7 @@ data class TransactionDraft(
     val primaryKind: TransactionPrimaryKind,
     val transferSubtype: TransactionTransferSubtype? = null,
     val debtIntent: TransactionDebtIntent? = null,
+    val counterpartyName: String? = null,
     val entryStatus: TransactionEntryStatus = TransactionEntryStatus.POSTED,
     val title: String,
     val note: String? = null,
@@ -270,7 +272,12 @@ data class TransactionDraft(
         if (amountMinor <= 0) transactionFail(TransactionValidationError.INVALID_AMOUNT)
 
         val normalizedTitle = title.trim()
+        val storedCounterpartyName = counterpartyName.transactionOptional()
+        val normalizedCounterpartyKey = normalizeCounterpartyName(storedCounterpartyName)
         val isPosted = entryStatus == TransactionEntryStatus.POSTED
+        val isStandaloneDebtLend = primaryKind == TransactionPrimaryKind.TRANSFER &&
+            transferSubtype == TransactionTransferSubtype.DEBT &&
+            debtIntent == TransactionDebtIntent.LEND
         if (isPosted && primaryKind != TransactionPrimaryKind.TRANSFER && normalizedTitle.isEmpty()) {
             transactionFail(TransactionValidationError.TITLE_REQUIRED)
         }
@@ -308,42 +315,67 @@ data class TransactionDraft(
             TransactionPrimaryKind.TRANSFER -> {
                 if (category != null || canonicalCategoryId != null) transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)
                 if (isPosted && transferSubtype == null) transactionFail(TransactionValidationError.TRANSFER_SUBTYPE_REQUIRED)
-                if (transferSubtype != null && transferSubtype != TransactionTransferSubtype.INTERNAL_TRANSFER) {
-                    transactionFail(TransactionValidationError.UNSUPPORTED_TRANSFER_SUBTYPE)
-                }
-                if (transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER) {
-                    if (isPosted && destinationWallet == null) {
-                        transactionFail(TransactionValidationError.DESTINATION_WALLET_REQUIRED)
-                    }
-                    if (sourceId != null && sourceId == destinationId) {
-                        transactionFail(TransactionValidationError.SAME_WALLET_TRANSFER)
-                    }
-                    if (sourceWallet?.kind == WalletKind.CREDIT_CARD) {
-                        transactionFail(TransactionValidationError.CREDIT_CARD_CANNOT_SEND_TRANSFER)
-                    }
-                    normalizedDestinationCurrency = destinationWallet?.currencyCode?.transactionCurrency()
-                    if (normalizedSourceCurrency != null && normalizedDestinationCurrency != null &&
-                        normalizedSourceCurrency != normalizedDestinationCurrency
-                    ) {
-                        val destinationAmount = destinationAmountMinor?.takeIf { it > 0 }
-                            ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                        val mode = conversionMode
-                            ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                        val rate = exchangeRateDecimalString.transactionOptional()
-                            ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                        if (runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1) {
-                            transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE)
+                when (transferSubtype) {
+                    TransactionTransferSubtype.INTERNAL_TRANSFER -> {
+                        if (debtIntent != null || storedCounterpartyName != null) {
+                            transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)
                         }
-                        val rateDate = exchangeRateDate.transactionOptional()
-                        if (rateDate != null && runCatching { LocalDate.parse(rateDate) }.isFailure) {
-                            transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE_DATE)
+                        if (isPosted && destinationWallet == null) {
+                            transactionFail(TransactionValidationError.DESTINATION_WALLET_REQUIRED)
                         }
-                        normalizedDestinationAmount = destinationAmount
-                        normalizedConversionMode = mode.wireValue
-                        normalizedRate = rate
-                        normalizedProvider = exchangeRateProvider.transactionOptional()
-                        normalizedRateDate = rateDate
+                        if (sourceId != null && sourceId == destinationId) {
+                            transactionFail(TransactionValidationError.SAME_WALLET_TRANSFER)
+                        }
+                        if (sourceWallet?.kind == WalletKind.CREDIT_CARD) {
+                            transactionFail(TransactionValidationError.CREDIT_CARD_CANNOT_SEND_TRANSFER)
+                        }
+                        normalizedDestinationCurrency = destinationWallet?.currencyCode?.transactionCurrency()
+                        if (normalizedSourceCurrency != null && normalizedDestinationCurrency != null &&
+                            normalizedSourceCurrency != normalizedDestinationCurrency
+                        ) {
+                            val destinationAmount = destinationAmountMinor?.takeIf { it > 0 }
+                                ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                            val mode = conversionMode
+                                ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                            val rate = exchangeRateDecimalString.transactionOptional()
+                                ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                            if (runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1) {
+                                transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE)
+                            }
+                            val rateDate = exchangeRateDate.transactionOptional()
+                            if (rateDate != null && runCatching { LocalDate.parse(rateDate) }.isFailure) {
+                                transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE_DATE)
+                            }
+                            normalizedDestinationAmount = destinationAmount
+                            normalizedConversionMode = mode.wireValue
+                            normalizedRate = rate
+                            normalizedProvider = exchangeRateProvider.transactionOptional()
+                            normalizedRateDate = rateDate
+                        }
                     }
+                    TransactionTransferSubtype.DEBT -> {
+                        if (!isPosted) {
+                            transactionFail(TransactionValidationError.UNSUPPORTED_DEBT_DRAFT)
+                        }
+                        if (existing?.hasSettlementOwnership() == true) {
+                            transactionFail(TransactionValidationError.SETTLEMENT_OWNED_TRANSACTION)
+                        }
+                        if (destinationId != null || destinationWallet != null) {
+                            transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)
+                        }
+                        if (debtIntent != null && debtIntent != TransactionDebtIntent.LEND) {
+                            transactionFail(TransactionValidationError.UNSUPPORTED_DEBT_INTENT)
+                        }
+                        if (isPosted && debtIntent == null) {
+                            transactionFail(TransactionValidationError.DEBT_INTENT_REQUIRED)
+                        }
+                        if (isPosted && normalizedCounterpartyKey == null) {
+                            transactionFail(TransactionValidationError.COUNTERPARTY_REQUIRED)
+                        }
+                    }
+                    TransactionTransferSubtype.FAMILY_TRANSFER ->
+                        transactionFail(TransactionValidationError.UNSUPPORTED_TRANSFER_SUBTYPE)
+                    null -> Unit
                 }
             }
         }
@@ -361,8 +393,8 @@ data class TransactionDraft(
             sourceCurrencyCode = normalizedSourceCurrency,
             destinationCurrencyCode = normalizedDestinationCurrency,
             destinationAmountMinor = normalizedDestinationAmount,
-            reportingCurrencyCode = existing?.reportingCurrencyCode,
-            reportingAmountMinor = existing?.reportingAmountMinor,
+            reportingCurrencyCode = existing?.reportingCurrencyCode.takeUnless { isStandaloneDebtLend },
+            reportingAmountMinor = existing?.reportingAmountMinor.takeUnless { isStandaloneDebtLend },
             conversionModeWireValue = normalizedConversionMode,
             exchangeRateDecimalString = normalizedRate,
             exchangeRateProvider = normalizedProvider,
@@ -372,15 +404,25 @@ data class TransactionDraft(
             updatedAt = timestamp,
             createdByUserId = existing?.createdByUserId ?: owner,
             lastModifiedByUserId = owner,
-            counterpartyName = existing?.counterpartyName,
-            normalizedCounterpartyKey = existing?.normalizedCounterpartyKey,
-            settlementGroupId = existing?.settlementGroupId,
-            settlementObligationId = existing?.settlementObligationId,
-            settlementRoleWireValue = existing?.settlementRoleWireValue,
-            reportingExpenseMinor = existing?.reportingExpenseMinor,
-            reportingIncomeMinor = existing?.reportingIncomeMinor,
+            counterpartyName = storedCounterpartyName.takeIf {
+                primaryKind == TransactionPrimaryKind.TRANSFER &&
+                    transferSubtype == TransactionTransferSubtype.DEBT
+            },
+            normalizedCounterpartyKey = normalizedCounterpartyKey.takeIf {
+                primaryKind == TransactionPrimaryKind.TRANSFER &&
+                    transferSubtype == TransactionTransferSubtype.DEBT
+            },
+            settlementGroupId = existing?.settlementGroupId.takeUnless { isStandaloneDebtLend },
+            settlementObligationId = existing?.settlementObligationId.takeUnless { isStandaloneDebtLend },
+            settlementRoleWireValue = existing?.settlementRoleWireValue.takeUnless { isStandaloneDebtLend },
+            reportingExpenseMinor = existing?.reportingExpenseMinor.takeUnless { isStandaloneDebtLend },
+            reportingIncomeMinor = existing?.reportingIncomeMinor.takeUnless { isStandaloneDebtLend },
             sourceWalletId = sourceId,
-            destinationWalletId = if (primaryKind == TransactionPrimaryKind.TRANSFER) destinationId else null,
+            destinationWalletId = if (transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER) {
+                destinationId
+            } else {
+                null
+            },
             categoryId = if (primaryKind == TransactionPrimaryKind.TRANSFER) null else canonicalCategoryId,
             deletedAt = null,
             isArchived = existing?.isArchived ?: false,
@@ -417,6 +459,10 @@ enum class TransactionValidationError {
     DESTINATION_WALLET_REQUIRED,
     CATEGORY_REQUIRED,
     TRANSFER_SUBTYPE_REQUIRED,
+    DEBT_INTENT_REQUIRED,
+    COUNTERPARTY_REQUIRED,
+    UNSUPPORTED_DEBT_DRAFT,
+    SETTLEMENT_OWNED_TRANSACTION,
     INVALID_SOURCE_WALLET,
     INVALID_DESTINATION_WALLET,
     INVALID_CATEGORY,
@@ -434,6 +480,7 @@ enum class TransactionValidationError {
     INVALID_EXCHANGE_RATE_DATE,
     INVALID_KIND_FIELDS,
     UNSUPPORTED_TRANSFER_SUBTYPE,
+    UNSUPPORTED_DEBT_INTENT,
 }
 
 class TransactionValidationException(val reason: TransactionValidationError) :
@@ -478,6 +525,42 @@ private fun validateTransactionCategory(
 private fun transactionUuid(value: String): String = UUID.fromString(value.trim()).toString()
 private fun transactionInstant(value: String): String = Instant.parse(value.trim()).toString()
 private fun String?.transactionOptional(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+fun normalizeCounterpartyName(name: String?): String? {
+    val trimmed = name.transactionOptional() ?: return null
+    val compatibilityFolded = Normalizer.normalize(trimmed, Normalizer.Form.NFKC)
+    val decomposed = Normalizer.normalize(compatibilityFolded, Normalizer.Form.NFD)
+    val normalized = StringBuilder()
+    var lastCharacterWasSeparator = false
+    decomposed.codePoints().forEach { codePoint ->
+        val type = Character.getType(codePoint)
+        when {
+            type == Character.NON_SPACING_MARK.toInt() ||
+                type == Character.COMBINING_SPACING_MARK.toInt() ||
+                type == Character.ENCLOSING_MARK.toInt() -> Unit
+            Character.isLetterOrDigit(codePoint) -> {
+                normalized.appendCodePoint(codePoint)
+                lastCharacterWasSeparator = false
+            }
+            normalized.isNotEmpty() && !lastCharacterWasSeparator -> {
+                normalized.append(' ')
+                lastCharacterWasSeparator = true
+            }
+        }
+    }
+    return normalized.toString()
+        .trim()
+        .takeIf(String::isNotEmpty)
+        ?.lowercase(Locale.ROOT)
+        ?.replace("\u00DF", "ss")
+        ?.replace('\u03C2', '\u03C3')
+}
+
+private fun LedgerTransactionRecord.hasSettlementOwnership(): Boolean =
+    settlementGroupId != null ||
+        settlementObligationId != null ||
+        settlementRoleWireValue != null ||
+        reportingExpenseMinor != null ||
+        reportingIncomeMinor != null
 private fun String.transactionCurrency(): String {
     val value = trim().uppercase(Locale.ROOT)
     if (!value.matches(Regex("^[A-Z]{3}$"))) transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)
