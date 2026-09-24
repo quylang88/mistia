@@ -1,8 +1,8 @@
 # APK 1 receipt editor state-contract evidence — 2026-09-24
 
-This bounded slice establishes the state and persistence ordering required by
-native saved-receipt preview/removal. It does not yet bind those controls into
-Compose and makes no visual-completion claim.
+This document records the bounded state-contract slice at its commit. That
+slice established the state and persistence ordering required by native
+saved-receipt preview/removal but did not yet bind those controls into Compose.
 
 ## Scope and behavior
 
@@ -70,8 +70,9 @@ cloud-write flags remain `false`.
 
 ## Verification boundary
 
-`adb` remains unavailable, so no editor preview/removal or file deletion was
-exercised on an emulator or Samsung device. Compose binding, saved-receipt
-loading, image decoding and full-size preview remain the next slice. No live
-Edge Function/Gemini call, production cloud write, production migration or
-deployment occurred; APK 1 and APK 2–4 are incomplete.
+At this slice boundary, `adb` was unavailable, so no editor preview/removal or
+file deletion was exercised on an emulator or Samsung device. Compose binding,
+saved-receipt loading, image decoding and full-size preview were intentionally
+left to the subsequent slice. No live Edge Function/Gemini call, production
+cloud write, production migration or deployment occurred; APK 1 and APK 2–4
+were incomplete.

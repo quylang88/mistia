@@ -197,6 +197,135 @@ class TransactionReceiptEditorStateTest {
         assertSame(cancellation, thrown)
     }
 
+    @Test
+    fun `stored receipt loader returns empty editor state when metadata is absent`() = runBlocking {
+        var didReadFile = false
+
+        val result = loadStoredReceiptEditorState(
+            transactionId = TRANSACTION_ID,
+            initialState = TransactionReceiptEditorState.none(),
+            loadRecord = { null },
+            loadImageData = {
+                didReadFile = true
+                Result.success(byteArrayOf(1))
+            },
+            loadThumbnailData = {
+                didReadFile = true
+                Result.success(byteArrayOf(2))
+            },
+        )
+
+        assertNull(result.state.preview)
+        assertNull(result.error)
+        assertFalse(didReadFile)
+    }
+
+    @Test
+    fun `stored receipt loader resolves full image and thumbnail into editor preview`() = runBlocking {
+        val events = mutableListOf<String>()
+
+        val result = loadStoredReceiptEditorState(
+            transactionId = TRANSACTION_ID,
+            initialState = TransactionReceiptEditorState.none(),
+            loadRecord = {
+                events += "record:$it"
+                record()
+            },
+            loadImageData = {
+                events += "image:${it.id}"
+                Result.success(byteArrayOf(3, 4))
+            },
+            loadThumbnailData = {
+                events += "thumbnail:${it.id}"
+                Result.success(byteArrayOf(5))
+            },
+        )
+
+        val state = result.state
+        assertNull(result.error)
+        assertEquals(listOf<Byte>(3, 4), state.preview?.imageData?.toList())
+        assertEquals(listOf<Byte>(5), state.preview?.thumbnailData?.toList())
+        assertTrue(state.storedReceiptPresent)
+        assertEquals(
+            listOf("record:$TRANSACTION_ID", "image:receipt-id", "thumbnail:receipt-id"),
+            events,
+        )
+    }
+
+    @Test
+    fun `stored receipt loader returns file failure without partial preview`() = runBlocking {
+        val failure = IllegalStateException("missing image")
+        var didReadThumbnail = false
+
+        val result = loadStoredReceiptEditorState(
+            transactionId = TRANSACTION_ID,
+            initialState = TransactionReceiptEditorState.none(),
+            loadRecord = { record() },
+            loadImageData = { Result.failure(failure) },
+            loadThumbnailData = {
+                didReadThumbnail = true
+                Result.success(byteArrayOf(5))
+            },
+        )
+
+        assertSame(failure, result.error)
+        assertTrue(result.state.storedReceiptPresent)
+        assertTrue(result.state.remove().deleteStoredOnSave)
+        assertFalse(didReadThumbnail)
+    }
+
+    @Test
+    fun `receipt editor saveable flags restore pending stored and deletion states without bytes`() {
+        val pending = TransactionReceiptEditorState.pending(image())
+        val restoredPending = TransactionReceiptEditorState.restoreSaveableValues(
+            pending.saveableValues(),
+        )
+        assertTrue(restoredPending.newReceiptRequired)
+        assertNull(restoredPending.preview)
+        assertTrue(restoredPending.newReceiptImageForSave().isFailure)
+
+        val stored = TransactionReceiptEditorState.none().loadedStored(
+            record = record(),
+            imageData = byteArrayOf(3, 4),
+            thumbnailData = byteArrayOf(5),
+        )
+        val restoredStored = TransactionReceiptEditorState.restoreSaveableValues(
+            stored.saveableValues(),
+        )
+        assertTrue(restoredStored.storedReceiptPresent)
+        assertFalse(restoredStored.deleteStoredOnSave)
+        assertNull(restoredStored.preview)
+
+        val restoredRemoval = TransactionReceiptEditorState.restoreSaveableValues(
+            stored.remove().saveableValues(),
+        )
+        assertFalse(restoredRemoval.storedReceiptPresent)
+        assertTrue(restoredRemoval.deleteStoredOnSave)
+        assertNull(restoredRemoval.preview)
+    }
+
+    @Test
+    fun `stored receipt load cancellation propagates and skips thumbnail`() = runBlocking {
+        val cancellation = CancellationException("image load cancelled")
+        var didReadThumbnail = false
+
+        val thrown = runCatching {
+            loadStoredReceiptEditorState(
+                transactionId = TRANSACTION_ID,
+                initialState = TransactionReceiptEditorState.none(),
+                loadRecord = { record() },
+                loadImageData = { Result.failure(cancellation) },
+                loadThumbnailData = {
+                    didReadThumbnail = true
+                    Result.success(byteArrayOf(5))
+                },
+            )
+        }.exceptionOrNull()
+
+        assertSame(cancellation, thrown)
+        assertFalse(didReadThumbnail)
+    }
+
     private fun image() = PreparedReceiptImage(
         imageData = byteArrayOf(3, 4),
         thumbnailData = byteArrayOf(5),

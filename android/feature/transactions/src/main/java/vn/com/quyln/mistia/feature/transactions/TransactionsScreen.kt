@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CancellationException
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.R
@@ -35,7 +36,6 @@ import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
-import vn.com.quyln.mistia.core.model.PreparedReceiptImage
 import vn.com.quyln.mistia.core.model.TransactionReceiptImageRepository
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.isLockedByPaidCreditCardStatement
@@ -66,10 +66,41 @@ fun TransactionsScreen(
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editorTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
     var editorInitialState by remember { mutableStateOf<TransactionEditorState?>(null) }
-    var editorReceiptImage by remember { mutableStateOf<PreparedReceiptImage?>(null) }
-    var editorReceiptRequired by rememberSaveable { mutableStateOf(false) }
+    var editorReceiptState by rememberSaveable(stateSaver = TransactionReceiptEditorState.Saver) {
+        mutableStateOf(TransactionReceiptEditorState.none())
+    }
+    var editorReceiptLoading by remember { mutableStateOf(false) }
+    var editorReceiptLoadFailed by remember { mutableStateOf(false) }
     var receiptOpen by rememberSaveable { mutableStateOf(false) }
     val walletCurrencies = wallets.associate { it.id to it.currencyCode }
+    LaunchedEffect(editorOpen, editorTransactionId, editorReceiptState.deleteStoredOnSave) {
+        val transactionId = editorTransactionId
+        if (!editorOpen || transactionId == null || editorReceiptState.deleteStoredOnSave ||
+            editorReceiptState.preview != null
+        ) {
+            editorReceiptLoading = false
+            return@LaunchedEffect
+        }
+        editorReceiptLoading = true
+        editorReceiptLoadFailed = false
+        try {
+            val loadResult = loadStoredReceiptEditorState(
+                transactionId = transactionId,
+                initialState = editorReceiptState,
+                loadRecord = receiptImageRepository::receipt,
+                loadImageData = receiptImageRepository::imageData,
+                loadThumbnailData = receiptImageRepository::thumbnailData,
+            )
+            editorReceiptState = loadResult.state
+            editorReceiptLoadFailed = loadResult.error != null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            editorReceiptLoadFailed = true
+        } finally {
+            editorReceiptLoading = false
+        }
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -98,8 +129,8 @@ fun TransactionsScreen(
                         onClick = {
                             editorTransactionId = null
                             editorInitialState = null
-                            editorReceiptImage = null
-                            editorReceiptRequired = false
+                            editorReceiptState = TransactionReceiptEditorState.none()
+                            editorReceiptLoadFailed = false
                             editorOpen = true
                         },
                         modifier = Modifier.weight(1f),
@@ -132,8 +163,8 @@ fun TransactionsScreen(
                     modifier = Modifier.clickable(enabled = isEditable) {
                         editorTransactionId = record.id
                         editorInitialState = null
-                        editorReceiptImage = null
-                        editorReceiptRequired = false
+                        editorReceiptState = TransactionReceiptEditorState.none()
+                        editorReceiptLoadFailed = false
                         editorOpen = true
                     },
                 ) { padding ->
@@ -174,8 +205,8 @@ fun TransactionsScreen(
                     receiptOpen = false
                     editorTransactionId = null
                     editorInitialState = prefill
-                    editorReceiptImage = launch.receiptImage
-                    editorReceiptRequired = true
+                    editorReceiptState = TransactionReceiptEditorState.pending(launch.receiptImage)
+                    editorReceiptLoadFailed = false
                     editorOpen = true
                 }
             },
@@ -193,27 +224,53 @@ fun TransactionsScreen(
                 exchangeRates = exchangeRates,
                 now = Instant.now().toString(),
                 initialState = editorInitialState,
+                receiptState = editorReceiptState,
+                receiptLoading = editorReceiptLoading,
+                receiptLoadFailed = editorReceiptLoadFailed,
+                onRemoveReceipt = {
+                    editorReceiptState = editorReceiptState.remove()
+                    editorReceiptLoadFailed = false
+                },
                 onDismiss = {
                     editorOpen = false
                     editorInitialState = null
-                    editorReceiptImage = null
-                    editorReceiptRequired = false
+                    editorReceiptState = TransactionReceiptEditorState.none()
+                    editorReceiptLoadFailed = false
                 },
                 onSave = { draft ->
                     val now = Instant.now().toString()
                     val deviceId = deviceIdProvider()
-                    resolveReceiptImageForSave(
-                        receiptRequired = editorReceiptRequired,
-                        receiptImage = editorReceiptImage,
-                    ).fold(
+                    editorReceiptState.newReceiptImageForSave().fold(
                         onSuccess = { receiptImage ->
                             if (receiptImage == null) {
-                                repository.saveTransaction(
-                                    ownerUserId = ownerUserId,
-                                    draft = draft,
-                                    deviceId = deviceId,
-                                    now = now,
-                                )
+                                if (editorReceiptState.deleteStoredOnSave) {
+                                    val transactionId = draft.id
+                                    if (transactionId == null) {
+                                        Result.failure(
+                                            IllegalStateException("Stored receipt deletion requires a transaction ID"),
+                                        )
+                                    } else {
+                                        saveTransactionThenDeleteReceipt(
+                                            transactionId = transactionId,
+                                            saveTransaction = {
+                                                repository.saveTransaction(
+                                                    ownerUserId = ownerUserId,
+                                                    draft = draft,
+                                                    deviceId = deviceId,
+                                                    now = now,
+                                                )
+                                            },
+                                            deleteReceipt = receiptImageRepository::deleteReceipt,
+                                        )
+                                    }
+                                } else {
+                                    repository.saveTransaction(
+                                        ownerUserId = ownerUserId,
+                                        draft = draft,
+                                        deviceId = deviceId,
+                                        now = now,
+                                    )
+                                }
                             } else {
                                 saveReceiptBackedTransaction(
                                     draft = draft,

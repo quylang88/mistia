@@ -1,17 +1,25 @@
 package vn.com.quyln.mistia.feature.transactions
 
+import android.graphics.BitmapFactory
+import android.text.format.Formatter
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,12 +36,18 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -45,7 +59,9 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.CategoryHierarchyRole
@@ -64,13 +80,17 @@ import vn.com.quyln.mistia.core.model.matchingExchangeRateSnapshot
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun TransactionEditorSheet(
+internal fun TransactionEditorSheet(
     transaction: LedgerTransactionRecord?,
     wallets: List<LedgerWalletRecord>,
     categories: List<TransactionCategoryRecord>,
     exchangeRates: List<ExchangeRateSnapshot>,
     now: String,
     initialState: TransactionEditorState? = null,
+    receiptState: TransactionReceiptEditorState = TransactionReceiptEditorState.none(),
+    receiptLoading: Boolean = false,
+    receiptLoadFailed: Boolean = false,
+    onRemoveReceipt: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
 ) {
@@ -437,6 +457,17 @@ fun TransactionEditorSheet(
                 )
             }
 
+            if (receiptState.preview != null || receiptLoading || receiptLoadFailed ||
+                receiptState.newReceiptRequired
+            ) {
+                TransactionReceiptEditorSection(
+                    state = receiptState,
+                    isLoading = receiptLoading,
+                    loadFailed = receiptLoadFailed,
+                    onRemove = onRemoveReceipt,
+                )
+            }
+
             transactionEditorError(validation, operationError, genericFailure, state.occurredAt)?.let { message ->
                 Text(
                     text = message,
@@ -470,6 +501,141 @@ fun TransactionEditorSheet(
             onSelected = {
                 state = state.copy(occurredAt = it)
                 showsTimePicker = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun TransactionReceiptEditorSection(
+    state: TransactionReceiptEditorState,
+    isLoading: Boolean,
+    loadFailed: Boolean,
+    onRemove: () -> Unit,
+) {
+    val preview = state.preview
+    val context = LocalContext.current
+    var showsPreview by remember(preview) { mutableStateOf(false) }
+    val thumbnail = remember(preview) {
+        preview?.thumbnailData?.let { bytes ->
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }
+    }
+    MistiaGlassCard { padding ->
+        Column(
+            modifier = Modifier.padding(padding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                stringResource(R.string.transactions_transactioneditor_image),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            when {
+                isLoading -> Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Text(
+                        stringResource(R.string.transactions_transactioneditor_receipt_image),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                preview != null && thumbnail != null -> Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(
+                        bitmap = thumbnail,
+                        contentDescription = stringResource(
+                            R.string.transactions_transactioneditor_receipt_image,
+                        ),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showsPreview = true },
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.transactions_transactioneditor_receipt_image))
+                        Text(
+                            Formatter.formatShortFileSize(context, preview.byteCount.toLong()),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = onRemove) {
+                        Text(
+                            stringResource(R.string.transactions_transactioneditor_remove_image),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                else -> {
+                    Text(
+                        stringResource(
+                            R.string.transactions_transactioneditor_couldn_t_load_the_saved_receipt_image,
+                        ),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    if (state.newReceiptRequired || state.storedReceiptPresent) {
+                        TextButton(onClick = onRemove) {
+                            Text(
+                                stringResource(R.string.transactions_transactioneditor_remove_image),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showsPreview && preview != null) {
+        val fullImageBytes = remember(preview) { preview.imageData }
+        val fullImageResult by produceState<Result<ImageBitmap>?>(
+            initialValue = null,
+            key1 = fullImageBytes,
+        ) {
+            value = withContext(Dispatchers.Default) {
+                runCatching {
+                    requireNotNull(
+                        BitmapFactory.decodeByteArray(fullImageBytes, 0, fullImageBytes.size),
+                    ).asImageBitmap()
+                }
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showsPreview = false },
+            confirmButton = {
+                TextButton(onClick = { showsPreview = false }) {
+                    Text(stringResource(R.string.common_ok))
+                }
+            },
+            title = { Text(stringResource(R.string.transactions_transactioneditor_receipt_image)) },
+            text = {
+                val fullImage = fullImageResult?.getOrNull()
+                if (fullImage != null) {
+                    Image(
+                        bitmap = fullImage,
+                        contentDescription = stringResource(
+                            R.string.transactions_transactioneditor_receipt_image,
+                        ),
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp),
+                    )
+                } else if (fullImageResult == null) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(
+                        stringResource(
+                            R.string.transactions_transactioneditor_couldn_t_load_the_saved_receipt_image,
+                        ),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             },
         )
     }

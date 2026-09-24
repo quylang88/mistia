@@ -953,3 +953,31 @@ APK 1 is not complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-editor-state-contract.md`.
+
+## APK 1 native saved-receipt preview and removal — 2026-09-24
+
+- [x] Loaded stored receipt metadata, full image and prepared thumbnail when an
+  existing transaction editor opens, while skipping file reads when no receipt
+  metadata exists.
+- [x] Added a native Material 3 thumbnail, localized file size/error states and
+  a tap-through full-image dialog; full-image bitmap decoding runs off the main
+  dispatcher.
+- [x] Bound explicit removal for both pending and stored receipts. Stored data
+  is deleted only after the edited transaction saves successfully; saving
+  without pressing Remove leaves the stored receipt untouched.
+- [x] Preserved only semantic flags across Activity recreation, never image
+  bytes. Pending missing bytes still block save, while stored/delete intent is
+  restored and the stored preview can be reloaded.
+- [x] Kept a corrupt or missing stored image removable by preserving metadata
+  presence even when file loading fails; coroutine cancellation is propagated.
+- [x] Verified 296 Android unit tests across 50 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Implement the receipt debt/lend path and remaining APK 1 closure checks.
+
+No emulator/Samsung UI or dark-mode visual claim is made because `adb` is not
+available. No live AI/production request, cloud write, migration or deployment
+occurred. All five cloud-write flags remain `false`; APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-preview-removal-ui.md`.

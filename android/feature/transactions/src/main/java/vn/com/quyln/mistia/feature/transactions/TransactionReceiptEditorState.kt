@@ -1,5 +1,7 @@
 package vn.com.quyln.mistia.feature.transactions
 
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import java.util.concurrent.CancellationException
 import vn.com.quyln.mistia.core.model.PreparedReceiptImage
 import vn.com.quyln.mistia.core.model.TransactionReceiptImageRecord
@@ -49,6 +51,14 @@ internal data class TransactionReceiptEditorState(
     val storedReceiptPresent: Boolean,
     val deleteStoredOnSave: Boolean,
 ) {
+    fun foundStoredReceipt(): TransactionReceiptEditorState = copy(
+        preview = null,
+        newReceiptImage = null,
+        newReceiptRequired = false,
+        storedReceiptPresent = true,
+        deleteStoredOnSave = false,
+    )
+
     fun loadedStored(
         record: TransactionReceiptImageRecord,
         imageData: ByteArray,
@@ -88,7 +98,30 @@ internal data class TransactionReceiptEditorState(
         receiptImage = newReceiptImage?.ownedCopy(),
     )
 
+    internal fun saveableValues(): List<Boolean> = listOf(
+        newReceiptRequired,
+        storedReceiptPresent,
+        deleteStoredOnSave,
+    )
+
     companion object {
+        val Saver: Saver<TransactionReceiptEditorState, Any> =
+            listSaver<TransactionReceiptEditorState, Boolean>(
+                save = { it.saveableValues() },
+                restore = ::restoreSaveableValues,
+            )
+
+        internal fun restoreSaveableValues(values: List<Boolean>): TransactionReceiptEditorState {
+            require(values.size == 3) { "Receipt editor saved state must contain three flags" }
+            return TransactionReceiptEditorState(
+                preview = null,
+                newReceiptImage = null,
+                newReceiptRequired = values[0],
+                storedReceiptPresent = values[1],
+                deleteStoredOnSave = values[2],
+            )
+        }
+
         fun none(): TransactionReceiptEditorState = TransactionReceiptEditorState(
             preview = null,
             newReceiptImage = null,
@@ -114,6 +147,11 @@ internal data class TransactionReceiptEditorState(
         }
     }
 }
+
+internal data class TransactionReceiptEditorLoadResult(
+    val state: TransactionReceiptEditorState,
+    val error: Throwable? = null,
+)
 
 private fun PreparedReceiptImage.ownedCopy(): PreparedReceiptImage = copy(
     imageData = imageData.copyOf(),
@@ -148,4 +186,57 @@ internal suspend fun <Record> saveTransactionThenDeleteReceipt(
     if (deletionFailure is CancellationException) throw deletionFailure
     if (deletionFailure != null) return Result.failure(deletionFailure)
     return transactionResult
+}
+
+internal suspend fun loadStoredReceiptEditorState(
+    transactionId: String,
+    initialState: TransactionReceiptEditorState,
+    loadRecord: suspend (String) -> TransactionReceiptImageRecord?,
+    loadImageData: suspend (TransactionReceiptImageRecord) -> Result<ByteArray>,
+    loadThumbnailData: suspend (TransactionReceiptImageRecord) -> Result<ByteArray>,
+): TransactionReceiptEditorLoadResult {
+    require(transactionId.isNotBlank()) { "Transaction ID cannot be blank" }
+    val record = try {
+        loadRecord(transactionId)
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: Throwable) {
+        return TransactionReceiptEditorLoadResult(initialState, error)
+    } ?: return TransactionReceiptEditorLoadResult(TransactionReceiptEditorState.none())
+
+    val storedState = initialState.foundStoredReceipt()
+
+    val imageResult = receiptFileResult { loadImageData(record) }
+    val imageFailure = imageResult.exceptionOrNull()
+    if (imageFailure is CancellationException) throw imageFailure
+    if (imageFailure != null) return TransactionReceiptEditorLoadResult(storedState, imageFailure)
+
+    val thumbnailResult = receiptFileResult { loadThumbnailData(record) }
+    val thumbnailFailure = thumbnailResult.exceptionOrNull()
+    if (thumbnailFailure is CancellationException) throw thumbnailFailure
+    if (thumbnailFailure != null) return TransactionReceiptEditorLoadResult(storedState, thumbnailFailure)
+
+    return try {
+        TransactionReceiptEditorLoadResult(
+            storedState.loadedStored(
+                record = record,
+                imageData = imageResult.getOrThrow(),
+                thumbnailData = thumbnailResult.getOrThrow(),
+            ),
+        )
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: Throwable) {
+        TransactionReceiptEditorLoadResult(storedState, error)
+    }
+}
+
+private suspend fun receiptFileResult(
+    load: suspend () -> Result<ByteArray>,
+): Result<ByteArray> = try {
+    load()
+} catch (cancellation: CancellationException) {
+    throw cancellation
+} catch (error: Throwable) {
+    Result.failure(error)
 }
