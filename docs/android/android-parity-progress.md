@@ -926,3 +926,30 @@ complete.
 
 Evidence:
 `docs/android/evidence/2026-09-24-apk1-receipt-image-save-flow.md`.
+
+## APK 1 receipt editor state contract — 2026-09-24
+
+- [x] Added a typed editor state that distinguishes a new analyzed receipt
+  from an already stored receipt and exposes one preview payload for either.
+- [x] Removing a new pending receipt clears the create requirement without
+  scheduling storage deletion; removing a stored receipt schedules an
+  idempotent delete-on-save mutation.
+- [x] Kept the saveable missing-image guard: restored pending state without
+  its large in-memory bytes still refuses a silent receipt-less create.
+- [x] Added transaction-first stored-receipt deletion, so a transaction-save
+  failure leaves its existing receipt untouched and a deletion failure remains
+  visible/retryable.
+- [x] Isolated mutable image bytes between source, preview and save payload;
+  preview equality/hash use byte content rather than array identity.
+- [x] Verified 291 Android unit tests across 50 suites, Room Android-test
+  compilation, lint, debug assembly, the 15-entity contract check and Android/
+  strict iOS localization code generation.
+- [ ] Bind this contract to native thumbnail/full preview, saved-receipt load
+  and remove controls in the transaction editor.
+
+No UI claim, live AI/production request, cloud write, migration or deployment
+occurred. `adb` remains unavailable. All five cloud-write flags remain `false`;
+APK 1 is not complete.
+
+Evidence:
+`docs/android/evidence/2026-09-24-apk1-receipt-editor-state-contract.md`.
