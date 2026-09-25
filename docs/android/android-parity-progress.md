@@ -1106,3 +1106,27 @@ evidence.
 
 Evidence:
 `docs/android/evidence/2026-09-25-apk1-local-closure-audit.md`.
+
+## APK 2 budget typed contract — 2026-09-25
+
+- [x] Added the typed budget-plan cloud record for all shared schema fields,
+  explicit JSON nulls, signed-64 minor units/versioning and strict UUID/UTC
+  decoding.
+- [x] Matched iOS required/optional decoding: malformed or missing required
+  fields fail, the legacy family-spending flag alone defaults to `false`, and
+  empty optional snapshot strings remain lossless.
+- [x] Added frozen-category allocation snapshots and parent/child limit
+  validation scoped by branch and local calendar month, with edit exclusion.
+- [x] Used exact arithmetic for allocation sums so overflow cannot turn an
+  invalid allocation into a valid one; only displayed error totals are clamped.
+- [x] Verified 318 JVM tests across 51 suites, Room Android-test compilation,
+  lint, debug assembly, the 15-entity contract check and Android/strict iOS
+  localization code generation. Final independent review reported no finding.
+- [ ] Add the offline Room/outbox budget repository on top of this contract.
+
+No production cloud request/write, migration or deployment occurred. `adb`
+remains unavailable, so no emulator/Samsung behavior is claimed. All five
+cloud-write flags remain `false`; APK 2 remains incomplete.
+
+Evidence:
+`docs/android/evidence/2026-09-25-apk2-budget-typed-contract.md`.
