@@ -11,6 +11,8 @@ interface RecurringBillRepository {
     /** Includes archived bills to preserve paid history in monthly projections. */
     fun observeRecurringBills(ownerUserId:UserId):Flow<List<RecurringBillPlanRecord>>
     fun observeDueOccurrences(ownerUserId:UserId):Flow<List<DueOccurrenceRecord>>
+    suspend fun skipRecurringBill(ownerUserId:UserId,id:RecordId,month:YearMonth,deviceId:String,now:String):Result<DueOccurrenceRecord> = Result.failure(UnsupportedOperationException("Bill skip unavailable"))
+    suspend fun undoRecurringBillSkip(ownerUserId:UserId,id:RecordId,month:YearMonth,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Bill undo skip unavailable"))
     suspend fun saveRecurringBill(ownerUserId:UserId,draft:RecurringBillDraft,deviceId:String,now:String):Result<RecurringBillPlanRecord>
     suspend fun pauseRecurringBill(ownerUserId:UserId,id:RecordId,deviceId:String,now:String):Result<Unit>
     suspend fun resumeRecurringBill(ownerUserId:UserId,id:RecordId,deviceId:String,now:String):Result<Unit>
@@ -83,3 +85,11 @@ fun RecurringBillPlanRecord.pendingMutation(kind:MutationKind=MutationKind.UPSER
     CloudEntity.RECURRING_BILL_PLAN,id,ownerUserId,kind,toPayload(),updatedAt,syncVersion,requireNotNull(lastModifiedByDeviceId))
 fun DueOccurrenceRecord.pendingMutation(kind:MutationKind=MutationKind.UPSERT)=PendingMutation(
     CloudEntity.DUE_OCCURRENCE_RECORD,id,ownerUserId,kind,toPayload(),updatedAt,syncVersion,requireNotNull(lastModifiedByDeviceId))
+
+/** Includes viewer-envelope rows for snapshot guards, but never grants mutation ownership. */
+fun billCycleRecords(rows:List<CloudRecord>,bill:CloudRecord,monthKey:String):List<CloudRecord> = rows.filter {row ->
+    row.entity==CloudEntity.DUE_OCCURRENCE_RECORD.table && row.ownerUserId==bill.ownerUserId &&
+        (row.payload["source_kind_raw_value"] as? kotlinx.serialization.json.JsonPrimitive)?.content=="recurringBill" &&
+        (row.payload["source_id"] as? kotlinx.serialization.json.JsonPrimitive)?.content==bill.id &&
+        (row.payload["selected_month_key"] as? kotlinx.serialization.json.JsonPrimitive)?.content==monthKey
+}.sortedBy {it.id}

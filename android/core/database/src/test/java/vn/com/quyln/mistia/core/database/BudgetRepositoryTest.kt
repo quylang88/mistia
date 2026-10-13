@@ -395,6 +395,11 @@ class BudgetRepositoryTest {
             if (failBatch) throw IllegalStateException("simulated storage failure")
             mutations.forEach { (record, mutation) -> commitMutation(record, mutation) }
         }
+        override suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+            require(record(UserId(bill.ownerUserId),bill.entity,bill.id)==bill)
+            require(billCycleRecords(recordsIncludingDeleted(UserId(bill.ownerUserId),CloudEntity.DUE_OCCURRENCE_RECORD.table),bill,monthKey)==expectedOccurrences.sortedBy {it.id})
+            commitMutations(mutations)
+        }
         override suspend fun commitMissingSystemCategories(mutations:List<Pair<CloudRecord,PendingMutation>>) {
             require(mutations.none { (candidate,_) -> records.value.values.any {row -> row.ownerUserId==candidate.ownerUserId && row.entity==candidate.entity &&
                 (row.id==candidate.id || (row.payload["user_id"]==candidate.payload["user_id"] && row.payload["system_key"]==candidate.payload["system_key"])) }})

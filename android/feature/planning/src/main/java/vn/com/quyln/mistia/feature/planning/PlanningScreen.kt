@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -47,6 +48,10 @@ fun PlanningScreen(
     deviceIdProvider: () -> String,
     exchangeRateRepository: ExchangeRateRepository,
 ) {
+    var cycleAction by remember(ownerUserId.value) {mutableStateOf<Triple<String,String,Boolean>?>(null)}
+    var cycleBusy by remember(ownerUserId.value) {mutableStateOf(false)}
+    var cycleError by remember(ownerUserId.value) {mutableStateOf(false)}
+    val cycleScope=rememberCoroutineScope()
     val bills by repository.observeRecurringBills(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val occurrences by repository.observeDueOccurrences(ownerUserId).collectAsStateWithLifecycle(emptyList())
     var billNavigation by rememberSaveable(ownerUserId.value,stateSaver=RecurringBillNavigationState.saver(ownerUserId.value)) {
@@ -152,6 +157,11 @@ fun PlanningScreen(
                     Text("${stringResource(R.string.planning_planning_payment_date)}: ${row.paymentStartDate.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")
                     if(row.hasExplicitDueDate) Text("${stringResource(R.string.planning_planning_deadline)}: ${row.dueDate.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")
                     row.autoPayDate?.let {Text("${stringResource(R.string.planning_planning_auto_pay_date)}: ${it.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")}
+                    if(!row.bill.isArchived && row.bill.deletedAt==null && row.status!=DueStatus.PAID) TextButton(
+                        enabled=!cycleBusy,onClick={cycleError=false;cycleAction=Triple(row.bill.id,month.toString(),row.status==DueStatus.SKIPPED)},
+                        modifier=Modifier.testTag("bill.skip.${row.bill.id}")) {
+                        Text(stringResource(if(row.status==DueStatus.SKIPPED) R.string.planning_duepayment_undo_skip else R.string.planning_duepayment_skip_this_month))
+                    }
                     if(!row.bill.isArchived && row.bill.deletedAt==null) TextButton(onClick={billNavigation=billNavigation.copy(payload=row.bill.toPayload().toString(),open=true)},modifier=Modifier.testTag("bill.edit.${row.bill.id}")) {Text(stringResource(R.string.planning_planning_s_a_h_a_n))}
                 }
             }
@@ -163,6 +173,21 @@ fun PlanningScreen(
             item {Button(onClick={billNavigation=billNavigation.copy(payload=null,open=true)},modifier=Modifier.fillMaxWidth().testTag("bill.add")) {Text(stringResource(R.string.planning_planning_add_bill))}}
             }
         }
+    }
+    cycleAction?.let {action ->
+        val title=if(action.third) R.string.planning_duepayment_undo_skip else R.string.planning_duepayment_skip_this_month
+        AlertDialog(onDismissRequest={if(!cycleBusy) cycleAction=null},title={Text(stringResource(title))},
+            text={androidx.compose.foundation.layout.Column {
+                Text(stringResource(if(action.third) R.string.planning_duepayment_undo_skip_message else R.string.planning_duepayment_skip_confirmation_message))
+                if(cycleError) Text(stringResource(R.string.planning_planning_couldn_t_save_this_bill_right_now),color=MaterialTheme.colorScheme.error)
+            }},confirmButton={TextButton(enabled=!cycleBusy,onClick={
+                cycleBusy=true;cycleError=false
+                cycleScope.launch {
+                    val result=if(action.third) repository.undoRecurringBillSkip(ownerUserId,RecordId(action.first),YearMonth.parse(action.second),deviceIdProvider(),Instant.now().toString())
+                        else repository.skipRecurringBill(ownerUserId,RecordId(action.first),YearMonth.parse(action.second),deviceIdProvider(),Instant.now().toString()).map {Unit}
+                    cycleBusy=false;result.fold(onSuccess={cycleAction=null},onFailure={cycleError=true})
+                }
+            },modifier=Modifier.testTag("bill.confirmSkip")) {Text(stringResource(title))}},dismissButton={TextButton(enabled=!cycleBusy,onClick={cycleAction=null}) {Text(stringResource(R.string.common_cancel))}})
     }
     if(billNavigation.open && (billNavigation.payload==null || editorBill!=null)) RecurringBillEditorSheet(ownerUserId.value,editorBill,categories,goalWallets,language,
         onSave={repository.saveRecurringBill(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},

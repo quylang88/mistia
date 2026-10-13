@@ -18,6 +18,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.billCycleRecords
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.EntityCount
@@ -547,6 +548,27 @@ class RoomLocalStore(
         require(mutations.map { it.first.entity to it.first.id }.distinct().size == mutations.size)
         database.withTransaction {
             mutations.forEach { (record, mutation) -> commitMutationRows(record, mutation) }
+        }
+    }
+
+    override suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+        require(bill.entity==CloudEntity.RECURRING_BILL_PLAN.table)
+        java.time.YearMonth.parse(monthKey)
+        require(mutations.isNotEmpty() && mutations.all {pair ->
+            pair.first.entity==CloudEntity.DUE_OCCURRENCE_RECORD.table && pair.first.ownerUserId==bill.ownerUserId &&
+                (pair.first.payload["user_id"] as? JsonPrimitive)?.content==bill.ownerUserId &&
+                billCycleRecords(listOf(pair.first),bill,monthKey).size==1
+        })
+        database.withTransaction {
+            require(record(UserId(bill.ownerUserId),bill.entity,bill.id)==bill) {"Bill changed during cycle operation"}
+            val current=billCycleRecords(recordsIncludingDeleted(UserId(bill.ownerUserId),CloudEntity.DUE_OCCURRENCE_RECORD.table),bill,monthKey)
+            require(current==expectedOccurrences.sortedBy {it.id}) {"Bill cycle changed during operation"}
+            require(mutations.all {pair ->
+                val existing=expectedOccurrences.firstOrNull {it.id==pair.first.id}
+                if(existing!=null) (existing.payload["user_id"] as? JsonPrimitive)?.content==bill.ownerUserId
+                else record(UserId(bill.ownerUserId),pair.first.entity,pair.first.id)==null
+            }) {"Occurrence identity occupied"}
+            commitMutations(mutations)
         }
     }
 

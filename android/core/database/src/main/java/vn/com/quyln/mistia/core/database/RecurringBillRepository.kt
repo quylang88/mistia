@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.UUID
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -26,6 +27,41 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
                 runCatching { DueOccurrenceRecord.fromCloudRecord(row).takeIf { it.id==row.id && it.ownerUserId==ownerUserId.value && it.deletedAt==null } }.getOrNull()
             }.sortedWith(compareBy(DueOccurrenceRecord::createdAt,DueOccurrenceRecord::id))
         }
+    override suspend fun skipRecurringBill(ownerUserId:UserId,id:RecordId,month:YearMonth,deviceId:String,now:String):Result<DueOccurrenceRecord> = result {
+        mutex.withLock {
+            val bill=active(ownerUserId,id)
+            val cloud=requireNotNull(store.record(ownerUserId,CloudEntity.RECURRING_BILL_PLAN.table,bill.id))
+            require(RecurringBillPlanRecord.fromCloudRecord(cloud)==bill) {"Bill changed before cycle snapshot"}
+            val cycle=billCycleRecords(store.recordsIncludingDeleted(ownerUserId,CloudEntity.DUE_OCCURRENCE_RECORD.table),cloud,month.toString())
+            val owned=cycle.filter {(it.payload["user_id"] as? JsonPrimitive)?.content==ownerUserId.value}.map {record -> DueOccurrenceRecord.fromCloudRecord(record).also {require(it.id==record.id && it.ownerUserId==ownerUserId.value)}}.filter {it.deletedAt==null}
+            require(owned.none {it.status==DueStatus.PAID || it.linkedTransactionId!=null}) {"Paid cycle cannot be skipped"}
+            val row=recurringBillDueRows(ownerUserId,listOf(bill),owned,month,zone).singleOrNull() ?: error("Bill cycle is not scheduled")
+            owned.firstOrNull {it.status==DueStatus.SKIPPED}?.let {return@withLock it}
+            val timestamp=Instant.parse(now).toString()
+            val device=UUID.fromString(deviceId).toString()
+            val pending=owned.filter {it.status==DueStatus.PENDING}
+            val saved=if(pending.isEmpty()) listOf(DueOccurrenceRecord(UUID.randomUUID().toString(),ownerUserId.value,"recurringBill",bill.id,
+                month.toString(),row.dueDate.toString(),null,"skipped",null,null,timestamp,timestamp,null,0,device)) else pending.map {
+                it.copy(scheduledDate=row.dueDate.toString(),amountMinorSnapshot=null,statusWireValue="skipped",paidAt=null,linkedTransactionId=null,updatedAt=timestamp,lastModifiedByDeviceId=device)
+            }
+            store.commitBillCycleMutations(cloud,month.toString(),cycle,saved.map {it.toCloudRecord() to it.pendingMutation()})
+            saved.first()
+        }
+    }
+    override suspend fun undoRecurringBillSkip(ownerUserId:UserId,id:RecordId,month:YearMonth,deviceId:String,now:String):Result<Unit> = result {
+        mutex.withLock {
+            val bill=active(ownerUserId,id)
+            val cloud=requireNotNull(store.record(ownerUserId,CloudEntity.RECURRING_BILL_PLAN.table,bill.id))
+            require(RecurringBillPlanRecord.fromCloudRecord(cloud)==bill)
+            val cycle=billCycleRecords(store.recordsIncludingDeleted(ownerUserId,CloudEntity.DUE_OCCURRENCE_RECORD.table),cloud,month.toString())
+            val timestamp=Instant.parse(now).toString()
+            val device=UUID.fromString(deviceId).toString()
+            val owned=cycle.filter {(it.payload["user_id"] as? JsonPrimitive)?.content==ownerUserId.value}.map {record -> DueOccurrenceRecord.fromCloudRecord(record).also {require(it.id==record.id && it.ownerUserId==ownerUserId.value)}}
+            require(recurringBillDueRows(ownerUserId,listOf(bill),owned.filter {it.deletedAt==null},month,zone).isNotEmpty()) {"Bill cycle is not scheduled"}
+            val deleted=owned.filter {it.deletedAt==null && it.status==DueStatus.SKIPPED}.map {it.copy(deletedAt=timestamp,updatedAt=timestamp,lastModifiedByDeviceId=device)}
+            if(deleted.isNotEmpty()) store.commitBillCycleMutations(cloud,month.toString(),cycle,deleted.map {it.toCloudRecord() to it.pendingMutation(MutationKind.DELETE)})
+        }
+    }
     override suspend fun saveRecurringBill(ownerUserId:UserId,draft:RecurringBillDraft,deviceId:String,now:String):Result<RecurringBillPlanRecord> = result {
         mutex.withLock {
             require(draft.zoneId==zone) { "Bill draft must use the repository calendar zone" }

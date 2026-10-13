@@ -153,6 +153,98 @@ class RecurringBillRepositoryTest {
         assertTrue(repo.archiveRecurringBill(owner,RecordId(saved.id),device,later).isFailure)
         assertEquals(MutationKind.DELETE,store.outboxRows(owner.value).single { it.entity==CloudEntity.RECURRING_BILL_PLAN }.kind)
     }
+    @Test fun `skip creates exact cycle occurrence without any ledger mutation and undo tombstones it`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        val skipped=repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).getOrThrow()
+        assertEquals("2026-10",skipped.selectedMonthKey)
+        assertEquals("2026-11-09T15:00:00Z",skipped.scheduledDate)
+        assertEquals("skipped",skipped.statusWireValue)
+        assertNull(skipped.amountMinorSnapshot);assertNull(skipped.paidAt);assertNull(skipped.linkedTransactionId)
+        assertEquals(1,store.batches.last().size)
+        assertFalse(store.outboxRows(owner.value).any {it.entity==CloudEntity.LEDGER_TRANSACTION})
+        val repeated=repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).getOrThrow()
+        assertEquals(skipped,repeated)
+        repo.undoRecurringBillSkip(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).getOrThrow()
+        assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
+        val tombstone=store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,skipped.id)!!
+        assertEquals(later,tombstone.deletedAt)
+        assertEquals(MutationKind.DELETE,store.outboxRows(owner.value).single {it.recordId==skipped.id}.kind)
+        val next=repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).getOrThrow()
+        assertNotEquals(skipped.id,next.id)
+    }
+    @Test fun `skip cannot alter paid occurrence foreign owner or unscheduled paused bill`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft().copy(frequencyMonths=2),device,now).getOrThrow()
+        val paid=occurrence(bill,"2026-10","paid").copy(syncVersion=9007199254740993L,linkedTransactionId=id)
+        store.commitMutation(paid.toCloudRecord(),paid.pendingMutation())
+        assertTrue(repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).isFailure)
+        assertTrue(repo.skipRecurringBill(other,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).isFailure)
+        assertTrue(repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,11),device,later).isFailure)
+        assertEquals(listOf(paid),repo.observeDueOccurrences(owner).first())
+        repo.pauseRecurringBill(owner,RecordId(bill.id),device,now).getOrThrow()
+        assertTrue(repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,12),device,later).isFailure)
+    }
+    @Test fun `undo skip tombstones every duplicate but preserves paid and other cycles`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        val a=occurrence(bill,"2026-10","skipped").copy(syncVersion=9007199254740993L)
+        val b=a.copy(id="88888888-8888-8888-8888-888888888888")
+        val otherCycle=a.copy(id="66666666-6666-6666-6666-666666666666",selectedMonthKey="2026-09")
+        val paid=a.copy(id="55555555-5555-5555-5555-555555555555",statusWireValue="paid")
+        listOf(a,b,otherCycle,paid).forEach {store.commitMutation(it.toCloudRecord(),it.pendingMutation())}
+        repo.undoRecurringBillSkip(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).getOrThrow()
+        assertEquals(setOf(otherCycle.id,paid.id),repo.observeDueOccurrences(owner).first().map {it.id}.toSet())
+        assertEquals(2,store.batches.last().size)
+        assertEquals(9007199254740993L,store.outboxRows(owner.value).single {it.recordId==a.id}.baseVersion)
+    }
+    @Test fun `skip batch failure leaves cycle and outbox unchanged`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        store.failBatch=true
+        assertTrue(repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).isFailure)
+        assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
+        assertFalse(store.outboxRows(owner.value).any {it.entity==CloudEntity.DUE_OCCURRENCE_RECORD})
+    }
+
+    @Test fun `occurrence wire identity mismatch cannot retarget skip mutation`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        val pending=occurrence(bill,"2026-10","pending")
+        store.replacePullSnapshot(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,listOf(pending.toCloudRecord().copy(id="88888888-8888-8888-8888-888888888888")))
+        assertTrue(repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).isFailure)
+        assertFalse(store.outboxRows(owner.value).any {it.entity==CloudEntity.DUE_OCCURRENCE_RECORD})
+    }
+    @Test fun `arriving paid cycle aborts skip without erasing synchronized record`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        val paid=occurrence(bill,"2026-10","paid").copy(syncVersion=9)
+        val racing=object:LocalStore by store {
+            override suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+                store.replacePullSnapshot(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,listOf(paid.toCloudRecord()))
+                store.commitBillCycleMutations(bill,monthKey,expectedOccurrences,mutations)
+            }
+        }
+        assertTrue(OfflineFirstFinanceRepository(racing,zone).skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).isFailure)
+        assertEquals(listOf(paid),repo.observeDueOccurrences(owner).first())
+        assertFalse(store.outboxRows(owner.value).any {it.entity==CloudEntity.DUE_OCCURRENCE_RECORD})
+    }
+    @Test fun `foreign viewer occurrence stays intact and cannot be skipped or undone`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        val foreign=occurrence(bill,"2026-10","skipped").copy(ownerUserId=other.value)
+        store.replacePullSnapshot(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,listOf(foreign.toCloudRecord().copy(ownerUserId=owner.value)))
+        repo.undoRecurringBillSkip(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).getOrThrow()
+        val saved=repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).getOrThrow()
+        assertNotEquals(foreign.id,saved.id)
+        assertEquals(foreign.toPayload(),store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,foreign.id)!!.payload)
+    }
+
+    @Test fun `stale undo cannot delete skipped history after pause or schedule change`()=runTest {
+        val original=draft()
+        val bill=repo.saveRecurringBill(owner,original,device,now).getOrThrow()
+        val skipped=repo.skipRecurringBill(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,now).getOrThrow()
+        repo.pauseRecurringBill(owner,RecordId(bill.id),device,now).getOrThrow()
+        assertTrue(repo.undoRecurringBillSkip(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).isFailure)
+        assertEquals(listOf(skipped),repo.observeDueOccurrences(owner).first())
+        repo.resumeRecurringBill(owner,RecordId(bill.id),device,later).getOrThrow()
+        assertTrue(repo.undoRecurringBillSkip(owner,RecordId(bill.id),java.time.YearMonth.of(2026,10),device,later).isFailure)
+        assertEquals(listOf(skipped),repo.observeDueOccurrences(owner).first())
+    }
+
     private fun occurrence(bill:RecurringBillPlanRecord,month:String,status:String)=DueOccurrenceRecord(
         "77777777-7777-7777-7777-777777777777",owner.value,"recurringBill",bill.id,month,now,bill.amountMinor,status,
         null,null,now,now,null,0,device)

@@ -240,6 +240,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    /** Compare source and complete cycle snapshot inside the same transaction as occurrence/outbox writes. */
+    suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+        throw UnsupportedOperationException("Conditional bill cycle writes unavailable")
+    }
+
     /** Insert-only category bootstrap: check missing IDs/system keys and write batch in one transaction. */
     suspend fun commitMissingSystemCategories(mutations: List<Pair<CloudRecord, PendingMutation>>) {
         throw UnsupportedOperationException("Conditional category bootstrap is unsupported")

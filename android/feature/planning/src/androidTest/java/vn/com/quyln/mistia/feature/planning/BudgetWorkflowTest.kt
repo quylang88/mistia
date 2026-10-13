@@ -148,6 +148,23 @@ class BudgetWorkflowTest {
         compose.runOnIdle {Assert.assertTrue(dismissed)}
     }
 
+    @Test fun skipAndUndoKeepLedgerEmptyThroughPlanningConfirmation() {
+        val bill=runBlocking {
+            val wallet=repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY"),device,Instant.now().toString()).getOrThrow()
+            repo.saveRecurringBill(owner,RecurringBillDraft("Rent",childId,500,wallet.id,"JPY"),device,Instant.now().toString()).getOrThrow()
+        }
+        compose.setContent {MistiaTheme(darkTheme=false) {PlanningScreen(owner,repo,deviceIdProvider={device},exchangeRateRepository=rates)}}
+        compose.onNodeWithTag("planning.tab.1").performClick()
+        compose.onNodeWithTag("bill.skip.${bill.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("bill.confirmSkip").performClick()
+        compose.waitUntil(5000) {runBlocking {repo.observeDueOccurrences(owner).first().any {it.status==DueStatus.SKIPPED}}}
+        Assert.assertTrue(runBlocking {repo.observeTransactions(owner).first().isEmpty()})
+        compose.onNodeWithTag("bill.skip.${bill.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("bill.confirmSkip").performClick()
+        compose.waitUntil(5000) {runBlocking {repo.observeDueOccurrences(owner).first().isEmpty()}}
+        Assert.assertEquals(MutationKind.DELETE,runBlocking {store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).single().mutation.kind})
+    }
+
     private fun capture(tag:String,name:String) {
         val image=compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
         File(context.filesDir,name).outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }

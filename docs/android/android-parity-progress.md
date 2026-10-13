@@ -1448,3 +1448,18 @@ Evidence: `docs/android/evidence/2026-10-13-native-bill-editor.md`.
 contract/l10n/diff checks pass. VersionCode16, eight gates false, ADB empty.
 Next: typed bill pay/skip/undo atomic transaction/occurrence workflow; preserve
 category startup reconciliation as an explicit open dependency. Goal active.
+
+## Bill skip / undo skip — 2026-10-13
+
+- [x] Native captured-cycle confirmation, pending/skipped actions, busy/retry/error
+  and owner-scoped repository. No ledger writes; skipped amount/payment/link null.
+- [x] Conditional Room source/cycle snapshot guard, duplicate tombstone/outbox
+  batch, exact Long version, paid/foreign protection and stale-schedule rejection.
+- [x]579 JVM tests/72 suites,52 Swift tests, full lint/build/Room/UI compile,
+  contracts/l10n/diff checks pass. Static review findings fixed and re-reviewed.
+- [ ] Room reopen/UI workflow assertions compiled but not run; ADB empty.
+- [ ] Payment + undo-payment atomic money workflow next; due sync/maintenance,
+  cards/installments, category legacy-ID startup and APK3–4 remain incomplete.
+
+VersionCode17, eight gates false, no production writes. Evidence:
+`docs/android/evidence/2026-10-13-bill-skip-undo.md`.
