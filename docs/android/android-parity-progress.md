@@ -1199,3 +1199,16 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-budget-push.md`.
 
 VersionCode 6, all six write flags false; no production writes/deployment.
 Evidence: `docs/android/evidence/2026-10-13-apk2-budget-ui.md`.
+
+## APK 2 savings typed contract — 2026-10-13
+
+- [x] Complete typed RemoteSavingsGoal wire record, explicit nullable fields,
+  signed Long money/version and strict scalar/UUID/instant decoding.
+- [x] Owner-scoped goal rows with inclusive target month, exact monthly ceiling
+  and progress/date/name ordering, avoiding Double precision and overflow.
+- [x] 392 JVM tests/57 suites, 52 Swift planning tests, Room compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Add savings offline repository, gated push, summary and native workflow.
+
+All six write gates false; no device/production verification claim.
+Evidence: `docs/android/evidence/2026-10-13-apk2-savings-contract.md`.
