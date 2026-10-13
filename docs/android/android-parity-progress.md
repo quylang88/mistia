@@ -1414,3 +1414,17 @@ Evidence: `docs/android/evidence/2026-10-13-budget-category-logical-identity.md`
   bills/payment/maintenance, remaining APK2–4 and final physical verification.
 
 Evidence: `docs/android/evidence/2026-10-13-system-category-key-lookup.md`.
+
+## Recurring bill editor draft foundation — 2026-10-13
+
+- [x] Exact optional/signed amount, recurring and one-time schedule inputs,
+  Swift date/auto-pay normalization, edit currency/identity and account saver.
+- [x] Six runtime RED tests, then imported-frequency parity RED; final568 JVM
+  tests/72 suites and52 Swift tests pass. Room/UI compilation, lint/build,
+  contracts/localization/diff checks pass. No device available.
+- [ ] Native bill sheet/list, correct budget/due/goals navigation, quick picker
+  and lifecycle controls next; payment/maintenance and APK2–4 still incomplete.
+- [ ] Category legacy-ID reconciliation/startup remains an open parallel
+  dependency; read lookup is already implemented but not called automatically.
+
+Evidence: `docs/android/evidence/2026-10-13-bill-editor-draft.md`.
