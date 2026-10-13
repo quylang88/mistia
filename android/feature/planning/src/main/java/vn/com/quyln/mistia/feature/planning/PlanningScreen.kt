@@ -58,6 +58,7 @@ fun PlanningScreen(
     }
     val budgets by repository.observeBudgets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeBudgetCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val categoryMetadata by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     LaunchedEffect(ownerUserId.value,exchangeRateRepository) { exchangeRateRepository.refreshIfStale() }
@@ -73,7 +74,7 @@ fun PlanningScreen(
         context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(lang)) })
             .getString(R.string.transactions_generated_title_balance_adjustment)
     }.toSet() }
-    val projection = projectBudgets(ownerUserId,budgets,categories,transactions,wallets,month,Instant.now(),zone,rates,language,adjustmentTitles,"JPY",
+    val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,wallets,month,Instant.now(),zone,rates,language,adjustmentTitles,"JPY",
         stringResource(R.string.planning_planning_deleted_category))
     val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val values = counts.associate { it.entity to it.count }
@@ -131,6 +132,7 @@ fun PlanningScreen(
         onDelete={repository.deleteSavingsGoal(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
         onDismiss={goalNavigation=goalNavigation.copy(open=false,payload=null)})
     if (navigation.editorOpen) BudgetEditorSheet(ownerUserId.value,navigation.editorPlan(),month,categories,budgets,transactions,language,
+        categoryMetadata=categoryMetadata,
         onSave={ draft -> repository.saveBudget(ownerUserId,draft,deviceIdProvider(),Instant.now().toString()) },
         onArchive={ id -> repository.archiveBudget(ownerUserId,RecordId(id),deviceIdProvider(),Instant.now().toString()) },
         onDelete={ id -> repository.deleteBudget(ownerUserId,RecordId(id),deviceIdProvider(),Instant.now().toString()) },

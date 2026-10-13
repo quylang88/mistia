@@ -48,20 +48,26 @@ data class BudgetProjection(
     val remainingMinor: Long,
 )
 
-fun activeBudgetPlans(owner: UserId, plans: List<BudgetPlanRecord>, month: YearMonth, zone: ZoneId): List<BudgetPlanRecord> =
-    plans.filter { it.ownerUserId == owner.value && !it.isArchived && it.deletedAt == null && budgetMonth(it.monthAnchor, zone) <= month }
+fun activeBudgetPlans(owner: UserId, plans: List<BudgetPlanRecord>, month: YearMonth, zone: ZoneId,
+    categories: List<TransactionCategoryRecord> = emptyList(),
+): List<BudgetPlanRecord> {
+    val index = CategoryIdentityIndex(owner, categories)
+    return plans.filter { it.ownerUserId == owner.value && !it.isArchived && it.deletedAt == null && budgetMonth(it.monthAnchor, zone) <= month }
         .groupBy { plan ->
-            val category = plan.categoryIdSnapshot ?: plan.categoryId
+            val category = index.logical(plan.categoryIdSnapshot ?: plan.categoryId)
             listOf(category ?: groupingKey(plan.categoryNameSnapshot.orEmpty()),
                 if (category == null) groupingKey(plan.categoryParentNameSnapshot.orEmpty()) else "",
                 if (category == null) plan.categoryIsParentSnapshot.toString() else "", currency(plan.currencyCode))
         }.values.map { group ->
             group.maxWith(compareBy<BudgetPlanRecord>({ budgetMonth(it.monthAnchor, zone) }, { it.id }))
         }.sortedBy { it.id }
+}
 
 /** Current continuity and future anchors can coexist with a newly saved monthly plan. */
-fun budgetCurrencyConstraints(owner: UserId, plans: List<BudgetPlanRecord>, month: YearMonth, zone: ZoneId): List<BudgetPlanRecord> =
-    (activeBudgetPlans(owner, plans, month, zone) + plans.filter {
+fun budgetCurrencyConstraints(owner: UserId, plans: List<BudgetPlanRecord>, month: YearMonth, zone: ZoneId,
+    categories: List<TransactionCategoryRecord> = emptyList(),
+): List<BudgetPlanRecord> =
+    (activeBudgetPlans(owner, plans, month, zone, categories) + plans.filter {
         it.ownerUserId == owner.value && !it.isArchived && it.deletedAt == null && budgetMonth(it.monthAnchor, zone) > month
     }).distinctBy { it.id }
 
@@ -107,14 +113,14 @@ fun projectBudgets(
     reportingCurrency: String,
     deletedCategoryName: String = "",
 ): BudgetProjection {
-    val categoryById = categories.filter { it.ownerUserId == owner.value }.associateBy { it.id }
+    val index = CategoryIdentityIndex(owner, categories)
     val walletById = wallets.filter { it.ownerUserId == owner.value }.associateBy { it.id }
-    val active = activeBudgetPlans(owner, plans, selectedMonth, zone)
+    val active = activeBudgetPlans(owner, plans, selectedMonth, zone, categories)
     val monthStart = selectedMonth.atDay(1).atStartOfDay(zone).toInstant()
     val monthEnd = selectedMonth.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant()
     fun name(plan: BudgetPlanRecord, parent: Boolean = false): String {
-        val live = if (parent) categoryById[plan.categoryParentIdSnapshot ?: categoryById[plan.categoryId]?.parentCategoryId]
-            else categoryById[plan.categoryId]
+        val live = if (parent) index.category(plan.categoryParentIdSnapshot ?: index.category(plan.categoryId)?.parentCategoryId)
+            else index.category(plan.categoryId)
         val vi = if (parent) plan.categoryParentNameSnapshot else plan.categoryNameSnapshot
         val localized = when (language) {
             CategoryNameLanguage.VIETNAMESE -> vi
@@ -123,7 +129,7 @@ fun projectBudgets(
         }
         return localized.nonblank() ?: vi.nonblank() ?: live?.localizedBudgetName(language) ?: deletedCategoryName
     }
-    fun allocation(plan: BudgetPlanRecord) = plan.allocationSnapshot(categoryById[plan.categoryId])
+    fun allocation(plan: BudgetPlanRecord) = plan.logicalAllocation(index)
     fun spent(plan: BudgetPlanRecord, branch: Boolean): Long {
         val snapshot = allocation(plan)
         val targetId = if (branch) snapshot.branchCategoryId else snapshot.categoryId
@@ -132,13 +138,13 @@ fun projectBudgets(
         return transactions.asSequence().filter { it.ownerUserId == owner.value && it.entryStatus == TransactionEntryStatus.POSTED && !it.isArchived && it.deletedAt == null }
             .distinctBy { it.id }.filter { Instant.parse(it.occurredAt) >= start && Instant.parse(it.occurredAt) < monthEnd }
             .filter { record ->
-                val category = categoryById[record.categoryId]
-                val identity = if (branch) category?.parentCategoryId ?: record.categoryId else record.categoryId
-                val names = if (branch) listOf(category?.localizedBudgetName(language), categoryById[category?.parentCategoryId]?.localizedBudgetName(language))
+                val category = index.category(record.categoryId)
+                val identity = index.logical(if (branch) category?.parentCategoryId ?: record.categoryId else record.categoryId)
+                val names = if (branch) listOf(category?.localizedBudgetName(language), index.category(category?.parentCategoryId)?.localizedBudgetName(language))
                     else listOf(category?.localizedBudgetName(language))
                 (targetId != null && identity == targetId) || (targetName.isNotEmpty() && names.any { it != null && groupingKey(it) == targetName })
             }.map { record ->
-                val expense = reportedBudgetExpense(record, categoryById[record.categoryId], walletById[record.sourceWalletId], adjustmentTitles)
+                val expense = reportedBudgetExpense(record, index.category(record.categoryId), walletById[record.sourceWalletId], adjustmentTitles)
                 planningMoneyMinorExact(expense, record.sourceCurrencyCode, plan.currencyCode, rates)
             }.fold(BigInteger.ZERO) { sum, amount -> sum.add(amount) }.clamped()
     }
@@ -151,8 +157,8 @@ fun projectBudgets(
         val parent = branchPlans.firstOrNull { allocation(it).categoryIsParent }
         val children = branchPlans.filterNot { allocation(it).categoryIsParent }.map { plan ->
             val amount = spent(plan, false)
-            BudgetRow(plan, name(plan), plan.categoryIconSymbolNameSnapshot ?: categoryById[plan.categoryId]?.iconSymbolName ?: "questionmark.circle.fill",
-                plan.categoryColorHexSnapshot ?: categoryById[plan.categoryId]?.iconColorHex ?: "#8A8A8E", amount,
+            BudgetRow(plan, name(plan), plan.categoryIconSymbolNameSnapshot ?: index.category(plan.categoryId)?.iconSymbolName ?: "questionmark.circle.fill",
+                plan.categoryColorHexSnapshot ?: index.category(plan.categoryId)?.iconColorHex ?: "#8A8A8E", amount,
                 budgetPace(amount, plan.limitMinor, selectedMonth, referenceDate, zone))
         }.sortedWith(rowComparator)
         val template = parent ?: branchPlans.first()
@@ -163,8 +169,8 @@ fun projectBudgets(
         val onlyChild = parent == null && children.size == 1
         val branchName = if (onlyChild) children.single().name else name(template, parent = parent == null)
         BudgetBranchRow(branchId, branchName,
-            if (onlyChild) children.single().icon else parent?.categoryIconSymbolNameSnapshot ?: parent?.let { categoryById[it.categoryId]?.iconSymbolName } ?: template.categoryParentIconSymbolNameSnapshot ?: categoryById[categoryById[template.categoryId]?.parentCategoryId]?.iconSymbolName ?: "questionmark.circle.fill",
-            if (onlyChild) children.single().colorHex else parent?.categoryColorHexSnapshot ?: parent?.let { categoryById[it.categoryId]?.iconColorHex } ?: template.categoryParentColorHexSnapshot ?: categoryById[categoryById[template.categoryId]?.parentCategoryId]?.iconColorHex ?: "#8A8A8E",
+            if (onlyChild) children.single().icon else parent?.categoryIconSymbolNameSnapshot ?: parent?.let { index.category(it.categoryId)?.iconSymbolName } ?: template.categoryParentIconSymbolNameSnapshot ?: index.category(index.category(template.categoryId)?.parentCategoryId)?.iconSymbolName ?: "questionmark.circle.fill",
+            if (onlyChild) children.single().colorHex else parent?.categoryColorHexSnapshot ?: parent?.let { index.category(it.categoryId)?.iconColorHex } ?: template.categoryParentColorHexSnapshot ?: index.category(index.category(template.categoryId)?.parentCategoryId)?.iconColorHex ?: "#8A8A8E",
             code, limit, totalSpent, childLimit, limit.big().subtract(childLimit.big()).max(BigInteger.ZERO).clamped(),
             parent?.id ?: children.singleOrNull()?.plan?.id, parent?.id, if (onlyChild) emptyList() else children,
             budgetPace(totalSpent, limit, selectedMonth, referenceDate, zone))

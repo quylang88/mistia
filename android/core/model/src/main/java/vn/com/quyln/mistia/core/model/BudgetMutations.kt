@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface BudgetRepository {
     fun observeBudgetCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
+    fun observeBudgetCategoryMetadata(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>> = observeBudgetCategories(ownerUserId)
     fun observeBudgets(ownerUserId: UserId): Flow<List<BudgetPlanRecord>>
     suspend fun saveBudget(ownerUserId: UserId, draft: BudgetDraft, deviceId: String, now: String): Result<BudgetPlanRecord>
     suspend fun archiveBudget(ownerUserId: UserId, budgetId: RecordId, deviceId: String, now: String): Result<Unit>
@@ -60,7 +61,7 @@ fun BudgetDraft.toBudgetRecord(
         id = UUID.fromString(existing?.id ?: id ?: UUID.randomUUID().toString()).toString(),
         ownerUserId = owner,
         categoryId = category.id,
-        categoryIdSnapshot = category.id,
+        categoryIdSnapshot = category.canonicalSnapshotId,
         categoryNameSnapshot = category.name,
         categoryNameEnglishSnapshot = category.nameEnglish,
         categoryNameJapaneseSnapshot = category.nameJapanese,
@@ -69,7 +70,7 @@ fun BudgetDraft.toBudgetRecord(
         categoryPathJapaneseSnapshot = if (parent == null) category.nameJapanese else path(parent.nameJapanese, category.nameJapanese),
         categoryIconSymbolNameSnapshot = category.iconSymbolName,
         categoryColorHexSnapshot = category.iconColorHex,
-        categoryParentIdSnapshot = parent?.id,
+        categoryParentIdSnapshot = parent?.canonicalSnapshotId,
         categoryParentNameSnapshot = parent?.name,
         categoryParentNameEnglishSnapshot = parent?.nameEnglish,
         categoryParentNameJapaneseSnapshot = parent?.nameJapanese,

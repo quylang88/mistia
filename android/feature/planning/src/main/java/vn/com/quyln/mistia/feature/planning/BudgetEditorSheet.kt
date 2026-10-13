@@ -33,12 +33,19 @@ internal fun BudgetEditorSheet(
     plans: List<BudgetPlanRecord>,
     transactions: List<LedgerTransactionRecord>,
     language: CategoryNameLanguage,
+    categoryMetadata: List<TransactionCategoryRecord> = categories,
     onSave: suspend (BudgetDraft) -> Result<BudgetPlanRecord>,
     onArchive: suspend (String) -> Result<Unit>,
     onDelete: suspend (String) -> Result<Unit>,
     onDismiss: () -> Unit,
 ) {
     val zone = ZoneId.systemDefault()
+    val identity = remember(ownerId, categoryMetadata) { CategoryIdentityIndex(UserId(ownerId), categoryMetadata) }
+    fun branchCurrency(category: TransactionCategoryRecord?): String? {
+        val branchId = identity.logical(category?.parentCategoryId ?: category?.id) ?: return null
+        return budgetCurrencyConstraints(UserId(ownerId), plans, selectedMonth, zone, categoryMetadata)
+            .firstOrNull { it.logicalAllocation(identity).branchCategoryId == branchId }?.currencyCode
+    }
     val initial = remember(ownerId, plan?.id, selectedMonth) { BudgetEditorState.from(plan, selectedMonth, zone) }
     var state by rememberSaveable(ownerId, plan?.id, selectedMonth.toString(), stateSaver = BudgetEditorState.scopedSaver(ownerId)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
@@ -65,12 +72,12 @@ internal fun BudgetEditorSheet(
             }
             MistiaSectionCard(stringResource(R.string.planning_planning_budget)) {
                 Text(selectedMonth.toString(), style = MaterialTheme.typography.labelLarge)
-                val category = categories.firstOrNull { it.id == state.categoryId }
-                val parent = categories.firstOrNull { it.id == category?.parentCategoryId }
+                val category = identity.category(state.categoryId)
+                val parent = identity.category(category?.parentCategoryId)
                 val livePath = category?.let { selected ->
                     parent?.let { "${it.localizedBudgetName(language)} / ${selected.localizedBudgetName(language)}" } ?: selected.localizedBudgetName(language)
                 }
-                val label = (if (state.categoryId == plan?.categoryId) plan?.localizedBudgetPath(language) else null)
+                val label = (if (identity.logical(state.categoryId) == identity.logical(plan?.categoryId)) plan?.localizedBudgetPath(language) else null)
                     ?: livePath ?: stringResource(R.string.planning_planning_choose_category)
                 TextButton(onClick = { categoryPicker = true }, enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.category")) {
                     Text(label, modifier = Modifier.weight(1f))
@@ -79,9 +86,7 @@ internal fun BudgetEditorSheet(
                     label = { Text(stringResource(R.string.planning_planning_budget_amount)) }, suffix = { Text(state.currencyCode) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.amount"))
                 if (state.id == null) {
-                    val branchId=category?.parentCategoryId ?: category?.id
-                    val branchCurrency=budgetCurrencyConstraints(UserId(ownerId),plans,selectedMonth,zone).firstOrNull { budget ->
-                        budget.allocationSnapshot(categories.firstOrNull { it.id==budget.categoryId }).branchCategoryId==branchId }?.currencyCode
+                    val branchCurrency = branchCurrency(category)
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         listOf("JPY","VND").forEach { code -> FilterChip(selected=state.currencyCode==code,
                             enabled=!busy && (branchCurrency==null || branchCurrency==code),
@@ -126,18 +131,15 @@ internal fun BudgetEditorSheet(
         }
     }
     fun selectCategory(category: TransactionCategoryRecord) {
-        val branch = category.parentCategoryId ?: category.id
-        val branchCurrency = budgetCurrencyConstraints(UserId(ownerId), plans, selectedMonth, zone).firstOrNull { budget ->
-                budget.allocationSnapshot(categories.firstOrNull { it.id == budget.categoryId }).branchCategoryId == branch
-        }?.currencyCode
+        val branchCurrency = branchCurrency(category)
         state = state.selectCategory(category.id, branchCurrency)
         categoryPicker = false
     }
     if (categoryPicker) AlertDialog(onDismissRequest = { categoryPicker = false },
         title = { Text(stringResource(R.string.planning_planning_choose_category)) },
         text = {
-            val allowed = categories.filter { it.ownerUserId == ownerId && it.kind == TransactionCategoryKind.EXPENSE && !it.isBalanceAdjustmentSystemCategory &&
-                (!it.isArchived || it.id == plan?.categoryId || it.id == plan?.categoryParentIdSnapshot || it.id == categories.firstOrNull { category -> category.id == plan?.categoryId }?.parentCategoryId) }
+            val allowed = categories.filter { it.ownerUserId == ownerId && it.kind == TransactionCategoryKind.EXPENSE && it.deletedAt == null && !it.isBalanceAdjustmentSystemCategory &&
+                (!it.isArchived || identity.logical(it.id) == identity.logical(plan?.categoryId) || identity.logical(it.id) == identity.logical(plan?.categoryParentIdSnapshot) || identity.logical(it.id) == identity.logical(identity.category(plan?.categoryId)?.parentCategoryId)) }
             Column(Modifier.heightIn(max=440.dp)) {
                 Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     listOf(R.string.core_ui_mistiacategorypicker_all,R.string.core_ui_mistiacategorypicker_recent,R.string.core_ui_mistiacategorypicker_favorites).forEachIndexed { index,title ->
@@ -148,11 +150,11 @@ internal fun BudgetEditorSheet(
                 Column(Modifier.weight(1f,false).verticalScroll(rememberScrollState())) {
                     if (pickerMode==0) {
                         allowed.filter { it.hierarchyRole==CategoryHierarchyRole.PARENT }.forEach { parent ->
-                            val children=allowed.filter { it.parentCategoryId==parent.id }
+                            val children=allowed.filter { identity.logical(it.parentCategoryId)==identity.logical(parent.id) }
                             if (pickerSearch.isBlank() || parent.localizedBudgetName(language).contains(pickerSearch,true) || children.any { it.localizedBudgetName(language).contains(pickerSearch,true) }) {
-                                BudgetCategoryChoice(parent,language,false,parent.id==state.categoryId) { selectCategory(parent) }
+                                BudgetCategoryChoice(parent,language,false,identity.logical(parent.id)==identity.logical(state.categoryId)) { selectCategory(parent) }
                                 children.filter { pickerSearch.isBlank() || it.localizedBudgetName(language).contains(pickerSearch,true) || parent.localizedBudgetName(language).contains(pickerSearch,true) }.forEach { child ->
-                                    BudgetCategoryChoice(child,language,true,child.id==state.categoryId) { selectCategory(child) }
+                                    BudgetCategoryChoice(child,language,true,identity.logical(child.id)==identity.logical(state.categoryId)) { selectCategory(child) }
                                 }
                             }
                         }
@@ -160,7 +162,7 @@ internal fun BudgetEditorSheet(
                         val quick=budgetQuickCategories(UserId(ownerId),allowed,transactions,pickerMode==2,now,zone)
                             .filter { it.localizedBudgetName(language).contains(pickerSearch,true) }
                         if(quick.isEmpty()) Text(stringResource(if(pickerMode==2) R.string.core_ui_mistiacategorypicker_no_favorite_categories_yet else R.string.core_ui_mistiacategorypicker_no_recent_categories_yet))
-                        quick.forEach { category -> BudgetCategoryChoice(category,language,false,category.id==state.categoryId) { selectCategory(category) } }
+                        quick.forEach { category -> BudgetCategoryChoice(category,language,false,identity.logical(category.id)==identity.logical(state.categoryId)) { selectCategory(category) } }
                     }
                 }
             }

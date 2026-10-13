@@ -163,6 +163,65 @@ class BudgetPlanningTest {
         assertEquals(listOf(food.id,travel.id),budgetQuickCategories(UserId(OWNER_ID),listOf(parent,food,travel),records,false,reference,zone).map { it.id })
     }
 
+    @Test fun `iOS frozen canonical identity counts renamed live cloud category without changing snapshot`() {
+        val owner=UserId(OWNER_ID)
+        val parentId=SystemCategoryIdentity.cloudId("parent_expense_housing",owner)
+        val childId=SystemCategoryIdentity.cloudId("rent",owner)
+        val parent=category(parentId,"Renamed housing",null).copy(isSystem=true,systemKey="parent_expense_housing")
+        val child=category(childId,"Renamed rent",parentId).copy(isSystem=true,systemKey="rent")
+        val plan=budget().copy(categoryId=childId,categoryIdSnapshot=SystemCategoryIdentity.canonicalId("rent"),
+            categoryParentIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"),categoryNameEnglishSnapshot="Frozen title")
+        val before=plan.toPayload()
+        val projection=project(listOf(plan),listOf(transactionRecord().copy(categoryId=childId)),listOf(parent,child))
+        assertEquals(100,projection.branches.single().spentMinor)
+        assertEquals("Frozen title",projection.branches.single().name)
+        assertEquals(before,plan.toPayload())
+        val foreign=child.copy(id=SystemCategoryIdentity.cloudId("rent",UserId(OTHER_OWNER)),ownerUserId=OTHER_OWNER)
+        assertEquals(0,project(listOf(plan),listOf(transactionRecord().copy(categoryId=foreign.id)),listOf(parent,child,foreign)).totalSpentMinor)
+    }
+    @Test fun `canonical and cloud snapshots share one continuity plan and one summary branch`() {
+        val owner=UserId(OWNER_ID)
+        val parentId=SystemCategoryIdentity.cloudId("parent_expense_housing",owner)
+        val childId=SystemCategoryIdentity.cloudId("rent",owner)
+        val categories=listOf(category(parentId,"Housing",null).copy(isSystem=true,systemKey="parent_expense_housing"),
+            category(childId,"Rent",parentId).copy(isSystem=true,systemKey="rent"))
+        val old=budget().copy(categoryId=childId,categoryIdSnapshot=SystemCategoryIdentity.canonicalId("rent"),categoryParentIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"))
+        val current=old.copy(id=OTHER_BUDGET_ID,categoryIdSnapshot=childId,categoryParentIdSnapshot=parentId,monthAnchor="2026-09-30T15:00:00Z",limitMinor=2000)
+        val projection=project(listOf(old,current),emptyList(),categories)
+        assertEquals(1,projection.branches.size);assertEquals(2000,projection.totalLimitMinor)
+    }
+
+    @Test fun `canonical parent branch counts unbudgeted children once and keeps frozen display`() {
+        val owner=UserId(OWNER_ID)
+        val parentId=SystemCategoryIdentity.cloudId("parent_expense_housing",owner)
+        val rentId=SystemCategoryIdentity.cloudId("rent",owner)
+        val internetId=SystemCategoryIdentity.cloudId("internet",owner)
+        val categories=listOf(category(parentId,"New housing name",null).copy(isSystem=true,systemKey="parent_expense_housing"),
+            category(rentId,"New rent name",parentId).copy(isSystem=true,systemKey="rent"),
+            category(internetId,"New internet name",parentId).copy(isSystem=true,systemKey="internet",deletedAt=NOW))
+        val parent=budget().copy(categoryId=parentId,categoryIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"),
+            categoryIsParentSnapshot=true,categoryNameEnglishSnapshot="Frozen housing",limitMinor=2000)
+        val rent=budget().copy(id=OTHER_BUDGET_ID,categoryId=rentId,categoryIdSnapshot=rentId,categoryParentIdSnapshot=parentId)
+        val records=listOf(transactionRecord().copy(categoryId=rentId),transactionRecord().copy(id=TX2,categoryId=internetId,amountMinor=200))
+        val projection=project(listOf(parent,rent),records,categories)
+        assertEquals(1,projection.branches.size)
+        assertEquals(2000,projection.totalLimitMinor)
+        assertEquals(300,projection.totalSpentMinor)
+        assertEquals(100,projection.branches.single().children.single().spentMinor)
+        assertEquals("Frozen housing",projection.branches.single().name)
+    }
+    @Test fun `logical aliases preserve actual custom IDs and foreign owner boundaries`() {
+        val owner=UserId(OWNER_ID)
+        val legacy=category(CATEGORY_ID,"Rent",PARENT_ID).copy(isSystem=true,systemKey="rent",deletedAt=NOW)
+        val custom=category(OTHER_CHILD_ID,"Custom rent",PARENT_ID).copy(systemKey="rent",isSystem=false)
+        val foreign=legacy.copy(id=SystemCategoryIdentity.cloudId("rent",UserId(OTHER_OWNER)),ownerUserId=OTHER_OWNER)
+        val index=CategoryIdentityIndex(owner,listOf(legacy,custom,foreign))
+        assertEquals(SystemCategoryIdentity.canonicalId("rent"),index.logical(legacy.id))
+        assertEquals(legacy,index.category(SystemCategoryIdentity.cloudId("rent",owner)))
+        assertEquals(custom.id,index.logical(custom.id))
+        assertEquals(foreign.id,index.logical(foreign.id))
+    }
+
     private fun project(plans:List<BudgetPlanRecord>, records:List<LedgerTransactionRecord>, categories:List<TransactionCategoryRecord> = emptyList(), rates:List<ExchangeRateSnapshot> = emptyList()) =
         projectBudgets(UserId(OWNER_ID),plans,categories,records,emptyList(),october,reference,zone,rates,
             CategoryNameLanguage.ENGLISH,setOf("Balance adjustment"),"JPY")

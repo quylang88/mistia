@@ -1379,3 +1379,22 @@ Evidence: `docs/android/evidence/2026-10-13-system-category-bootstrap-local.md`.
 
 Evidence: `docs/android/evidence/2026-10-13-system-category-seed-sync-guard.md`.
 Next: `docs/superpowers/plans/2026-10-13-android-system-category-logical-identity.md`.
+
+## Cross-platform system category identity in budgets — 2026-10-13
+
+- [x] Owner-scoped canonical/cloud/legacy comparison index; wire FKs and frozen
+  display metadata preserved. New system snapshots use Swift canonical IDs.
+- [x] Continuity, branch spending/totals, allocation cap, duplicate/auto-parent,
+  single-currency guard, family propagation/reset and native form inheritance
+  handle imported iOS IDs. Custom IDs and foreign owners remain isolated.
+- [x] Complete category metadata includes tombstones for historical comparisons;
+  deleted categories stay out of pickers and cannot be saved as dependencies.
+- [x] Runtime RED: six identity failures and one UUID casing failure; final
+  550 JVM tests/70 suites, 56 Swift tests, Room/UI test compilation, lint/build,
+  contract and localization checks pass. All eight write gates false.
+- [ ] Legacy different-ID/system-key reconciliation still required before startup
+  seeding. Next: owner-scoped remote system-key lookup, then atomic reference
+  reconciliation. Native bills/payment/maintenance and APK2–4 remain incomplete.
+
+VersionCode14; ADB empty; no physical/UI runtime or live Supabase verification.
+Evidence: `docs/android/evidence/2026-10-13-budget-category-logical-identity.md`.

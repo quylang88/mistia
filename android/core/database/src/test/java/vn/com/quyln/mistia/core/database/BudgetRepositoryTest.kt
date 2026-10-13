@@ -237,6 +237,100 @@ class BudgetRepositoryTest {
         assertEquals(1,repo.observeBudgets(owner).first().size)
     }
 
+    private suspend fun seedSystemCategories() {
+        seedCategories()
+        repo.observeCategories(owner).first().forEach { category ->
+            val system=category.copy(isSystem=true,systemKey=when(category.id) {PARENT -> "parent_expense_housing";CHILD -> "rent";else -> "internet"})
+            store.commitMutation(system.toCloudRecord(),system.bootstrapMutation())
+        }
+    }
+    @Test fun `imported canonical branch snapshot still rejects another currency`()=runTest {
+        seedSystemCategories()
+        val saved=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow().copy(categoryIdSnapshot=SystemCategoryIdentity.canonicalId("rent"),categoryParentIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"))
+        store.commitMutation(saved.toCloudRecord(),pending(saved))
+        val error=repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,currencyCode="VND"),DEVICE,NOW).exceptionOrNull()
+        assertTrue(error is BudgetValidationException)
+        assertEquals(BudgetValidationError.BRANCH_CURRENCY_MISMATCH,(error as BudgetValidationException).reason)
+        assertEquals(1,repo.observeBudgets(owner).first().size)
+    }
+    @Test fun `imported canonical parent snapshot still enforces child cap`()=runTest {
+        seedSystemCategories()
+        val saved=repo.saveBudget(owner,draft().copy(id=PARENT_BUDGET,categoryId=PARENT,limitMinor=100),DEVICE,NOW).getOrThrow()
+            .copy(categoryIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"))
+        store.commitMutation(saved.toCloudRecord(),pending(saved))
+        val error=repo.saveBudget(owner,draft().copy(limitMinor=101),DEVICE,NOW).exceptionOrNull()
+        assertTrue(error is BudgetValidationException)
+        assertEquals(BudgetValidationError.ALLOCATION_EXCEEDED,(error as BudgetValidationException).reason)
+    }
+    @Test fun `last canonical snapshot budget disables actual wire parent family flag`()=runTest {
+        seedSystemCategories()
+        val parent=repo.observeCategories(owner).first().single {it.id==PARENT}.copy(familyBudgetSpendingEnabled=true)
+        store.commitMutation(parent.toCloudRecord(),parent.bootstrapMutation())
+        val saved=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow().copy(categoryIdSnapshot=SystemCategoryIdentity.canonicalId("rent"),categoryParentIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"))
+        store.commitMutation(saved.toCloudRecord(),pending(saved))
+        repo.deleteBudget(owner,RecordId(saved.id),DEVICE,NOW).getOrThrow()
+        assertFalse(repo.observeCategories(owner).first().single {it.id==PARENT}.familyBudgetSpendingEnabled)
+    }
+    @Test fun `new system budget snapshots canonical identity while live FK remains actual record id`()=runTest {
+        seedSystemCategories()
+        val saved=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow()
+        assertEquals(CHILD,saved.categoryId)
+        assertEquals(SystemCategoryIdentity.canonicalId("rent"),saved.categoryIdSnapshot)
+        assertEquals(SystemCategoryIdentity.canonicalId("parent_expense_housing"),saved.categoryParentIdSnapshot)
+    }
+
+    @Test fun `tombstone metadata survives for currency checks but never enters picker or mutation`()=runTest {
+        seedSystemCategories()
+        val saved=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow()
+        val child=repo.observeCategories(owner).first().single {it.id==CHILD}.copy(deletedAt=NOW)
+        store.commitMutation(child.toCloudRecord(),child.bootstrapMutation().copy(kind=MutationKind.DELETE))
+        assertFalse(repo.observeBudgetCategories(owner).first().any {it.id==CHILD})
+        assertTrue(repo.observeBudgetCategoryMetadata(owner).first().any {it.id==CHILD && it.deletedAt==NOW})
+        val raw=saved.copy(categoryIdSnapshot=CHILD,categoryParentIdSnapshot=PARENT)
+        store.commitMutation(raw.toCloudRecord(),pending(raw))
+        val error=repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,currencyCode="VND"),DEVICE,NOW).exceptionOrNull()
+        assertEquals(BudgetValidationError.BRANCH_CURRENCY_MISMATCH,(error as BudgetValidationException).reason)
+        assertTrue(repo.saveBudget(owner,draft(),DEVICE,NOW).isFailure)
+        assertEquals(child,TransactionCategoryRecord.fromCloudRecord(store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,CHILD)!!))
+    }
+    @Test fun `viewer envelope foreign system metadata cannot alias owned category`()=runTest {
+        seedSystemCategories()
+        val foreign=repo.observeCategories(owner).first().single {it.id==CHILD}
+            .copy(id=SystemCategoryIdentity.cloudId("rent",UserId(OTHER)),ownerUserId=OTHER)
+        val viewer=foreign.toCloudRecord().copy(ownerUserId=OWNER,payload=JsonObject(foreign.toPayload()+ ("sync_version" to JsonPrimitive("malformed foreign version"))))
+        store.replacePullSnapshot(owner,CloudEntity.TRANSACTION_CATEGORY.table,
+            repo.observeBudgetCategoryMetadata(owner).first().map {it.toCloudRecord()}+viewer)
+        val metadata=repo.observeBudgetCategoryMetadata(owner).first()
+        assertEquals(3,metadata.size)
+        assertEquals(foreign.id,CategoryIdentityIndex(owner,metadata).logical(foreign.id))
+        assertTrue(repo.saveBudget(owner,draft().copy(categoryId=foreign.id),DEVICE,NOW).isFailure)
+    }
+    @Test fun `system canonical parent prevents duplicate auto parent and propagates family to legacy child`()=runTest {
+        seedSystemCategories()
+        val child=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow()
+            .copy(categoryIdSnapshot=CHILD,categoryParentIdSnapshot=PARENT)
+        store.commitMutation(child.toCloudRecord(),pending(child))
+        val parent=repo.saveBudget(owner,draft().copy(id=PARENT_BUDGET,categoryId=PARENT,limitMinor=1500),DEVICE,NOW).getOrThrow()
+        val parentCategory=repo.observeCategories(owner).first().single {it.id==PARENT}.copy(familyBudgetSpendingEnabled=true)
+        store.commitMutation(parentCategory.toCloudRecord(),parentCategory.bootstrapMutation())
+        repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2),DEVICE,NOW).getOrThrow()
+        val plans=repo.observeBudgets(owner).first()
+        assertEquals(3,plans.size)
+        assertEquals(parent.id,plans.single {it.categoryId==PARENT}.id)
+        assertTrue(plans.all {it.includesFamilySpending})
+        assertEquals(SystemCategoryIdentity.canonicalId("rent"),plans.single {it.id==child.id}.categoryIdSnapshot)
+    }
+
+    @Test fun `metadata accepts UUID casing already normalized by typed category contract`()=runTest {
+        val scoped=UserId("abcdefab-cdef-abcd-efab-cdefabcdefab")
+        val category=CategoryDraft(id=PARENT,name="Housing",kind=TransactionCategoryKind.EXPENSE,hierarchyRole=CategoryHierarchyRole.PARENT)
+            .toMutation(scoped,null,null,DEVICE,NOW).record
+        val wire=category.toCloudRecord().copy(payload=JsonObject(category.toPayload()+ ("user_id" to JsonPrimitive(scoped.value.uppercase()))))
+        store.replacePullSnapshot(scoped,CloudEntity.TRANSACTION_CATEGORY.table,listOf(wire))
+        assertEquals(listOf(category),repo.observeBudgetCategoryMetadata(scoped).first())
+        assertTrue(repo.saveBudget(scoped,draft().copy(categoryId=PARENT),DEVICE,NOW).isSuccess)
+    }
+
     private fun draft() = BudgetDraft(id = BUDGET, categoryId = CHILD, monthAnchor = NOW,
         limitMinor = 500, currencyCode = "JPY", rolloverEnabled = true, zoneId = zone)
 

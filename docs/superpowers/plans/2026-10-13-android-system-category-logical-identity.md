@@ -10,27 +10,27 @@ IDs for the same owned logical system category. Verify with runtime RED before
 changing code; do not rely on translated name fallback to hide the mismatch.
 
 ## Next bounded slice: canonical comparisons, unchanged wire references
-- [ ] RED pure projection tests using actual factory system records: frozen
+- [x] RED pure projection tests using actual factory system records: frozen
   canonical ID versus live cloud ID, renamed live category (so name fallback
   cannot mask failure), active continuity/carry-forward and parent totals.
-- [ ] RED repository tests: imported canonical parent/child snapshots enforce
+- [x] RED repository tests: imported canonical parent/child snapshots enforce
   the approved single-currency branch rule and parent cap; final current-budget
   deletion disables the actual wire parent family flag. Metadata for tombstoned
   system categories and foreign-owner isolation must be covered.
-- [ ] Add owner-scoped logical identity index from typed system category metadata
+- [x] Add owner-scoped logical identity index from typed system category metadata
   (canonical, owner cloud and actual legacy IDs). Custom IDs remain unchanged.
   Normalize comparison/grouping only; preserve live FK/wire IDs and frozen names,
   colors, amounts, versions. New system budget snapshot identity should match
   Swift canonical local identity. Check all allocation/currency/auto-parent/
   family propagation/delete call sites and editor branch currency inheritance.
-- [ ] Obtain complete category metadata including tombstones for projection and
+- [x] Obtain complete category metadata including tombstones for projection and
   repository checks, while native pickers continue to exclude deleted records.
   Preserve existing observeBudgetCategories UI contract or add separate metadata
   API. Source user_id owner filtering remains strict despite viewer envelopes.
-- [ ] Review direct Swift budgetBranchRows/reportedExpense/category mapping for
+- [x] Review direct Swift budgetBranchRows/reportedExpense/category mapping for
   frozen hierarchy and any name fallback before claiming parity. Cover no double
   counting and immutable snapshots with regression tests.
-- [ ] Full Android/Swift/contract/localization/Room/lint/build checks, evidence,
+- [x] Full Android/Swift/contract/localization/Room/lint/build checks, evidence,
   progress and commit. All eight write gates false, no production writes.
 
 ## After comparisons: legacy identity reconciliation before startup
