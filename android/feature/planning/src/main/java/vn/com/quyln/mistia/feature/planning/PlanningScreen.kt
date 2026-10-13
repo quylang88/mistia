@@ -52,8 +52,13 @@ fun PlanningScreen(
     var cycleBusy by remember(ownerUserId.value) {mutableStateOf(false)}
     var cycleError by remember(ownerUserId.value) {mutableStateOf(false)}
     val cycleScope=rememberCoroutineScope()
-    val bills by repository.observeRecurringBills(ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val occurrences by repository.observeDueOccurrences(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val billSnapshot by repository.observeRecurringBills(ownerUserId).collectAsStateWithLifecycle(initialValue=null)
+    val occurrenceSnapshot by repository.observeDueOccurrences(ownerUserId).collectAsStateWithLifecycle(initialValue=null)
+    val bills=billSnapshot.orEmpty()
+    val occurrences=occurrenceSnapshot.orEmpty()
+    var paymentNavigation by rememberSaveable(ownerUserId.value,stateSaver=BillPaymentNavigation.saver(ownerUserId.value)) {
+        mutableStateOf(BillPaymentNavigation(ownerUserId.value,null,YearMonth.now().toString()))
+    }
     var billNavigation by rememberSaveable(ownerUserId.value,stateSaver=RecurringBillNavigationState.saver(ownerUserId.value)) {
         mutableStateOf(RecurringBillNavigationState(ownerUserId.value,false,null))
     }
@@ -157,6 +162,11 @@ fun PlanningScreen(
                     Text("${stringResource(R.string.planning_planning_payment_date)}: ${row.paymentStartDate.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")
                     if(row.hasExplicitDueDate) Text("${stringResource(R.string.planning_planning_deadline)}: ${row.dueDate.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")
                     row.autoPayDate?.let {Text("${stringResource(R.string.planning_planning_auto_pay_date)}: ${it.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")}
+                    if(!row.bill.isArchived && row.bill.deletedAt==null && row.status!=DueStatus.SKIPPED) TextButton(
+                        enabled=!cycleBusy,onClick={paymentNavigation=paymentNavigation.copy(billId=row.bill.id,month=month.toString(),undo=row.status==DueStatus.PAID)},
+                        modifier=Modifier.testTag("bill.pay.${row.bill.id}")) {
+                        Text(stringResource(if(row.status==DueStatus.PAID) R.string.planning_duepayment_undo_payment else R.string.planning_planning_pay))
+                    }
                     if(!row.bill.isArchived && row.bill.deletedAt==null && row.status!=DueStatus.PAID) TextButton(
                         enabled=!cycleBusy,onClick={cycleError=false;cycleAction=Triple(row.bill.id,month.toString(),row.status==DueStatus.SKIPPED)},
                         modifier=Modifier.testTag("bill.skip.${row.bill.id}")) {
@@ -173,6 +183,21 @@ fun PlanningScreen(
             item {Button(onClick={billNavigation=billNavigation.copy(payload=null,open=true)},modifier=Modifier.fillMaxWidth().testTag("bill.add")) {Text(stringResource(R.string.planning_planning_add_bill))}}
             }
         }
+    }
+    val paymentMonth=YearMonth.parse(paymentNavigation.month)
+    val paymentRow=recurringBillDueRows(ownerUserId,bills,occurrences,paymentMonth,zone).firstOrNull {
+        it.bill.id==paymentNavigation.billId && !it.bill.isArchived && it.bill.deletedAt==null &&
+            it.status==if(paymentNavigation.undo) DueStatus.PAID else DueStatus.PENDING
+    }
+    LaunchedEffect(paymentNavigation,billSnapshot,occurrenceSnapshot) {
+        if(paymentNavigation.billId!=null && billSnapshot!=null && occurrenceSnapshot!=null && paymentRow==null)
+            paymentNavigation=paymentNavigation.copy(billId=null)
+    }
+    if(paymentRow!=null && billSnapshot!=null && occurrenceSnapshot!=null) key(ownerUserId.value,paymentRow.bill.id,paymentMonth,paymentNavigation.undo) {
+        BillPaymentSheet(ownerUserId.value,paymentRow,paymentMonth,goalWallets,paymentNavigation.undo,
+            onPay={repository.payRecurringBill(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
+            onUndo={repository.undoRecurringBillPayment(ownerUserId,RecordId(paymentRow.bill.id),paymentMonth,deviceIdProvider(),Instant.now().toString())},
+            onDismiss={paymentNavigation=paymentNavigation.copy(billId=null)},category=categories.firstOrNull {it.id==paymentRow.bill.categoryId && it.ownerUserId==ownerUserId.value})
     }
     cycleAction?.let {action ->
         val title=if(action.third) R.string.planning_duepayment_undo_skip else R.string.planning_duepayment_skip_this_month

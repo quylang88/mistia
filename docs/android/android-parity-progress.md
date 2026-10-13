@@ -1532,3 +1532,20 @@ Evidence: `docs/android/evidence/2026-10-13-swift-investment-migration-plan.md`.
 
 VersionCode20; nine write flagsfalse. Evidence:
 `docs/android/evidence/2026-10-13-atomic-bill-payments.md`.
+
+
+## Native bill payment / undo UI — 2026-10-13
+
+- [x] Pending Pay /paid Undo sheet actions, exact confirmed amount and captured
+  month/wallet; nil amount input, owned same-currency selector, localized errors,
+  busy/retry/discard and archived/skip suppression. Category icon/color/date window.
+- [x] Owner/bill/month saved form/navigation and coroutine lifecycle guard;
+  restore waits for source and occurrence loading. Stale source/status refuses.
+- [x]6 new JVM tests,630 total/76 suites green;4 new Compose tests compile,
+  full Android lint/build/Room/UI compile and Swift Planning53 pass. Review noP1/P2.
+- [ ] Device UI/visual checks not run: ADB empty. Investment/shared/receipt cleanup,
+  category reconciliation/startup, maintenance, cards/installments, settings,
+  APK3–4 remain open; full goal continues.
+
+VersionCode21, nine write gatesfalse. Evidence:
+`docs/android/evidence/2026-10-13-native-bill-payments.md`.

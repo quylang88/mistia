@@ -47,3 +47,10 @@ system-key/icon/fallback behavior compared directly with Swift. Room SQL rollbac
 and reopen/race tests compile but await device execution. Native UI is next;
 investment/shared/receipt cleanup remains explicitly unavailable and guarded.
 Evidence: docs/android/evidence/2026-10-13-atomic-bill-payments.md.
+
+
+2026-10-13 native checkpoint: pay/undo sheet/actions are implemented and verified
+with6 new JVM tests/full630 Android,4 compiled Compose tests and53 Swift Planning
+cases. Confirmed amounts are explicit request overrides to preserve user intent
+across concurrent source edits. Device UI/visual QA and investment/shared/receipt
+cleanup remain open. Continue legacy system-category reconciliation/startup next.
