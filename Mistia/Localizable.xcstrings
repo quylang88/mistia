@@ -1,19 +1,6 @@
 {
   "sourceLanguage" : "vi",
   "strings" : {
-    "" : {
-
-    },
-    "%@ %@" : {
-      "localizations" : {
-        "vi" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@"
-          }
-        }
-      }
-    },
     "app.mistia.loadingYourData" : {
       "extractionState" : "stale",
       "localizations" : {

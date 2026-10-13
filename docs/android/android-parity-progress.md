@@ -1130,3 +1130,13 @@ cloud-write flags remain `false`; APK 2 remains incomplete.
 
 Evidence:
 `docs/android/evidence/2026-09-25-apk2-budget-typed-contract.md`.
+
+## Shared localization baseline repair — 2026-10-13
+
+- [x] Restored Android and strict Swift localization checks after starting
+  HEAD 82a9313 added two invalid automatically extracted catalog keys.
+- [x] Removed only the empty/untranslated entries; existing translations,
+  generated output and iOS runtime source are unchanged.
+
+Evidence: `docs/android/evidence/2026-10-13-localization-baseline-repair.md`.
+APK 2–4 remain incomplete; all financial cloud-write gates remain disabled.
