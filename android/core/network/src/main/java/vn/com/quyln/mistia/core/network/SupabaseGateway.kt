@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.core.network
 
 import java.io.IOException
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -10,6 +11,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -23,6 +25,8 @@ import vn.com.quyln.mistia.core.model.RemotePage
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.RemoteStore
 import vn.com.quyln.mistia.core.model.UserId
+import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.SystemCategoryPage
 
 private val POSTGREST_JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
@@ -84,6 +88,59 @@ class SupabasePostgrestRemoteStore(
                 ?.mapNotNull { it as? JsonObject }
                 .orEmpty()
             RemotePage(records = records, nextOffset = if (records.size == limit) offset + limit else null)
+        }
+    }
+
+    override suspend fun fetchSystemCategoryPage(
+        systemKey: String,
+        accessToken: String,
+        ownerUserId: UserId,
+        offset: Int,
+        limit: Int,
+    ): SystemCategoryPage = withContext(Dispatchers.IO) {
+        require(systemKey.matches(Regex("[a-z][a-z0-9_]{0,127}"))) { "Invalid system category key" }
+        require(accessToken.isNotBlank()) { "Access token cannot be blank" }
+        require(ownerUserId.value.matches(Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")))
+        val owner = UserId(UUID.fromString(ownerUserId.value).toString())
+        require(offset >= 0 && limit in 1..1_000 && offset <= Int.MAX_VALUE - limit) { "Invalid system category page range" }
+        val url = tableUrl(CloudEntity.TRANSACTION_CATEGORY)
+            .addQueryParameter("select", "*")
+            .addQueryParameter("user_id", "eq.${owner.value}")
+            .addQueryParameter("system_key", "eq.$systemKey")
+            .addQueryParameter("is_system", "eq.true")
+            .addQueryParameter("order", "id.asc")
+            .build()
+        val request = authorizedRequest(url.toString(), accessToken)
+            .header("Prefer", "count=exact")
+            .header("Range-Unit", "items")
+            .header("Range", "$offset-${offset + limit - 1}")
+            .get().build()
+        client.newCall(request).execute().use { response ->
+            val rows = response.requireObjectRows(strict = true)
+            require(rows.size <= limit) { "System category response exceeded requested page" }
+            val records = rows.map { payload ->
+                val version = (payload["sync_version"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull
+                require(version != null && version >= 0) { "Invalid system category version" }
+                val system = (payload["is_system"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull
+                require(system == true && payload.string("system_key") == systemKey) { "System category key does not match request" }
+                payload.toCloudRecord(CloudEntity.TRANSACTION_CATEGORY, owner).also { record ->
+                    val decoded = TransactionCategoryRecord.fromCloudRecord(record)
+                    require(decoded.id == record.id && decoded.ownerUserId == owner.value && decoded.isSystem && decoded.systemKey == systemKey)
+                }
+            }
+            // Exact range metadata detects a server page cap below our requested limit.
+            val range = requireNotNull(response.header("Content-Range")) { "Missing system category range" }
+            val parts = range.split('/')
+            require(parts.size == 2)
+            val total = requireNotNull(parts[1].toIntOrNull()) { "Missing exact system category count" }
+            require(total >= 0)
+            val consumed = offset + records.size
+            if (records.isEmpty()) {
+                require(parts[0] == "*" && offset >= total) { "Empty system category page before end" }
+            } else {
+                require(parts[0] == "$offset-${consumed - 1}" && consumed <= total) { "Inconsistent system category range" }
+            }
+            SystemCategoryPage(records, if (consumed < total) consumed else null)
         }
     }
 
@@ -183,13 +240,16 @@ class SupabasePostgrestRemoteStore(
         require(payload.string("user_id") == ownerUserId.value) { "Mutation payload owner does not match request" }
     }
 
-    private fun Response.requireObjectRows(): List<JsonObject> {
+    private fun Response.requireObjectRows(strict: Boolean = false): List<JsonObject> {
         val raw = body.string()
         if (!isSuccessful) throw SupabaseHttpException(code, raw)
-        if (raw.isBlank()) return emptyList()
-        return (json.parseToJsonElement(raw) as? JsonArray)
-            ?.mapNotNull { it as? JsonObject }
-            ?: error("Supabase response was not a JSON array")
+        if (raw.isBlank()) {
+            check(!strict) { "Supabase response was empty" }
+            return emptyList()
+        }
+        val rows = json.parseToJsonElement(raw) as? JsonArray ?: error("Supabase response was not a JSON array")
+        return if (strict) rows.map { it as? JsonObject ?: error("Supabase response contained a non-object row") }
+            else rows.mapNotNull { it as? JsonObject }
     }
 
     private fun JsonObject.toCloudRecord(entity: CloudEntity, ownerUserId: UserId): CloudRecord {

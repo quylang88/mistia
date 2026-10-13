@@ -320,7 +320,18 @@ interface RemoteStore {
     ): RemotePage
 }
 
+data class SystemCategoryPage(val records: List<CloudRecord>, val nextOffset: Int?)
+
 interface RemoteMutationStore {
+    /** Includes legacy IDs and tombstones; consume nextOffset until null before reconciling. */
+    suspend fun fetchSystemCategoryPage(
+        systemKey: String,
+        accessToken: String,
+        ownerUserId: UserId,
+        offset: Int,
+        limit: Int,
+    ): SystemCategoryPage = throw UnsupportedOperationException("System category key lookup is unavailable")
+
     suspend fun fetchRecord(
         entity: CloudEntity,
         recordId: String,

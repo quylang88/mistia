@@ -44,3 +44,39 @@ and frozen display metadata. Test stale responses, create race, foreign viewer
 rows, tombstones and referenced offline user records. Only after these paths are
 verified should MainActivity startup pull/bootstrap be wired. Then return to
 native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remains.
+
+
+## Owner-key lookup prerequisite completed
+- [x] Typed owner/system-key page lookup includes legacy IDs/tombstones and exact
+  range continuation; invalid/foreign/malformed pages fail closed.
+- [x] Runtime RED4/GREEN10 HTTPS tests, 560 JVM/21 Swift, lint/build/Room/UI
+  compilation and contract/l10n checks; committed as a separate read-only slice.
+
+## Next atomic reconciliation acceptance
+- [ ] Test an untouched queued owner-cloud seed against a different-ID owned
+  remote row of the same system key. A normal same-ID ACK is prohibited.
+- [ ] Decide canonical winner from complete pages using direct Swift priority
+  review; preserve active versus tombstone semantics. Do not synthesize an
+  unpersisted remote wire ID or silently discard duplicate remote candidates.
+- [ ] Within one Room transaction, compare exact queued seed and current record
+  before replacing it. Reject stale response or occupied target with newer local
+  edits; preserve every newer mutation. Retry from fresh metadata instead.
+- [ ] Repoint owned category parent_category_id and ledger/budget/bill category_id
+  from old wire ID to selected actual remote ID. Preserve frozen budget display
+  fields/identity and unknown payload fields, amounts, currency and versions.
+  Preserve current dependent edits/base versions and tombstone mutation kinds;
+  ensure every required dependent change has an atomic matching outbox mutation.
+- [ ] Source user_id filtering must precede any payload rewrite despite viewer
+  envelopes. Handle references in archived/deleted records and any foreign
+  reference/occupied identity without destructive cross-owner writes.
+- [ ] Audit pending category translation tasks and stale in-flight translations:
+  reference/timestamp changes must not drop untranslated user edits or allow old
+  responses to overwrite a replacement. Owner scope and retry remain intact.
+- [ ] Tests for record/outbox rollback, reopen, stale queued seed, stale dependent
+  edit, deleted remote, changed target, same-key duplicate, child parent rewrite,
+  archived/deleted references, foreign viewer scope and exact monetary payloads.
+- [ ] Integrate owner-key lookup/reconciliation before category create and again
+  after create409; account cancellation and gate-off must produce zero requests.
+  Explicitly edited offline seeds need preservation/reconciliation coverage too.
+- [ ] Only enable startup pull/bootstrap once these paths are proven. Then resume
+  native bill UI/payment/maintenance and remaining APK2–4 without waiting for ADB.

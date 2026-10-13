@@ -1398,3 +1398,19 @@ Next: `docs/superpowers/plans/2026-10-13-android-system-category-logical-identit
 
 VersionCode14; ADB empty; no physical/UI runtime or live Supabase verification.
 Evidence: `docs/android/evidence/2026-10-13-budget-category-logical-identity.md`.
+
+## Owner/system-key remote lookup — 2026-10-13
+
+- [x] Read-only paginated system-category lookup with explicit owner/key/system
+  filters, stable ID order, exact-count range cursor, legacy IDs and tombstones.
+- [x] Reject foreign/wrong-key/custom rows, malformed/missing rows or count,
+  overfull/inconsistent pages, invalid scope/range/key and invalid Long versions.
+  No rows are silently dropped before later identity reconciliation.
+- [x] Runtime RED4, GREEN10 HTTPS mock tests. Final 560 JVM tests/71 suites,
+  21 focused Swift tests, Room/UI test compilation, lint/build, contract/l10n
+  and diff checks passed. VersionCode15, all eight write gates false, ADB empty.
+- [ ] Atomic reference/outbox reconciliation and coordinator integration next;
+  lookup remains uncalled by startup. Then bootstrap integration and native
+  bills/payment/maintenance, remaining APK2–4 and final physical verification.
+
+Evidence: `docs/android/evidence/2026-10-13-system-category-key-lookup.md`.
