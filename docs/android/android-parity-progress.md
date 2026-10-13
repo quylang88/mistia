@@ -1478,3 +1478,22 @@ VersionCode17, eight gates false, no production writes. Evidence:
 
 VersionCode18; nine write flagsfalse; ADB empty; no production writes.
 Evidence: `docs/android/evidence/2026-10-13-due-occurrence-push.md`.
+
+## Bill payment same-currency policy on Android and Swift — 2026-10-13
+
+- [x] User explicitly requires wallet currency to equal bill currency on BOTH
+  platforms. Shared predicates, wallet picker/default filtering and persistence
+  guards implemented in existing flows; errors localizedvi/en/ja.
+- [x] Swift manual payment and auto-pay blocked before money writes. Reviewer
+  found auto-pay bypass; simulatorRED/real SwiftDataGREEN verifies correction.
+- [x] Android bill save enforces retained currency, mismatched defaults rejected;
+  actual Android pay repository still requires implementation using this helper.
+- [x]601 Android JVM tests,53 shared Swift planning tests and2 iOS Simulator
+  integration tests pass. iOS build +Android lint/build/Room/UI compile pass.
+- [ ] Full SwiftPM601tests has1 reproducible V7 migration fixture failure:
+  testV7InvestmentStoreMigratesWithoutOpeningPositionOrFees, CoreData134504.
+  Diagnose next; do not claim full Swift green or production migration proof.
+- [ ] Android payment/undo +remaining APK2–4/default-category startup/physical
+  gates remain incomplete. ADB empty; nine write flagsfalse; no productionwrites.
+
+VersionCode19. Evidence:`docs/android/evidence/2026-10-13-bill-same-currency.md`.

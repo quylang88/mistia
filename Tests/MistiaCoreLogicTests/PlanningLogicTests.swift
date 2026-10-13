@@ -4,6 +4,13 @@ import XCTest
 final class PlanningLogicTests: XCTestCase {
     private let calendar = Calendar(identifier: .gregorian)
 
+    func testBillPaymentWalletRequiresSameNonemptyCurrency() {
+        XCTAssertFalse(PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: "VND", walletCurrencyCode: "JPY"))
+        XCTAssertTrue(PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: "jpy", walletCurrencyCode: " JPY "))
+        XCTAssertTrue(PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: "VND", walletCurrencyCode: "VND"))
+        XCTAssertFalse(PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: "", walletCurrencyCode: ""))
+    }
+
     func testMonthKeyAndScheduledDateUseJapanLocalCalendarAtUTCBoundary() throws {
         let japanCalendar = MistiaCalendar.gregorian(
             locale: Locale(identifier: "ja_JP"),

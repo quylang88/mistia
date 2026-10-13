@@ -245,6 +245,24 @@ class RecurringBillRepositoryTest {
         assertEquals(listOf(skipped),repo.observeDueOccurrences(owner).first())
     }
 
+    @Test fun `new bill cannot select payment wallet with different currency`()=runTest {
+        val draft=draft()
+        val wallet=repo.saveWallet(owner,WalletDraft(name="VND cash",kind=WalletKind.CASH,currencyCode="VND"),device,now).getOrThrow()
+        val failure=repo.saveRecurringBill(owner,draft.copy(paymentWalletId=wallet.id),device,now).exceptionOrNull()
+        assertTrue(failure is RecurringBillValidationException)
+        assertEquals("WALLET_CURRENCY_MISMATCH",(failure as RecurringBillValidationException).reason.name)
+        assertTrue(repo.observeRecurringBills(owner).first().isEmpty())
+        assertFalse(store.outboxRows(owner.value).any {it.entity==CloudEntity.RECURRING_BILL_PLAN})
+        assertTrue(repo.saveRecurringBill(owner,draft.copy(paymentWalletId=wallet.id,currencyCode="VND"),device,now).isSuccess)
+    }
+    @Test fun `editing bill cannot change its retained currency to bypass wallet rule`()=runTest {
+        val draft=draft()
+        val saved=repo.saveRecurringBill(owner,draft,device,now).getOrThrow()
+        val wallet=repo.saveWallet(owner,WalletDraft(name="VND cash",kind=WalletKind.CASH,currencyCode="VND"),device,now).getOrThrow()
+        assertTrue(repo.saveRecurringBill(owner,draft.copy(editingExisting=true,paymentWalletId=wallet.id,currencyCode="VND"),device,later).isFailure)
+        assertEquals(saved,repo.observeRecurringBills(owner).first().single())
+    }
+
     private fun occurrence(bill:RecurringBillPlanRecord,month:String,status:String)=DueOccurrenceRecord(
         "77777777-7777-7777-7777-777777777777",owner.value,"recurringBill",bill.id,month,now,bill.amountMinor,status,
         null,null,now,now,null,0,device)

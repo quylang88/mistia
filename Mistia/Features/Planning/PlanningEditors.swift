@@ -1086,7 +1086,9 @@ struct PlanningBillEditorSheet: View {
             preferredWalletIDs: preferredWalletIDs,
             ownerUserID: billOwnerUserID,
             excludesCreditCards: false
-        )
+        ).filter { PlanningLogic.billPaymentWalletIsEligible(
+            billCurrencyCode: activeCurrencyCode, walletCurrencyCode: $0.currencyCode
+        ) }
     }
 
     private var billOwnerUserID: UUID? {
@@ -1401,6 +1403,13 @@ struct PlanningBillEditorSheet: View {
 
         guard let wallet = storedWallets.first(where: { $0.id == draft.paymentWalletID }) else {
             alertMessage = L10n.planning.planning.chooseAPaymentWalletForThisBill
+            return
+        }
+
+        guard PlanningLogic.billPaymentWalletIsEligible(
+            billCurrencyCode: activeCurrencyCode, walletCurrencyCode: wallet.currencyCode
+        ) else {
+            alertMessage = L10n.planning.bill.payment.currencyMismatch
             return
         }
 

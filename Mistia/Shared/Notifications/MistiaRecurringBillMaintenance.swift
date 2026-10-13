@@ -78,6 +78,20 @@ enum MistiaRecurringBillMaintenance {
                    let walletID = snap.paymentWalletID,
                    let paymentWallet = snapshot.walletByID[walletID] {
 
+                    guard PlanningLogic.billPaymentWalletIsEligible(
+                        billCurrencyCode: bill.currencyCode, walletCurrencyCode: paymentWallet.currencyCode
+                    ) else {
+                        upsertNotification(
+                            key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
+                            title: L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaymentFailed,
+                            body: L10n.planning.bill.payment.currencyMismatch,
+                            kind: .billAutoPaymentFailed, bill: bill, dueItem: dueItem,
+                            monthKey: cycleMonthKey, recipientUserID: snapshot.activeUserID,
+                            modelContext: modelContext, notificationBatch: &notificationBatch
+                        )
+                        continue
+                    }
+
                     let balanceCanPay = balanceSufficientToCover(
                         amount: amount,
                         wallet: paymentWallet,
@@ -250,6 +264,9 @@ enum MistiaRecurringBillMaintenance {
         sessionStore: SessionStore,
         referenceDate: Date
     ) async {
+        guard PlanningLogic.billPaymentWalletIsEligible(
+            billCurrencyCode: bill.currencyCode, walletCurrencyCode: paymentWallet.currencyCode
+        ) else { return }
         let now = Date()
         let title = L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaidValue(String(describing: bill.name))
         let tx = LedgerTransaction(

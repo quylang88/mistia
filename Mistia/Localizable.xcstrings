@@ -48599,6 +48599,29 @@
           }
         }
       }
+    },
+    "planning.bill.payment.currencyMismatch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chỉ có thể thanh toán hóa đơn bằng ví cùng tiền tệ."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pay this bill using a wallet with the same currency."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請求書と同じ通貨のウォレットで支払ってください。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

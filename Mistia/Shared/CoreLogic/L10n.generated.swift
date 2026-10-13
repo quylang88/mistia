@@ -2459,6 +2459,11 @@ nonisolated enum L10n {
                 static var unpaidCyclesMessage: String { L10n.tr("planning.bill.archive.unpaidCyclesMessage", vi: "Hóa đơn này vẫn còn khoản chưa thanh toán trong tháng hiện tại hoặc các tháng trước. Hãy hoàn tất tất cả thanh toán trước khi lưu trữ.", en: "This bill still has an unpaid payment in the current or a past month. Complete all payments before archiving it.", ja: "この請求には、今月または過去の月に未払いの支払いが残っています。すべての支払いを完了してからアーカイブしてください。") }
                 static func unpaidCyclesMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.bill.archive.unpaidCyclesMessage", vi: "Hóa đơn này vẫn còn khoản chưa thanh toán trong tháng hiện tại hoặc các tháng trước. Hãy hoàn tất tất cả thanh toán trước khi lưu trữ.", en: "This bill still has an unpaid payment in the current or a past month. Complete all payments before archiving it.", ja: "この請求には、今月または過去の月に未払いの支払いが残っています。すべての支払いを完了してからアーカイブしてください。", language: language) }
             }
+
+            nonisolated enum payment {
+                static var currencyMismatch: String { L10n.tr("planning.bill.payment.currencyMismatch", vi: "Chỉ có thể thanh toán hóa đơn bằng ví cùng tiền tệ.", en: "Pay this bill using a wallet with the same currency.", ja: "請求書と同じ通貨のウォレットで支払ってください。") }
+                static func currencyMismatch(language: MistiaAppLanguage) -> String { L10n.tr("planning.bill.payment.currencyMismatch", vi: "Chỉ có thể thanh toán hóa đơn bằng ví cùng tiền tệ.", en: "Pay this bill using a wallet with the same currency.", ja: "請求書と同じ通貨のウォレットで支払ってください。", language: language) }
+            }
         }
 
         nonisolated enum budgetEditor {

@@ -235,6 +235,19 @@ enum PlanningPersistenceSupport {
         guard let sourceWallet = wallets.first(where: { $0.id == draft.sourceWalletID }) else {
             throw PlanningPersistenceError.missingWallet
         }
+        if sourceKind == .recurringBill {
+            let billID = sourceID
+            guard let bill = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>(
+                predicate: #Predicate<RecurringBillPlan> { $0.id == billID }
+            )).first, bill.deletedAt == nil, !bill.isArchived else {
+                throw PlanningPersistenceError.missingCategory
+            }
+            guard PlanningLogic.billPaymentWalletIsEligible(
+                billCurrencyCode: bill.currencyCode, walletCurrencyCode: sourceWallet.currencyCode
+            ) else {
+                throw PlanningDuePaymentError.billCurrencyMismatch
+            }
+        }
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
             forWalletID: sourceWallet.id,

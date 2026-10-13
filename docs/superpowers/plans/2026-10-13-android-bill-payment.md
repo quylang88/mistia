@@ -16,10 +16,13 @@ commitBillCycleMutations snapshot checks and typed bill/occurrence contract.
   transaction logic. Recheck bill/cycle/wallet/category/balance dependency
   snapshots inside the Room transaction; no stale mutation may overwrite a
   concurrent payment or user edit. Never split ledger and occurrence writes.
-- [ ] Verify source/bill currencies directly against Swift; do not sum/assign
-  mixed minor units. Preserve exact source wallet currency/amount pairing and
-  applicable reporting snapshots. Surface missing FX/exact source input rather
-  than invent an exchange rate. Document any actual product decision needed.
+- [x] User product decision supersedes previous FX alternatives: payment must
+  use a wallet in the SAME bill currency, for Android AND Swift. Existing Swift
+  manual/auto-pay and both bill editor guards are implemented and verified.
+- [ ] Android pay execution must invoke billPaymentCurrenciesMatch against
+  the authoritative bill and wallet inside the atomic money transaction;
+  picker filtering alone never suffices. Preserve exact wallet amount/currency
+  pairing and occurrence snapshot; reject mismatched imported defaults.
 - [ ] Undo payment tombstones all owned matching paid occurrences and linked
   ledger records atomically with versions/tombstone DELETE outbox preservation.
   Honor transaction statement locks, family/shared money/receipt/investment

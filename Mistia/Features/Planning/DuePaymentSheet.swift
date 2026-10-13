@@ -105,7 +105,15 @@ struct DuePaymentSheet: View {
     private func defaultWalletID(for dueItem: PlanningRecurringDueSnapshot?) -> UUID? {
         switch target.sourceKind {
         case .recurringBill, .installment:
-            return dueItem?.paymentWalletID
+            let id = dueItem?.paymentWalletID
+            if target.sourceKind == .recurringBill {
+                return id.flatMap { walletID in
+                    wallets.first { $0.id == walletID && PlanningLogic.billPaymentWalletIsEligible(
+                        billCurrencyCode: dueItem?.currencyCode ?? activeCurrencyCode, walletCurrencyCode: $0.currencyCode
+                    ) }?.id
+                }
+            }
+            return id
         case .creditCard:
             return nil
         }
@@ -117,7 +125,12 @@ struct DuePaymentSheet: View {
             preferredWalletIDs: Set([defaultWalletID(for: dueItem), selectedWalletID].compactMap { $0 }),
             targetOwnerUserID: target.ownerUserID ?? walletPickerAccess.currentSelfUserID,
             excludesCreditCards: target.sourceKind == .installment
-        )
+        ).filter { wallet in
+            target.sourceKind != .recurringBill || PlanningLogic.billPaymentWalletIsEligible(
+                billCurrencyCode: dueItem?.currencyCode ?? activeCurrencyCode,
+                walletCurrencyCode: wallet.currencyCode
+            )
+        }
     }
 
     private var parsedAmountInput: Int64? {
@@ -173,6 +186,10 @@ struct DuePaymentSheet: View {
             return true
         }
 
+        if target.sourceKind == .recurringBill,
+           !availableWallets(for: dueItem).contains(where: { $0.id == selectedWalletID }) {
+            return true
+        }
         if target.requiresAmountInput {
             return (parsedAmountInput ?? 0) <= 0
         }

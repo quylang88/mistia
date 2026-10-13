@@ -83,6 +83,8 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
             val wallet=LedgerWalletRecord.fromCloudRecord(walletRow)
             if(walletRow.ownerUserId!=ownerUserId.value || walletRow.id!=walletId || wallet.ownerUserId!=ownerUserId.value || wallet.id!=walletId || walletRow.deletedAt!=null || wallet.deletedAt!=null ||
                 (wallet.isArchived && existing?.paymentWalletId!=walletId)) fail(RecurringBillValidationError.INVALID_WALLET)
+            if(!billPaymentCurrenciesMatch(existing?.currencyCode ?: draft.currencyCode,wallet.currencyCode))
+                fail(RecurringBillValidationError.WALLET_CURRENCY_MISMATCH)
             val saved=draft.toBillRecord(ownerUserId,category,existing,deviceId,now)
             RecurringBillPlanRecord.fromCloudRecord(saved.toCloudRecord())
             commit(saved)

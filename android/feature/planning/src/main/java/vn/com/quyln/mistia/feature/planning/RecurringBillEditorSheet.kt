@@ -148,7 +148,7 @@ import vn.com.quyln.mistia.core.model.*
                         CategoryIcon(category.iconSymbolName,category.kind,category.iconColorHex);Spacer(Modifier.width(8.dp));Text(category.localizedBudgetName(language))
                     }}
                 }
-                "wallet" -> wallets.filter {it.ownerUserId==owner && it.deletedAt==null && (!it.isArchived || it.id==bill?.paymentWalletId || it.id==state.paymentWalletId)}.forEach {wallet -> TextButton(onClick={state=state.copy(paymentWalletId=wallet.id);picker=null},modifier=Modifier.testTag("bill.wallet.${wallet.id}")) {Text(wallet.name)}}
+                "wallet" -> wallets.filter {it.ownerUserId==owner && it.deletedAt==null && billPaymentCurrenciesMatch(state.currencyCode,it.currencyCode) && (!it.isArchived || it.id==bill?.paymentWalletId || it.id==state.paymentWalletId)}.forEach {wallet -> TextButton(onClick={state=state.copy(paymentWalletId=wallet.id);picker=null},modifier=Modifier.testTag("bill.wallet.${wallet.id}")) {Text(wallet.name)}}
                 else -> (if(picker=="autoDay") state.autoPayDayOptions else (1..31).toList()).forEach {day -> TextButton(onClick={update(when(picker) {"startDay" -> state.copy(paymentStartDay=day);"dueDay" -> state.copy(dueDay=day);else -> state.copy(autoPayDay=day)});picker=null}) {
                     Text(stringResource(if(picker=="autoDay" && state.hasDeadline && state.dueDay<state.paymentStartDay && day<state.paymentStartDay) R.string.planning_planning_day_value_next_month else R.string.planning_planning_day_value,day.toString()))
                 }}
@@ -160,6 +160,7 @@ import vn.com.quyln.mistia.core.model.*
     TextButton(onClick=onClick,enabled=enabled,modifier=Modifier.fillMaxWidth().testTag(tag)) {Text(stringResource(label),Modifier.weight(1f));Text(value)}
 }
 private fun billError(error:Throwable):Int = when((error as? RecurringBillValidationException)?.reason) {
+    RecurringBillValidationError.WALLET_CURRENCY_MISMATCH -> R.string.planning_bill_payment_currency_mismatch
     RecurringBillValidationError.NAME_REQUIRED -> R.string.planning_planning_enter_a_bill_name_before_saving
     RecurringBillValidationError.CATEGORY_REQUIRED,RecurringBillValidationError.INVALID_CATEGORY -> R.string.planning_planning_choose_an_expense_child_category_for_this
     RecurringBillValidationError.WALLET_REQUIRED,RecurringBillValidationError.INVALID_WALLET -> R.string.planning_planning_choose_a_payment_wallet_for_this_bill

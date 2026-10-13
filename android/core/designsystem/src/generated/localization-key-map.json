@@ -968,6 +968,7 @@
   "overview.overview.youDoNotHavePermissionToEdit": "overview_overview_you_do_not_have_permission_to_edit",
   "placeholder.placeholdertab.thisTabIsIntentionallyEmptyWhileWe": "placeholder_placeholdertab_this_tab_is_intentionally_empty_while_we",
   "planning.bill.archive.unpaidCyclesMessage": "planning_bill_archive_unpaid_cycles_message",
+  "planning.bill.payment.currencyMismatch": "planning_bill_payment_currency_mismatch",
   "planning.budgetEditor.branchCurrencyMismatch": "planning_budget_editor_branch_currency_mismatch",
   "planning.budgetEditor.discard": "planning_budget_editor_discard",
   "planning.budgetEditor.discardMessage": "planning_budget_editor_discard_message",

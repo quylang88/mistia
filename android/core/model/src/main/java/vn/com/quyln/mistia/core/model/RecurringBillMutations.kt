@@ -40,7 +40,7 @@ data class RecurringBillDraft(
     val startsNextMonth:Boolean=false,
     val zoneId:ZoneId=ZoneId.systemDefault(),
 )
-enum class RecurringBillValidationError { NAME_REQUIRED, CATEGORY_REQUIRED, INVALID_CATEGORY, WALLET_REQUIRED, INVALID_WALLET, INVALID_CURRENCY, INVALID_SCHEDULE, DEADLINE_BEFORE_START, NOT_FOUND, UNPAID_CYCLES }
+enum class RecurringBillValidationError { WALLET_CURRENCY_MISMATCH, NAME_REQUIRED, CATEGORY_REQUIRED, INVALID_CATEGORY, WALLET_REQUIRED, INVALID_WALLET, INVALID_CURRENCY, INVALID_SCHEDULE, DEADLINE_BEFORE_START, NOT_FOUND, UNPAID_CYCLES }
 class RecurringBillValidationException(val reason:RecurringBillValidationError):IllegalArgumentException(reason.name)
 
 fun RecurringBillDraft.toBillRecord(owner:UserId,category:TransactionCategoryRecord,existing:RecurringBillPlanRecord?,deviceId:String,now:String):RecurringBillPlanRecord {
@@ -93,3 +93,9 @@ fun billCycleRecords(rows:List<CloudRecord>,bill:CloudRecord,monthKey:String):Li
         (row.payload["source_id"] as? kotlinx.serialization.json.JsonPrimitive)?.content==bill.id &&
         (row.payload["selected_month_key"] as? kotlinx.serialization.json.JsonPrimitive)?.content==monthKey
 }.sortedBy {it.id}
+
+/** Product rule shared with Swift: money may leave only a wallet in the bill currency. */
+fun billPaymentCurrenciesMatch(billCurrency:String,walletCurrency:String):Boolean {
+    val bill=billCurrency.trim().uppercase(Locale.ROOT)
+    return bill.isNotEmpty() && bill==walletCurrency.trim().uppercase(Locale.ROOT)
+}
