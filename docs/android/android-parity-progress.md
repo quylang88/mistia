@@ -1306,3 +1306,19 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-bill-scheduling.md`.
 
 VersionCode10; all seven write gates false. No production writes/deployments.
 Evidence: `docs/android/evidence/2026-10-13-apk2-bill-offline.md`.
+
+## APK 2 recurring bill push foundation — 2026-10-13
+
+- [x] Separately disabled bill coordinator/network gate, category+wallet barrier
+  and priority70 ordering before pull, preserving tombstone/reset support.
+- [x] Conditional races/winners/conflicts/retry/cancellation/stale protection;
+  typed Swift semantic defaults, ISO instants and malformed record validation.
+- [x] Seven runtime RED contract regressions fixed; 32 bill coordinator and nine
+  HTTPS network tests pass with complete typed payloads.
+- [x] 511 JVM tests/67 suites, 14 Swift sync tests, Room compilation, lint/build
+  and contract/localization checks passed.
+- [ ] Native bill form/lifecycle/payment and due maintenance next; remaining
+  APK2–4 and final physical/visual verification incomplete.
+
+VersionCode11; all eight write gates false. ADB empty; no production writes.
+Evidence: `docs/android/evidence/2026-10-13-apk2-bill-push.md`.

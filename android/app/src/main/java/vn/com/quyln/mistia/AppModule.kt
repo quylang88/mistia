@@ -43,6 +43,7 @@ import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
 import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
+import vn.com.quyln.mistia.core.sync.RecurringBillPushCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.CreditCardPushCoordinator
 import vn.com.quyln.mistia.core.sync.TransactionPushCoordinator
@@ -146,6 +147,9 @@ object AppModule {
         client = client,
         json = json,
         writableEntities = buildSet {
+            if (BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) {
+                add(CloudEntity.RECURRING_BILL_PLAN)
+            }
             if (BuildConfig.ALLOW_SAVINGS_GOAL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES) {
                 add(CloudEntity.SAVINGS_GOAL)
             }
@@ -271,6 +275,17 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideRecurringBillPushCoordinator(
+        localStore: LocalStore,
+        remoteStore: RemoteMutationStore,
+    ): RecurringBillPushCoordinator = RecurringBillPushCoordinator(
+        localStore = localStore,
+        remoteStore = remoteStore,
+        writesEnabled = BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES,
+    )
+
+    @Provides
+    @Singleton
     fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
         OfflineFirstFinanceRepository(localStore)
 
@@ -297,6 +312,7 @@ object AppModule {
         transactionPushCoordinator: TransactionPushCoordinator,
         budgetPushCoordinator: BudgetPushCoordinator,
         savingsGoalPushCoordinator: SavingsGoalPushCoordinator,
+        recurringBillPushCoordinator: RecurringBillPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
@@ -310,6 +326,7 @@ object AppModule {
             transactionPushCoordinator,
             budgetPushCoordinator,
             savingsGoalPushCoordinator,
+            recurringBillPushCoordinator,
         ),
         categoryTranslationCoordinator,
     )

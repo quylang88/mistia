@@ -22,7 +22,7 @@ import vn.com.quyln.mistia.core.model.UserId
 
 class PullOnlySyncEnginePushOrderTest {
     @Test
-    fun `sync pushes category wallet card profile then transaction budget and savings before pull`() = runTest {
+    fun `sync pushes category wallet card profile then transaction budget savings and bill before pull`() = runTest {
         val events = mutableListOf<String>()
         val category = RecordingPushCoordinator(CloudEntity.TRANSACTION_CATEGORY, events)
         val wallet = RecordingPushCoordinator(CloudEntity.LEDGER_WALLET, events)
@@ -30,6 +30,7 @@ class PullOnlySyncEnginePushOrderTest {
         val transaction = RecordingPushCoordinator(CloudEntity.LEDGER_TRANSACTION, events)
         val budget = RecordingPushCoordinator(CloudEntity.BUDGET_PLAN, events)
         val savings = RecordingPushCoordinator(CloudEntity.SAVINGS_GOAL, events)
+        val bill = RecordingPushCoordinator(CloudEntity.RECURRING_BILL_PLAN, events)
         val remote = object : RemoteStore {
             override suspend fun pullPage(
                 table: String,
@@ -47,7 +48,7 @@ class PullOnlySyncEnginePushOrderTest {
             authRepository = SignedInAuthRepository(),
             localStore = EmptyLocalStore(),
             remoteStore = remote,
-            pushCoordinators = listOf(savings, budget, transaction, card, wallet, category),
+            pushCoordinators = listOf(bill, savings, budget, transaction, card, wallet, category),
         )
 
         val result = engine.syncNow()
@@ -59,7 +60,8 @@ class PullOnlySyncEnginePushOrderTest {
         assertEquals("push:ledger_transactions", events[3])
         assertEquals("push:budget_plans", events[4])
         assertEquals("push:savings_goals", events[5])
-        assertEquals("pull:transaction_categories", events[6])
+        assertEquals("push:recurring_bill_plans", events[6])
+        assertEquals("pull:transaction_categories", events[7])
     }
 
     private class RecordingPushCoordinator(

@@ -36,6 +36,7 @@ internal class OutboxPushCoordinator(
     private val nowEpochMillis: () -> Long,
     private val allowTombstoneDeletes: Boolean = false,
     private val normalizeSemanticPayload: (JsonObject) -> JsonObject = { it },
+    private val validateRecord: (CloudRecord) -> Unit = {},
     private val orderMutations: suspend (List<QueuedMutation>, UserId) -> List<QueuedMutation> = { rows, _ -> rows },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
@@ -86,6 +87,7 @@ internal class OutboxPushCoordinator(
         require(local.ownerUserId == ownerUserId.value && local.id == mutation.recordId) {
             "Local ${entity.table} identity does not match outbox"
         }
+        validateRecord(local)
 
         if (mutation.kind == MutationKind.DELETE) return pushDelete(queued, local, ownerUserId, accessToken)
 
@@ -206,6 +208,7 @@ internal class OutboxPushCoordinator(
         }
         require((payload["user_id"] as? JsonPrimitive)?.content == ownerUserId)
         require((payload["id"] as? JsonPrimitive)?.content == id)
+        validateRecord(this)
     }
 
     private suspend fun resolveConflict(
