@@ -551,7 +551,7 @@ enum MistiaDataStack {
                 || versionIdentifiers?.contains("8.0.0") == true {
                 return try ModelContainer(
                     for: schema,
-                    migrationPlan: MistiaMigrationPlan.self,
+                    migrationPlan: MistiaInvestmentMigrationPlan.self,
                     configurations: [configuration]
                 )
             }

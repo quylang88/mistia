@@ -1497,3 +1497,20 @@ Evidence: `docs/android/evidence/2026-10-13-due-occurrence-push.md`.
   gates remain incomplete. ADB empty; nine write flagsfalse; no productionwrites.
 
 VersionCode19. Evidence:`docs/android/evidence/2026-10-13-bill-same-currency.md`.
+
+
+## Swift V7 investment migration plan isolation — 2026-10-13
+
+- [x] Resolved the full Swift gate failure documented in the bill currency slice.
+  Root evidence: regenerated V7 ledger entity resolved to frozen V5 shape and lost
+  five reporting/settlement fields. V7/V8 now use an isolated V7–V11 plan with
+  unchanged investment stages; legacy V4 handling remains separate.
+- [x] Enhanced real-store regression runtime RED with old plan, GREEN with isolated
+  plan; independent ledger fields preserved. 20/20 final independent runs and
+  16 migration tests on normal/fresh scratch builds pass.
+- [x] Full SwiftPM601 tests zero failures; iOS build, Android full cached checks,
+  contracts/l10n/diff pass. Independent review no actionable P1/P2.
+- [ ] Android atomic bill payment/undo and remaining APK1–4 parity continue next.
+  ADB empty; no physical or live cloud verification; all cloud write gates false.
+
+Evidence: `docs/android/evidence/2026-10-13-swift-investment-migration-plan.md`.

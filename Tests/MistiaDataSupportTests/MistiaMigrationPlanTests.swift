@@ -415,6 +415,9 @@ final class MistiaMigrationPlanTests: XCTestCase {
         let channelID = UUID()
         let assetID = UUID()
         let tradeID = UUID()
+        let ordinaryLedgerID = UUID()
+        let settlementGroupID = UUID()
+        let settlementObligationID = UUID()
         let fundingWalletID = UUID()
         let fundingLedgerID = InvestmentLedgerIdentity.derivedID(eventID: tradeID, component: "funding")
         let fundingPostingID = InvestmentLedgerIdentity.derivedID(eventID: tradeID, component: "funding-posting")
@@ -537,6 +540,19 @@ final class MistiaMigrationPlanTests: XCTestCase {
                     remoteVersion: 2
                 )
             )
+            context.insert(LedgerTransaction(
+                id: ordinaryLedgerID,
+                primaryKind: .expense,
+                title: "Shared expense independent of investment funding",
+                amountMinor: 57,
+                settlementGroupID: settlementGroupID,
+                settlementObligationID: settlementObligationID,
+                settlementRole: .sharedExpensePaid,
+                reportingExpenseMinor: 12,
+                reportingIncomeMinor: 4,
+                sourceCurrencyCode: "JPY",
+                sourceWallet: fundingWallet
+            ))
             try context.save()
         }
 
@@ -560,6 +576,12 @@ final class MistiaMigrationPlanTests: XCTestCase {
         )
         XCTAssertEqual(ledger.first(where: { $0.id == fundingLedgerID })?.amountMinor, 120)
         XCTAssertEqual(ledger.first(where: { $0.id == fundingLedgerID })?.reportingAmountMinor, 120)
+        let ordinaryLedger = try XCTUnwrap(ledger.first(where: { $0.id == ordinaryLedgerID }))
+        XCTAssertEqual(ordinaryLedger.settlementGroupID, settlementGroupID)
+        XCTAssertEqual(ordinaryLedger.settlementObligationID, settlementObligationID)
+        XCTAssertEqual(ordinaryLedger.settlementRoleRawValue, SettlementTransactionRole.sharedExpensePaid.rawValue)
+        XCTAssertEqual(ordinaryLedger.reportingExpenseMinor, 12)
+        XCTAssertEqual(ordinaryLedger.reportingIncomeMinor, 4)
         XCTAssertEqual(posting.first(where: { $0.id == fundingPostingID })?.amountMinor, -120)
         XCTAssertEqual(posting.first(where: { $0.id == fundingPostingID })?.accountingAmountMinor, -120)
         let conflicts = try ModelContext(migrated).fetch(FetchDescriptor<SyncConflict>())

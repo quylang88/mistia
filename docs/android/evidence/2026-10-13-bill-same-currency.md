@@ -63,3 +63,10 @@ SHA-256:8685b38230598f70cbd3b06dce53bbcd2fa6bb617fb5461a4bcaacf8adc8d799
 Remaining: V7 full-suite failure, Android actual bill payment/undo with atomic
 money/outbox, maintenance/cards/installments/currency settings, category legacy
 identity/startup and APK3–4 plus final device checks. Full goal remains active.
+
+
+Follow-up: the full Swift V7 gate is now resolved by the separately reviewed
+investment migration plan slice. See
+`2026-10-13-swift-investment-migration-plan.md` for schema collision evidence,
+real-store regression and full SwiftPM601-test success. The original failure
+above records the result at the currency slice checkpoint.

@@ -432,6 +432,11 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
                 fromVersion: MistiaSchemaV6.self,
                 toVersion: MistiaSchemaV7.self
             ),
+        ] + investmentStages
+    }
+
+    static var investmentStages: [MigrationStage] {
+        [
             MigrationStage.custom(
                 fromVersion: MistiaSchemaV7.self,
                 toVersion: MistiaSchemaV8.self,
@@ -549,5 +554,25 @@ private enum InvestmentV8Migration {
             return false
         }
         return rate > 0
+    }
+}
+
+/// Investment stores already use the current ledger entity. Do not register the
+/// older V4/V5 ledger classes with the same entity name when opening V7/V8.
+/// SwiftData can otherwise resolve LedgerTransaction to a legacy model and fail
+/// to recognize the source store's model checksum.
+enum MistiaInvestmentMigrationPlan: SchemaMigrationPlan {
+    static var schemas: [any VersionedSchema.Type] {
+        [
+            MistiaSchemaV7.self,
+            MistiaSchemaV8.self,
+            MistiaSchemaV9.self,
+            MistiaSchemaV10.self,
+            MistiaSchemaV11.self
+        ]
+    }
+
+    static var stages: [MigrationStage] {
+        MistiaMigrationPlan.investmentStages
     }
 }
