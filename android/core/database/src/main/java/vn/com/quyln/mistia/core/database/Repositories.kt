@@ -44,7 +44,10 @@ import vn.com.quyln.mistia.core.model.requireAffordable
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.WalletDraft
 
-class OfflineFirstFinanceRepository(private val localStore: LocalStore) : FinanceRepository {
+class OfflineFirstFinanceRepository(
+    private val localStore: LocalStore,
+    budgetZoneId: ZoneId = ZoneId.systemDefault(),
+) : FinanceRepository, vn.com.quyln.mistia.core.model.BudgetRepository by OfflineBudgetRepository(localStore, budgetZoneId) {
     override fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>> =
         localStore.observe(entity.table, ownerUserId)
 

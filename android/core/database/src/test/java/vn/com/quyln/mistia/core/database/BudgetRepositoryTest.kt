@@ -1,0 +1,328 @@
+package vn.com.quyln.mistia.core.database
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import vn.com.quyln.mistia.core.model.CloudEntity
+import vn.com.quyln.mistia.core.model.CloudRecord
+import vn.com.quyln.mistia.core.model.EntityCount
+import vn.com.quyln.mistia.core.model.LedgerWalletRecord
+import vn.com.quyln.mistia.core.model.LocalStore
+import vn.com.quyln.mistia.core.model.PendingMutation
+import vn.com.quyln.mistia.core.model.RecordId
+import vn.com.quyln.mistia.core.model.QueuedMutation
+import vn.com.quyln.mistia.core.model.UserId
+import vn.com.quyln.mistia.core.model.*
+import org.junit.Assert.assertFalse
+import java.time.ZoneId
+import kotlinx.serialization.json.JsonNull
+import vn.com.quyln.mistia.core.model.WalletDraft
+import vn.com.quyln.mistia.core.model.WalletKind
+
+class BudgetRepositoryTest {
+    private val owner = UserId(OWNER)
+    private val store = BudgetMemoryStore()
+    private val zone = ZoneId.of("Asia/Tokyo")
+    private val repo = OfflineFirstFinanceRepository(store, zone)
+
+    @Test fun `create snapshots category and writes owner scoped budget outbox`() = runTest {
+        seedCategories()
+        val result = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        assertEquals("Living / Food", result.categoryPathSnapshot)
+        assertEquals("生活 / 食費", result.categoryPathJapaneseSnapshot)
+        assertEquals(PARENT, result.categoryParentIdSnapshot)
+        assertEquals("2026-09-30T15:00:00Z", result.monthAnchor)
+        assertEquals(result.id, store.outboxRows(OWNER).filter { it.entity == CloudEntity.BUDGET_PLAN }.single().recordId)
+        assertTrue(repo.observeBudgets(UserId(OTHER)).first().isEmpty())
+    }
+
+    @Test fun `edit preserves currency created date remote version and coalesces outbox`() = runTest {
+        seedCategories()
+        val saved = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow().copy(syncVersion = 9007199254740993L)
+        store.commitMutation(saved.toCloudRecord(), pending(saved))
+        repo.saveBudget(owner, draft().copy(limitMinor = 600, currencyCode = "VND"), DEVICE, LATER).getOrThrow()
+        val result = repo.saveBudget(owner, draft().copy(limitMinor = 700), DEVICE, LATER).getOrThrow()
+        assertEquals("JPY", result.currencyCode)
+        assertEquals(saved.createdAt, result.createdAt)
+        assertEquals(9007199254740993L, store.outboxRows(OWNER).single { it.entity == CloudEntity.BUDGET_PLAN }.baseVersion)
+        assertEquals(700, result.limitMinor)
+    }
+
+    @Test fun `duplicate invalid amount foreign dependency and parent cap leave no mutation`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        assertTrue(repo.saveBudget(owner, draft().copy(id = NEW_ID), DEVICE, NOW).isFailure)
+        assertTrue(repo.saveBudget(owner, draft().copy(limitMinor = 0), DEVICE, NOW).isFailure)
+        assertTrue(repo.saveBudget(UserId(OTHER), draft(), DEVICE, NOW).isFailure)
+        repo.saveBudget(owner, draft().copy(id = PARENT_BUDGET, categoryId = PARENT, limitMinor = 500), DEVICE, NOW).getOrThrow()
+        assertTrue(repo.saveBudget(owner, draft().copy(limitMinor = 501), DEVICE, NOW).isFailure)
+        assertEquals(2, repo.observeBudgets(owner).first().size)
+    }
+
+    @Test fun `past edit is read only archive upserts and current delete creates tombstone`() = runTest {
+        seedCategories()
+        val old = repo.saveBudget(owner, draft().copy(monthAnchor = "2026-09-10T00:00:00Z"), DEVICE, NOW).getOrThrow()
+        assertTrue(repo.saveBudget(owner, draft().copy(monthAnchor = old.monthAnchor), DEVICE, NOW).isFailure)
+        repo.archiveBudget(owner, RecordId(old.id), DEVICE, NOW).getOrThrow()
+        assertTrue(repo.observeBudgets(owner).first().isEmpty())
+        assertEquals(MutationKind.UPSERT, store.outboxRows(OWNER).single { it.entity == CloudEntity.BUDGET_PLAN }.kind)
+        val current = repo.saveBudget(owner, draft().copy(id = NEW_ID), DEVICE, NOW).getOrThrow()
+        repo.deleteBudget(owner, RecordId(current.id), DEVICE, LATER).getOrThrow()
+        assertTrue(repo.observeBudgets(owner).first().isEmpty())
+        assertEquals(LATER, store.record(owner, CloudEntity.BUDGET_PLAN.table, current.id)!!.deletedAt)
+        assertEquals(MutationKind.DELETE, store.outboxRows(OWNER).single { it.recordId == current.id }.kind)
+        assertTrue(repo.deleteBudget(UserId(OTHER), RecordId(current.id), DEVICE, LATER).isFailure)
+    }
+
+    @Test fun `carried forward edit creates new record without rewriting old month`() = runTest {
+        seedCategories()
+        val old = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        val carried = repo.saveBudget(owner, draft().copy(monthAnchor = "2026-11-15T00:00:00Z", limitMinor = 800), DEVICE, NOW).getOrThrow()
+        assertFalse(old.id == carried.id)
+        assertEquals(0, carried.syncVersion)
+        assertEquals(old, BudgetPlanRecord.fromCloudRecord(store.record(owner, CloudEntity.BUDGET_PLAN.table, old.id)!!))
+    }
+
+    @Test fun `second child auto creates parent in one atomic batch and overflow fails safely`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        repo.saveBudget(owner, draft().copy(id = NEW_ID, categoryId = CHILD2, limitMinor = 600), DEVICE, NOW).getOrThrow()
+        val parent = repo.observeBudgets(owner).first().single { it.categoryId == PARENT }
+        assertEquals(1100, parent.limitMinor)
+        assertFalse(parent.rolloverEnabled)
+        assertEquals(2, store.batches.last().size)
+        val fresh = BudgetMemoryStore()
+        val r = OfflineFirstFinanceRepository(fresh, zone)
+        seedCategories(fresh)
+        r.saveBudget(owner, draft().copy(limitMinor = Long.MAX_VALUE), DEVICE, NOW).getOrThrow()
+        assertTrue(r.saveBudget(owner, draft().copy(id = NEW_ID, categoryId = CHILD2, limitMinor = 1), DEVICE, NOW).isFailure)
+        assertEquals(1, r.observeBudgets(owner).first().size)
+    }
+
+    @Test fun `failed batch leaves both budgets and outbox unchanged`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        store.failBatch = true
+        assertTrue(repo.saveBudget(owner, draft().copy(id = NEW_ID, categoryId = CHILD2), DEVICE, NOW).isFailure)
+        assertEquals(1, repo.observeBudgets(owner).first().size)
+        assertEquals(1, store.outboxRows(OWNER).count { it.entity == CloudEntity.BUDGET_PLAN })
+    }
+
+    @Test fun `family scope is inherited and final current delete clears category scope atomically`() = runTest {
+        seedCategories()
+        val parentCloud = store.record(owner, CloudEntity.TRANSACTION_CATEGORY.table, PARENT)!!
+        val parent = TransactionCategoryRecord.fromCloudRecord(parentCloud).copy(familyBudgetSpendingEnabled = true)
+        store.replacePullSnapshot(owner, CloudEntity.TRANSACTION_CATEGORY.table,
+            repo.observeCategories(owner).first().filter { it.id != PARENT }.map { it.toCloudRecord() } + parent.toCloudRecord())
+        val saved = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        assertTrue(saved.includesFamilySpending)
+        repo.deleteBudget(owner, RecordId(saved.id), DEVICE, LATER).getOrThrow()
+        assertFalse(repo.observeCategories(owner).first().single { it.id == PARENT }.familyBudgetSpendingEnabled)
+        assertEquals(2, store.batches.last().size)
+    }
+
+    @Test fun `switching from child to parent clears stale optional snapshots`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        val saved = repo.saveBudget(owner, draft().copy(categoryId = PARENT), DEVICE, LATER).getOrThrow()
+        assertEquals(null, saved.categoryParentIdSnapshot)
+        assertEquals(null, saved.categoryParentNameSnapshot)
+        assertEquals(JsonNull, saved.toPayload()["category_parent_id_snapshot"])
+        assertEquals("Living", saved.categoryPathSnapshot)
+    }
+
+    @Test fun `editing parent into second child recreates parent from effective children`() = runTest {
+        seedCategories()
+        val parent = repo.saveBudget(owner, draft().copy(id = PARENT_BUDGET, categoryId = PARENT, limitMinor = 2000), DEVICE, NOW).getOrThrow()
+        repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        repo.saveBudget(owner, draft().copy(id = parent.id, categoryId = CHILD2, limitMinor = 600), DEVICE, LATER).getOrThrow()
+        val budgets = repo.observeBudgets(owner).first()
+        assertEquals(3, budgets.size)
+        assertEquals(1100, budgets.single { it.categoryId == PARENT }.limitMinor)
+    }
+
+    @Test fun `viewer envelope cannot expose or mutate foreign payload owner budgets or categories`() = runTest {
+        seedCategories()
+        val saved = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        val foreign = saved.copy(id = NEW_ID, ownerUserId = OTHER, limitMinor = Long.MAX_VALUE).toCloudRecord().copy(ownerUserId = OWNER)
+        store.replacePullSnapshot(owner, CloudEntity.BUDGET_PLAN.table, listOf(saved.toCloudRecord(), foreign))
+        assertEquals(listOf(saved.id), repo.observeBudgets(owner).first().map { it.id })
+        val category = repo.observeCategories(owner).first().single { it.id == CHILD2 }
+        val foreignCategory = category.copy(ownerUserId = OTHER).toCloudRecord().copy(ownerUserId = OWNER)
+        val rows = repo.observeCategories(owner).first().filter { it.id != CHILD2 }.map { it.toCloudRecord() } + foreignCategory
+        store.replacePullSnapshot(owner, CloudEntity.TRANSACTION_CATEGORY.table, rows)
+        assertTrue(repo.saveBudget(owner, draft().copy(id = PARENT_BUDGET, categoryId = CHILD2), DEVICE, NOW).isFailure)
+        assertEquals(1, store.outboxRows(OWNER).count { it.entity == CloudEntity.BUDGET_PLAN })
+    }
+
+    @Test fun `promoting sibling family scope refreshes only selected month category snapshots`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        val categories = repo.observeCategories(owner).first().map { cat ->
+            when (cat.id) {
+                PARENT -> cat.copy(familyBudgetSpendingEnabled = true)
+                CHILD -> cat.copy(name = "Dining")
+                else -> cat
+            }.toCloudRecord()
+        }
+        store.replacePullSnapshot(owner, CloudEntity.TRANSACTION_CATEGORY.table, categories)
+        repo.saveBudget(owner, draft().copy(id = NEW_ID, categoryId = CHILD2), DEVICE, NOW).getOrThrow()
+        val sibling = repo.observeBudgets(owner).first().single { it.id == BUDGET }
+        assertTrue(sibling.includesFamilySpending)
+        assertEquals("Living / Dining", sibling.categoryPathSnapshot)
+    }
+
+    @Test fun `explicit edit intent rejects missing or foreign budget id even with owned category`() = runTest {
+        seedCategories()
+        assertTrue(repo.saveBudget(owner, draft().copy(id = NEW_ID, editingExisting = true), DEVICE, NOW).isFailure)
+        assertTrue(repo.observeBudgets(owner).first().isEmpty())
+        assertTrue(store.outboxRows(OWNER).none { it.entity == CloudEntity.BUDGET_PLAN })
+    }
+
+    @Test fun `enabled child category family scope is inherited even if parent is disabled`() = runTest {
+        seedCategories()
+        val rows = repo.observeCategories(owner).first().map {
+            (if (it.id == CHILD) it.copy(familyBudgetSpendingEnabled = true) else it).toCloudRecord()
+        }
+        store.replacePullSnapshot(owner, CloudEntity.TRANSACTION_CATEGORY.table, rows)
+        val saved = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()
+        assertTrue(saved.includesFamilySpending)
+        assertTrue(repo.observeCategories(owner).first().single { it.id == PARENT }.familyBudgetSpendingEnabled)
+    }
+
+    private fun draft() = BudgetDraft(id = BUDGET, categoryId = CHILD, monthAnchor = NOW,
+        limitMinor = 500, currencyCode = "JPY", rolloverEnabled = true, zoneId = zone)
+
+    private suspend fun seedCategories(target: BudgetMemoryStore = store) {
+        val r = OfflineFirstFinanceRepository(target)
+        r.saveCategory(owner, CategoryDraft(id = PARENT, name = "Living", kind = TransactionCategoryKind.EXPENSE,
+            hierarchyRole = CategoryHierarchyRole.PARENT), DEVICE, NOW).getOrThrow()
+        r.saveCategory(owner, CategoryDraft(id = CHILD, name = "Food", kind = TransactionCategoryKind.EXPENSE,
+            hierarchyRole = CategoryHierarchyRole.CHILD, parentCategoryId = PARENT), DEVICE, NOW).getOrThrow()
+        r.saveCategory(owner, CategoryDraft(id = CHILD2, name = "Travel", kind = TransactionCategoryKind.EXPENSE,
+            hierarchyRole = CategoryHierarchyRole.CHILD, parentCategoryId = PARENT), DEVICE, NOW).getOrThrow()
+        val rows = r.observeCategories(owner).first().map { it.copy(nameJapanese = if (it.id == PARENT) "生活" else "食費").toCloudRecord() }
+        target.replacePullSnapshot(owner, CloudEntity.TRANSACTION_CATEGORY.table, rows)
+    }
+
+    private fun pending(record: BudgetPlanRecord) = PendingMutation(CloudEntity.BUDGET_PLAN, record.id,
+        record.ownerUserId, MutationKind.UPSERT, record.toPayload(), record.updatedAt, record.syncVersion, DEVICE)
+
+    companion object {
+        const val OWNER = "11111111-1111-1111-1111-111111111111"
+        const val OTHER = "22222222-2222-2222-2222-222222222222"
+        const val DEVICE = "33333333-3333-3333-3333-333333333333"
+        const val PARENT = "44444444-4444-4444-4444-444444444444"
+        const val CHILD = "55555555-5555-5555-5555-555555555555"
+        const val CHILD2 = "66666666-6666-6666-6666-666666666666"
+        const val BUDGET = "77777777-7777-7777-7777-777777777777"
+        const val NEW_ID = "88888888-8888-8888-8888-888888888888"
+        const val PARENT_BUDGET = "99999999-9999-9999-9999-999999999999"
+        const val NOW = "2026-10-13T01:00:00Z"
+        const val LATER = "2026-10-13T02:00:00Z"
+    }
+}
+
+    internal class BudgetMemoryStore : LocalStore {
+        private val records = MutableStateFlow<Map<Triple<String, String, String>, CloudRecord>>(emptyMap())
+        private val outbox = linkedMapOf<Triple<String, String, String>, PendingMutation>()
+
+        override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
+            records.map { values ->
+                values.values.filter {
+                    it.ownerUserId == ownerUserId.value && it.entity == entity && it.deletedAt == null
+                }
+            }
+
+        override fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>> =
+            records.map { values ->
+                values.values
+                    .filter { it.ownerUserId == ownerUserId.value && it.deletedAt == null }
+                    .groupingBy(CloudRecord::entity)
+                    .eachCount()
+                    .map { EntityCount(it.key, it.value) }
+            }
+
+        override suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord? =
+            records.value[Triple(ownerUserId.value, entity, recordId)]
+
+        override suspend fun commitMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
+            batches.add(mutations)
+            if (failBatch) throw IllegalStateException("simulated storage failure")
+            mutations.forEach { (record, mutation) -> commitMutation(record, mutation) }
+        }
+        val batches = mutableListOf<List<Pair<CloudRecord, PendingMutation>>>()
+        var failBatch = false
+
+        override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
+            val key = Triple(record.ownerUserId, record.entity, record.id)
+            require(key == Triple(mutation.subjectUserId, mutation.entity.table, mutation.recordId))
+            records.value = records.value + (key to record)
+            outbox[key] = mutation
+        }
+
+        override suspend fun pendingMutations(
+            ownerUserId: UserId,
+            entity: CloudEntity,
+            dueAtEpochMillis: Long,
+            limit: Int,
+        ): List<QueuedMutation> = outbox
+            .filterKeys { it.first == ownerUserId.value && it.second == entity.table }
+            .values
+            .sortedBy(PendingMutation::modifiedAt)
+            .take(limit)
+            .map { QueuedMutation(it, 0, 0, null) }
+
+        override suspend fun acknowledgeMutation(
+            mutation: QueuedMutation,
+            remoteRecord: CloudRecord,
+        ): Boolean {
+            val key = Triple(
+                mutation.mutation.subjectUserId,
+                mutation.mutation.entity.table,
+                mutation.mutation.recordId,
+            )
+            if (outbox[key] != mutation.mutation) return false
+            outbox.remove(key)
+            records.value = records.value + (key to remoteRecord)
+            return true
+        }
+
+        override suspend fun recordMutationFailure(
+            mutation: QueuedMutation,
+            nextAttemptAtEpochMillis: Long,
+            errorCode: String,
+        ): Boolean = outbox.values.contains(mutation.mutation)
+
+        override suspend fun replacePullSnapshot(
+            ownerUserId: UserId,
+            entity: String,
+            records: List<CloudRecord>,
+        ) {
+            val retained = this.records.value.filterKeys { key ->
+                key.first != ownerUserId.value || key.second != entity || outbox.containsKey(key)
+            }
+            this.records.value = retained + records.associateBy {
+                Triple(ownerUserId.value, entity, it.id)
+            }
+        }
+
+        override suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String): Set<String> =
+            outbox.keys.filter { it.first == ownerUserId.value && it.second == entity }.mapTo(mutableSetOf()) { it.third }
+
+        override suspend fun clearAccount(ownerUserId: UserId) {
+            records.value = records.value.filterKeys { it.first != ownerUserId.value }
+            outbox.keys.removeAll { it.first == ownerUserId.value }
+        }
+
+        fun outboxRows(ownerUserId: String): List<PendingMutation> =
+            outbox.filterKeys { it.first == ownerUserId }.values.toList()
+    }
+

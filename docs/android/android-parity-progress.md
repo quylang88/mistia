@@ -1140,3 +1140,25 @@ Evidence:
 
 Evidence: `docs/android/evidence/2026-10-13-localization-baseline-repair.md`.
 APK 2–4 remain incomplete; all financial cloud-write gates remain disabled.
+
+## APK 2 offline budget repository — 2026-10-13
+
+- [x] Added owner-scoped typed budget observation and local create/edit/archive/
+  tombstone delete through atomic Room record+outbox batches.
+- [x] Matched iOS localized category snapshots, monthly duplicate/allocation
+  validation, carried-forward new-record editing and automatic parent creation.
+- [x] Preserved remote base versions and currency, explicit nullable clears,
+  selected-month family-scope propagation and final-current-budget scope reset.
+- [x] Added viewer-envelope/payload-owner isolation and exact-overflow regressions;
+  reproduced and fixed all independent review findings using RED/GREEN tests.
+- [x] Verified 332 JVM tests across 52 suites, Room Android-test compilation
+  and APK assembly, lint, app APK assembly, contract/localization checks and
+  52 focused Swift PlanningLogic tests.
+- [ ] Add separately gated budget push, including conditional tombstone deletes,
+  then native budget rows/editor before moving to savings.
+
+Artifact versionCode 4; all financial cloud-write flags remain false. Emulator
+installation failed as its connection disappeared; no instrumentation execution,
+emulator UI or Samsung claim is made. No production request/write/deployment.
+
+Evidence: `docs/android/evidence/2026-10-13-apk2-budget-offline.md`.

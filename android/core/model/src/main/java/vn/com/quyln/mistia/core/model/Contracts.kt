@@ -178,7 +178,7 @@ interface AuthRepository {
     suspend fun signOut(clearLocalSession: Boolean = true)
 }
 
-interface FinanceRepository {
+interface FinanceRepository : BudgetRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
@@ -244,6 +244,11 @@ interface LocalStore {
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
+    /** Implementations must commit the entire batch atomically or fail without writing. */
+    suspend fun commitMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
+        require(mutations.size == 1) { "Atomic batch mutations are unsupported by this store" }
+        commitMutation(mutations.single().first, mutations.single().second)
+    }
     suspend fun commitCreditCardMutation(
         walletRecord: CloudRecord,
         walletMutation: PendingMutation,

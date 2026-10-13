@@ -535,6 +535,15 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun commitMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
+        require(mutations.isNotEmpty())
+        require(mutations.map { it.first.ownerUserId }.distinct().size == 1)
+        require(mutations.map { it.first.entity to it.first.id }.distinct().size == mutations.size)
+        database.withTransaction {
+            mutations.forEach { (record, mutation) -> commitMutationRows(record, mutation) }
+        }
+    }
+
     override suspend fun commitCreditCardMutation(
         walletRecord: CloudRecord,
         walletMutation: PendingMutation,
