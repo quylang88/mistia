@@ -129,6 +129,9 @@ data class EntityCountProjection(
 
 @Dao
 interface CloudRecordDao {
+    @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity = :entity ORDER BY record_id ASC")
+    suspend fun recordsIncludingDeleted(ownerUserId: String, entity: String): List<CloudRecordEntity>
+
     @Query(
         """
         SELECT * FROM cloud_records
@@ -506,6 +509,9 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : LocalStore {
+    override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
+        database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
+
     override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
         database.cloudRecordDao().observeActive(ownerUserId.value, entity).map { rows ->
             rows.map { row ->
@@ -541,6 +547,24 @@ class RoomLocalStore(
         require(mutations.map { it.first.entity to it.first.id }.distinct().size == mutations.size)
         database.withTransaction {
             mutations.forEach { (record, mutation) -> commitMutationRows(record, mutation) }
+        }
+    }
+
+    override suspend fun commitMissingSystemCategories(mutations: List<Pair<CloudRecord, PendingMutation>>) {
+        require(mutations.isNotEmpty())
+        val owner=mutations.first().first.ownerUserId
+        require(mutations.all {it.first.ownerUserId==owner && it.first.entity==CloudEntity.TRANSACTION_CATEGORY.table})
+        val ids=mutations.map {it.first.id}.toSet()
+        val keys=mutations.map {requireNotNull(TransactionCategoryRecord.fromCloudRecord(it.first).systemKey)}.toSet()
+        require(ids.size==mutations.size && keys.size==mutations.size)
+        database.withTransaction {
+            val existing=database.cloudRecordDao().recordsIncludingDeleted(owner,CloudEntity.TRANSACTION_CATEGORY.table)
+            require(existing.none {row ->
+                val record=row.toCloudRecord()
+                record.id in ids || ((record.payload["user_id"] as? JsonPrimitive)?.content?.equals(owner,ignoreCase=true)==true &&
+                    (record.payload["system_key"] as? JsonPrimitive)?.content in keys)
+            }) {"Category bootstrap snapshot changed"}
+            commitMutations(mutations)
         }
     }
 

@@ -4,9 +4,16 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val generatedBootstrapTestAssets = layout.buildDirectory.dir("generated/bootstrapTestAssets")
+val syncBootstrapTestAssets by tasks.registering(org.gradle.api.tasks.Sync::class) {
+    from(rootProject.file("../Mistia/Shared/CoreLogic/MistiaSystemCategories.json"))
+    into(generatedBootstrapTestAssets)
+}
+
 android {
     namespace = "vn.com.quyln.mistia.core.database"
     compileSdk = 36
+    sourceSets.getByName("androidTest").assets.srcDir(generatedBootstrapTestAssets)
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -16,6 +23,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+tasks.named("preBuild").configure { dependsOn(syncBootstrapTestAssets) }
 
 kotlin { jvmToolchain(17) }
 

@@ -178,7 +178,7 @@ interface AuthRepository {
     suspend fun signOut(clearLocalSession: Boolean = true)
 }
 
-interface FinanceRepository : BudgetRepository, SavingsGoalRepository, RecurringBillRepository {
+interface FinanceRepository : BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
@@ -240,6 +240,13 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    /** Insert-only category bootstrap: check missing IDs/system keys and write batch in one transaction. */
+    suspend fun commitMissingSystemCategories(mutations: List<Pair<CloudRecord, PendingMutation>>) {
+        throw UnsupportedOperationException("Conditional category bootstrap is unsupported")
+    }
+    /** Complete owner/entity snapshot; required for safe tombstone-aware reconciliation. */
+    suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
+        throw UnsupportedOperationException("Complete local snapshots are unsupported")
     fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?

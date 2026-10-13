@@ -49,7 +49,8 @@ class OfflineFirstFinanceRepository(
     budgetZoneId: ZoneId = ZoneId.systemDefault(),
 ) : FinanceRepository, vn.com.quyln.mistia.core.model.BudgetRepository by OfflineBudgetRepository(localStore, budgetZoneId),
     vn.com.quyln.mistia.core.model.SavingsGoalRepository by OfflineSavingsGoalRepository(localStore),
-    vn.com.quyln.mistia.core.model.RecurringBillRepository by OfflineRecurringBillRepository(localStore, budgetZoneId) {
+    vn.com.quyln.mistia.core.model.RecurringBillRepository by OfflineRecurringBillRepository(localStore, budgetZoneId),
+    vn.com.quyln.mistia.core.model.SystemCategoryBootstrapRepository by OfflineSystemCategoryBootstrapRepository(localStore) {
     override fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>> =
         localStore.observe(entity.table, ownerUserId)
 

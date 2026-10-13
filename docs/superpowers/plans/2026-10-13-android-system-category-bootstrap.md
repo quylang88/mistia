@@ -25,7 +25,7 @@ Swift picker behavior just to bypass missing defaults.
    SHA1 stable UUID (version5/variant bits) namespace canonicalID and owner-scoped
    cloudScopedID. Golden vectors against Swift, same-owner determinism and
    different-owner isolation. Do not create new independent category assets.
-2. Atomic local bootstrap and reconciliation, TDD/Room tests. Preserve existing
+2. [x] Atomic missing-default bootstrap, TDD/Room tests. Existing-record duplicate/legacy repairs remain separate. Preserve existing
    IDs, custom names, versions, favorites, archive state and linked references;
    create missing defaults using owner-scoped cloud identity to avoid global PK
    collision. Respect known tombstones/user state; compare direct Swift behavior
@@ -55,3 +55,5 @@ Bill quick-picker includes selected original category if absent from defaults.
 Do not drop custom original category identity or archived preferred wallet.
 
 Stage 1 complete: 515 JVM tests/68 suites and four focused Swift identity tests pass. Android and Swift share exact canonical/cloud/family golden vectors; strict owner UUID shape rejects Java short-form expansion. Existing picker metadata matches all 147 active definitions. Startup seeding and conflict protection remain stages 2–3, not yet integrated.
+
+Stage 2 complete: 527 JVM tests/69 suites pass; three full-catalog Room tests compile but remain unexecuted (ADB empty). Insert-only transaction rechecks IDs/system keys to prevent an arriving row overwriting race. Existing metadata/archives/tombstones remain unchanged; foreign viewer records are ignored for self defaults but occupied IDs stay protected. Startup and later remote customization protection remain stage 3.

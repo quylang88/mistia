@@ -274,6 +274,9 @@ class BudgetRepositoryTest {
         private val records = MutableStateFlow<Map<Triple<String, String, String>, CloudRecord>>(emptyMap())
         private val outbox = linkedMapOf<Triple<String, String, String>, PendingMutation>()
 
+        override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
+            records.value.values.filter { it.ownerUserId==ownerUserId.value && it.entity==entity }
+
         override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
             records.map { values ->
                 values.values.filter {
@@ -297,6 +300,11 @@ class BudgetRepositoryTest {
             batches.add(mutations)
             if (failBatch) throw IllegalStateException("simulated storage failure")
             mutations.forEach { (record, mutation) -> commitMutation(record, mutation) }
+        }
+        override suspend fun commitMissingSystemCategories(mutations:List<Pair<CloudRecord,PendingMutation>>) {
+            require(mutations.none { (candidate,_) -> records.value.values.any {row -> row.ownerUserId==candidate.ownerUserId && row.entity==candidate.entity &&
+                (row.id==candidate.id || (row.payload["user_id"]==candidate.payload["user_id"] && row.payload["system_key"]==candidate.payload["system_key"])) }})
+            commitMutations(mutations)
         }
         val batches = mutableListOf<List<Pair<CloudRecord, PendingMutation>>>()
         var failBatch = false

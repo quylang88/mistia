@@ -1349,3 +1349,18 @@ Plan: `docs/superpowers/plans/2026-10-13-android-system-category-bootstrap.md`.
 
 All eight gates false; no startup mutation introduced, ADB empty. APK2–4 remain
 incomplete. Evidence: `docs/android/evidence/2026-10-13-system-category-catalog-contract.md`.
+
+## Atomic local system category bootstrap — 2026-10-13
+
+- [x] Missing defaults with owner-scoped cloud IDs, shared catalog metadata,
+  atomic record/outbox and existing ID/custom/archive/tombstone preservation.
+- [x] Viewer-owner filtering, occupied identity protection, duplicate reporting,
+  strict UUID scope and insert-only transaction arrival-race guard.
+- [x] 527 JVM tests/69 suites, four Swift identity tests, Room test APK compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Three full-catalog Room tests await device execution; ADB empty.
+- [ ] Sync customization protection and startup wiring next, then bill UI/payment.
+  Existing duplicate/legacy repair and remaining APK2–4/physical gates incomplete.
+
+VersionCode12; all eight gates false. No startup seed or production writes yet.
+Evidence: `docs/android/evidence/2026-10-13-system-category-bootstrap-local.md`.
