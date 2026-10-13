@@ -1259,3 +1259,17 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-savings-push.md`.
 
 VersionCode9, all seven write gates false; no production writes/deployments.
 Evidence: `docs/android/evidence/2026-10-13-apk2-savings-ui.md`.
+
+## APK 2 recurring bill typed contract — 2026-10-13
+
+- [x] Complete 28-field typed bill wire record with explicit nullable schedule/
+  deadline/auto-pay/pause/resume clears and exact Long money/version.
+- [x] Strict decoding, legacy pause default, lossless unknown raw schedules and
+  Swift local-calendar explicit deadline resolution.
+- [x] 448 JVM tests/62 suites, 52 Swift planning tests, Room compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Due occurrences/scheduling next, then repository lifecycle guards, gated
+  push, native bill forms/payment, installments/statements and APK3–4.
+
+All seven write gates false; no ADB device or production writes/deployment.
+Evidence: `docs/android/evidence/2026-10-13-apk2-bill-contract.md`.
