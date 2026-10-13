@@ -19,6 +19,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import vn.com.quyln.mistia.core.model.billCycleRecords
+import vn.com.quyln.mistia.core.model.BillMoneySnapshot
+import vn.com.quyln.mistia.core.model.requireValidMutations
+import vn.com.quyln.mistia.core.model.requireUnchanged
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.EntityCount
@@ -571,6 +574,20 @@ class RoomLocalStore(
             commitMutations(mutations)
         }
     }
+
+    override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
+        snapshot.requireValidMutations(mutations)
+        database.withTransaction {
+            snapshot.requireUnchanged(CloudEntity.entries.associateWith {
+                recordsIncludingDeleted(snapshot.owner, it.table)
+            })
+            require(snapshot.receiptTransactionIds==billMoneyReceiptTransactionIds(snapshot.owner)) { "Receipt dependencies changed during bill payment" }
+            commitMutations(mutations)
+        }
+    }
+
+    override suspend fun billMoneyReceiptTransactionIds(owner: UserId): Set<String> =
+        database.transactionReceiptImageDao().receipts(owner.value).map { it.transactionId }.toSet()
 
     override suspend fun commitMissingSystemCategories(mutations: List<Pair<CloudRecord, PendingMutation>>) {
         require(mutations.isNotEmpty())

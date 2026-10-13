@@ -39,3 +39,11 @@ commitBillCycleMutations snapshot checks and typed bill/occurrence contract.
 Other open dependencies stay in scope: category legacy-ID reconciliation/startup,
 fresh-account defaults, currency settings, due maintenance, cards/installments,
 APK3–4 and physical checks. No production writes/migrations/deployments.
+
+
+2026-10-13 backend checkpoint: ordinary/credit wallet pay + undo APIs and atomic
+money CAS implemented;23 new tests/full624 Android +601 Swift green. Category
+system-key/icon/fallback behavior compared directly with Swift. Room SQL rollback
+and reopen/race tests compile but await device execution. Native UI is next;
+investment/shared/receipt cleanup remains explicitly unavailable and guarded.
+Evidence: docs/android/evidence/2026-10-13-atomic-bill-payments.md.

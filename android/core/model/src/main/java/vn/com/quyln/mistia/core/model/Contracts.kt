@@ -178,7 +178,7 @@ interface AuthRepository {
     suspend fun signOut(clearLocalSession: Boolean = true)
 }
 
-interface FinanceRepository : BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository {
+interface FinanceRepository : BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
@@ -240,6 +240,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun billMoneyReceiptTransactionIds(owner: UserId): Set<String> =
+        throw UnsupportedOperationException("Bill receipt dependency snapshots unavailable")
+    suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
+        throw UnsupportedOperationException("Conditional bill money writes unavailable")
+    }
     /** Compare source and complete cycle snapshot inside the same transaction as occurrence/outbox writes. */
     suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
         throw UnsupportedOperationException("Conditional bill cycle writes unavailable")

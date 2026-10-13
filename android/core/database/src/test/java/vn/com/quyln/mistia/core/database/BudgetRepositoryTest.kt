@@ -365,6 +365,8 @@ class BudgetRepositoryTest {
 }
 
     internal class BudgetMemoryStore : LocalStore {
+        var billReceiptIds: Set<String> = emptySet()
+        override suspend fun billMoneyReceiptTransactionIds(owner: UserId): Set<String> = billReceiptIds
         private val records = MutableStateFlow<Map<Triple<String, String, String>, CloudRecord>>(emptyMap())
         private val outbox = linkedMapOf<Triple<String, String, String>, PendingMutation>()
 
@@ -398,6 +400,12 @@ class BudgetRepositoryTest {
         override suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
             require(record(UserId(bill.ownerUserId),bill.entity,bill.id)==bill)
             require(billCycleRecords(recordsIncludingDeleted(UserId(bill.ownerUserId),CloudEntity.DUE_OCCURRENCE_RECORD.table),bill,monthKey)==expectedOccurrences.sortedBy {it.id})
+            commitMutations(mutations)
+        }
+        override suspend fun commitBillMoneyMutations(snapshot:BillMoneySnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+            snapshot.requireValidMutations(mutations)
+            snapshot.requireUnchanged(CloudEntity.entries.associateWith { recordsIncludingDeleted(snapshot.owner,it.table) })
+            require(snapshot.receiptTransactionIds==billMoneyReceiptTransactionIds(snapshot.owner))
             commitMutations(mutations)
         }
         override suspend fun commitMissingSystemCategories(mutations:List<Pair<CloudRecord,PendingMutation>>) {

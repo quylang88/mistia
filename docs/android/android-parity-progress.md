@@ -1514,3 +1514,21 @@ VersionCode19. Evidence:`docs/android/evidence/2026-10-13-bill-same-currency.md`
   ADB empty; no physical or live cloud verification; all cloud write gates false.
 
 Evidence: `docs/android/evidence/2026-10-13-swift-investment-migration-plan.md`.
+
+
+## Android atomic bill payment / undo backend — 2026-10-13
+
+- [x] Posted expense + paid occurrence/category fallback/outbox atomic batch;
+  complete money/receipt snapshots rechecked in Room. Same-currency validation,
+  exactLong amounts, owner/viewer isolation, balance/credit/statement guards.
+- [x] Owned paid duplicates + linked ordinary ledger undo atomically tombstone
+  with Long base versions and DELETE outbox. Archive/history, shared/investment,
+  receipt/link dependencies guarded; unsupported cleanup remains explicit.
+- [x]23 new JVM tests,624 total/75 suites green;3 real Room tests compile,
+  full Android lint/build and Swift601 tests green. Independent review fixed
+  archive undo P2 and confirmed no remaining backend P1/P2. Contracts/l10n pass.
+- [ ] Native pay/undo sheet/actions next; investment confirmation/shared/receipt
+  cleanup and the rest of APK1–4 remain incomplete. No ADB/physical/live cloud test.
+
+VersionCode20; nine write flagsfalse. Evidence:
+`docs/android/evidence/2026-10-13-atomic-bill-payments.md`.

@@ -301,8 +301,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
-        OfflineFirstFinanceRepository(localStore)
+    fun provideFinanceRepository(localStore: LocalStore, catalog: SystemCategoryCatalog): FinanceRepository =
+        OfflineFirstFinanceRepository(localStore, systemCategoryCatalog=catalog)
 
     @Provides
     @Singleton
