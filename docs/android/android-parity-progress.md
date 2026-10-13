@@ -1212,3 +1212,17 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-budget-ui.md`.
 
 All six write gates false; no device/production verification claim.
 Evidence: `docs/android/evidence/2026-10-13-apk2-savings-contract.md`.
+
+## APK 2 savings offline repository — 2026-10-13
+
+- [x] Scoped typed create/edit/delete with atomic record/outbox, original currency/
+  timestamps/version, wallet clear/preferred archive access and stale edit guard.
+- [x] Payload owner/identity validation, UUID normalization, exact sort overflow,
+  cancellation propagation and storage failure regressions.
+- [x] 401 JVM tests/58 suites, 52 Swift planning tests, Room test APK compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Execute savings file-backed Room reopen test when ADB returns; no device.
+- [ ] Continue separately gated savings push and native rows/editor/summary.
+
+VersionCode 7, all six write gates false; no production writes/deployment.
+Evidence: `docs/android/evidence/2026-10-13-apk2-savings-offline.md`.
