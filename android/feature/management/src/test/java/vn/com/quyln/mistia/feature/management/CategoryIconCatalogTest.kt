@@ -20,6 +20,9 @@ class CategoryIconCatalogTest {
         assertTrue(options.any { it.token == "mistia.category.expense.food.grocery" })
         assertTrue(options.any { it.token == "mistia.category.income.salary_work.salary" })
         assertFalse(options.any { it.token == "mistia.category.expense.other.expense" })
+        val bootstrapIcons = vn.com.quyln.mistia.core.model.SystemCategoryCatalog.parse(source).activeDefinitions
+            .associate { it.iconSymbolName to (it.iconColorHex to it.fallbackIconSymbolName) }
+        assertEquals(bootstrapIcons, options.associate { it.token to (it.colorHex to it.fallbackIcon) })
     }
 
     @Test

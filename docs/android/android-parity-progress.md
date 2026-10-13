@@ -1335,3 +1335,17 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-bill-push.md`.
 
 No runtime/production change in this audit. All eight write gates stay false.
 Plan: `docs/superpowers/plans/2026-10-13-android-system-category-bootstrap.md`.
+
+## Shared system category catalog/identity contract — 2026-10-13
+
+- [x] Same shared JSON: 161 definitions, 147 active parent/child rows, seed names/
+  metadata/order, strict malformed/duplicate validation and picker metadata check.
+- [x] Canonical/cloud/family SHA1 UUID golden vectors verified directly in Swift
+  and Kotlin; owner isolation/case and strict UUID shape regression covered.
+- [x] 515 JVM tests/68 suites, four Swift identity tests, Room compilation,
+  lint/build, one packaged catalog asset and contract/localization checks pass.
+- [ ] Atomic local bootstrap and cloud customization protection/startup wiring
+  still required before the native bill quick-picker can work for fresh accounts.
+
+All eight gates false; no startup mutation introduced, ADB empty. APK2–4 remain
+incomplete. Evidence: `docs/android/evidence/2026-10-13-system-category-catalog-contract.md`.

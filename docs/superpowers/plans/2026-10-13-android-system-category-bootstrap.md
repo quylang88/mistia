@@ -20,7 +20,7 @@ Swift picker behavior just to bypass missing defaults.
 - FinanceEnums.swift recurringBillQuickPickDefaults (26 keys, in defined order).
 
 ## Bounded slices
-1. Pure catalog/identity contract, TDD with real shared JSON as test resource.
+1. [x] Pure catalog/identity contract, TDD with real shared JSON as test resource.
    Match active registry hierarchy/vi/en/ja/icons/colors/per-parent ordering;
    SHA1 stable UUID (version5/variant bits) namespace canonicalID and owner-scoped
    cloudScopedID. Golden vectors against Swift, same-owner determinism and
@@ -53,3 +53,5 @@ with owner-scoped saveable navigation, safe restoration of older Int tab state,
 and updated Compose tests (savings moves from tab1 to tab2).
 Bill quick-picker includes selected original category if absent from defaults.
 Do not drop custom original category identity or archived preferred wallet.
+
+Stage 1 complete: 515 JVM tests/68 suites and four focused Swift identity tests pass. Android and Swift share exact canonical/cloud/family golden vectors; strict owner UUID shape rejects Java short-form expansion. Existing picker metadata matches all 147 active definitions. Startup seeding and conflict protection remain stages 2–3, not yet integrated.

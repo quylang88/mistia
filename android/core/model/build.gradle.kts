@@ -4,15 +4,24 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val generatedCategoryTestResources = layout.buildDirectory.dir("generated/categoryTestResources")
+val syncCategoryTestResources by tasks.registering(org.gradle.api.tasks.Sync::class) {
+    from(rootProject.file("../Mistia/Shared/CoreLogic/MistiaSystemCategories.json"))
+    into(generatedCategoryTestResources)
+}
+
 android {
     namespace = "vn.com.quyln.mistia.core.model"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
+    sourceSets.getByName("test").resources.srcDir(generatedCategoryTestResources)
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+tasks.named("preBuild").configure { dependsOn(syncCategoryTestResources) }
 
 kotlin { jvmToolchain(17) }
 
