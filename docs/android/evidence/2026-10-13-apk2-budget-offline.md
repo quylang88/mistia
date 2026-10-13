@@ -64,3 +64,9 @@ RPC, Edge Function change or production deployment occurred.
 
 Next slice: independently gated budget push including iOS conditional tombstone
 delete semantics; then native budget projection/editor. APK 2–4 remain incomplete.
+
+### Later emulator verification in the next slice
+After the emulator returned, push installation with --no-streaming succeeded.
+BudgetRoomTest ran directly on sdk_gphone64_arm64/API36 and passed 2/2. See
+2026-10-13-apk2-budget-push.md for the command and verification boundaries.
+The earlier failed install is retained above as historical evidence.

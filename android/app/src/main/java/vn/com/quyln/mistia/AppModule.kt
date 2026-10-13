@@ -41,6 +41,7 @@ import vn.com.quyln.mistia.core.network.SupabaseConfig
 import vn.com.quyln.mistia.core.network.MistiaWireFormat
 import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
+import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.CreditCardPushCoordinator
 import vn.com.quyln.mistia.core.sync.TransactionPushCoordinator
@@ -144,6 +145,9 @@ object AppModule {
         client = client,
         json = json,
         writableEntities = buildSet {
+            if (BuildConfig.ALLOW_BUDGET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) {
+                add(CloudEntity.BUDGET_PLAN)
+            }
             if (BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) add(CloudEntity.TRANSACTION_CATEGORY)
             if (BuildConfig.ALLOW_WALLET_CLOUD_WRITES) add(CloudEntity.LEDGER_WALLET)
             if (BuildConfig.ALLOW_CREDIT_CARD_CLOUD_WRITES) add(CloudEntity.CREDIT_CARD_PROFILE)
@@ -241,6 +245,17 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideBudgetPushCoordinator(
+        localStore: LocalStore,
+        remoteStore: RemoteMutationStore,
+    ): BudgetPushCoordinator = BudgetPushCoordinator(
+        localStore = localStore,
+        remoteStore = remoteStore,
+        writesEnabled = BuildConfig.ALLOW_BUDGET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES,
+    )
+
+    @Provides
+    @Singleton
     fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
         OfflineFirstFinanceRepository(localStore)
 
@@ -265,6 +280,7 @@ object AppModule {
         walletPushCoordinator: WalletPushCoordinator,
         creditCardPushCoordinator: CreditCardPushCoordinator,
         transactionPushCoordinator: TransactionPushCoordinator,
+        budgetPushCoordinator: BudgetPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
@@ -276,6 +292,7 @@ object AppModule {
             walletPushCoordinator,
             creditCardPushCoordinator,
             transactionPushCoordinator,
+            budgetPushCoordinator,
         ),
         categoryTranslationCoordinator,
     )

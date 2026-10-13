@@ -45,7 +45,7 @@ android {
         applicationId = "vn.com.quyln.mistia"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = "0.2.0-apk2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -56,6 +56,7 @@ android {
         buildConfigField("boolean", "ALLOW_WALLET_CLOUD_WRITES", "false")
         buildConfigField("boolean", "ALLOW_CREDIT_CARD_CLOUD_WRITES", "false")
         buildConfigField("boolean", "ALLOW_TRANSACTION_CLOUD_WRITES", "false")
+        buildConfigField("boolean", "ALLOW_BUDGET_CLOUD_WRITES", "false")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.trim().asBuildConfigString())
     }
 

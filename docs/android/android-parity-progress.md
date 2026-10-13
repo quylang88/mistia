@@ -1162,3 +1162,22 @@ installation failed as its connection disappeared; no instrumentation execution,
 emulator UI or Samsung claim is made. No production request/write/deployment.
 
 Evidence: `docs/android/evidence/2026-10-13-apk2-budget-offline.md`.
+
+## APK 2 budget push foundation — 2026-10-13
+
+- [x] Added separately disabled budget gate at coordinator and PostgREST boundaries,
+  dependency ordering and selected-category outbox deferral.
+- [x] Added iOS conditional tombstone delete semantics, remote missing/deleted
+  ACK, conditional races, winners, stale response protection and durable conflicts.
+- [x] Guarded remote identity, version overflow and semantic ACK deletion state;
+  reproduced/fixed the independent review finding with RED/GREEN tests.
+- [x] Verified 363 JVM tests across 54 suites, Room instrumentation compilation,
+  lint/APK assembly, contract/localization checks and 14 focused Swift sync tests.
+- [x] Ran BudgetRoomTest directly on API36 emulator: 2/2 passed, including atomic
+  rollback and auto-parent/account-scope persistence from the preceding slice.
+- [ ] Add native budget rows/month projection and editor, then continue savings.
+
+APK versionCode 5; all six cloud-write flags remain false. No Samsung or budget
+UI verification, live Supabase budget write, migration or deployment claim.
+
+Evidence: `docs/android/evidence/2026-10-13-apk2-budget-push.md`.
