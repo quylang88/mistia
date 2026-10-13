@@ -42,6 +42,7 @@ import vn.com.quyln.mistia.core.network.MistiaWireFormat
 import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
+import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.CreditCardPushCoordinator
 import vn.com.quyln.mistia.core.sync.TransactionPushCoordinator
@@ -145,6 +146,9 @@ object AppModule {
         client = client,
         json = json,
         writableEntities = buildSet {
+            if (BuildConfig.ALLOW_SAVINGS_GOAL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES) {
+                add(CloudEntity.SAVINGS_GOAL)
+            }
             if (BuildConfig.ALLOW_BUDGET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) {
                 add(CloudEntity.BUDGET_PLAN)
             }
@@ -256,6 +260,17 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSavingsGoalPushCoordinator(
+        localStore: LocalStore,
+        remoteStore: RemoteMutationStore,
+    ): SavingsGoalPushCoordinator = SavingsGoalPushCoordinator(
+        localStore = localStore,
+        remoteStore = remoteStore,
+        writesEnabled = BuildConfig.ALLOW_SAVINGS_GOAL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES,
+    )
+
+    @Provides
+    @Singleton
     fun provideFinanceRepository(localStore: LocalStore): FinanceRepository =
         OfflineFirstFinanceRepository(localStore)
 
@@ -281,6 +296,7 @@ object AppModule {
         creditCardPushCoordinator: CreditCardPushCoordinator,
         transactionPushCoordinator: TransactionPushCoordinator,
         budgetPushCoordinator: BudgetPushCoordinator,
+        savingsGoalPushCoordinator: SavingsGoalPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
@@ -293,6 +309,7 @@ object AppModule {
             creditCardPushCoordinator,
             transactionPushCoordinator,
             budgetPushCoordinator,
+            savingsGoalPushCoordinator,
         ),
         categoryTranslationCoordinator,
     )

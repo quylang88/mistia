@@ -1226,3 +1226,18 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-savings-contract.md`.
 
 VersionCode 7, all six write gates false; no production writes/deployment.
 Evidence: `docs/android/evidence/2026-10-13-apk2-savings-offline.md`.
+
+## APK 2 savings push foundation — 2026-10-13
+
+- [x] Separately disabled savings gate at coordinator/network, linked-wallet
+  dependency barrier and priority60 ordering before pull.
+- [x] Conditional upsert/tombstone races, ACK/conflict/retry/cancellation and
+  replacement mutation protection using full typed savings payloads.
+- [x] Fixed ISO8601 target-date semantic equality via comparison-only normalizer;
+  wire/storage representations stay lossless, other domains unchanged.
+- [x] 434 JVM tests/60 suites, 14 Swift sync tests, Room compilation, lint/build
+  and contract/localization checks passed.
+- [ ] Native savings rows/editor/summary next; APK2–4 and physical/UI gates pending.
+
+VersionCode8; all seven write flags false. ADB empty; no production writes.
+Evidence: `docs/android/evidence/2026-10-13-apk2-savings-push.md`.

@@ -35,8 +35,13 @@ internal class OutboxPushCoordinator(
     private val writesEnabled: Boolean,
     private val nowEpochMillis: () -> Long,
     private val allowTombstoneDeletes: Boolean = false,
+    private val normalizeSemanticPayload: (JsonObject) -> JsonObject = { it },
     private val orderMutations: suspend (List<QueuedMutation>, UserId) -> List<QueuedMutation> = { rows, _ -> rows },
 ) : DomainPushCoordinator {
+    private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
+        ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
+            remote.copy(payload = normalizeSemanticPayload(remote.payload)))
+
     override suspend fun pushPending(ownerUserId: UserId, accessToken: String): DomainPushSummary {
         if (!writesEnabled) return DomainPushSummary()
 
@@ -87,8 +92,8 @@ internal class OutboxPushCoordinator(
         val remote = remoteStore.fetchRecord(entity, mutation.recordId, accessToken, ownerUserId)
         remote?.requireMutationIdentity(queued)
         if (remote != null && local.deletedAt == remote.deletedAt &&
-            ConflictResolver.semanticFingerprint(remote.payload) ==
-            ConflictResolver.semanticFingerprint(local.payload)
+            ConflictResolver.semanticFingerprint(normalizeSemanticPayload(remote.payload)) ==
+            ConflictResolver.semanticFingerprint(normalizeSemanticPayload(local.payload))
         ) {
             return acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
         }
@@ -166,7 +171,7 @@ internal class OutboxPushCoordinator(
         owner: UserId,
         token: String,
     ): PushOutcome {
-        val decision = ConflictResolver.resolve(local, remote)
+        val decision = semanticDecision(local, remote)
         return when (decision.winner) {
             ConflictWinner.REMOTE -> acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
             ConflictWinner.UNRESOLVED -> retainConflict(queued, "delete_${decision.reason}")
@@ -211,7 +216,7 @@ internal class OutboxPushCoordinator(
         accessToken: String,
     ): PushOutcome {
         remote.requireMutationIdentity(queued)
-        val decision = ConflictResolver.resolve(local, remote)
+        val decision = semanticDecision(local, remote)
         return when (decision.winner) {
             ConflictWinner.REMOTE -> acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
             ConflictWinner.UNRESOLVED -> retainConflict(queued, decision.reason)
