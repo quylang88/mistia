@@ -1289,3 +1289,20 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-bill-contract.md`.
 
 All seven write gates false; ADB empty; no production writes/deployments.
 Evidence: `docs/android/evidence/2026-10-13-apk2-bill-scheduling.md`.
+
+## APK 2 offline recurring bill lifecycle — 2026-10-13
+
+- [x] Atomic typed save/pause/resume/archive and owner-scoped history/occurrences;
+  original currency/version/created/first-month and recurring pause state kept.
+- [x] Schedule/deadline/auto-pay normalization, linked category/wallet validation,
+  preferred imported archives and stale/deleted/forged owner protections.
+- [x] Archive unpaid/skipped-cycle guard preserves payment history; runtime
+  RED/GREEN fix for irrelevant stale due-day when deadline disabled.
+- [x] 470 JVM tests/65 suites, 52 Swift planning tests, Room test APK compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Execute file-backed lifecycle Room test when ADB returns; no device now.
+- [ ] Bill push/native form/payment and notification/automatic maintenance next;
+  remaining APK2–4 and final physical/visual verification incomplete.
+
+VersionCode10; all seven write gates false. No production writes/deployments.
+Evidence: `docs/android/evidence/2026-10-13-apk2-bill-offline.md`.

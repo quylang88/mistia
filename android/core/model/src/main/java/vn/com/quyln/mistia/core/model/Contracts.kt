@@ -178,7 +178,7 @@ interface AuthRepository {
     suspend fun signOut(clearLocalSession: Boolean = true)
 }
 
-interface FinanceRepository : BudgetRepository, SavingsGoalRepository {
+interface FinanceRepository : BudgetRepository, SavingsGoalRepository, RecurringBillRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
