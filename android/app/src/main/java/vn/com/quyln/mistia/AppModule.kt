@@ -32,6 +32,7 @@ import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.LocalStore
+import vn.com.quyln.mistia.core.model.SystemCategoryCatalog
 import vn.com.quyln.mistia.core.model.RemoteStore
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.ReceiptAnalysisClient
@@ -217,13 +218,20 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSystemCategoryCatalog(@ApplicationContext context: Context): SystemCategoryCatalog =
+        context.assets.open("MistiaSystemCategories.json").bufferedReader().use { SystemCategoryCatalog.parse(it.readText()) }
+
+    @Provides
+    @Singleton
     fun provideCategoryPushCoordinator(
         localStore: LocalStore,
         remoteStore: RemoteMutationStore,
+        catalog: SystemCategoryCatalog,
     ): CategoryPushCoordinator = CategoryPushCoordinator(
         localStore = localStore,
         remoteStore = remoteStore,
         writesEnabled = BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES,
+        catalog = catalog,
     )
 
     @Provides

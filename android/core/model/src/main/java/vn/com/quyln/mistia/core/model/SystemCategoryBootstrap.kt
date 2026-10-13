@@ -19,3 +19,16 @@ fun SystemCategoryDefinition.seedRecord(owner:UserId,parentId:String?,deviceId:S
 }
 fun TransactionCategoryRecord.bootstrapMutation()=PendingMutation(CloudEntity.TRANSACTION_CATEGORY,id,ownerUserId,MutationKind.UPSERT,
     toPayload(),updatedAt,syncVersion,requireNotNull(lastModifiedByDeviceId))
+
+/** Narrow provenance check: a semantically exact, unmodified, never-uploaded default. */
+fun TransactionCategoryRecord.isUntouchedSystemCategorySeed(catalog:SystemCategoryCatalog,parent:TransactionCategoryRecord?):Boolean = runCatching {
+    if(syncVersion!=0L || deletedAt!=null || lastModifiedByDeviceId==null || Instant.parse(createdAt)!=Instant.parse(updatedAt)) return@runCatching false
+    val definition=catalog.activeDefinitions.firstOrNull {it.key==systemKey} ?: return@runCatching false
+    if(definition.parentKey==null) {
+        if(parentCategoryId!=null) return@runCatching false
+    } else {
+        if(parent==null || parent.id!=parentCategoryId || parent.ownerUserId!=ownerUserId || parent.systemKey!=definition.parentKey ||
+            parent.hierarchyRole!=CategoryHierarchyRole.PARENT || parent.kind!=definition.kind) return@runCatching false
+    }
+    copy(updatedAt=createdAt)==definition.seedRecord(UserId(ownerUserId),parentCategoryId,lastModifiedByDeviceId,createdAt)
+}.getOrDefault(false)

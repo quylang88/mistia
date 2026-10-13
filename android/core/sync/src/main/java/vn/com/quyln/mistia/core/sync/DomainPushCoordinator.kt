@@ -37,6 +37,7 @@ internal class OutboxPushCoordinator(
     private val allowTombstoneDeletes: Boolean = false,
     private val normalizeSemanticPayload: (JsonObject) -> JsonObject = { it },
     private val validateRecord: (CloudRecord) -> Unit = {},
+    private val preferRemoteRecord: suspend (QueuedMutation, CloudRecord, CloudRecord) -> Boolean = { _, _, _ -> false },
     private val orderMutations: suspend (List<QueuedMutation>, UserId) -> List<QueuedMutation> = { rows, _ -> rows },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
@@ -93,6 +94,7 @@ internal class OutboxPushCoordinator(
 
         val remote = remoteStore.fetchRecord(entity, mutation.recordId, accessToken, ownerUserId)
         remote?.requireMutationIdentity(queued)
+        if (remote != null && preferRemoteRecord(queued, local, remote)) return acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
         if (remote != null && local.deletedAt == remote.deletedAt &&
             ConflictResolver.semanticFingerprint(normalizeSemanticPayload(remote.payload)) ==
             ConflictResolver.semanticFingerprint(normalizeSemanticPayload(local.payload))
@@ -219,6 +221,7 @@ internal class OutboxPushCoordinator(
         accessToken: String,
     ): PushOutcome {
         remote.requireMutationIdentity(queued)
+        if (preferRemoteRecord(queued, local, remote)) return acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
         val decision = semanticDecision(local, remote)
         return when (decision.winner) {
             ConflictWinner.REMOTE -> acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)

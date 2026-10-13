@@ -1364,3 +1364,18 @@ incomplete. Evidence: `docs/android/evidence/2026-10-13-system-category-catalog-
 
 VersionCode12; all eight gates false. No startup seed or production writes yet.
 Evidence: `docs/android/evidence/2026-10-13-system-category-bootstrap-local.md`.
+
+## Untouched system category seed sync protection — 2026-10-13
+
+- [x] Narrow exact-seed classifier and same-ID remote customization/tombstone
+  preference, including create race; explicit edits retain normal conflict logic.
+- [x] Stale preference ACK preserves newer user mutation/record and next push.
+- [x] 538 JVM tests/70 suites, 13 focused Swift tests, Room compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Legacy different-ID/system-key reconciliation and canonical category
+  comparisons in budget remain prerequisites to startup integration.
+- [ ] Then native bill UI/payment/maintenance and remaining APK2–4; physical/UI
+  verification still pending. ADB empty, all eight gates false, no production.
+
+Evidence: `docs/android/evidence/2026-10-13-system-category-seed-sync-guard.md`.
+Next: `docs/superpowers/plans/2026-10-13-android-system-category-logical-identity.md`.

@@ -6,6 +6,9 @@ import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.UserId
+import vn.com.quyln.mistia.core.model.SystemCategoryCatalog
+import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
+import vn.com.quyln.mistia.core.model.isUntouchedSystemCategorySeed
 
 typealias CategoryPushSummary = DomainPushSummary
 
@@ -13,6 +16,7 @@ class CategoryPushCoordinator(
     localStore: LocalStore,
     remoteStore: RemoteMutationStore,
     writesEnabled: Boolean,
+    catalog: SystemCategoryCatalog? = null,
     nowEpochMillis: () -> Long = System::currentTimeMillis,
 ) : DomainPushCoordinator {
     private val delegate = OutboxPushCoordinator(
@@ -21,6 +25,20 @@ class CategoryPushCoordinator(
         remoteStore = remoteStore,
         writesEnabled = writesEnabled,
         nowEpochMillis = nowEpochMillis,
+        preferRemoteRecord = { queued, local, remote ->
+            if (catalog == null || queued.mutation.baseVersion != 0L || local.syncVersion != 0L) false else {
+                val decoded=TransactionCategoryRecord.fromCloudRecord(local)
+                val parent=decoded.parentCategoryId?.let { id ->
+                    localStore.record(UserId(local.ownerUserId),CloudEntity.TRANSACTION_CATEGORY.table,id)?.let { row ->
+                        TransactionCategoryRecord.fromCloudRecord(row).takeIf { it.id==row.id && row.ownerUserId==local.ownerUserId }
+                    }
+                }
+                val untouched=decoded.ownerUserId==local.ownerUserId && decoded.id==local.id && decoded.toPayload()==local.payload &&
+                    local.updatedAt==decoded.updatedAt && decoded.isUntouchedSystemCategorySeed(catalog,parent)
+                if (untouched) TransactionCategoryRecord.fromCloudRecord(remote)
+                untouched
+            }
+        },
         orderMutations = { mutations, ownerUserId ->
             val childRecordIds = mutableSetOf<String>()
             for (queued in mutations) {

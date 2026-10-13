@@ -46,4 +46,28 @@ class SystemCategoryCatalogTest {
         assertThrows(IllegalArgumentException::class.java) {SystemCategoryCatalog.parse(source.replaceFirst("\"kind\" : \"expense\"","\"kind\" : \"invalid\""))}
         assertThrows(IllegalArgumentException::class.java) {SystemCategoryCatalog.parse(source.replaceFirst("\"id\" : \"parent_expense_food\"","\"id\" : \"grocery\""))}
     }
+    @Test fun `every untouched active seed classifies with its owner and actual parent`() {
+        val catalog=SystemCategoryCatalog.parse(source)
+        val owner=UserId("11111111-1111-1111-1111-111111111111")
+        val rows=catalog.activeDefinitions.associate {definition -> definition.key to definition.seedRecord(owner,
+            definition.parentKey?.let {SystemCategoryIdentity.cloudId(it,owner)},"33333333-3333-3333-3333-333333333333","2026-10-13T00:00:00Z")}
+        rows.values.forEach {row -> assertTrue(row.isUntouchedSystemCategorySeed(catalog,row.systemKey?.let {key -> catalog.definitions.single {it.key==key}.parentKey}?.let(rows::get)))}
+        val rent=rows.getValue("rent")
+        val parent=rows[rent.parentCategoryId?.let {id -> rows.values.single {it.id==id}.systemKey}]
+        listOf(rent.copy(name="User edit"),rent.copy(isFavorite=true),rent.copy(syncVersion=1),rent.copy(isArchived=true),
+            rent.copy(deletedAt=rent.updatedAt),rent.copy(updatedAt="2026-10-13T00:00:01Z"),rent.copy(nameEnglish="Custom")
+        ).forEach {assertFalse(it.isUntouchedSystemCategorySeed(catalog,parent))}
+    }
+    @Test fun `seed classifier accepts legacy system parent identity but rejects unrelated parent`() {
+        val catalog=SystemCategoryCatalog.parse(source)
+        val owner=UserId("11111111-1111-1111-1111-111111111111")
+        val definition=catalog.definitions.single {it.key=="rent"}
+        val parent=catalog.definitions.single {it.key==definition.parentKey}.seedRecord(owner,null,"33333333-3333-3333-3333-333333333333","2026-10-13T00:00:00Z")
+            .copy(id="44444444-4444-4444-4444-444444444444",name="Custom parent",syncVersion=9)
+        val child=definition.seedRecord(owner,parent.id,"33333333-3333-3333-3333-333333333333","2026-10-13T00:00:00Z")
+        assertTrue(child.isUntouchedSystemCategorySeed(catalog,parent))
+        assertFalse(child.isUntouchedSystemCategorySeed(catalog,parent.copy(systemKey="other_parent")))
+        assertFalse(child.isUntouchedSystemCategorySeed(catalog,parent.copy(ownerUserId="22222222-2222-2222-2222-222222222222")))
+        assertFalse(child.isUntouchedSystemCategorySeed(catalog,null))
+    }
 }
