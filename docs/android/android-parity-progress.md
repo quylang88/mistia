@@ -1322,3 +1322,16 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-bill-offline.md`.
 
 VersionCode11; all eight write gates false. ADB empty; no production writes.
 Evidence: `docs/android/evidence/2026-10-13-apk2-bill-push.md`.
+
+## Follow-up category bootstrap dependency identified — 2026-10-13
+
+- [x] Direct Swift/UI audit found Android lacks startup default system category
+  seeding. The prior APK1 build closure does not prove fresh/offline-account
+  default-category parity; this gap is reopened explicitly.
+- [ ] Add shared catalog/stable owner-scoped identity, atomic local bootstrap
+  and sync protection against overwriting pre-existing cloud customization.
+- [ ] Then implement native bills with Swift quick-picker and correct planning
+  mode order budget/due/goals plus due bills/cards/installments submodes.
+
+No runtime/production change in this audit. All eight write gates stay false.
+Plan: `docs/superpowers/plans/2026-10-13-android-system-category-bootstrap.md`.
