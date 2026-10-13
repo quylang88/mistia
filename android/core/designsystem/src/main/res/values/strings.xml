@@ -995,6 +995,8 @@
     <string name="planning_duepayment_undo_payment_message">Bạn có chắc chắn muốn hoàn tác thanh toán cho hóa đơn này không? Giao dịch thanh toán liên quan sẽ bị xóa.</string>
     <string name="planning_duepayment_undo_skip">Hoàn tác bỏ qua</string>
     <string name="planning_duepayment_undo_skip_message">Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán.</string>
+    <string name="planning_goal_editor_discard_message">Các thay đổi mục tiêu chưa lưu sẽ bị mất.</string>
+    <string name="planning_goal_editor_invalid_amount">Nhập số tiền hợp lệ trong phạm vi được hỗ trợ.</string>
     <string name="planning_planning_a_matching_payment_wallet_could_not_be">Không tìm thấy ví thanh toán phù hợp.</string>
     <string name="planning_planning_access_requested">Đã yêu cầu quyền</string>
     <string name="planning_planning_active_goals">Mục tiêu đang hoạt động</string>

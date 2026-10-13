@@ -104,4 +104,50 @@ class BudgetWorkflowTest {
         val image=compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
         File(context.filesDir,name).outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
     }
+
+    @Test fun savingsGoalCreateEditAndDeleteKeepWalletAndOutboxConsistent() {
+        compose.setContent { MistiaTheme(darkTheme=false) { PlanningScreen(owner,repo,deviceIdProvider={device},exchangeRateRepository=rates) } }
+        compose.onNodeWithTag("planning.tab.1").performClick()
+        compose.onNodeWithTag("goal.add").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.name").performTextReplacement("Travel")
+        compose.onNodeWithTag("goal.target").performTextReplacement("1000")
+        compose.onNodeWithTag("goal.current").performTextReplacement("100")
+        capture("goal.editor","goal-editor-light.png")
+        compose.onNodeWithTag("goal.save").performScrollTo().performClick()
+        compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().size==1 } }
+        val goal=runBlocking { repo.observeSavingsGoals(owner).first().single() }
+        Assert.assertEquals(1000,goal.targetMinor)
+        compose.onNodeWithTag("goal.edit.${goal.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.current").performTextReplacement("200")
+        compose.onNodeWithTag("goal.save").performScrollTo().performClick()
+        compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().single().currentSavedMinor==200L } }
+        capture("budget.screen","goal-list-light.png")
+        compose.onNodeWithTag("goal.edit.${goal.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.delete").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.confirmDelete").performClick()
+        compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().isEmpty() } }
+        Assert.assertTrue(runBlocking { repo.observeWallets(owner).first().isEmpty() })
+        Assert.assertEquals(MutationKind.DELETE,runBlocking { store.pendingMutations(owner,CloudEntity.SAVINGS_GOAL,Long.MAX_VALUE).single().mutation.kind })
+    }
+
+    @Test fun savingsFailedSaveRetainsDraftAndRequiresDiscardInDarkLargeFont() {
+        var dismissed=false
+        compose.setContent {
+            val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,1.3f)) {
+                MistiaTheme(darkTheme=true) { SavingsGoalEditorSheet(owner.value,null,emptyList(),
+                    onSave={Result.failure(IllegalStateException("storage failure"))},onDelete={Result.success(Unit)},onDismiss={dismissed=true}) }
+            }
+        }
+        compose.onNodeWithTag("goal.name").performTextReplacement("Pending")
+        compose.onNodeWithTag("goal.target").performTextReplacement("1000")
+        compose.onNodeWithTag("goal.save").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.name").assertTextContains("Pending")
+        Assert.assertFalse(dismissed)
+        capture("goal.editor","goal-editor-dark-font.png")
+        compose.onNodeWithTag("goal.close").performScrollTo().performClick()
+        Assert.assertFalse(dismissed)
+        compose.onNodeWithTag("goal.discard").performClick()
+        compose.runOnIdle { Assert.assertTrue(dismissed) }
+    }
 }

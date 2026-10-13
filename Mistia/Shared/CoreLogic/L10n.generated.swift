@@ -2521,6 +2521,13 @@ nonisolated enum L10n {
             static func undoSkipMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.undoSkipMessage", vi: "Bạn có chắc chắn muốn hoàn tác bỏ qua hóa đơn này không? Hóa đơn sẽ quay trở lại trạng thái cần thanh toán.", en: "Are you sure you want to undo skipping this bill? It will return to pending status.", ja: "この請求のスキップを取り消しますか？未払い状態に戻ります。", language: language) }
         }
 
+        nonisolated enum goalEditor {
+            static var discardMessage: String { L10n.tr("planning.goalEditor.discardMessage", vi: "Các thay đổi mục tiêu chưa lưu sẽ bị mất.", en: "Unsaved goal changes will be lost.", ja: "未保存の目標の変更は失われます。") }
+            static func discardMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.goalEditor.discardMessage", vi: "Các thay đổi mục tiêu chưa lưu sẽ bị mất.", en: "Unsaved goal changes will be lost.", ja: "未保存の目標の変更は失われます。", language: language) }
+            static var invalidAmount: String { L10n.tr("planning.goalEditor.invalidAmount", vi: "Nhập số tiền hợp lệ trong phạm vi được hỗ trợ.", en: "Enter valid amounts within the supported range.", ja: "対応範囲内の有効な金額を入力してください。") }
+            static func invalidAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.goalEditor.invalidAmount", vi: "Nhập số tiền hợp lệ trong phạm vi được hỗ trợ.", en: "Enter valid amounts within the supported range.", ja: "対応範囲内の有効な金額を入力してください。", language: language) }
+        }
+
         nonisolated enum planning {
             static var aMatchingPaymentWalletCouldNotBe: String { L10n.tr("planning.planning.aMatchingPaymentWalletCouldNotBe", vi: "Không tìm thấy ví thanh toán phù hợp.", en: "A matching payment wallet could not be found.", ja: "支払いに使うウォレットが見つかりません。") }
             static func aMatchingPaymentWalletCouldNotBe(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.aMatchingPaymentWalletCouldNotBe", vi: "Không tìm thấy ví thanh toán phù hợp.", en: "A matching payment wallet could not be found.", ja: "支払いに使うウォレットが見つかりません。", language: language) }

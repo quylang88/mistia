@@ -1241,3 +1241,21 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-savings-offline.md`.
 
 VersionCode8; all seven write flags false. ADB empty; no production writes.
 Evidence: `docs/android/evidence/2026-10-13-apk2-savings-push.md`.
+
+## APK 2 native savings workflow — 2026-10-13
+
+- [x] Planning tabs, savings summary/progress/monthly requirement and native
+  name/amount/date/icon/wallet form with delete and unsaved-change confirmation.
+- [x] Exact input, owner-scoped draft/edit-snapshot restoration, original target
+  instant preservation, preferred archived wallet and save-failure retention.
+- [x] Fixed reporting FX overflow in budget/savings: exact intermediate values
+  and final display clamping, with runtime RED/GREEN regressions.
+- [x] 442 JVM tests/61 suites, 52 Swift planning tests, Room/planning test APK
+  compilation, lint/build and contract/localization checks passed.
+- [ ] Four compiled Compose budget/savings workflow tests and file-backed Room
+  reopen test await ADB; visual/font/keyboard/Samsung verification not claimed.
+- [ ] Recurring bills next, followed by installments/statements/due maintenance
+  and remaining APK3–4/RC settings. Full requested parity remains incomplete.
+
+VersionCode9, all seven write gates false; no production writes/deployments.
+Evidence: `docs/android/evidence/2026-10-13-apk2-savings-ui.md`.

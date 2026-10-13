@@ -139,8 +139,8 @@ fun projectBudgets(
                 (targetId != null && identity == targetId) || (targetName.isNotEmpty() && names.any { it != null && groupingKey(it) == targetName })
             }.map { record ->
                 val expense = reportedBudgetExpense(record, categoryById[record.categoryId], walletById[record.sourceWalletId], adjustmentTitles)
-                convertBudgetMoney(expense, record.sourceCurrencyCode, plan.currencyCode, rates)
-            }.fold(BigInteger.ZERO) { sum, amount -> sum.add(amount.big()) }.clamped()
+                planningMoneyMinorExact(expense, record.sourceCurrencyCode, plan.currencyCode, rates)
+            }.fold(BigInteger.ZERO) { sum, amount -> sum.add(amount) }.clamped()
     }
     val rowComparator = Comparator<BudgetRow> { a, b ->
         val ratio = compareProgress(b.spentMinor, b.plan.limitMinor, a.spentMinor, a.plan.limitMinor)
@@ -157,8 +157,8 @@ fun projectBudgets(
         }.sortedWith(rowComparator)
         val template = parent ?: branchPlans.first()
         val code = template.currencyCode
-        val childLimit = sumBudget(children.map { convertBudgetMoney(it.plan.limitMinor, it.plan.currencyCode, code, rates) })
-        val totalSpent = if (parent != null) spent(parent, true) else sumBudget(children.map { convertBudgetMoney(it.spentMinor, it.plan.currencyCode, code, rates) })
+        val childLimit = sumBudgetExact(children.map { planningMoneyMinorExact(it.plan.limitMinor, it.plan.currencyCode, code, rates) })
+        val totalSpent = if (parent != null) spent(parent, true) else sumBudgetExact(children.map { planningMoneyMinorExact(it.spentMinor, it.plan.currencyCode, code, rates) })
         val limit = parent?.limitMinor ?: childLimit
         val onlyChild = parent == null && children.size == 1
         val branchName = if (onlyChild) children.single().name else name(template, parent = parent == null)
@@ -172,8 +172,8 @@ fun projectBudgets(
         val ratio = compareProgress(b.spentMinor, b.limitMinor, a.spentMinor, a.limitMinor)
         if (ratio != 0) ratio else Collator.getInstance().compare(a.name, b.name)
     }
-    val limit = sumBudget(branches.map { convertBudgetMoney(it.limitMinor, it.currencyCode, reportingCurrency, rates) })
-    val spent = sumBudget(branches.map { convertBudgetMoney(it.spentMinor, it.currencyCode, reportingCurrency, rates) })
+    val limit = sumBudgetExact(branches.map { planningMoneyMinorExact(it.limitMinor, it.currencyCode, reportingCurrency, rates) })
+    val spent = sumBudgetExact(branches.map { planningMoneyMinorExact(it.spentMinor, it.currencyCode, reportingCurrency, rates) })
     return BudgetProjection(branches, limit, spent, limit.big().subtract(spent.big()).max(BigInteger.ZERO).clamped())
 }
 
@@ -197,9 +197,7 @@ private fun reportedBudgetExpense(record: LedgerTransactionRecord, category: Tra
     return if (wallet?.kind != WalletKind.CREDIT_CARD && cardTitle) 0 else record.amountMinor
 }
 private fun currency(value: String?): String = value?.trim()?.uppercase(Locale.ROOT)?.takeIf { it == "JPY" || it == "VND" } ?: "JPY"
-private fun convertBudgetMoney(amount: Long, source: String?, target: String, rates: List<ExchangeRateSnapshot>): Long =
-    if (currency(source) == currency(target)) amount else resolveExchangeRate(amount, currency(source), currency(target), rates)?.destinationAmountMinor ?: 0
-private fun sumBudget(values: List<Long>): Long = values.fold(BigInteger.ZERO) { sum, value -> sum.add(value.big()) }.clamped()
+private fun sumBudgetExact(values: List<BigInteger>): Long = values.fold(BigInteger.ZERO, BigInteger::add).clamped()
 private fun groupingKey(value: String): String = value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
 private fun String?.nonblank(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 private fun Long.big(): BigInteger = BigInteger.valueOf(this)

@@ -995,6 +995,8 @@
     <string name="planning_duepayment_undo_payment_message">Are you sure you want to undo payment for this bill? The linked payment transaction will be deleted.</string>
     <string name="planning_duepayment_undo_skip">Undo skip</string>
     <string name="planning_duepayment_undo_skip_message">Are you sure you want to undo skipping this bill? It will return to pending status.</string>
+    <string name="planning_goal_editor_discard_message">Unsaved goal changes will be lost.</string>
+    <string name="planning_goal_editor_invalid_amount">Enter valid amounts within the supported range.</string>
     <string name="planning_planning_a_matching_payment_wallet_could_not_be">A matching payment wallet could not be found.</string>
     <string name="planning_planning_access_requested">Access requested</string>
     <string name="planning_planning_active_goals">Active goals</string>

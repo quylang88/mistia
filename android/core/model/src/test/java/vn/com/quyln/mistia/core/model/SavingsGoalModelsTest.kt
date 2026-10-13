@@ -50,4 +50,22 @@ class SavingsGoalModelsTest {
         val c=a.copy(id="55555555-5555-5555-5555-555555555555",name="aardvark")
         assertEquals(listOf("aardvark","Alpha"),savingsGoalRows(owner,listOf(a,c),YearMonth.of(2026,10),zone).map { it.goal.name })
     }
+    @Test fun `summary converts currencies once and takes highest progress as nearest`() {
+        val yen=goal().copy(name="Near",targetMinor=20000,currentSavedMinor=12000)
+        val dong=goal("33333333-3333-3333-3333-333333333333").copy(currencyCode="VND",targetMinor=1000000,currentSavedMinor=200000)
+        val rows=savingsGoalRows(owner,listOf(dong,yen),YearMonth.of(2026,10),zone)
+        val rates=listOf(ExchangeRateSnapshot("JPY","VND","200","fixture",0,null))
+        val summary=savingsGoalSummary(rows,"JPY",rates)
+        assertEquals(2,summary.activeCount);assertEquals(13000,summary.totalSavedMinor);assertEquals("Near",summary.nearestGoalName)
+        assertEquals(12000,savingsGoalSummary(rows,"JPY",emptyList()).totalSavedMinor)
+        assertNull(savingsGoalSummary(emptyList(),"JPY",rates).nearestGoalName)
+    }
+    @Test fun `summary does not drop conversion overflow and cancels exact signed values before display clamping`() {
+        val positive=goal().copy(currentSavedMinor=Long.MAX_VALUE)
+        val negative=goal("33333333-3333-3333-3333-333333333333").copy(currentSavedMinor=-Long.MAX_VALUE)
+        val rates=listOf(ExchangeRateSnapshot("JPY","VND","200","fixture",0,null))
+        fun rows(values:List<SavingsGoalRecord>)=savingsGoalRows(owner,values,YearMonth.of(2026,10),zone)
+        assertEquals(Long.MAX_VALUE,savingsGoalSummary(rows(listOf(positive)),"VND",rates).totalSavedMinor)
+        assertEquals(0,savingsGoalSummary(rows(listOf(positive,negative)),"VND",rates).totalSavedMinor)
+    }
 }

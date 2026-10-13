@@ -90,3 +90,18 @@ private fun JsonObject.number(key:String):Long = (get(key) as? JsonPrimitive)?.t
     ?: throw IllegalArgumentException("Savings field $key must be an Int64")
 private fun JsonObject.boolean(key:String):Boolean = (get(key) as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull
     ?: throw IllegalArgumentException("Savings field $key must be a boolean")
+
+data class SavingsGoalSummary(val activeCount:Int,val totalSavedMinor:Long,val nearestGoalName:String?)
+
+fun savingsGoalSummary(rows:List<SavingsGoalRow>,reportingCurrency:String,rates:List<ExchangeRateSnapshot>):SavingsGoalSummary {
+    val total=rows.fold(BigInteger.ZERO) { sum,row ->
+        sum.add(planningMoneyMinorExact(row.goal.currentSavedMinor,row.goal.currencyCode,reportingCurrency,rates))
+    }.max(BigInteger.valueOf(Long.MIN_VALUE)).min(BigInteger.valueOf(Long.MAX_VALUE)).toLong()
+    val nearest=rows.maxWithOrNull { a,b ->
+        fun ratio(goal:SavingsGoalRecord)=if(goal.targetMinor>0) BigInteger.valueOf(goal.currentSavedMinor) to BigInteger.valueOf(goal.targetMinor) else BigInteger.ZERO to BigInteger.ONE
+        val (an,ad)=ratio(a.goal);val (bn,bd)=ratio(b.goal)
+        val progress=an.multiply(bd).compareTo(bn.multiply(ad))
+        if(progress!=0) progress else Instant.parse(b.goal.targetDate).compareTo(Instant.parse(a.goal.targetDate))
+    }?.goal?.name
+    return SavingsGoalSummary(rows.size,total,nearest)
+}

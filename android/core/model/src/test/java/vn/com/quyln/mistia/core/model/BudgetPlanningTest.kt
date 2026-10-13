@@ -64,6 +64,12 @@ class BudgetPlanningTest {
         assertEquals(300,projection.totalSpentMinor)
         assertEquals(700,projection.remainingMinor)
     }
+    @Test fun `reporting FX overflow clamps displayed budget spending instead of erasing it`() {
+        val rate=ExchangeRateSnapshot("JPY","VND","200","fixture",0,null)
+        val plan=budget().copy(currencyCode="VND")
+        val expense=transactionRecord().copy(amountMinor=Long.MAX_VALUE)
+        assertEquals(Long.MAX_VALUE,project(listOf(plan),listOf(expense),rates=listOf(rate)).branches.single().spentMinor)
+    }
 
     @Test fun `frozen localized category labels survive live rename and legacy hierarchy falls back`() {
         val renamed = category(CATEGORY_ID,"Dining",PARENT_ID)

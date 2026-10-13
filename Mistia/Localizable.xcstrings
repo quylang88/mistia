@@ -22863,6 +22863,52 @@
           }
         }
       },
+    "planning.goalEditor.discardMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Các thay đổi mục tiêu chưa lưu sẽ bị mất."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsaved goal changes will be lost."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未保存の目標の変更は失われます。"
+          }
+        }
+      }
+    },
+    "planning.goalEditor.invalidAmount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhập số tiền hợp lệ trong phạm vi được hỗ trợ."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter valid amounts within the supported range."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "対応範囲内の有効な金額を入力してください。"
+          }
+        }
+      }
+    },
     "planning.planning.accessRequested" : {
       "extractionState" : "stale",
       "localizations" : {
