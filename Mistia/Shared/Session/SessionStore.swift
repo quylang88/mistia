@@ -1779,6 +1779,15 @@ final class SessionStore {
         _ session: SupabaseAuthSession,
         restoringExistingSession: Bool
     ) throws {
+        if let launchState {
+            let activeDescriptor = launchState.activeProfileDescriptor
+            if activeDescriptor?.kind != .cloudUser
+                || activeDescriptor?.cloudUserID != session.user.id {
+                let descriptor = try launchState.ensureCloudProfile(for: session.user.id)
+                try activateLocalProfile(descriptor)
+            }
+        }
+
         currentSession = session
         setPreservedSignedInUserID(session.user.id)
         setLocalModeProfileUserID(nil)

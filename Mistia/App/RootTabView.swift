@@ -621,7 +621,7 @@ struct RootTabView: View {
     let anchorTrailing = quickCreateAnchorFrame.maxX
     let anchorBottom = quickCreateAnchorFrame.maxY - proxy.safeAreaInsets.top
     let x = anchorTrailing - (width / 2)
-    let y = anchorBottom - (height / 2) - 2
+    let y = anchorBottom - (height / 2)
 
     return CGPoint(x: x, y: y)
   }
@@ -785,7 +785,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 }
 
 private struct MistiaQuickCreateMenu: View {
-  static let collapsedSize: CGFloat = 44
+  static let collapsedSize = MistiaRootChromeMetrics.floatingButtonDiameter
   static let defaultExpandedHeight: CGFloat = 318 // Matched to menuHeight
 
   @Environment(\.colorScheme) private var colorScheme
@@ -803,7 +803,7 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var cornerRadius: CGFloat {
-    isExpanded ? 30 : 22
+    isExpanded ? 30 : Self.collapsedSize / 2
   }
 
   private var menuHeight: CGFloat {
@@ -934,7 +934,7 @@ private struct MistiaQuickCreateMenu: View {
         Circle()
           .fill(appPurple.opacity(0.18))
         Image(systemName: "plus")
-          .font(.system(size: 20, weight: .semibold, design: .rounded))
+          .font(.system(size: 24, weight: .semibold, design: .rounded))
           .foregroundStyle(appPurple)
       }
       .frame(width: Self.collapsedSize, height: Self.collapsedSize)

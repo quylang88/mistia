@@ -2216,6 +2216,40 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(ownerUserID, localProfileUserID)
     }
 
+    func testRestoredSessionKeepsGuestDataSeparateFromAuthenticatedSync() async throws {
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        let guestDescriptor = try XCTUnwrap(launchState.activeProfileDescriptor)
+        let wallet = LedgerWallet(
+            name: "Guest cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        launchState.modelContainer.mainContext.insert(wallet)
+        try launchState.modelContainer.mainContext.save()
+
+        let session = makeSession(userID: UUID())
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .disconnected),
+            registerBackgroundRefresh: false
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertEqual(store.activeLocalProfileUserID, session.user.id)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.kind, .cloudUser)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.cloudUserID, session.user.id)
+        XCTAssertNotEqual(launchState.activeProfileDescriptor?.id, guestDescriptor.id)
+        XCTAssertTrue(try launchState.hasMeaningfulUserData(in: guestDescriptor))
+        XCTAssertFalse(try launchState.hasMeaningfulUserData())
+    }
+
     func testGuestUnboundSignInToExistingAccountPromptsToKeepDataSeparate() async throws {
         let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
         let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)

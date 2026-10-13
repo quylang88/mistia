@@ -1,6 +1,11 @@
 import SwiftUI
 import UIKit
 
+enum MistiaRootChromeMetrics {
+  static let floatingButtonDiameter: CGFloat = 62
+  static let trailingInset: CGFloat = 20
+}
+
 struct MistiaNativeTabShell: UIViewControllerRepresentable {
   @Binding var selectedTab: MistiaTab
   var appearanceMode: MistiaAppearanceMode
@@ -116,14 +121,14 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private var didConfigureTabs = false
   private var didConfigureQuickCreateButton = false
+  private var didConfigureShortcutButton = false
   private var cachedControllers: [MistiaTab: UIViewController] = [:]
   @available(iOS 18.0, *)
   private var cachedRootTabs: [MistiaTab: UITab] = [:]
-  private weak var shortcutTab: UISearchTab?
   private var shortcutAvatarTask: Task<Void, Never>?
   private var shortcutAvatarImageCache: [String: UIImage] = [:]
   private var currentShortcutImageKey = ""
-  private var quickCreateCenterXConstraint: NSLayoutConstraint?
+  private var shortcutImage: UIImage?
   private var currentAppearanceMode: MistiaAppearanceMode = .automatic
   private var currentAppLanguage: MistiaAppLanguage = .english
   private var currentShortcutPresentation = MistiaShortcutPresentation(
@@ -138,8 +143,6 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private var currentShortcutDisabledAccessibilityHint: String?
   private var currentSelectedMistiaTab: MistiaTab?
   private var currentShowsShortcutTab = false
-  private var spinnerActivityIndicatorView: UIActivityIndicatorView?
-  private var shortcutPulseView: MistiaAttentionPulseRingUIView?
   private var wasMenuVisible = false
   private var draggedFocusedTab: MistiaTab?
   private var draggedFocusedIndex: Int?
@@ -148,6 +151,21 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
       guard let self else { return }
       chromeDelegate?.nativeTabBarControllerDidTapQuickCreate(self)
+    }
+  )
+
+  private lazy var shortcutController = UIHostingController(
+    rootView: MistiaShortcutFloatingButton(
+      image: nil,
+      tint: Color(uiColor: currentShortcutTint),
+      isSyncing: false,
+      isDisabled: true,
+      showsAttentionPulse: false,
+      accessibilityLabel: "",
+      accessibilityHint: nil
+    ) { [weak self] in
+      guard let self else { return }
+      chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
     }
   )
 
@@ -180,14 +198,14 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       object: nil,
       queue: .main
     ) { [weak self] _ in
-      self?.updateShortcutPulseAnimation()
+      self?.refreshShortcutButton()
     }
   }
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    alignQuickCreateButtonToSearchPill()
-    updateShortcutPulseFrame()
+    layoutTabBarForShortcut()
+    layoutFloatingButtons()
     notifyQuickCreateFrameChanged()
   }
 
@@ -220,6 +238,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       || isCurrentShortcutDisabled != isShortcutDisabled
       || isCurrentShortcutAttentionPulsing != isShortcutAttentionPulsing
       || currentShortcutDisabledAccessibilityHint != shortcutDisabledAccessibilityHint
+    let didChangeShortcutVisibility = currentShowsShortcutTab != showsShortcutTab
     let didChangeSelectedTab = currentSelectedMistiaTab != selectedTab
 
     currentAppearanceMode = appearanceMode
@@ -234,25 +253,21 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
     configureTabsIfNeeded()
     configureQuickCreateButtonIfNeeded()
+    configureShortcutButtonIfNeeded()
 
     if didChangeLanguage {
       refreshLocalizedContent()
-    } else if didChangeShortcutContent {
-      refreshShortcutTabContent()
+    } else if isFirstRender || didChangeAppearance || didChangeShortcutContent {
+      refreshShortcutButtonContent()
     }
 
-    let didChangeShortcutTabVisibility = updateShortcutTabVisibilityIfNeeded(
-      showsShortcutTab: showsShortcutTab
-    )
-    updateShortcutPulseAnimation()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar, isMenuVisible: isMenuVisible)
+    updateShortcutButtonVisibility(isHidden: !showsShortcutTab || hidesTabBar)
     updateTabBarVisibility(isHidden: hidesTabBar)
-    if isFirstRender || didChangeAppearance || didChangeShortcutTabVisibility {
+    if isFirstRender || didChangeAppearance {
       applyChromeAppearance()
     }
-    if isFirstRender || didChangeSelectedTab || didChangeAppearance
-      || didChangeShortcutTabVisibility
-    {
+    if isFirstRender || didChangeSelectedTab || didChangeAppearance {
       syncTabSymbols(selectedTab: selectedTab)
     }
     currentSelectedMistiaTab = selectedTab
@@ -262,7 +277,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     if self.selectedTab?.identifier != identifier {
       self.selectedTab = tab(forIdentifier: identifier)
     }
-    if isFirstRender || didChangeShortcutTabVisibility {
+    if isFirstRender || didChangeShortcutContent || didChangeShortcutVisibility {
       scheduleTabBarChromeRefresh(selectedTab: selectedTab)
     }
   }
@@ -277,8 +292,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
       let rootTabs = MistiaTab.nativeShellTabs.map(makeRootTab(for:))
       cachedRootTabs = Dictionary(uniqueKeysWithValues: zip(MistiaTab.nativeShellTabs, rootTabs))
-      let configuredTabs = currentShowsShortcutTab ? rootTabs + [makePinnedShortcutTab()] : rootTabs
-      setTabs(configuredTabs, animated: false)
+      setTabs(rootTabs, animated: false)
       selectedTab = rootTabs.first
       syncTabSymbols(selectedTab: .overview)
     } else {
@@ -307,27 +321,29 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     refreshQuickCreateRootView()
 
     addChild(quickCreateController)
-    quickCreateController.view.translatesAutoresizingMaskIntoConstraints = false
+    quickCreateController.view.translatesAutoresizingMaskIntoConstraints = true
     quickCreateController.view.backgroundColor = UIColor.clear
     view.addSubview(quickCreateController.view)
     quickCreateController.didMove(toParent: self)
+    layoutFloatingButtons()
+  }
 
-    let centerXConstraint = quickCreateController.view.centerXAnchor.constraint(
-      equalTo: view.leadingAnchor)
-    centerXConstraint.constant = fallbackQuickCreateCenterX
-    quickCreateCenterXConstraint = centerXConstraint
+  private func configureShortcutButtonIfNeeded() {
+    guard !didConfigureShortcutButton else { return }
+    didConfigureShortcutButton = true
+    refreshShortcutButton()
 
-    NSLayoutConstraint.activate([
-      quickCreateController.view.widthAnchor.constraint(equalToConstant: 44),
-      quickCreateController.view.heightAnchor.constraint(equalToConstant: 44),
-      centerXConstraint,
-      quickCreateController.view.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -14),
-    ])
+    addChild(shortcutController)
+    shortcutController.view.translatesAutoresizingMaskIntoConstraints = true
+    shortcutController.view.backgroundColor = .clear
+    view.addSubview(shortcutController.view)
+    shortcutController.didMove(toParent: self)
+    layoutFloatingButtons()
   }
 
   private func refreshLocalizedContent() {
     refreshQuickCreateRootView()
-    refreshShortcutTabContent()
+    refreshShortcutButtonContent()
 
     if #available(iOS 18.0, *) {
       for tab in MistiaTab.nativeShellTabs {
@@ -353,45 +369,37 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     }
   }
 
-  private func refreshShortcutTabContent() {
-    guard #available(iOS 18.0, *), let shortcutTab else { return }
-
-    shortcutTab.title = currentShortcutPresentation.title
+  private func refreshShortcutButtonContent() {
     shortcutAvatarTask?.cancel()
     shortcutAvatarTask = nil
-    stopSpinnerAnimation()
-    shortcutTab.isEnabled = !isCurrentShortcutDisabled
-    shortcutTab.accessibilityLabel = currentShortcutPresentation.accessibilityLabel
-    shortcutTab.accessibilityHint = currentShortcutDisabledAccessibilityHint
 
     if isCurrentShortcutSyncing && !isCurrentShortcutDisabled {
       currentShortcutImageKey = "syncing_spinner"
-      stopShortcutPulseAnimation()
-      startSpinnerAnimation()
+      refreshShortcutButton()
       return
     }
 
     switch currentShortcutPresentation.icon {
     case .systemImage(let systemName):
       currentShortcutImageKey = "system:\(systemName)"
-      shortcutTab.image = shortcutSystemImage(systemName)
+      shortcutImage = shortcutSystemImage(systemName)
 
     case .currentUserAvatar(_, let avatarURL):
       currentShortcutImageKey = avatarURL?.absoluteString ?? "system:person.crop.circle.fill"
 
       guard let avatarURL else {
-        shortcutTab.image = shortcutSystemImage("person.crop.circle.fill")
-        updateShortcutPulseAnimation()
+        shortcutImage = shortcutSystemImage("person.crop.circle.fill")
+        refreshShortcutButton()
         return
       }
 
       if let cachedImage = shortcutAvatarImageCache[avatarURL.absoluteString] {
-        shortcutTab.image = cachedImage
-        updateShortcutPulseAnimation()
+        shortcutImage = cachedImage
+        refreshShortcutButton()
         return
       }
 
-      shortcutTab.image = shortcutSystemImage("person.crop.circle.fill")
+      shortcutImage = shortcutSystemImage("person.crop.circle.fill")
       loadShortcutAvatarImage(from: avatarURL, fallbackImage: shortcutSystemImage("person.crop.circle.fill"))
 
     case .memberAvatar(let initials, let avatarURL):
@@ -399,22 +407,22 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       currentShortcutImageKey = avatarURL?.absoluteString ?? "member:\(initials)"
 
       guard let avatarURL else {
-        shortcutTab.image = fallbackImage
-        updateShortcutPulseAnimation()
+        shortcutImage = fallbackImage
+        refreshShortcutButton()
         return
       }
 
       if let cachedImage = shortcutAvatarImageCache[avatarURL.absoluteString] {
-        shortcutTab.image = cachedImage
-        updateShortcutPulseAnimation()
+        shortcutImage = cachedImage
+        refreshShortcutButton()
         return
       }
 
-      shortcutTab.image = fallbackImage
+      shortcutImage = fallbackImage
       loadShortcutAvatarImage(from: avatarURL, fallbackImage: fallbackImage)
     }
 
-    updateShortcutPulseAnimation()
+    refreshShortcutButton()
   }
 
   private func loadShortcutAvatarImage(from url: URL, fallbackImage: UIImage?) {
@@ -431,7 +439,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
           self.shortcutAvatarImageCache[cacheKey] = resolvedImage
         }
         guard self.currentShortcutImageKey == cacheKey else { return }
-        self.shortcutTab?.image = resolvedImage
+        self.shortcutImage = resolvedImage
+        self.refreshShortcutButton()
       }
     }
   }
@@ -497,112 +506,21 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     }
   }
 
-  private func findSearchTabButton() -> UIView? {
-    guard #available(iOS 18.0, *) else { return nil }
-    let control = tabBar.rightmostVisibleControl
-    return control
-  }
+  private func refreshShortcutButton() {
+    guard didConfigureShortcutButton else { return }
 
-  private func startSpinnerAnimation() {
-    stopSpinnerAnimation()
-    stopShortcutPulseAnimation()
-    guard let tabButton = findSearchTabButton() else { return }
-
-    let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
-    iconView?.isHidden = true
-
-    let indicator = UIActivityIndicatorView(style: .medium)
-    indicator.color = currentShortcutTint
-    indicator.translatesAutoresizingMaskIntoConstraints = false
-    tabButton.addSubview(indicator)
-
-    NSLayoutConstraint.activate([
-      indicator.centerXAnchor.constraint(equalTo: tabButton.centerXAnchor),
-      indicator.centerYAnchor.constraint(equalTo: iconView?.centerYAnchor ?? tabButton.centerYAnchor),
-      indicator.widthAnchor.constraint(equalToConstant: 22),
-      indicator.heightAnchor.constraint(equalToConstant: 22),
-    ])
-
-    spinnerActivityIndicatorView = indicator
-    indicator.startAnimating()
-  }
-
-  private func stopSpinnerAnimation() {
-    spinnerActivityIndicatorView?.stopAnimating()
-    spinnerActivityIndicatorView?.removeFromSuperview()
-    spinnerActivityIndicatorView = nil
-
-    if let tabButton = findSearchTabButton() {
-      let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
-      iconView?.isHidden = false
+    shortcutController.rootView = MistiaShortcutFloatingButton(
+      image: shortcutImage,
+      tint: Color(uiColor: currentShortcutTint),
+      isSyncing: isCurrentShortcutSyncing,
+      isDisabled: isCurrentShortcutDisabled,
+      showsAttentionPulse: isCurrentShortcutAttentionPulsing,
+      accessibilityLabel: currentShortcutPresentation.accessibilityLabel,
+      accessibilityHint: currentShortcutDisabledAccessibilityHint
+    ) { [weak self] in
+      guard let self else { return }
+      chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
     }
-  }
-
-  private func updateShortcutPulseAnimation() {
-    guard #available(iOS 18.0, *) else { return }
-    guard isCurrentShortcutAttentionPulsing,
-      !isCurrentShortcutDisabled,
-      !isCurrentShortcutSyncing,
-      let tabButton = findSearchTabButton()
-    else {
-      stopShortcutPulseAnimation()
-      return
-    }
-
-    let pulseView: MistiaAttentionPulseRingUIView
-    if let shortcutPulseView {
-      pulseView = shortcutPulseView
-      if pulseView.superview !== tabButton {
-        pulseView.removeFromSuperview()
-        tabButton.addSubview(pulseView)
-      }
-    } else {
-      pulseView = MistiaAttentionPulseRingUIView()
-      shortcutPulseView = pulseView
-      tabButton.addSubview(pulseView)
-    }
-
-    updateShortcutPulseFrame()
-    pulseView.configure(
-      color: currentShortcutTint,
-      diameter: 42,
-      targetScale: 1.62,
-      isActive: true,
-      reducesMotion: UIAccessibility.isReduceMotionEnabled
-    )
-  }
-
-  private func updateShortcutPulseFrame() {
-    guard let pulseView = shortcutPulseView,
-      let tabButton = findSearchTabButton()
-    else { return }
-
-    let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
-    let iconCenter: CGPoint
-    if let iconView, let iconSuperview = iconView.superview {
-      iconCenter = tabButton.convert(iconView.center, from: iconSuperview)
-    } else {
-      iconCenter = CGPoint(x: tabButton.bounds.midX, y: tabButton.bounds.midY - 7)
-    }
-
-    let side: CGFloat = 42
-    let rect = CGRect(
-      x: iconCenter.x - side / 2,
-      y: iconCenter.y - side / 2,
-      width: side,
-      height: side
-    ).integral
-    UIView.performWithoutAnimation {
-      pulseView.frame = rect
-      pulseView.layer.zPosition = 10
-      pulseView.setNeedsLayout()
-      pulseView.layoutIfNeeded()
-    }
-  }
-
-  private func stopShortcutPulseAnimation() {
-    shortcutPulseView?.removeFromSuperview()
-    shortcutPulseView = nil
   }
 
   private func makeShortcutFallbackAvatarImage(initials: String) -> UIImage? {
@@ -666,20 +584,99 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     return makeShortcutAvatarImage(from: image)
   }
 
-  private func alignQuickCreateButtonToSearchPill() {
-    guard let quickCreateCenterXConstraint else { return }
+  private func layoutFloatingButtons() {
+    guard didConfigureQuickCreateButton, !view.bounds.isEmpty else { return }
+    let tabContentFrame = visibleTabBarContentFrame
+    guard !tabContentFrame.isEmpty else { return }
 
-    if let searchControl = tabBar.rightmostVisibleControl {
-      let searchFrame = searchControl.convert(searchControl.bounds, to: view)
-      quickCreateCenterXConstraint.constant = searchFrame.midX
-    } else {
-      quickCreateCenterXConstraint.constant = fallbackQuickCreateCenterX
+    let buttonSize = MistiaRootChromeMetrics.floatingButtonDiameter
+    let tabBarGap: CGFloat = 14
+    let centerX = fallbackQuickCreateCenterX
+
+    quickCreateController.view.frame = CGRect(
+      x: centerX - buttonSize / 2,
+      y: tabContentFrame.minY - tabBarGap - buttonSize,
+      width: buttonSize,
+      height: buttonSize
+    )
+
+    guard didConfigureShortcutButton else { return }
+    shortcutController.view.frame = CGRect(
+      x: centerX - buttonSize / 2,
+      y: tabContentFrame.midY - buttonSize / 2,
+      width: buttonSize,
+      height: buttonSize
+    )
+  }
+
+  private func layoutTabBarForShortcut() {
+    guard !view.bounds.isEmpty else { return }
+    tabBar.layoutIfNeeded()
+
+    let buttonSize = MistiaRootChromeMetrics.floatingButtonDiameter
+    let gap: CGFloat = 12
+    let shortcutCenterX = fallbackQuickCreateCenterX
+    let fullWidth = view.bounds.width
+    let tabBarFrame = tabBar.convert(tabBar.bounds, to: view)
+    // The system's visible pill is inset inside the tab bar's full frame.
+    let contentTrailingInset = max(0, tabBarFrame.maxX - visibleTabBarContentFrame.maxX)
+    let targetWidth = currentShowsShortcutTab
+      ? shortcutCenterX - buttonSize / 2 - gap + contentTrailingInset - view.bounds.minX
+      : fullWidth
+
+    var targetFrame = tabBar.frame
+    targetFrame.origin.x = view.bounds.minX
+    targetFrame.size.width = targetWidth
+
+    if abs(tabBar.frame.minX - targetFrame.minX) > 0.5
+      || abs(tabBar.frame.width - targetFrame.width) > 0.5
+    {
+      tabBar.frame = targetFrame
     }
+
+    tabBar.layoutIfNeeded()
+
+    let itemWidth = currentShowsShortcutTab
+      ? targetWidth / CGFloat(MistiaTab.nativeShellTabs.count)
+      : 82
+    guard abs(tabBar.itemWidth - itemWidth) > 0.5 else { return }
+
+    tabBar.itemWidth = itemWidth
+    let appearance = tabBar.standardAppearance.copy()
+    appearance.stackedItemWidth = itemWidth
+    tabBar.standardAppearance = appearance
+    tabBar.scrollEdgeAppearance = appearance
+    tabBar.setNeedsLayout()
+  }
+
+  private var visibleTabBarContentFrame: CGRect {
+    func containsVisibleControl(_ candidate: UIView) -> Bool {
+      guard !candidate.isHidden, candidate.alpha > 0.01, !candidate.bounds.isEmpty else {
+        return false
+      }
+      return candidate is UIControl || candidate.subviews.contains(where: containsVisibleControl)
+    }
+
+    let contentFrames = tabBar.subviews
+      .filter(containsVisibleControl)
+      .map { $0.convert($0.bounds, to: view) }
+    if let firstFrame = contentFrames.first {
+      return contentFrames.dropFirst().reduce(firstFrame) { $0.union($1) }
+    }
+
+    // Before UIKit creates the tab controls, exclude the home-indicator safe area.
+    let frame = tabBar.convert(tabBar.bounds, to: view)
+    return CGRect(
+      x: frame.minX,
+      y: frame.minY,
+      width: frame.width,
+      height: max(0, frame.height - tabBar.safeAreaInsets.bottom)
+    )
   }
 
   private func scheduleQuickCreateButtonRealignment() {
     DispatchQueue.main.async { [weak self] in
-      self?.alignQuickCreateButtonToSearchPill()
+      self?.layoutFloatingButtons()
       self?.notifyQuickCreateFrameChanged()
     }
   }
@@ -774,6 +771,26 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     wasMenuVisible = isMenuVisible
   }
 
+  private func updateShortcutButtonVisibility(isHidden: Bool) {
+    guard didConfigureShortcutButton else { return }
+    let targetAlpha: CGFloat = isHidden ? 0 : 1
+    guard
+      shortcutController.view.alpha != targetAlpha
+        || shortcutController.view.isHidden != isHidden
+    else { return }
+
+    if !isHidden {
+      shortcutController.view.isHidden = false
+    }
+
+    UIView.animate(withDuration: 0.18, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+      self.shortcutController.view.alpha = targetAlpha
+    } completion: { _ in
+      guard abs(self.shortcutController.view.alpha - targetAlpha) < 0.01 else { return }
+      self.shortcutController.view.isHidden = isHidden
+    }
+  }
+
   private func updateTabBarVisibility(isHidden: Bool) {
     let targetAlpha: CGFloat = isHidden ? 0 : 1
     let targetTranslation: CGFloat = isHidden ? (tabBar.frame.height > 0 ? tabBar.frame.height : 100) : 0
@@ -808,19 +825,13 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func notifyQuickCreateFrameChanged() {
     guard didConfigureQuickCreateButton else { return }
     view.layoutIfNeeded()
-    let buttonSize = CGSize(width: 44, height: 44)
-    let center = quickCreateController.view.center
-    let frame = CGRect(
-      x: center.x - (buttonSize.width / 2),
-      y: center.y - (buttonSize.height / 2),
-      width: buttonSize.width,
-      height: buttonSize.height
-    )
+    let frame = quickCreateController.view.convert(quickCreateController.view.bounds, to: view)
     chromeDelegate?.nativeTabBarController(self, didUpdateQuickCreateFrame: frame.integral)
   }
 
   private var fallbackQuickCreateCenterX: CGFloat {
-    view.bounds.maxX - view.safeAreaInsets.right - 41
+    view.bounds.maxX - view.safeAreaInsets.right - MistiaRootChromeMetrics.trailingInset
+      - MistiaRootChromeMetrics.floatingButtonDiameter / 2
   }
 
   private var currentSelectedTint: UIColor {
@@ -891,10 +902,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
           }
           chromeDelegate?.nativeTabBarController(self, didSelect: focusedTab)
         }
-      } else if let focusedIndex = draggedFocusedIndex, focusedIndex == 4, currentShowsShortcutTab {
-        chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
       }
-
       clearTabHoverHighlight()
 
     case .cancelled, .failed:
@@ -919,7 +927,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     }
 
     let controls = orderedTabControls
-    let totalCount = currentShowsShortcutTab ? 5 : 4
+    let totalCount = MistiaTab.nativeShellTabs.count
 
     if controls.count == totalCount {
       for (index, control) in controls.enumerated() {
@@ -1032,41 +1040,9 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       return self.viewController(for: tab)
     }
 
-    // Keep the four core destinations grouped by the system before the pinned search tab.
+    // Keep the four core destinations grouped by the system.
     rootTab.preferredPlacement = UITab.Placement.fixed
     return rootTab
-  }
-
-  @available(iOS 18.0, *)
-  private func makePinnedShortcutTab() -> UISearchTab {
-    let searchTab = UISearchTab { _ in
-      UIViewController()
-    }
-    searchTab.preferredPlacement = UITab.Placement.pinned
-    if #available(iOS 26.0, *) {
-      searchTab.automaticallyActivatesSearch = false
-    }
-    shortcutTab = searchTab
-    refreshShortcutTabContent()
-    return searchTab
-  }
-
-  @discardableResult
-  private func updateShortcutTabVisibilityIfNeeded(showsShortcutTab: Bool) -> Bool {
-    guard #available(iOS 18.0, *) else { return false }
-
-    if showsShortcutTab {
-      guard shortcutTab == nil else { return false }
-      setTabs(tabs + [makePinnedShortcutTab()], animated: false)
-      return true
-    } else {
-      guard let shortcutTab else { return false }
-      var nextTabs = tabs
-      nextTabs.removeAll { $0 === shortcutTab }
-      setTabs(nextTabs, animated: false)
-      self.shortcutTab = nil
-      return true
-    }
   }
 
   private func scheduleTabBarChromeRefresh(selectedTab: MistiaTab) {
@@ -1080,7 +1056,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       self.view.setNeedsLayout()
       self.tabBar.setNeedsLayout()
       self.view.layoutIfNeeded()
-      self.alignQuickCreateButtonToSearchPill()
+      self.layoutFloatingButtons()
       self.notifyQuickCreateFrameChanged()
     }
   }
@@ -1104,17 +1080,6 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
         .environment(\.locale, currentAppLanguage.locale)
         .environment(\.calendar, currentAppLanguage.calendar)
     )
-  }
-
-  @available(iOS 18.0, *)
-  func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool
-  {
-    guard let shortcutTab, tab === shortcutTab else { return true }
-    if isCurrentShortcutSyncing || isCurrentShortcutDisabled {
-      return false
-    }
-    chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
-    return false
   }
 
   @available(iOS 18.0, *)
@@ -1154,17 +1119,96 @@ private struct MistiaQuickCreateFloatingButton: View {
         action()
     } label: {
       Image(systemName: "plus")
-        .font(.system(size: 20, weight: .semibold, design: .rounded))
+        .font(.system(size: 24, weight: .semibold, design: .rounded))
         .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-        .frame(width: 44, height: 44)
+        .frame(
+          width: MistiaRootChromeMetrics.floatingButtonDiameter,
+          height: MistiaRootChromeMetrics.floatingButtonDiameter
+        )
+        .contentShape(Circle())
     }
-    .buttonStyle(.glassProminent)
-    .buttonBorderShape(.circle)
-    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
+    .buttonStyle(.plain)
+    .glassEffect(
+      .regular.tint(Color(red: 0.43, green: 0.23, blue: 0.76)).interactive(),
+      in: Circle()
+    )
     .shadow(color: Color.black.opacity(0.18), radius: 16, y: 8)
     .accessibilityLabel(
       L10n.app.mistianativetab.quickCreate
     )
+  }
+}
+
+private struct MistiaShortcutFloatingButton: View {
+  let image: UIImage?
+  let tint: Color
+  let isSyncing: Bool
+  let isDisabled: Bool
+  let showsAttentionPulse: Bool
+  let accessibilityLabel: String
+  let accessibilityHint: String?
+  let action: () -> Void
+
+  var body: some View {
+    Group {
+      if #available(iOS 26.0, *) {
+        button
+          .buttonStyle(.plain)
+          .glassEffect(.regular.interactive(), in: Circle())
+      } else {
+        button
+          .buttonStyle(.plain)
+          .background(.ultraThinMaterial, in: Circle())
+      }
+    }
+    .frame(
+      width: MistiaRootChromeMetrics.floatingButtonDiameter,
+      height: MistiaRootChromeMetrics.floatingButtonDiameter
+    )
+    .opacity(isDisabled ? 0.48 : 1)
+    .shadow(color: Color.black.opacity(0.14), radius: 12, y: 6)
+    .disabled(isDisabled || isSyncing)
+    .accessibilityLabel(accessibilityLabel)
+    .accessibilityHint(accessibilityHint ?? "")
+  }
+
+  private var button: some View {
+    Button {
+      let generator = UIImpactFeedbackGenerator(style: .light)
+      generator.prepare()
+      generator.impactOccurred()
+      action()
+    } label: {
+      ZStack {
+        if showsAttentionPulse && !isDisabled && !isSyncing {
+          MistiaAttentionPulseRing(
+            color: tint,
+            diameter: MistiaRootChromeMetrics.floatingButtonDiameter - 4,
+            targetScale: 1.62,
+            isActive: true
+          )
+        }
+
+        if isSyncing {
+          ProgressView()
+            .tint(tint)
+        } else if let image {
+          Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 28, height: 28)
+        } else {
+          Image(systemName: "externaldrive.badge.icloud")
+            .font(.system(size: 24, weight: .medium))
+            .foregroundStyle(tint)
+        }
+      }
+      .frame(
+        width: MistiaRootChromeMetrics.floatingButtonDiameter,
+        height: MistiaRootChromeMetrics.floatingButtonDiameter
+      )
+      .contentShape(Circle())
+    }
   }
 }
 
@@ -1216,35 +1260,6 @@ extension UIImage {
   }
 }
 
-extension UIView {
-  fileprivate var rightmostVisibleControl: UIControl? {
-    allDescendantControls
-      .filter { control in
-        !control.isHidden && control.alpha > 0.01 && control.bounds.width > 20
-          && control.bounds.height > 20
-      }
-      .max { lhs, rhs in
-        let lhsFrame = lhs.convert(lhs.bounds, to: self)
-        let rhsFrame = rhs.convert(rhs.bounds, to: self)
-        return lhsFrame.midX < rhsFrame.midX
-      }
-  }
-
-  private var allDescendantControls: [UIControl] {
-    var controls: [UIControl] = []
-    accumulateDescendantControls(in: self, result: &controls)
-    return controls
-  }
-
-  private func accumulateDescendantControls(in view: UIView, result: inout [UIControl]) {
-    for subview in view.subviews {
-      if let control = subview as? UIControl {
-        result.append(control)
-      }
-      accumulateDescendantControls(in: subview, result: &result)
-    }
-  }
-}
 
 extension MistiaNativeTabBarController: UIGestureRecognizerDelegate {
   func gestureRecognizer(
