@@ -23,6 +23,13 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
                 .sortedWith(compareByDescending(BudgetPlanRecord::monthAnchor).thenBy(BudgetPlanRecord::createdAt).thenBy(BudgetPlanRecord::id))
         }
 
+    override fun observeBudgetCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>> =
+        store.observe(CloudEntity.TRANSACTION_CATEGORY.table, ownerUserId).map { rows ->
+            rows.mapNotNull { runCatching { TransactionCategoryRecord.fromCloudRecord(it) }.getOrNull() }
+                .filter { it.ownerUserId == ownerUserId.value && it.deletedAt == null }
+                .sortedWith(compareBy(TransactionCategoryRecord::sortOrder, TransactionCategoryRecord::createdAt, TransactionCategoryRecord::id))
+        }
+
     override suspend fun saveBudget(ownerUserId: UserId, draft: BudgetDraft, deviceId: String, now: String): Result<BudgetPlanRecord> =
         result { mutex.withLock {
             require(draft.zoneId == zoneId) { "Budget draft must use the repository calendar zone" }
@@ -48,9 +55,16 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
             if (active.any { it.id != existing?.id && it.categoryId == category.id && budgetMonth(it.monthAnchor, draft.zoneId) == month }) {
                 fail(BudgetValidationError.DUPLICATE_CATEGORY)
             }
+            val selectedBranchId = parent?.id ?: category.id
+            val proposedCurrency = (existing?.currencyCode ?: draft.currencyCode).trim().uppercase(java.util.Locale.ROOT)
+            if (budgetCurrencyConstraints(ownerUserId, active, month, draft.zoneId).any { it.id != existing?.id &&
+                    it.allocationSnapshot(categories.firstOrNull { category -> category.id == it.categoryId }).branchCategoryId == selectedBranchId &&
+                    it.currencyCode.trim().uppercase(java.util.Locale.ROOT) != proposedCurrency }) {
+                fail(BudgetValidationError.BRANCH_CURRENCY_MISMATCH)
+            }
             if (validateBudgetAllocation(category.id, parent?.id ?: category.id,
                     category.hierarchyRole == CategoryHierarchyRole.PARENT, category.hierarchyRole == CategoryHierarchyRole.CHILD,
-                    draft.limitMinor, draft.monthAnchor, active.map(BudgetPlanRecord::allocationSnapshot), existing?.id, draft.zoneId)
+                    draft.limitMinor, draft.monthAnchor, active.map { it.allocationSnapshot(categories.firstOrNull { category -> category.id == it.categoryId }) }, existing?.id, draft.zoneId)
                 != BudgetAllocationValidation.Valid) fail(BudgetValidationError.ALLOCATION_EXCEEDED)
             val carried = existing != null && budgetMonth(existing.monthAnchor, draft.zoneId) < month
             val edited = existing.takeUnless { carried }
@@ -60,7 +74,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
             val records = mutableListOf(saved)
             val branchId = parent?.id ?: category.id
             if (family) {
-                active.filter { it.id != saved.id && it.allocationSnapshot().branchCategoryId == branchId &&
+                active.filter { it.id != saved.id && it.allocationSnapshot(categories.firstOrNull { category -> category.id == it.categoryId }).branchCategoryId == branchId &&
                     budgetMonth(it.monthAnchor, draft.zoneId) == month && !it.includesFamilySpending }
                     .forEach { sibling ->
                         val siblingCategory = categories.firstOrNull { it.id == sibling.categoryId }
@@ -78,7 +92,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
             }
             if (parent != null && active.none { it.id != edited?.id && it.categoryId == parent.id && budgetMonth(it.monthAnchor, draft.zoneId) == month }) {
                 val children = active.filter { it.id != edited?.id && it.categoryId != parent.id &&
-                    it.allocationSnapshot().branchCategoryId == parent.id && budgetMonth(it.monthAnchor, draft.zoneId) == month } + saved
+                    it.allocationSnapshot(categories.firstOrNull { category -> category.id == it.categoryId }).branchCategoryId == parent.id && budgetMonth(it.monthAnchor, draft.zoneId) == month } + saved
                 if (children.size >= 2) {
                     val total = try { children.fold(0L) { sum, child -> Math.addExact(sum, child.limitMinor) } }
                         catch (_: ArithmeticException) { fail(BudgetValidationError.AMOUNT_OVERFLOW) }
@@ -109,9 +123,10 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
             val deleted = existing.copy(deletedAt = utc(now), updatedAt = now, lastModifiedByDeviceId = UUID.fromString(deviceId).toString())
             val mutations = mutableListOf(deleted.toCloudRecord() to deleted.pendingMutation(MutationKind.DELETE))
             val zone = zoneId
-            val branchId = existing.allocationSnapshot().branchCategoryId
+            val categories = observeBudgetCategories(ownerUserId).first()
+            val branchId = existing.allocationSnapshot(categories.firstOrNull { it.id == existing.categoryId }).branchCategoryId
             if (budgetMonth(existing.monthAnchor, zone) == budgetMonth(now, zone) && branchId != null &&
-                observeBudgets(ownerUserId).first().none { it.id != existing.id && it.allocationSnapshot().branchCategoryId == branchId &&
+                observeBudgets(ownerUserId).first().none { it.id != existing.id && it.allocationSnapshot(categories.firstOrNull { category -> category.id == it.categoryId }).branchCategoryId == branchId &&
                     budgetMonth(it.monthAnchor, zone) == budgetMonth(existing.monthAnchor, zone) }) {
                 store.record(ownerUserId, CloudEntity.TRANSACTION_CATEGORY.table, branchId)?.let { cloud ->
                     val category = TransactionCategoryRecord.fromCloudRecord(cloud)

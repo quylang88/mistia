@@ -197,6 +197,46 @@ class BudgetRepositoryTest {
         assertTrue(repo.observeCategories(owner).first().single { it.id == PARENT }.familyBudgetSpendingEnabled)
     }
 
+    @Test fun `legacy category hierarchy snapshots still enforce child allocation cap`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner,draft().copy(id=PARENT_BUDGET,categoryId=PARENT,limitMinor=1000),DEVICE,NOW).getOrThrow()
+        val child=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow().copy(categoryParentIdSnapshot=null,
+            categoryIsParentSnapshot=null,categoryHierarchyRoleSnapshotWireValue=null)
+        store.replacePullSnapshot(owner,CloudEntity.BUDGET_PLAN.table,repo.observeBudgets(owner).first()
+            .filter { it.id!=child.id }.map { it.toCloudRecord() }+child.toCloudRecord())
+        assertTrue(repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,limitMinor=501),DEVICE,NOW).isFailure)
+    }
+
+    @Test fun `mixed currencies in the same branch month are rejected without automatic parent or mutation`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner,draft().copy(currencyCode="VND",limitMinor=1000000),DEVICE,NOW).getOrThrow()
+        val failure=repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,currencyCode="JPY",limitMinor=1000),DEVICE,NOW).exceptionOrNull()
+        assertTrue(failure is BudgetValidationException)
+        assertEquals(BudgetValidationError.BRANCH_CURRENCY_MISMATCH,(failure as BudgetValidationException).reason)
+        assertEquals(1,repo.observeBudgets(owner).first().size)
+        assertEquals(1,store.outboxRows(OWNER).count { it.entity==CloudEntity.BUDGET_PLAN })
+        assertTrue(repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,currencyCode="VND",limitMinor=1000),DEVICE,NOW).isSuccess)
+        assertEquals(1001000,repo.observeBudgets(owner).first().single { it.categoryId==PARENT }.limitMinor)
+    }
+
+    @Test fun `carried forward branch currency also constrains new budgets in its displayed month`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner,draft().copy(currencyCode="VND",monthAnchor="2026-09-01T00:00:00Z"),DEVICE,NOW).getOrThrow()
+        val failure=repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,currencyCode="JPY"),DEVICE,NOW).exceptionOrNull()
+        assertTrue(failure is BudgetValidationException)
+        assertEquals(BudgetValidationError.BRANCH_CURRENCY_MISMATCH,(failure as BudgetValidationException).reason)
+        assertEquals(1,repo.observeBudgets(owner).first().size)
+    }
+
+    @Test fun `future branch currency constrains a new earlier carried budget`() = runTest {
+        seedCategories()
+        repo.saveBudget(owner,draft().copy(currencyCode="VND",monthAnchor="2026-11-01T00:00:00Z"),DEVICE,NOW).getOrThrow()
+        val failure=repo.saveBudget(owner,draft().copy(id=NEW_ID,categoryId=CHILD2,currencyCode="JPY"),DEVICE,NOW).exceptionOrNull()
+        assertTrue(failure is BudgetValidationException)
+        assertEquals(BudgetValidationError.BRANCH_CURRENCY_MISMATCH,(failure as BudgetValidationException).reason)
+        assertEquals(1,repo.observeBudgets(owner).first().size)
+    }
+
     private fun draft() = BudgetDraft(id = BUDGET, categoryId = CHILD, monthAnchor = NOW,
         limitMinor = 500, currencyCode = "JPY", rolloverEnabled = true, zoneId = zone)
 

@@ -94,9 +94,10 @@ data class BudgetPlanRecord(
         syncVersion = syncVersion,
     )
 
-    fun allocationSnapshot(): BudgetAllocationSnapshot {
+    fun allocationSnapshot(category: TransactionCategoryRecord? = null): BudgetAllocationSnapshot {
         val snapshotCategoryId = categoryIdSnapshot ?: categoryId
         val isParent = categoryIsParentSnapshot
+            ?: category?.let { it.hierarchyRole == CategoryHierarchyRole.PARENT }
             ?: (categoryHierarchyRoleSnapshotWireValue == CategoryHierarchyRole.PARENT.wireValue)
         return BudgetAllocationSnapshot(
             id = id,
@@ -104,7 +105,7 @@ data class BudgetPlanRecord(
             branchCategoryId = if (isParent) {
                 snapshotCategoryId
             } else {
-                categoryParentIdSnapshot ?: snapshotCategoryId
+                categoryParentIdSnapshot ?: category?.parentCategoryId ?: snapshotCategoryId
             },
             categoryIsParent = isParent,
             limitMinor = limitMinor,

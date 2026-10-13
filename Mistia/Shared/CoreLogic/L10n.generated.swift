@@ -2461,6 +2461,21 @@ nonisolated enum L10n {
             }
         }
 
+        nonisolated enum budgetEditor {
+            static var branchCurrencyMismatch: String { L10n.tr("planning.budgetEditor.branchCurrencyMismatch", vi: "Các ngân sách trong cùng nhánh và tháng phải dùng cùng tiền tệ.", en: "Budgets in the same branch and month must use the same currency.", ja: "同じ分類と月の予算は、同じ通貨を使用してください。") }
+            static func branchCurrencyMismatch(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.branchCurrencyMismatch", vi: "Các ngân sách trong cùng nhánh và tháng phải dùng cùng tiền tệ.", en: "Budgets in the same branch and month must use the same currency.", ja: "同じ分類と月の予算は、同じ通貨を使用してください。", language: language) }
+            static var discard: String { L10n.tr("planning.budgetEditor.discard", vi: "Bỏ thay đổi", en: "Discard changes", ja: "変更を破棄") }
+            static func discard(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.discard", vi: "Bỏ thay đổi", en: "Discard changes", ja: "変更を破棄", language: language) }
+            static var discardMessage: String { L10n.tr("planning.budgetEditor.discardMessage", vi: "Các thay đổi ngân sách chưa lưu sẽ bị mất.", en: "Unsaved budget changes will be lost.", ja: "保存していない予算の変更は失われます。") }
+            static func discardMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.discardMessage", vi: "Các thay đổi ngân sách chưa lưu sẽ bị mất.", en: "Unsaved budget changes will be lost.", ja: "保存していない予算の変更は失われます。", language: language) }
+            static var discardTitle: String { L10n.tr("planning.budgetEditor.discardTitle", vi: "Bỏ thay đổi?", en: "Discard changes?", ja: "変更を破棄しますか？") }
+            static func discardTitle(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.discardTitle", vi: "Bỏ thay đổi?", en: "Discard changes?", ja: "変更を破棄しますか？", language: language) }
+            static var invalidAmount: String { L10n.tr("planning.budgetEditor.invalidAmount", vi: "Nhập số tiền dương trong phạm vi được hỗ trợ.", en: "Enter a positive amount within the supported range.", ja: "対応範囲内の正の金額を入力してください。") }
+            static func invalidAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.invalidAmount", vi: "Nhập số tiền dương trong phạm vi được hỗ trợ.", en: "Enter a positive amount within the supported range.", ja: "対応範囲内の正の金額を入力してください。", language: language) }
+            static var keepEditing: String { L10n.tr("planning.budgetEditor.keepEditing", vi: "Tiếp tục chỉnh sửa", en: "Keep editing", ja: "編集を続ける") }
+            static func keepEditing(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.keepEditing", vi: "Tiếp tục chỉnh sửa", en: "Keep editing", ja: "編集を続ける", language: language) }
+        }
+
         nonisolated enum duepayment {
             static var billSkipped: String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み") }
             static func billSkipped(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み", language: language) }

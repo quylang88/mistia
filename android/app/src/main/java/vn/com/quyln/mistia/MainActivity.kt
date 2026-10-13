@@ -229,6 +229,8 @@ private fun SignedInRoot(
                         authState.session.userId,
                         financeRepository,
                         modifier,
+                        deviceIdProvider = { deviceIdStore.getOrCreate() },
+                        exchangeRateRepository = exchangeRateRepository,
                     )
                     RootTab.MANAGEMENT -> ManagementScreen(
                         ownerUserId = authState.session.userId,

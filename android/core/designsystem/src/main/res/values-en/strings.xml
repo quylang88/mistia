@@ -970,6 +970,12 @@
     <string name="overview_overview_you_do_not_have_permission_to_edit">You do not have permission to edit this member\'s cashflow items.</string>
     <string name="placeholder_placeholdertab_this_tab_is_intentionally_empty_while_we">This tab is intentionally empty while we prioritize finishing the Overview screen first.</string>
     <string name="planning_bill_archive_unpaid_cycles_message">This bill still has an unpaid payment in the current or a past month. Complete all payments before archiving it.</string>
+    <string name="planning_budget_editor_branch_currency_mismatch">Budgets in the same branch and month must use the same currency.</string>
+    <string name="planning_budget_editor_discard">Discard changes</string>
+    <string name="planning_budget_editor_discard_message">Unsaved budget changes will be lost.</string>
+    <string name="planning_budget_editor_discard_title">Discard changes?</string>
+    <string name="planning_budget_editor_invalid_amount">Enter a positive amount within the supported range.</string>
+    <string name="planning_budget_editor_keep_editing">Keep editing</string>
     <string name="planning_duepayment_bill_skipped">Skipped</string>
     <string name="planning_duepayment_cancel">Cancel</string>
     <string name="planning_duepayment_choose_wallet">Choose wallet</string>

@@ -970,6 +970,12 @@
     <string name="overview_overview_you_do_not_have_permission_to_edit">Bạn chưa có quyền chỉnh sửa thu chi của thành viên này.</string>
     <string name="placeholder_placeholdertab_this_tab_is_intentionally_empty_while_we">Tab này đang để trống để ưu tiên hoàn thiện giao diện Tổng quan trước.</string>
     <string name="planning_bill_archive_unpaid_cycles_message">Hóa đơn này vẫn còn khoản chưa thanh toán trong tháng hiện tại hoặc các tháng trước. Hãy hoàn tất tất cả thanh toán trước khi lưu trữ.</string>
+    <string name="planning_budget_editor_branch_currency_mismatch">Các ngân sách trong cùng nhánh và tháng phải dùng cùng tiền tệ.</string>
+    <string name="planning_budget_editor_discard">Bỏ thay đổi</string>
+    <string name="planning_budget_editor_discard_message">Các thay đổi ngân sách chưa lưu sẽ bị mất.</string>
+    <string name="planning_budget_editor_discard_title">Bỏ thay đổi?</string>
+    <string name="planning_budget_editor_invalid_amount">Nhập số tiền dương trong phạm vi được hỗ trợ.</string>
+    <string name="planning_budget_editor_keep_editing">Tiếp tục chỉnh sửa</string>
     <string name="planning_duepayment_bill_skipped">Đã bỏ qua</string>
     <string name="planning_duepayment_cancel">Hủy</string>
     <string name="planning_duepayment_choose_wallet">Chọn ví</string>

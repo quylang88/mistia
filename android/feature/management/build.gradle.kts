@@ -13,7 +13,6 @@ android {
     compileSdk = 36
     defaultConfig { minSdk = 26 }
     buildFeatures { compose = true }
-    sourceSets.getByName("main").assets.srcDir(generatedCategoryAssets)
     sourceSets.getByName("test").resources.srcDir(generatedCategoryAssets)
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }

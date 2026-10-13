@@ -8,6 +8,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 
 interface BudgetRepository {
+    fun observeBudgetCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeBudgets(ownerUserId: UserId): Flow<List<BudgetPlanRecord>>
     suspend fun saveBudget(ownerUserId: UserId, draft: BudgetDraft, deviceId: String, now: String): Result<BudgetPlanRecord>
     suspend fun archiveBudget(ownerUserId: UserId, budgetId: RecordId, deviceId: String, now: String): Result<Unit>
@@ -26,7 +27,7 @@ data class BudgetDraft(
 )
 
 enum class BudgetValidationError {
-    CATEGORY_REQUIRED, INVALID_AMOUNT, INVALID_CURRENCY, DUPLICATE_CATEGORY,
+    BRANCH_CURRENCY_MISMATCH, CATEGORY_REQUIRED, INVALID_AMOUNT, INVALID_CURRENCY, DUPLICATE_CATEGORY,
     ALLOCATION_EXCEEDED, PAST_READ_ONLY, NOT_FOUND, INVALID_CATEGORY, AMOUNT_OVERFLOW,
 }
 

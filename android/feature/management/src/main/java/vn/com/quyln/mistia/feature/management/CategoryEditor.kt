@@ -17,17 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingDown
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.CardGiftcard
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MedicalServices
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -447,25 +435,8 @@ fun CategoryEditorSheet(
 }
 
 @Composable
-internal fun CategoryIcon(
-    symbolName: String,
-    kind: TransactionCategoryKind?,
-    colorHex: String,
-    modifier: Modifier = Modifier,
-) {
-    val iconCatalog = CategoryIconCatalog.load(LocalContext.current)
-    Box(
-        modifier = modifier.clip(CircleShape).background(colorFromHex(colorHex).copy(alpha = 0.18f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            categoryIcon(symbolName, kind, iconCatalog.option(symbolName)?.fallbackIcon),
-            contentDescription = null,
-            tint = colorFromHex(colorHex),
-            modifier = Modifier.size(24.dp),
-        )
-    }
-}
+internal fun CategoryIcon(symbolName: String, kind: TransactionCategoryKind?, colorHex: String, modifier: Modifier = Modifier) =
+    vn.com.quyln.mistia.core.designsystem.CategoryIcon(symbolName, kind, colorHex, modifier)
 
 @Composable
 internal fun categoryKindTitle(kind: TransactionCategoryKind): String = stringResource(
@@ -512,26 +483,6 @@ private fun categoryOperationMessage(error: CategoryValidationError): String = s
         else -> R.string.management_management_couldn_t_save_this_category_right_now
     }
 )
-
-private fun categoryIcon(
-    symbolName: String,
-    kind: TransactionCategoryKind?,
-    fallbackIcon: String?,
-): ImageVector = when (symbolName) {
-    "mistia.flow.expense" -> Icons.AutoMirrored.Filled.TrendingDown
-    "mistia.flow.income" -> Icons.AutoMirrored.Filled.TrendingUp
-    else -> when (categoryIconFamily(fallbackIcon, kind)) {
-        CategoryIconFamily.FOOD -> Icons.Default.Restaurant
-        CategoryIconFamily.HOME -> Icons.Default.Home
-        CategoryIconFamily.TRANSPORT -> Icons.Default.DirectionsCar
-        CategoryIconFamily.SHOPPING -> Icons.Default.ShoppingBag
-        CategoryIconFamily.HEALTH -> Icons.Default.MedicalServices
-        CategoryIconFamily.WORK -> Icons.Default.Work
-        CategoryIconFamily.GIFT -> Icons.Default.CardGiftcard
-        CategoryIconFamily.INCOME -> Icons.AutoMirrored.Filled.TrendingUp
-        CategoryIconFamily.OTHER -> Icons.Default.MoreHoriz
-    }
-}
 
 private val CATEGORY_COLORS = listOf(
     "#FF7A59",

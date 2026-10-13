@@ -1181,3 +1181,21 @@ APK versionCode 5; all six cloud-write flags remain false. No Samsung or budget
 UI verification, live Supabase budget write, migration or deployment claim.
 
 Evidence: `docs/android/evidence/2026-10-13-apk2-budget-push.md`.
+
+## APK 2 native budget workflow — 2026-10-13
+
+- [x] Monthly hierarchy/spending/FX/pace projection and native budget editor,
+  shared category icons, frozen localization and legacy hierarchy fallback.
+- [x] Exact input, owner-scoped restoration, category recent/favorites/search,
+  save-failure retention, dismiss guard and archive/delete confirmations.
+- [x] User-approved one currency per branch: repository rejects conflicts,
+  including carried-forward and future budgets; form inherits branch currency.
+- [x] 387 JVM tests/56 suites, 52 Swift planning tests, Room/test APK compilation,
+  lint/app assembly and contract/localization checks passed.
+- [ ] Execute compiled Compose workflow tests and visual QA when ADB returns;
+  no device is currently connected. Final reviewer was usage-limited after
+  reporting future-currency finding; its regression is fixed and green.
+- [ ] Continue savings, then remaining APK 2–4 domains; full parity not complete.
+
+VersionCode 6, all six write flags false; no production writes/deployment.
+Evidence: `docs/android/evidence/2026-10-13-apk2-budget-ui.md`.
