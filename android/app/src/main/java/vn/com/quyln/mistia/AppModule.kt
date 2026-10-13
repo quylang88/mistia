@@ -44,6 +44,7 @@ import vn.com.quyln.mistia.core.network.SupabasePostgrestRemoteStore
 import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
 import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
+import vn.com.quyln.mistia.core.sync.DueOccurrencePushCoordinator
 import vn.com.quyln.mistia.core.sync.RecurringBillPushCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.CreditCardPushCoordinator
@@ -148,6 +149,7 @@ object AppModule {
         client = client,
         json = json,
         writableEntities = buildSet {
+            if (BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES && BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) add(CloudEntity.DUE_OCCURRENCE_RECORD)
             if (BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) {
                 add(CloudEntity.RECURRING_BILL_PLAN)
             }
@@ -283,6 +285,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore):DueOccurrencePushCoordinator =
+        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES && BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES)
+
+    @Provides
+    @Singleton
     fun provideRecurringBillPushCoordinator(
         localStore: LocalStore,
         remoteStore: RemoteMutationStore,
@@ -321,6 +328,7 @@ object AppModule {
         budgetPushCoordinator: BudgetPushCoordinator,
         savingsGoalPushCoordinator: SavingsGoalPushCoordinator,
         recurringBillPushCoordinator: RecurringBillPushCoordinator,
+        dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
@@ -335,6 +343,7 @@ object AppModule {
             budgetPushCoordinator,
             savingsGoalPushCoordinator,
             recurringBillPushCoordinator,
+            dueOccurrencePushCoordinator,
         ),
         categoryTranslationCoordinator,
     )

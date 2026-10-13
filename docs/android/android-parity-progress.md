@@ -1463,3 +1463,18 @@ category startup reconciliation as an explicit open dependency. Goal active.
 
 VersionCode17, eight gates false, no production writes. Evidence:
 `docs/android/evidence/2026-10-13-bill-skip-undo.md`.
+
+## Gated due-occurrence push — 2026-10-13
+
+- [x] Typed identity/version validation, semantic Date equality with losslessACK,
+  source dependencies and linked ledger deferral forUPSERT/DELETE.
+- [x] Separate occurrence write gatefalse in coordinator and network allowlist,
+  global/dependency gates; occurrence pushes after bill/ledger before pull.
+- [x]599 JVM tests/74 suites,11 coordinator+9HTTPS cases,53 shared Swift tests,
+  full checks/contract/l10n/diff pass. Independent static review noP1/P2.
+- [ ] Atomic payment/undo next. User-approved rule: bill payment wallet must have
+  same currency, applying to both Android and Swift; cross-platform guards underway.
+- [ ] APK2–4/default-category startup/maintenance/physical gates remain incomplete.
+
+VersionCode18; nine write flagsfalse; ADB empty; no production writes.
+Evidence: `docs/android/evidence/2026-10-13-due-occurrence-push.md`.

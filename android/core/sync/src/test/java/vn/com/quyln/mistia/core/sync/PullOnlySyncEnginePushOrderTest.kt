@@ -30,6 +30,7 @@ class PullOnlySyncEnginePushOrderTest {
         val transaction = RecordingPushCoordinator(CloudEntity.LEDGER_TRANSACTION, events)
         val budget = RecordingPushCoordinator(CloudEntity.BUDGET_PLAN, events)
         val savings = RecordingPushCoordinator(CloudEntity.SAVINGS_GOAL, events)
+        val due = RecordingPushCoordinator(CloudEntity.DUE_OCCURRENCE_RECORD, events)
         val bill = RecordingPushCoordinator(CloudEntity.RECURRING_BILL_PLAN, events)
         val remote = object : RemoteStore {
             override suspend fun pullPage(
@@ -48,7 +49,7 @@ class PullOnlySyncEnginePushOrderTest {
             authRepository = SignedInAuthRepository(),
             localStore = EmptyLocalStore(),
             remoteStore = remote,
-            pushCoordinators = listOf(bill, savings, budget, transaction, card, wallet, category),
+            pushCoordinators = listOf(due, bill, savings, budget, transaction, card, wallet, category),
         )
 
         val result = engine.syncNow()
@@ -61,7 +62,8 @@ class PullOnlySyncEnginePushOrderTest {
         assertEquals("push:budget_plans", events[4])
         assertEquals("push:savings_goals", events[5])
         assertEquals("push:recurring_bill_plans", events[6])
-        assertEquals("pull:transaction_categories", events[7])
+        assertEquals("push:due_occurrence_records", events[7])
+        assertEquals("pull:transaction_categories", events[8])
     }
 
     private class RecordingPushCoordinator(
