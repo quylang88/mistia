@@ -47,12 +47,20 @@ fun PlanningScreen(
     deviceIdProvider: () -> String,
     exchangeRateRepository: ExchangeRateRepository,
 ) {
+    val bills by repository.observeRecurringBills(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val occurrences by repository.observeDueOccurrences(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    var billNavigation by rememberSaveable(ownerUserId.value,stateSaver=RecurringBillNavigationState.saver(ownerUserId.value)) {
+        mutableStateOf(RecurringBillNavigationState(ownerUserId.value,false,null))
+    }
+    val editorBill=billNavigation.bill()
+    LaunchedEffect(billNavigation) { if(billNavigation.open && billNavigation.payload!=null && editorBill==null) billNavigation=billNavigation.copy(open=false,payload=null) }
     val goals by repository.observeSavingsGoals(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val walletRecords by repository.observe(CloudEntity.LEDGER_WALLET,ownerUserId).collectAsStateWithLifecycle(emptyList())
     val goalWallets=walletRecords.filter { it.ownerUserId==ownerUserId.value && it.deletedAt==null }.mapNotNull {
         runCatching { LedgerWalletRecord.fromCloudRecord(it).takeIf { wallet -> wallet.ownerUserId==ownerUserId.value && wallet.id==it.id } }.getOrNull()
     }
     var selectedTab by rememberSaveable(ownerUserId.value) { mutableIntStateOf(0) }
+    LaunchedEffect(selectedTab) { if(selectedTab !in 0..2) selectedTab=0 }
     var goalNavigation by rememberSaveable(ownerUserId.value,stateSaver=SavingsGoalNavigationState.saver(ownerUserId.value)) {
         mutableStateOf(SavingsGoalNavigationState(ownerUserId.value,false,null))
     }
@@ -67,6 +75,9 @@ fun PlanningScreen(
     var navigation by rememberSaveable(ownerUserId.value, stateSaver=BudgetNavigationState.saver(ownerUserId.value)) {
         mutableStateOf(BudgetNavigationState(ownerUserId.value,YearMonth.now(zone).toString(),false,null,null))
     }
+    var dueMode by rememberSaveable(ownerUserId.value) {mutableIntStateOf(0)}
+    val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val values=counts.associate {it.entity to it.count}
     val month=YearMonth.parse(navigation.month)
     val context = LocalContext.current
     val language = when (Locale.getDefault().language) { "vi" -> CategoryNameLanguage.VIETNAMESE; "ja" -> CategoryNameLanguage.JAPANESE; else -> CategoryNameLanguage.ENGLISH }
@@ -76,8 +87,6 @@ fun PlanningScreen(
     }.toSet() }
     val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,wallets,month,Instant.now(),zone,rates,language,adjustmentTitles,"JPY",
         stringResource(R.string.planning_planning_deleted_category))
-    val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val values = counts.associate { it.entity to it.count }
     LazyColumn(
         modifier = modifier.testTag("budget.screen").fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -87,8 +96,8 @@ fun PlanningScreen(
             Text(stringResource(R.string.planning_planning_planning), style = MaterialTheme.typography.headlineMedium)
         }
         item {
-            ScrollableTabRow(selectedTabIndex=selectedTab,edgePadding=0.dp) {
-                listOf(R.string.planning_planning_budget,R.string.planning_planning_goals2,R.string.planning_planning_bills2,R.string.planning_planning_installments_loans2).forEachIndexed { index,label ->
+            ScrollableTabRow(selectedTabIndex=selectedTab.coerceIn(0,2),edgePadding=0.dp) {
+                listOf(R.string.planning_planning_budget,R.string.planning_planning_due2,R.string.planning_planning_goals2).forEachIndexed { index,label ->
                     Tab(selected=selectedTab==index,onClick={selectedTab=index},text={Text(stringResource(label))},modifier=Modifier.testTag("planning.tab.$index"))
                 }
             }
@@ -114,15 +123,53 @@ fun PlanningScreen(
         }
         item { Button(onClick={navigation=navigation.copy(editorId=null,editorOpen=true,editorPayload=null)},modifier=Modifier.fillMaxWidth().testTag("budget.add")) { Text(stringResource(R.string.planning_planning_add_budget)) } }
         }
-        if(selectedTab==1) {
+        if(selectedTab==2) {
             val rows=savingsGoalRows(ownerUserId,goals,month,zone)
             savingsGoalContent(rows,savingsGoalSummary(rows,"JPY",rates),
                 onAdd={goalNavigation=goalNavigation.copy(open=true,payload=null)},
                 onEdit={goalNavigation=goalNavigation.copy(open=true,payload=it.toPayload().toString())})
         }
-        if(selectedTab==2) item { PlanningCountCard(stringResource(R.string.planning_planning_bills2),values[CloudEntity.RECURRING_BILL_PLAN.table] ?: 0) }
-        if(selectedTab==3) item { PlanningCountCard(stringResource(R.string.planning_planning_installments_loans2),values[CloudEntity.INSTALLMENT_PLAN.table] ?: 0) }
+        if(selectedTab==1) {
+            item {Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                listOf(R.string.planning_planning_bills2,R.string.planning_planning_credit_cards,R.string.planning_planning_installments_loans2).forEachIndexed {index,label ->
+                    FilterChip(selected=dueMode==index,onClick={dueMode=index},label={Text(stringResource(label))},modifier=Modifier.testTag("planning.due.$index"))
+                }
+            }}
+            if(dueMode==1) item {PlanningCountCard(stringResource(R.string.planning_planning_credit_cards),values[CloudEntity.CREDIT_CARD_PROFILE.table] ?: 0)}
+            if(dueMode==2) item {PlanningCountCard(stringResource(R.string.planning_planning_installments_loans2),values[CloudEntity.INSTALLMENT_PLAN.table] ?: 0)}
+            if(dueMode==0) {
+            val rows=recurringBillDueRows(ownerUserId,bills,occurrences,month,zone)
+            item { Text(stringResource(R.string.planning_planning_bills2),style=MaterialTheme.typography.titleLarge) }
+            if(rows.isEmpty()) item {Text(stringResource(R.string.planning_planning_no_bills_yet))}
+            items(rows,key={"bill.${it.bill.id}"}) {row ->
+                MistiaSectionCard(row.bill.name) {
+                    Text(row.amountMinor?.let {formatMinorUnits(it,row.bill.currencyCode)} ?: stringResource(R.string.planning_planning_no_amount_yet))
+                    Text(stringResource(when(row.status) {
+                        DueStatus.PAID -> R.string.planning_planning_paid
+                        DueStatus.SKIPPED -> R.string.planning_duepayment_bill_skipped
+                        else -> R.string.planning_planning_due2
+                    }))
+                    Text("${stringResource(R.string.planning_planning_payment_date)}: ${row.paymentStartDate.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")
+                    if(row.hasExplicitDueDate) Text("${stringResource(R.string.planning_planning_deadline)}: ${row.dueDate.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")
+                    row.autoPayDate?.let {Text("${stringResource(R.string.planning_planning_auto_pay_date)}: ${it.atZone(zone).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))}")}
+                    if(!row.bill.isArchived && row.bill.deletedAt==null) TextButton(onClick={billNavigation=billNavigation.copy(payload=row.bill.toPayload().toString(),open=true)},modifier=Modifier.testTag("bill.edit.${row.bill.id}")) {Text(stringResource(R.string.planning_planning_s_a_h_a_n))}
+                }
+            }
+            val paused=bills.filter {it.ownerUserId==ownerUserId.value && !it.isArchived && it.deletedAt==null && it.isPaused}
+            if(paused.isNotEmpty()) item {Text(stringResource(R.string.planning_planning_paused_bills),style=MaterialTheme.typography.titleMedium)}
+            items(paused,key={"paused.${it.id}"}) {bill ->
+                MistiaSectionCard(bill.name) {TextButton(onClick={billNavigation=billNavigation.copy(payload=bill.toPayload().toString(),open=true)},modifier=Modifier.testTag("bill.edit.${bill.id}")) {Text(stringResource(R.string.planning_planning_s_a_h_a_n))}}
+            }
+            item {Button(onClick={billNavigation=billNavigation.copy(payload=null,open=true)},modifier=Modifier.fillMaxWidth().testTag("bill.add")) {Text(stringResource(R.string.planning_planning_add_bill))}}
+            }
+        }
     }
+    if(billNavigation.open && (billNavigation.payload==null || editorBill!=null)) RecurringBillEditorSheet(ownerUserId.value,editorBill,categories,goalWallets,language,
+        onSave={repository.saveRecurringBill(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
+        onPause={repository.pauseRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
+        onResume={repository.resumeRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
+        onArchive={repository.archiveRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
+        onDismiss={billNavigation=billNavigation.copy(open=false,payload=null)})
     val editorGoal=goalNavigation.goal()
     LaunchedEffect(goalNavigation) {
         if(goalNavigation.open && goalNavigation.payload!=null && editorGoal==null) goalNavigation=goalNavigation.copy(open=false,payload=null)

@@ -1428,3 +1428,23 @@ Evidence: `docs/android/evidence/2026-10-13-system-category-key-lookup.md`.
   dependency; read lookup is already implemented but not called automatically.
 
 Evidence: `docs/android/evidence/2026-10-13-bill-editor-draft.md`.
+
+## Native bill editor/lifecycle and planning navigation — 2026-10-13
+
+- [x] Budget/due/goals order and due bills/cards/installments submode structure.
+  Bills projected by selected month, paused section and immutable archived history.
+- [x] Native bill create/edit fields, Swift quick picker keys, dates/day/window/
+  frequency/auto-pay options/wallet, exact optional amount, busy/error/discard and
+  pause/resume/archive confirmations wired to existing offline repository.
+- [x] Captured edit account scope plus archived/deleted rejection; independent
+  review findings corrected. Native UI tests compile but await device execution.
+- [ ] Credit cards/installments still placeholders; pay/skip/undo, due summaries/
+  timing/maintenance/actual auto-pay/notifications, configured default currency,
+  category legacy-ID reconciliation/startup seed and APK3–4 remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-13-native-bill-editor.md`.
+
+571 JVM tests/72 suites,52 Swift tests, full lint/build/Room/UI compilation and
+contract/l10n/diff checks pass. VersionCode16, eight gates false, ADB empty.
+Next: typed bill pay/skip/undo atomic transaction/occurrence workflow; preserve
+category startup reconciliation as an explicit open dependency. Goal active.

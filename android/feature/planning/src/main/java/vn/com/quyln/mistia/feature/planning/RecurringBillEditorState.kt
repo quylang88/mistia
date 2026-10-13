@@ -96,3 +96,17 @@ data class RecurringBillEditorState(
         )
     }
 }
+
+data class RecurringBillNavigationState(val owner:String,val open:Boolean,val payload:String?) {
+    fun bill():RecurringBillPlanRecord?=runCatching {
+        val json=kotlinx.serialization.json.Json.parseToJsonElement(requireNotNull(payload)) as kotlinx.serialization.json.JsonObject
+        val id=(json["id"] as kotlinx.serialization.json.JsonPrimitive).content
+        RecurringBillPlanRecord.fromCloudRecord(CloudRecord(CloudEntity.RECURRING_BILL_PLAN.table,id,owner,json,null,null,0)).takeIf {it.ownerUserId==owner && !it.isArchived && it.deletedAt==null}
+    }.getOrNull()
+    companion object {
+        fun saver(owner:String)=listSaver<RecurringBillNavigationState,Any>(
+            save={listOf(it.owner,it.open,it.payload.orEmpty())},
+            restore={values -> if(values.size!=3 || values[0]!=owner) null else RecurringBillNavigationState(owner,values[1] as Boolean,(values[2] as String).ifEmpty {null})},
+        )
+    }
+}

@@ -98,6 +98,27 @@ class RecurringBillEditorStateTest {
         assertFalse(draft.autoPayEnabled)
     }
 
+    @Test fun `bill navigation preserves captured edit and cannot restore for another owner`() {
+        val navigation=RecurringBillNavigationState(owner,true,bill().toPayload().toString())
+        val saver=RecurringBillNavigationState.saver(owner)
+        val saved=with(saver) {SaverScope {true}.save(navigation)}!!
+        assertEquals(bill(),saver.restore(saved)!!.bill())
+        assertNull(RecurringBillNavigationState.saver(wallet).restore(saved))
+        assertNull(navigation.copy(owner=wallet).bill())
+        assertNull(navigation.copy(payload="invalid").bill())
+    }
+
+    @Test fun `archived or deleted captured bill cannot open a mutable editor`() {
+        assertNull(RecurringBillNavigationState(owner,true,bill().copy(isArchived=true).toPayload().toString()).bill())
+        assertNull(RecurringBillNavigationState(owner,true,bill().copy(deletedAt="2026-10-13T00:00:00Z").toPayload().toString()).bill())
+    }
+    @Test fun `fractional imported currency amount round trips without changing minor units`() {
+        val state=RecurringBillEditorState.from(bill().copy(currencyCode="USD",amountMinor=1250),today,zone)
+        assertEquals("12.5",state.amountText)
+        assertEquals(1250L,state.toDraft(zone).amountMinor)
+        assertEquals(1375L,state.copy(amountText="13.75").toDraft(zone).amountMinor)
+    }
+
     private fun bill()=RecurringBillPlanRecord(id,owner,"Rent","house.fill",category,9007199254740993L,3,"recurring",28,
         null,"2026-09-30T15:00:00Z",true,null,true,2,null,2,wallet,"VND",false,true,"2026-10-10T00:00:00Z",null,
         "2026-10-01T00:00:00Z","2026-10-13T00:00:00Z",null,99,wallet)

@@ -100,6 +100,54 @@ class BudgetWorkflowTest {
         compose.runOnIdle { Assert.assertTrue(dismissed) }
     }
 
+    @Test fun billFormPersistsExactAmountWithNativeControls() {
+        val wallet=runBlocking {repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY"),device,Instant.now().toString()).getOrThrow()}
+        var bill by mutableStateOf<RecurringBillPlanRecord?>(null)
+        var dismissed=false
+        compose.setContent {MistiaTheme(darkTheme=false) {
+            RecurringBillEditorSheet(owner.value,bill,categories.map {if(it.id==childId) it.copy(systemKey="rent") else it},listOf(wallet),CategoryNameLanguage.ENGLISH,
+                onSave={draft -> repo.saveRecurringBill(owner,draft,device,Instant.now().toString()).also {it.onSuccess {saved -> bill=saved}}},
+                onPause={repo.pauseRecurringBill(owner,RecordId(it),device,Instant.now().toString())},
+                onResume={repo.resumeRecurringBill(owner,RecordId(it),device,Instant.now().toString())},
+                onArchive={repo.archiveRecurringBill(owner,RecordId(it),device,Instant.now().toString())},onDismiss={dismissed=true})
+        }}
+        compose.onNodeWithTag("bill.name").performTextReplacement("Rent")
+        compose.onNodeWithTag("bill.category").performClick()
+        compose.onNodeWithTag("bill.category.$childId").performClick()
+        compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
+        compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        compose.onNodeWithTag("bill.amount").performScrollTo().performTextReplacement("9007199254740993")
+        compose.onNodeWithTag("bill.save").performScrollTo().performClick()
+        compose.waitUntil(5000) {runBlocking {repo.observeRecurringBills(owner).first().size==1}}
+        Assert.assertEquals(9007199254740993L,runBlocking {repo.observeRecurringBills(owner).first().single().amountMinor})
+        compose.waitUntil(5000) {dismissed}
+        capture("bill.editor","bill-editor-light.png")
+    }
+
+    @Test fun billSaveFailureKeepsDraftAndRequiresDiscardInDarkLargeFont() {
+        var dismissed=false
+        val wallet=runBlocking {repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY"),device,Instant.now().toString()).getOrThrow()}
+        compose.setContent {
+            val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,1.3f)) {MistiaTheme(darkTheme=true) {
+                RecurringBillEditorSheet(owner.value,null,categories.map {if(it.id==childId) it.copy(systemKey="rent") else it},listOf(wallet),CategoryNameLanguage.ENGLISH,
+                    onSave={Result.failure(IllegalStateException("storage failure"))},onPause={Result.success(Unit)},onResume={Result.success(Unit)},onArchive={Result.success(Unit)},onDismiss={dismissed=true})
+            }}
+        }
+        compose.onNodeWithTag("bill.name").performTextReplacement("Rent")
+        compose.onNodeWithTag("bill.category").performClick()
+        compose.onNodeWithTag("bill.category.$childId").performClick()
+        compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
+        compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        compose.onNodeWithTag("bill.amount").performScrollTo().performTextReplacement("123")
+        compose.onNodeWithTag("bill.save").performScrollTo().performClick()
+        compose.onNodeWithTag("bill.amount").assertTextContains("123")
+        Assert.assertFalse(dismissed)
+        compose.onNodeWithTag("bill.close").performScrollTo().performClick()
+        compose.onNodeWithTag("bill.discard").performClick()
+        compose.runOnIdle {Assert.assertTrue(dismissed)}
+    }
+
     private fun capture(tag:String,name:String) {
         val image=compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
         File(context.filesDir,name).outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
@@ -107,7 +155,7 @@ class BudgetWorkflowTest {
 
     @Test fun savingsGoalCreateEditAndDeleteKeepWalletAndOutboxConsistent() {
         compose.setContent { MistiaTheme(darkTheme=false) { PlanningScreen(owner,repo,deviceIdProvider={device},exchangeRateRepository=rates) } }
-        compose.onNodeWithTag("planning.tab.1").performClick()
+        compose.onNodeWithTag("planning.tab.2").performClick()
         compose.onNodeWithTag("goal.add").performScrollTo().performClick()
         compose.onNodeWithTag("goal.name").performTextReplacement("Travel")
         compose.onNodeWithTag("goal.target").performTextReplacement("1000")
