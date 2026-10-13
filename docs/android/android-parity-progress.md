@@ -1273,3 +1273,19 @@ Evidence: `docs/android/evidence/2026-10-13-apk2-savings-ui.md`.
 
 All seven write gates false; no ADB device or production writes/deployment.
 Evidence: `docs/android/evidence/2026-10-13-apk2-bill-contract.md`.
+
+## APK 2 bill scheduling foundation — 2026-10-13
+
+- [x] Typed 15-field due occurrence wire contract with exact snapshots/version,
+  nullable clears, strict decoding and lossless legacy raw enum values.
+- [x] Owner-scoped bill due rows: local schedule/frequency/resume anchor, deadline/
+  auto-pay window, month-end clamp, paused exclusion and archived paid history.
+- [x] Unpaid-cycle archive calculation, skipped status and duplicate terminal
+  precedence; no mutation of historical payments.
+- [x] 458 JVM tests/64 suites, 52 Swift planning tests, Room compilation,
+  lint/build and contract/localization checks passed.
+- [ ] Offline bill lifecycle/outbox next, then gated push, native forms/payment
+  and due maintenance. APK2–4 and physical/UI verification remain incomplete.
+
+All seven write gates false; ADB empty; no production writes/deployments.
+Evidence: `docs/android/evidence/2026-10-13-apk2-bill-scheduling.md`.
