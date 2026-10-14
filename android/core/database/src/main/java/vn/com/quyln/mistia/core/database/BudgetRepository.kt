@@ -13,7 +13,8 @@ import kotlinx.coroutines.sync.withLock
 import vn.com.quyln.mistia.core.model.*
 
 /** Local mutations only; remote family enablement belongs to the cloud-first family flow. */
-internal class OfflineBudgetRepository(private val store: LocalStore, private val zoneId: ZoneId = ZoneId.systemDefault()) : BudgetRepository {
+internal class OfflineBudgetRepository(private val store: LocalStore, private val currentZone: ()->ZoneId = {ZoneId.systemDefault()}) : BudgetRepository {
+    constructor(store:LocalStore,zoneId:ZoneId):this(store,{zoneId})
     private val mutex = Mutex()
 
     override fun observeBudgets(ownerUserId: UserId): Flow<List<BudgetPlanRecord>> =
@@ -44,6 +45,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
 
     override suspend fun saveBudget(ownerUserId: UserId, draft: BudgetDraft, deviceId: String, now: String): Result<BudgetPlanRecord> =
         result { mutex.withLock {
+            val zoneId=currentZone()
             require(draft.zoneId == zoneId) { "Budget draft must use the repository calendar zone" }
             val existing = draft.id?.let { find(ownerUserId, it) }
             if (draft.editingExisting && existing == null) fail(BudgetValidationError.NOT_FOUND)
@@ -134,7 +136,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
             val existing = requireBudget(ownerUserId, budgetId)
             val deleted = existing.copy(deletedAt = utc(now), updatedAt = now, lastModifiedByDeviceId = UUID.fromString(deviceId).toString())
             val mutations = mutableListOf(deleted.toCloudRecord() to deleted.pendingMutation(MutationKind.DELETE))
-            val zone = zoneId
+            val zone = currentZone()
             val index = CategoryIdentityIndex(ownerUserId, categoryMetadata(ownerUserId))
             fun allocation(plan: BudgetPlanRecord) = plan.logicalAllocation(index)
             val branchId = allocation(existing).branchCategoryId

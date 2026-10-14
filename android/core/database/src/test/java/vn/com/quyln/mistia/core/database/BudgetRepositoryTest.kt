@@ -32,6 +32,15 @@ class BudgetRepositoryTest {
     private val zone = ZoneId.of("Asia/Tokyo")
     private val repo = OfflineFirstFinanceRepository(store, zone)
 
+    @Test fun `default budget save accepts the device zone changed after repository construction`()=runTest {
+        seedCategories();val original=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            val live=OfflineFirstFinanceRepository(store)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            assertEquals("2026-09-30T15:00:00Z",live.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow().monthAnchor)
+        } finally {java.util.TimeZone.setDefault(original)}
+    }
     @Test fun `create snapshots category and writes owner scoped budget outbox`() = runTest {
         seedCategories()
         val result = repo.saveBudget(owner, draft(), DEVICE, NOW).getOrThrow()

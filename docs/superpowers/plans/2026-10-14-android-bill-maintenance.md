@@ -109,3 +109,12 @@ timing/cold-process execution remain device-unverified. Next implement preferenc
 triggers and dynamic ZoneId, then owner-scoped Android OS notification delivery using
 persisted inbox state, permission/preferences and duplicate/read/action cleanup. Keep
 financial commit independent of presentation/OS failures. Full APK1–4 still pending.
+
+
+Dynamic calendar milestone: default planning/payment repos resolve current device
+zone per operation; maintenance captures one zone and constructs matching payment
+executor. Six runtime calendar cases/full checks pass. Swift OS scheduler only posts
+low-cash-wallet alerts at next 09:00; bill notices remain inbox-only. Next implement
+wallet reminder snapshots/next-morning plans, preference/owner/CAS guards and native
+OS schedule/delivery/cleanup. Preserve read history and exact Long balance, and
+keep OS presentation independent of committed money. Device/full APK1–4 still pending.

@@ -1902,3 +1902,17 @@ Evidence: `docs/android/evidence/2026-10-14-background-session-restoration.md`.
   preference/time-zone hooks, independent review and full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-background-bill-maintenance.md`.
+
+
+## Dynamic planning calendar — 2026-10-14
+
+- [x] Default singleton repository follows current device zone per planning/money
+  operation; explicit fixtures stay fixed. Each automatic pass shares one captured
+  zone across events, payment/statement checks and notification generation.
+- [x] Four reproduced REDs +two calendar regressions;846 JVM/91 suites; full Android/
+  SwiftPlanning53/contracts/l10n/SQLite pass. Room/planning AndroidTests compile only.
+  APK45; cloud flagsfalse; no device/live cloud.
+- [ ] Device zone-change/UI QA, OS low-wallet scheduling, immediate preference hooks,
+  remaining notification domains, independent review and full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-dynamic-planning-calendar.md`.

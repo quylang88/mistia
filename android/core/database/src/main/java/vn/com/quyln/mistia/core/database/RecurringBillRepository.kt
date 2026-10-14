@@ -13,7 +13,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vn.com.quyln.mistia.core.model.*
 
-internal class OfflineRecurringBillRepository(private val store:LocalStore,private val zone:ZoneId):RecurringBillRepository {
+internal class OfflineRecurringBillRepository(private val store:LocalStore,private val currentZone:()->ZoneId):RecurringBillRepository {
+    constructor(store:LocalStore,zone:ZoneId):this(store,{zone})
     private val mutex=Mutex()
     override fun observeRecurringBills(ownerUserId:UserId):Flow<List<RecurringBillPlanRecord>> =
         store.observe(CloudEntity.RECURRING_BILL_PLAN.table,ownerUserId).map { rows ->
@@ -29,6 +30,7 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
         }
     override suspend fun skipRecurringBill(ownerUserId:UserId,id:RecordId,month:YearMonth,deviceId:String,now:String):Result<DueOccurrenceRecord> = result {
         mutex.withLock {
+            val zone=currentZone()
             val bill=active(ownerUserId,id)
             val cloud=requireNotNull(store.record(ownerUserId,CloudEntity.RECURRING_BILL_PLAN.table,bill.id))
             require(RecurringBillPlanRecord.fromCloudRecord(cloud)==bill) {"Bill changed before cycle snapshot"}
@@ -50,6 +52,7 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
     }
     override suspend fun undoRecurringBillSkip(ownerUserId:UserId,id:RecordId,month:YearMonth,deviceId:String,now:String):Result<Unit> = result {
         mutex.withLock {
+            val zone=currentZone()
             val bill=active(ownerUserId,id)
             val cloud=requireNotNull(store.record(ownerUserId,CloudEntity.RECURRING_BILL_PLAN.table,bill.id))
             require(RecurringBillPlanRecord.fromCloudRecord(cloud)==bill)
@@ -64,6 +67,7 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
     }
     override suspend fun saveRecurringBill(ownerUserId:UserId,draft:RecurringBillDraft,deviceId:String,now:String):Result<RecurringBillPlanRecord> = result {
         mutex.withLock {
+            val zone=currentZone()
             require(draft.zoneId==zone) { "Bill draft must use the repository calendar zone" }
             val existing=draft.id?.let { find(ownerUserId,it) }
             if((draft.editingExisting && existing==null) || existing?.isArchived==true || existing?.deletedAt!=null) fail(RecurringBillValidationError.NOT_FOUND)
@@ -99,6 +103,7 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
     }
     override suspend fun resumeRecurringBill(ownerUserId:UserId,id:RecordId,deviceId:String,now:String):Result<Unit> = result {
         mutex.withLock {
+            val zone=currentZone()
             val bill=active(ownerUserId,id)
             if(bill.scheduleKind==BillScheduleKind.RECURRING) {
                 val month=YearMonth.from(Instant.parse(now).atZone(zone)).atDay(1).atStartOfDay(zone).toInstant().toString()
@@ -108,6 +113,7 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
     }
     override suspend fun archiveRecurringBill(ownerUserId:UserId,id:RecordId,deviceId:String,now:String):Result<Unit> = result {
         mutex.withLock {
+            val zone=currentZone()
             val bill=active(ownerUserId,id)
             if(hasUnpaidBillCycles(ownerUserId,bill,observeDueOccurrences(ownerUserId).first(),Instant.parse(now),zone)) fail(RecurringBillValidationError.UNPAID_CYCLES)
             commit(bill.copy(isArchived=true,updatedAt=now,lastModifiedByDeviceId=UUID.fromString(deviceId).toString()))

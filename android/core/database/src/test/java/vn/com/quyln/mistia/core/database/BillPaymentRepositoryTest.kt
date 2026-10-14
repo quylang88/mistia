@@ -86,6 +86,44 @@ class BillPaymentRepositoryTest {
         assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
         assertEquals(false,repo.observeRecurringBills(owner).first().single().autoPayEnabled)
     }
+    @Test fun `default payment calendar follows device zone changed after repository construction`()=runTest {
+        val bill=autoBill();val original=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            val live=OfflineFirstFinanceRepository(store,systemCategoryCatalog=catalog)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            val paid=live.payRecurringBill(owner,request(bill).copy(automatic=true),device,"2026-10-12T15:30:00Z").getOrThrow()
+            assertEquals(5000L,paid.transaction.amountMinor)
+        } finally {java.util.TimeZone.setDefault(original)}
+    }
+    @Test fun `default maintenance and payment share the changed local date and cycle`()=runTest {
+        autoBill();val original=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            val live=OfflineFirstFinanceRepository(store,systemCategoryCatalog=catalog)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            val report=live.maintainRecurringBills(owner,device,"2026-10-12T15:30:00Z").getOrThrow()
+            assertEquals(1,report.payments.size);assertEquals(month,report.payments.single().event.month)
+            assertTrue(report.payments.single().result.isSuccess)
+            assertEquals(1,live.observeTransactions(owner).first().size)
+        } finally {java.util.TimeZone.setDefault(original)}
+    }
+    @Test fun `maintenance freezes one calendar even if device zone changes during its snapshot read`()=runTest {
+        autoBill();val original=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            val racing=object:LocalStore by store {
+                override suspend fun recordsIncludingDeleted(ownerUserId:UserId,entity:String):List<CloudRecord> {
+                    java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+                    return store.recordsIncludingDeleted(ownerUserId,entity)
+                }
+            }
+            val live=OfflineFirstFinanceRepository(racing,systemCategoryCatalog=catalog)
+            val report=live.maintainRecurringBills(owner,device,"2026-10-12T15:30:00Z").getOrThrow()
+            assertEquals(1,report.payments.size);assertTrue(report.payments.single().result.isSuccess)
+            assertEquals(1,live.observeTransactions(owner).first().size)
+        } finally {java.util.TimeZone.setDefault(original)}
+    }
     private fun maintenance(store:LocalStore=this.store,payments:BillPaymentRepository=repo)=OfflineBillMaintenanceRepository(store,zone,payments)
     @Test fun `maintenance executes automatic money payment and suppresses paid reminders on replay`()=runTest {
         val bill=autoBill()

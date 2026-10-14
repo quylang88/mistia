@@ -13,11 +13,15 @@ import vn.com.quyln.mistia.core.model.*
 
 internal class OfflineBillPaymentRepository(
     private val store: LocalStore,
-    private val zone: ZoneId,
+    private val currentZone: ()->ZoneId,
     private val catalog: SystemCategoryCatalog?,
     private val automaticText: ((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)? = null,
 ) : BillPaymentRepository {
+    constructor(store:LocalStore,zone:ZoneId,catalog:SystemCategoryCatalog?,automaticText:((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)?=null):
+        this(store,{zone},catalog,automaticText)
+
     override suspend fun payRecurringBill(owner: UserId, request: BillPaymentRequest, deviceId: String, now: String): Result<SavedBillPayment> = result {
+        val zone=currentZone()
         val snapshot = snapshot(owner, request.billId, request.month)
         val bill = RecurringBillPlanRecord.fromCloudRecord(snapshot.bill)
         if(request.automatic) {
@@ -124,6 +128,7 @@ internal class OfflineBillPaymentRepository(
     }
 
     override suspend fun undoRecurringBillPayment(owner: UserId, billId: RecordId, month: YearMonth, deviceId: String, now: String): Result<Unit> = result {
+        val zone=currentZone()
         val snapshot = snapshot(owner, billId, month)
         val occurrences = owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
         val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue=="recurringBill" && it.sourceId==billId.value && it.selectedMonthKey==month.toString() && it.status==DueStatus.PAID }

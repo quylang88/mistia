@@ -26,6 +26,27 @@ class RecurringBillRepositoryTest {
         val wallet=repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY"),device,now).getOrThrow()
         return RecurringBillDraft("  Internet  ",child.id,5000,wallet.id,"JPY",id=id,paymentStartDay=25,dueDay=10,hasDeadline=true,zoneId=zone).also { prepared=it }
     }
+    @Test fun `default bill save accepts the device zone changed after repository construction`()=runTest {
+        val draft=draft();val original=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            val live=OfflineFirstFinanceRepository(store)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            assertEquals("2026-09-30T15:00:00Z",live.saveRecurringBill(owner,draft,device,now).getOrThrow().firstScheduledMonth)
+        } finally {java.util.TimeZone.setDefault(original)}
+    }
+    @Test fun `resume after device zone change uses the new local month at UTC month boundary`()=runTest {
+        val bill=repo.saveRecurringBill(owner,draft(),device,now).getOrThrow()
+        repo.pauseRecurringBill(owner,RecordId(bill.id),device,now).getOrThrow()
+        val original=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            val live=OfflineFirstFinanceRepository(store)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            live.resumeRecurringBill(owner,RecordId(bill.id),device,"2026-10-31T15:30:00Z").getOrThrow()
+            assertEquals("2026-10-31T15:00:00Z",live.observeRecurringBills(owner).first().single().resumeStartMonth)
+        } finally {java.util.TimeZone.setDefault(original)}
+    }
     @Test fun `create snapshots category icon and normalizes recurring schedule into one mutation`()=runTest {
         val draft=draft()
         val saved=repo.saveRecurringBill(owner,draft.copy(autoPayEnabled=true,autoPayDay=20),device,now).getOrThrow()
