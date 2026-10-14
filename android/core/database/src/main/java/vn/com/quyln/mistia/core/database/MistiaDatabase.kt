@@ -35,6 +35,7 @@ import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
 import vn.com.quyln.mistia.core.model.categoryReferenceEntities
 import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
 import vn.com.quyln.mistia.core.model.billCycleRecords
+import vn.com.quyln.mistia.core.model.InstallmentMutationSnapshot
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
 import vn.com.quyln.mistia.core.model.requireValidMutations
 import vn.com.quyln.mistia.core.model.requireUnchanged
@@ -576,22 +577,22 @@ class RoomLocalStore(
     private val walletRemindersEnabled:()->Boolean = {true},
     private val currentBillOwner:(()->UserId?)? = null,
 ) : LocalStore {
-    private fun ensureCurrentBillOwner(owner:UserId) {
+    private fun ensureCurrentFinanceOwner(owner:UserId) {
         if(currentBillOwner!=null && currentBillOwner.invoke()!=owner)
-            throw kotlinx.coroutines.CancellationException("Bill operation account changed")
+            throw kotlinx.coroutines.CancellationException("Finance operation account changed")
     }
 
     override suspend fun walletReminderSnapshot(owner:UserId):WalletReminderSnapshot = database.withTransaction {
         WalletReminderSnapshot(owner,WalletReminderSnapshot.entities.associateWith {recordsIncludingDeleted(owner,it.table)},localNotifications(owner))
     }
     override suspend fun commitWalletReminders(expected:WalletReminderSnapshot,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
-        ensureCurrentBillOwner(expected.owner)
+        ensureCurrentFinanceOwner(expected.owner)
         try {expected.requireUnchanged(walletReminderSnapshot(expected.owner))} catch(_:IllegalArgumentException) {return@withTransaction false}
         replacement.forEach {it.requireValidLocalNotification();require(it.ownerUserId==expected.owner.value)}
         require(replacement.map {it.key}.distinct().size==replacement.size)
         val rows=if(walletRemindersEnabled()) replacement else expected.notifications.filterNot {it.kind=="dueSoon" || it.key.startsWith("mistia.reminder.due.")}
         val committed=commitLocalNotifications(expected.owner,expected.notifications,rows)
-        ensureCurrentBillOwner(expected.owner)
+        ensureCurrentFinanceOwner(expected.owner)
         committed
     }
 
@@ -601,14 +602,14 @@ class RoomLocalStore(
     }
 
     override suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
-        ensureCurrentBillOwner(expected.owner)
+        ensureCurrentFinanceOwner(expected.owner)
         val current=billNotificationSnapshot(expected.owner)
         try {expected.requireUnchangedBillNotifications(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
         replacement.forEach {it.requireValidLocalNotification();require(it.ownerUserId==expected.owner.value)}
         require(replacement.map {it.key}.distinct().size==replacement.size)
         val committed=commitLocalNotifications(expected.owner,expected.notifications,
             applyBillReminderPreference(expected.notifications,replacement,billRemindersEnabled()))
-        ensureCurrentBillOwner(expected.owner)
+        ensureCurrentFinanceOwner(expected.owner)
         committed
     }
 
@@ -730,6 +731,27 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun installmentMutationSnapshot(owner: UserId, planId: String): InstallmentMutationSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val snapshot = InstallmentMutationSnapshot(owner, planId, InstallmentMutationSnapshot.entities.associateWith {
+            recordsIncludingDeleted(owner, it.table)
+        })
+        ensureCurrentFinanceOwner(owner)
+        snapshot
+    }
+
+    override suspend fun commitInstallmentMutations(expected: InstallmentMutationSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean {
+        expected.requireValidMutations(mutations)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current = InstallmentMutationSnapshot.entities.associateWith { recordsIncludingDeleted(expected.owner, it.table) }
+            if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+            mutations.forEach { (record, mutation) -> commitMutationRows(record, mutation) }
+            ensureCurrentFinanceOwner(expected.owner)
+            true
+        }
+    }
+
     override suspend fun commitBillCycleMutations(bill:CloudRecord,monthKey:String,expectedOccurrences:List<CloudRecord>,mutations:List<Pair<CloudRecord,PendingMutation>>) {
         require(bill.entity==CloudEntity.RECURRING_BILL_PLAN.table)
         java.time.YearMonth.parse(monthKey)
@@ -755,7 +777,7 @@ class RoomLocalStore(
     override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
         snapshot.requireValidMutations(mutations)
         database.withTransaction {
-            ensureCurrentBillOwner(snapshot.owner)
+            ensureCurrentFinanceOwner(snapshot.owner)
             snapshot.requireUnchanged(CloudEntity.entries.associateWith {
                 recordsIncludingDeleted(snapshot.owner, it.table)
             })
@@ -768,7 +790,7 @@ class RoomLocalStore(
                 database.localNotificationDao().upsert(listOf(LocalNotificationEntity(snapshot.owner.value,notification.key,
                     json.encodeToString(AppNotificationRecord.serializer(),notification))))
             }
-            ensureCurrentBillOwner(snapshot.owner)
+            ensureCurrentFinanceOwner(snapshot.owner)
         }
     }
 

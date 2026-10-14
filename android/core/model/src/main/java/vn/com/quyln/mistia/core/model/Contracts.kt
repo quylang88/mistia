@@ -180,13 +180,12 @@ interface AuthRepository {
     suspend fun signOut(clearLocalSession: Boolean = true)
 }
 
-interface FinanceRepository : AppNotificationRepository, BillMaintenanceRepository, BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
+interface FinanceRepository : InstallmentRepository, AppNotificationRepository, BillMaintenanceRepository, BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeCreditCardProfiles(ownerUserId: UserId): Flow<List<CreditCardProfileRecord>>
     fun observeTransactions(ownerUserId: UserId): Flow<List<LedgerTransactionRecord>>
-    fun observeInstallments(ownerUserId: UserId): Flow<List<InstallmentPlanRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun saveWallet(
         ownerUserId: UserId,
@@ -271,6 +270,11 @@ interface LocalStore {
     /** Does not remove/reassign category identities; commits only validated FK/outbox/task repairs. */
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
+
+    suspend fun installmentMutationSnapshot(owner: UserId, planId: String): InstallmentMutationSnapshot =
+        throw UnsupportedOperationException("Complete installment mutation snapshots unavailable")
+    suspend fun commitInstallmentMutations(expected: InstallmentMutationSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean =
+        throw UnsupportedOperationException("Conditional installment writes unavailable")
 
     suspend fun billMoneyReceiptTransactionIds(owner: UserId): Set<String> =
         throw UnsupportedOperationException("Bill receipt dependency snapshots unavailable")

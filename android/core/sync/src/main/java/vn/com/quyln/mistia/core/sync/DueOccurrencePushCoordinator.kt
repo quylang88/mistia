@@ -6,14 +6,17 @@ import vn.com.quyln.mistia.core.model.*
 
 class DueOccurrencePushCoordinator(
     localStore:LocalStore,remoteStore:RemoteMutationStore,writesEnabled:Boolean,
+    allowedSourceKinds:Set<DueSourceKind> = setOf(DueSourceKind.RECURRING_BILL),
     nowEpochMillis:()->Long=System::currentTimeMillis,
 ):DomainPushCoordinator {
+    private val allowedSourceValues = allowedSourceKinds.map { it.wireValue }.toSet()
     private val delegate=OutboxPushCoordinator(
         entity=CloudEntity.DUE_OCCURRENCE_RECORD,localStore=localStore,remoteStore=remoteStore,
         writesEnabled=writesEnabled,nowEpochMillis=nowEpochMillis,allowTombstoneDeletes=true,
         validateRecord={record ->
             val decoded=DueOccurrenceRecord.fromCloudRecord(record)
             require(decoded.id==record.id && decoded.ownerUserId==record.ownerUserId && decoded.syncVersion==record.syncVersion)
+            require(decoded.sourceKindWireValue in allowedSourceValues) {"Due source writes are disabled"}
         },
         preflight={queued,local,owner,token ->
             val occurrence=DueOccurrenceRecord.fromCloudRecord(local)
@@ -62,7 +65,7 @@ class DueOccurrencePushCoordinator(
                 val linked=(payload?.get("linked_transaction_id") as? JsonPrimitive)?.contentOrNull
                 val source=(payload?.get("source_id") as? JsonPrimitive)?.contentOrNull
                 val kind=(payload?.get("source_kind_raw_value") as? JsonPrimitive)?.contentOrNull
-                (linked==null || linked !in pendingTransactions) &&
+                kind in allowedSourceValues && (linked==null || linked !in pendingTransactions) &&
                     (queued.mutation.kind==MutationKind.DELETE || source==null || source !in pendingSources[kind].orEmpty())
             }
         },

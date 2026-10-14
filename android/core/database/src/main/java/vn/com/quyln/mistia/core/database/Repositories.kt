@@ -27,7 +27,6 @@ import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
-import vn.com.quyln.mistia.core.model.InstallmentPlanRecord
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
@@ -52,7 +51,7 @@ class OfflineFirstFinanceRepository(
     systemCategoryCatalog: vn.com.quyln.mistia.core.model.SystemCategoryCatalog? = null,
     billNotificationText: ((vn.com.quyln.mistia.core.model.BillNotificationMessage)->vn.com.quyln.mistia.core.model.BillNotificationText)? = null,
     automaticBillText: ((vn.com.quyln.mistia.core.model.RecurringBillPlanRecord,Long)->vn.com.quyln.mistia.core.model.BillAutomaticPaymentText)? = null,
-) : FinanceRepository, vn.com.quyln.mistia.core.model.AppNotificationRepository by OfflineAppNotificationRepository(localStore), vn.com.quyln.mistia.core.model.BillMaintenanceRepository by OfflineBillMaintenanceRepository(localStore,{budgetZoneId ?: ZoneId.systemDefault()},{zone -> OfflineBillPaymentRepository(localStore,zone,systemCategoryCatalog,automaticBillText)},billNotificationText),
+) : FinanceRepository, vn.com.quyln.mistia.core.model.InstallmentRepository by OfflineInstallmentRepository(localStore), vn.com.quyln.mistia.core.model.AppNotificationRepository by OfflineAppNotificationRepository(localStore), vn.com.quyln.mistia.core.model.BillMaintenanceRepository by OfflineBillMaintenanceRepository(localStore,{budgetZoneId ?: ZoneId.systemDefault()},{zone -> OfflineBillPaymentRepository(localStore,zone,systemCategoryCatalog,automaticBillText)},billNotificationText),
     vn.com.quyln.mistia.core.model.BudgetRepository by OfflineBudgetRepository(localStore, {budgetZoneId ?: ZoneId.systemDefault()}),
     vn.com.quyln.mistia.core.model.BillPaymentRepository by OfflineBillPaymentRepository(localStore, {budgetZoneId ?: ZoneId.systemDefault()}, systemCategoryCatalog,automaticBillText),
     vn.com.quyln.mistia.core.model.SavingsGoalRepository by OfflineSavingsGoalRepository(localStore),
@@ -105,13 +104,6 @@ class OfflineFirstFinanceRepository(
                         .thenByDescending(LedgerTransactionRecord::createdAt)
                         .thenBy(LedgerTransactionRecord::id)
                 )
-        }
-
-    override fun observeInstallments(ownerUserId: UserId): Flow<List<InstallmentPlanRecord>> =
-        localStore.observeOwnedFinanceRows(CloudEntity.INSTALLMENT_PLAN, ownerUserId).map { records ->
-            records.mapNotNull { runCatching { InstallmentPlanRecord.fromCloudRecord(it) }.getOrNull() }
-                .filter { !it.isArchived && it.deletedAt == null }
-                .sortedWith(compareBy<InstallmentPlanRecord> { Instant.parse(it.createdAt) }.thenBy { it.id })
         }
 
     override suspend fun saveWallet(

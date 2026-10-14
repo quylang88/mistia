@@ -2042,3 +2042,20 @@ Evidence: `docs/android/evidence/2026-10-14-finance-read-scope.md`.
   decision, independent/device/visual QA and full APK1–4/RC remain unfinished.
 
 Evidence: `docs/android/evidence/2026-10-14-installment-due-read.md`.
+
+
+## Owned installment mutation repository — 2026-10-14
+
+- [x] Stable-ID save/delete APIs, semantic baseline/ACK/replay behavior, imported raw
+  currency/creation/unknown metadata and exact Long versions, nullable total-cycle clears.
+- [x] Complete raw plan/wallet/occurrence snapshot CAS, three attempts, atomic Room
+  record/outbox writes and current-owner cancellation/rollback. Delete preserves expense
+  ledger and frozen occurrence data while tombstoning owned live plan/cycles.
+- [x] Installment flagfalse (10 flagsfalse total); shared due client/coordinator source
+  gate isolates bill readiness from card/installment children and pins PATCH source kind.
+- [x]35 new cases;1067 JVM/110 suites; full Android/Swift603/contracts/l10n/SQLite pass.
+  Four new Room fixtures compile only. APK54; no device/live cloud verification.
+- [ ] Native installment CRUD forms, payment/skip/undo, proper source-delete push
+  preflight, pending card currency decision, independent/device/visual QA and APK1–4/RC.
+
+Evidence: `docs/android/evidence/2026-10-14-installment-mutations.md`.

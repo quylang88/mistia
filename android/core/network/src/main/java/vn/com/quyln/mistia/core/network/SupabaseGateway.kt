@@ -19,6 +19,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import vn.com.quyln.mistia.core.model.DueSourceKind
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.RemotePage
@@ -48,6 +49,7 @@ class SupabasePostgrestRemoteStore(
     private val client: OkHttpClient,
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val writableEntities: Set<CloudEntity> = emptySet(),
+    private val writableDueSources: Set<DueSourceKind> = setOf(DueSourceKind.RECURRING_BILL),
 ) : RemoteStore, RemoteMutationStore {
     override suspend fun pullPage(
         table: String,
@@ -169,7 +171,7 @@ class SupabasePostgrestRemoteStore(
         ownerUserId: UserId,
         payload: JsonObject,
     ): CloudRecord = withContext(Dispatchers.IO) {
-        requireWriteEnabled(entity)
+        requireWriteEnabled(entity, payload)
         val recordId = payload.string("id") ?: error("Mutation payload is missing id")
         requirePayloadIdentity(payload, recordId, ownerUserId)
         val url = tableUrl(entity)
@@ -194,13 +196,16 @@ class SupabasePostgrestRemoteStore(
         expectedVersion: Long,
         payload: JsonObject,
     ): CloudRecord? = withContext(Dispatchers.IO) {
-        requireWriteEnabled(entity)
+        requireWriteEnabled(entity, payload)
         require(expectedVersion >= 0) { "Expected version cannot be negative" }
         requirePayloadIdentity(payload, recordId, ownerUserId)
         val url = tableUrl(entity)
             .addQueryParameter("id", "eq.$recordId")
             .addQueryParameter("user_id", "eq.${ownerUserId.value}")
             .addQueryParameter("sync_version", "eq.$expectedVersion")
+            .apply {
+                if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) addQueryParameter("source_kind_raw_value", "eq.${payload.string("source_kind_raw_value")}")
+            }
             .build()
         val request = authorizedRequest(url.toString(), accessToken)
             .header("Content-Type", "application/json")
@@ -225,8 +230,11 @@ class SupabasePostgrestRemoteStore(
             .header("Accept", "application/json")
     }
 
-    private fun requireWriteEnabled(entity: CloudEntity) {
+    private fun requireWriteEnabled(entity: CloudEntity, payload: JsonObject) {
         check(entity in writableEntities) { "Cloud writes are disabled for ${entity.table}" }
+        if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) {
+            check(payload.string("source_kind_raw_value") in writableDueSources.map { it.wireValue }) { "Cloud due source writes are disabled" }
+        }
     }
 
     private fun requireRecordIdentity(recordId: String, ownerUserId: UserId) {

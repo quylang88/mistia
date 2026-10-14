@@ -30,6 +30,23 @@ class DueOccurrencePushCoordinatorTest {
         assertEquals(DomainPushSummary(),DueOccurrencePushCoordinator(local,remote,false).pushPending(UserId(OWNER),TOKEN))
         assertEquals(0,remote.fetchCalls);assertEquals(0,remote.writeCalls);assertNotNull(local.queued)
     }
+    @Test fun `bill due gate cannot push installment or card occurrence creation`()=runTest {
+        for(kind in listOf("installment","creditCard")) {
+            val row=record(0).let {it.copy(payload=JsonObject(it.payload+("source_kind_raw_value" to JsonPrimitive(kind))))}
+            val pending=queued(0).let {it.copy(mutation=it.mutation.copy(payload=row.payload))}
+            val local=FakeLocalStore(row,pending)
+            val remote=FakeRemoteStore().apply {createdResult=row.copy(syncVersion=1,payload=JsonObject(row.payload+("sync_version" to JsonPrimitive(1))))}
+            assertEquals(DomainPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+            assertEquals(0,remote.fetchCalls);assertEquals(0,remote.writeCalls);assertSame(pending,local.queued)
+        }
+    }
+    @Test fun `bill due gate cannot process an installment tombstone even when its source is pending`()=runTest {
+        val row=deleted(0).let {it.copy(payload=JsonObject(it.payload+("source_kind_raw_value" to JsonPrimitive("installment"))))}
+        val pending=queued(0).let {it.copy(mutation=it.mutation.copy(kind=MutationKind.DELETE,payload=row.payload))}
+        val local=FakeLocalStore(row,pending).apply {sourcePendingIds=setOf(SOURCE)};val remote=FakeRemoteStore()
+        assertEquals(DomainPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(0,remote.fetchCalls);assertEquals(0,remote.writeCalls);assertSame(pending,local.queued)
+    }
     @Test fun `new skipped occurrence creates at version one with nullable clears`()=runTest {
         val local=FakeLocalStore(record(0),queued(0));val remote=FakeRemoteStore().apply {createdResult=record(1)}
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
@@ -194,7 +211,7 @@ class DueOccurrencePushCoordinatorTest {
             records: List<CloudRecord>,
         ) = Unit
         override suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String) =
-            if (entity == CloudEntity.RECURRING_BILL_PLAN.table) sourcePendingIds
+            if (entity == CloudEntity.RECURRING_BILL_PLAN.table || entity == CloudEntity.INSTALLMENT_PLAN.table) sourcePendingIds
             else if (entity == CloudEntity.LEDGER_TRANSACTION.table) transactionPendingIds
             else listOfNotNull(queued).filter { it.mutation.subjectUserId == ownerUserId.value && it.mutation.entity.table == entity }
                 .mapTo(mutableSetOf()) { it.mutation.recordId }

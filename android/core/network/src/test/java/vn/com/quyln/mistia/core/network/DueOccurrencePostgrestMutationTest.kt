@@ -162,7 +162,7 @@ class DueOccurrencePostgrestMutationTest {
         val deleted = JsonObject(occurrencePayload(8) + ("deleted_at" to JsonPrimitive(UPDATED_AT)))
         server.enqueue(MockResponse().setBody("[$deleted]"))
         val payload = JsonObject(mapOf("id" to JsonPrimitive(OCCURRENCE_ID), "user_id" to JsonPrimitive(OWNER),
-            "deleted_at" to JsonPrimitive(UPDATED_AT), "updated_at" to JsonPrimitive(UPDATED_AT),
+            "source_kind_raw_value" to JsonPrimitive("recurringBill"), "deleted_at" to JsonPrimitive(UPDATED_AT), "updated_at" to JsonPrimitive(UPDATED_AT),
             "sync_version" to JsonPrimitive(8), "last_modified_by_device_id" to JsonPrimitive(DEVICE)))
         val result = store.conditionalUpdate(CloudEntity.DUE_OCCURRENCE_RECORD, OCCURRENCE_ID, TOKEN, UserId(OWNER), 7, payload)
         assertEquals(UPDATED_AT, result!!.deletedAt)
@@ -171,6 +171,7 @@ class DueOccurrencePostgrestMutationTest {
         assertEquals("eq.$OWNER", request.requestUrl!!.queryParameter("user_id"))
         assertEquals("eq.$OCCURRENCE_ID", request.requestUrl!!.queryParameter("id"))
         assertEquals("eq.7", request.requestUrl!!.queryParameter("sync_version"))
+        assertEquals("eq.recurringBill", request.requestUrl!!.queryParameter("source_kind_raw_value"))
         val body = request.body.readUtf8()
         assertTrue(body.contains("\"deleted_at\":\"$UPDATED_AT\""))
         assertFalse(body.contains("amount_minor_snapshot"))

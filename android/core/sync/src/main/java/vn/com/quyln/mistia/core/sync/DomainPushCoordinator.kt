@@ -215,7 +215,7 @@ internal class OutboxPushCoordinator(
         }
     }
 
-    /** Conditional deletion changes only authoritative deletion metadata, as on iOS. */
+    /** Deletion metadata changes; an immutable due-source discriminator pins its permitted domain. */
     private fun CloudRecord.deletePatch(version: Long, device: String): JsonObject = JsonObject(mapOf(
         "id" to JsonPrimitive(id),
         "user_id" to JsonPrimitive(ownerUserId),
@@ -223,9 +223,11 @@ internal class OutboxPushCoordinator(
         "deleted_at" to JsonPrimitive(requireNotNull(deletedAt)),
         "sync_version" to JsonPrimitive(version),
         "last_modified_by_device_id" to JsonPrimitive(device),
-    ) + if (entity == CloudEntity.LEDGER_TRANSACTION.table) mapOf(
-        "last_modified_by_user_id" to JsonPrimitive(ownerUserId),
-    ) else emptyMap())
+    ) + when (entity) {
+        CloudEntity.LEDGER_TRANSACTION.table -> mapOf("last_modified_by_user_id" to JsonPrimitive(ownerUserId))
+        CloudEntity.DUE_OCCURRENCE_RECORD.table -> mapOf("source_kind_raw_value" to requireNotNull(payload["source_kind_raw_value"]))
+        else -> emptyMap()
+    })
 
     private fun nextVersion(current: Long): Long {
         require(current >= 0 && current < Long.MAX_VALUE) { "Sync version cannot be incremented" }
