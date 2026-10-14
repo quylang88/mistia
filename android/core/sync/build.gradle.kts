@@ -25,5 +25,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)
+    testImplementation("org.mockito:mockito-core:5.20.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

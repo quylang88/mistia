@@ -182,6 +182,7 @@ private fun MistiaApp(
                 authRepository = authRepository,
                 financeRepository = financeRepository,
                 notificationPreferences=notificationPreferences,
+                walletReminders=walletReminders,
                 familyRepository = familyRepository,
                 investmentRepository = investmentRepository,
                 syncEngine = syncEngine,
@@ -210,6 +211,7 @@ private fun SignedInRoot(
     authRepository: AuthRepository,
     financeRepository: FinanceRepository,
     notificationPreferences:NotificationPreferencesStore,
+    walletReminders:vn.com.quyln.mistia.core.model.WalletReminderRepository,
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
@@ -299,7 +301,9 @@ private fun SignedInRoot(
         }
         composable("notification-settings") {
             val context=LocalContext.current
-            val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+            val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+                scope.launch {walletReminders.maintainWalletReminders(authState.session.userId,java.time.Instant.now().toString())}
+            }
             vn.com.quyln.mistia.feature.settings.NotificationSettingsScreen(notificationPreferences,
                 onBack={navController.popBackStack()},onRequestPermission={
                     if(Build.VERSION.SDK_INT>=33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)

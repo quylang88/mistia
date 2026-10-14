@@ -327,17 +327,30 @@ object AppModule {
                     vn.com.quyln.mistia.core.designsystem.formatMinorUnits(amount,bill.currencyCode),bill.name))
         })
 
+    private fun walletReminderText(context:Context,wallet:vn.com.quyln.mistia.core.model.LedgerWalletRecord,balance:Long)=
+        vn.com.quyln.mistia.core.model.WalletReminderText(
+            context.getString(vn.com.quyln.mistia.core.designsystem.R.string.shared_notifications_mistialocalnotificationscheduler_low_wallet_balance),
+            wallet.name+" — "+vn.com.quyln.mistia.core.designsystem.formatMinorUnits(balance,wallet.currencyCode))
+
+    @Provides
+    @Singleton
+    fun provideNativeWalletReminders(@ApplicationContext context:Context,store:LocalStore,auth:AuthRepository,
+        preferences:NotificationPreferencesStore)=vn.com.quyln.mistia.core.sync.NativeWalletReminderCoordinator(
+            store,AndroidWalletReminderPlatform(context),
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId},
+            {preferences.state.value.reminderEnabled(ReminderKind.WALLETS)},{Instant.now()},{java.time.ZoneId.systemDefault()}) {wallet,balance ->
+                walletReminderText(context,wallet,balance)
+            }
+
     @Provides
     @Singleton
     fun provideWalletReminders(@ApplicationContext context:Context,store:LocalStore,auth:AuthRepository,
-        preferences:NotificationPreferencesStore):vn.com.quyln.mistia.core.model.WalletReminderRepository =
-        vn.com.quyln.mistia.core.database.OfflineWalletReminderRepository(store,{java.time.ZoneId.systemDefault()},
+        preferences:NotificationPreferencesStore,native:vn.com.quyln.mistia.core.sync.NativeWalletReminderCoordinator):vn.com.quyln.mistia.core.model.WalletReminderRepository {
+        val local=vn.com.quyln.mistia.core.database.OfflineWalletReminderRepository(store,{java.time.ZoneId.systemDefault()},
             {preferences.state.value.reminderEnabled(ReminderKind.WALLETS)},
-            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId}) {wallet,balance ->
-                vn.com.quyln.mistia.core.model.WalletReminderText(
-                    context.getString(vn.com.quyln.mistia.core.designsystem.R.string.shared_notifications_mistialocalnotificationscheduler_low_wallet_balance),
-                    wallet.name+" — "+vn.com.quyln.mistia.core.designsystem.formatMinorUnits(balance,wallet.currencyCode))
-            }
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId}) {wallet,balance ->walletReminderText(context,wallet,balance)}
+        return vn.com.quyln.mistia.core.sync.NativeScheduledWalletReminderRepository(local,native)
+    }
 
     @Provides
     @Singleton

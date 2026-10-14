@@ -1931,3 +1931,21 @@ Evidence: `docs/android/evidence/2026-10-14-dynamic-planning-calendar.md`.
   independent review/device/visual QA and full APK1–4 remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-wallet-reminder-inbox.md`.
+
+
+## Native Android low-wallet reminders — 2026-10-14
+
+- [x] Actual idle-aware local09:00 AlarmManager scheduling, private receiver/unique
+  delivery worker, Hilt cold restore, clock/boot recovery and wallet channel/posting.
+- [x] Fresh owner/balance/policy/permission/channel checks, durable pending intent and
+  handled/delivered nonces, normal retry protection and stale display cleanup.
+  Suppressed requests cannot replay after later funding/permission changes.
+- [x] Immediate owner/master/wallet preference and financial-change observation;
+  no inbox feedback loop, token-refresh restart or unchanged-data rescheduling.
+- [x]30 added runtime cases;891 JVM/96 suites; full Android/Swift601/contracts/l10n/
+  SQLite checks pass;3 new Android platform tests compile only. APK47; flagsfalse.
+- [ ] Actual OS/device timing/sound/reboot/permission/tap verification, independent
+  review, bill/family immediate preference flow, remaining maintenance/UI/APK3–4
+  domains and complete APK1–4 parity remain unfinished. No live cloud writes.
+
+Evidence: `docs/android/evidence/2026-10-14-native-wallet-reminders.md`.

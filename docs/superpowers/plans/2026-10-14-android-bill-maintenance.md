@@ -127,3 +127,16 @@ commit guards pass local checks. Native OS delivery remains next: durable alarm 
 latest owned wallet balance and permission/preferences at posting, cancellation of stale
 schedules on sign-out/master/detail change, and no duplicate/replaced native alerts.
 Future inbox rows are schedule targets only; do not claim OS/device delivery yet.
+
+
+Native wallet OS milestone: actual AlarmManager/private receiver/delivery worker,
+Hilt cold restore, durable ticket/handled/delivered state, fresh current owned balance
+and permission/channel/policy guards, clock/boot recovery and native channel/content
+are implemented. Process observer handles owner/master/wallet preference and finance
+changes, excludes inbox writes and deduplicates unchanged data. Due suppressed alarms
+are consumed; cancellation failure retains tracked intent and delivery nonce for retry.
+Thirty new runtime cases and full checks pass; platform AndroidTests compile only.
+Next: immediate bill/family preference actions and remaining APK2 card statement/
+installment/budget maintenance, then unfinished APK3–4 domains and complete native
+visual/device QA. Native OS timing/sound/reboot/permission/tap behavior still needs
+real device verification; do not infer that from JVM, DEX or compile checks.
