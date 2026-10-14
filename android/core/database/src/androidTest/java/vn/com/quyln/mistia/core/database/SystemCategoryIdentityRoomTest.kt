@@ -116,6 +116,29 @@ class SystemCategoryIdentityRoomTest {
         } finally {db.close()}
     }
 
+    @Test fun retainedAliasReopenPreservesRawMetadataAndRepairsFinancialReferences()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="category-alias-${UUID.randomUUID()}.db"
+        var db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build()
+        try {
+            var store:LocalStore=RoomLocalStore(db);seed(store)
+            val ledger=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,child)!!
+            val referenced=ledger.copy(payload=JsonObject(ledger.payload+("category_id" to JsonPrimitive(legacy))))
+            store.commitMutation(referenced,PendingMutation(CloudEntity.LEDGER_TRANSACTION,child,owner.value,MutationKind.UPSERT,referenced.payload,now,referenced.syncVersion,device))
+            val alias=TransactionCategoryRecord.fromCloudRecord(remote()).copy(deletedAt=now).toCloudRecord().let {
+                it.copy(payload=JsonObject(it.payload+("future_alias_metadata" to JsonPrimitive(9007199254740995L))))}
+            val active=remote(seed.id)
+            val before=store.categoryReferenceSnapshot(owner)
+            assertTrue(store.commitSystemCategoryIdentityMigration(before,source(before),listOf(active,alias),catalog,device,now))
+            db.close();db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build();store=RoomLocalStore(db)
+            assertEquals(active,store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,seed.id))
+            assertEquals(alias,store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,legacy))
+            assertEquals(seed.id,store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,child)!!.payload["category_id"]!!.jsonPrimitive.content)
+            assertEquals(9007199254740995L,store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,child)!!.payload["amount_minor"]!!.jsonPrimitive.long)
+            assertTrue(store.pendingMutations(owner,CloudEntity.TRANSACTION_CATEGORY,Long.MAX_VALUE).none {it.mutation.recordId in setOf(seed.id,legacy)})
+        } finally {db.close();context.deleteDatabase(name)}
+    }
+
     @Test fun failureAfterIdentityRemovalRollsBackSourceTargetOutboxReferencesAndTasks()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
@@ -124,7 +147,7 @@ class SystemCategoryIdentityRoomTest {
             val before=store.categoryReferenceSnapshot(owner)
             db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_identity_repair BEFORE INSERT ON sync_outbox
                 WHEN NEW.entity='budget_plans' BEGIN SELECT RAISE(ABORT,'simulated outbox failure'); END""")
-            assertTrue(runCatching {store.commitSystemCategoryIdentityMigration(before,source(before),listOf(remote()),catalog,device,now)}.isFailure)
+            assertTrue(runCatching {store.commitSystemCategoryIdentityMigration(before,source(before),listOf(remote(),TransactionCategoryRecord.fromCloudRecord(remote(device)).copy(deletedAt=now).toCloudRecord()),catalog,device,now)}.isFailure)
             assertEquals(before,store.categoryReferenceSnapshot(owner))
             assertNull(store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,legacy))
         } finally {db.close()}

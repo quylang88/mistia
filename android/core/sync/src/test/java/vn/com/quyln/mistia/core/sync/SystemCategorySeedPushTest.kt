@@ -236,6 +236,62 @@ class SystemCategorySeedPushTest {
         assertEquals(JsonPrimitive(false),local.records[CATEGORY_ID]!!.payload["is_favorite"])
         assertTrue(local.queued.isEmpty())
     }
+    @Test fun `fully paged active identity with deleted alias preserves metadata and retargets history`()=runTest {
+        val local=local()
+        val ledgerID="66666666-6666-6666-6666-666666666666"
+        val ledger=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,ledgerID,OWNER,JsonObject(mapOf(
+            "id" to JsonPrimitive(ledgerID),"user_id" to JsonPrimitive(OWNER),"category_id" to JsonPrimitive(CHILD_ID),
+            "amount_minor" to JsonPrimitive(9007199254740993L),"sync_version" to JsonPrimitive(7),"updated_at" to JsonPrimitive(NOW),"deleted_at" to JsonNull,
+        )),NOW,null,7)
+        local.records[ledgerID]=ledger
+        val active=row("Active cloud",NOW,9)
+        val alias=TransactionCategoryRecord.fromCloudRecord(row("Old",NOW,7)).copy(id=CHILD_ID,deletedAt=NOW).toCloudRecord()
+        val remote=FakeRemoteStore().apply {systemPages.add(SystemCategoryPage(listOf(alias),1));systemPages.add(SystemCategoryPage(listOf(active),null))}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        assertEquals(active,local.records[CATEGORY_ID]);assertEquals(alias,local.records[CHILD_ID])
+        assertEquals(CATEGORY_ID,local.records[ledgerID]!!.payload.string("category_id"))
+        assertEquals(9007199254740993L,local.records[ledgerID]!!.payload.long("amount_minor"))
+        assertEquals(0,remote.writeCalls);assertEquals(listOf(0,1),remote.keyOffsets)
+        assertTrue(local.queued.none {it.mutation.entity==CloudEntity.TRANSACTION_CATEGORY})
+    }
+    @Test fun `future pending alias edit defers adoption without dropping edits or retry state`()=runTest {
+        val local=local()
+        val alias=TransactionCategoryRecord.fromCloudRecord(row("Local edit",NOW,7)).copy(id=CHILD_ID,deletedAt=NOW).toCloudRecord()
+        val aliasQueue=pending(alias).copy(nextAttemptAtEpochMillis=Long.MAX_VALUE,remoteIdentityObserved=true)
+        local.records[CHILD_ID]=alias;local.queued.add(aliasQueue)
+        val before=local.queued.toList()
+        val remoteAlias=TransactionCategoryRecord.fromCloudRecord(alias).copy(name="Cloud old").toCloudRecord()
+        val remote=FakeRemoteStore().apply {systemPages.add(SystemCategoryPage(listOf(row(version=9),remoteAlias),null))}
+        assertEquals(CategoryPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(before,local.queued);assertEquals(alias,local.records[CHILD_ID])
+        assertEquals(0,remote.writeCalls)
+    }
+    @Test fun `deleted category parent repair pushes full tombstoned payload instead of unsupported delete`()=runTest {
+        val deleted=TransactionCategoryRecord.fromCloudRecord(row(version=7)).copy(deletedAt=NOW).toCloudRecord()
+        val repaired=rewriteOwnedCategoryReference(UserId(OWNER),deleted,null,PARENT_ID,CHILD_ID,DEVICE,LATER)!!
+        val local=local(repaired.record).apply {
+            records[CHILD_ID]=parent.copy(id=CHILD_ID,syncVersion=9).toCloudRecord()
+            queued.clear();queued.add(QueuedMutation(repaired.mutation,0,0,null,true))
+        }
+        val result=repaired.record.copy(syncVersion=8,payload=JsonObject(repaired.record.payload+("sync_version" to JsonPrimitive(8))))
+        val remote=FakeRemoteStore().apply {fetchedResults.add(deleted);updatedResults.add(result)}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
+        assertEquals(CHILD_ID,remote.updatedPayloads.single().string("parent_category_id"))
+        assertEquals(NOW,remote.updatedPayloads.single().string("deleted_at"))
+        assertEquals(NOW,local.records[CATEGORY_ID]!!.deletedAt)
+    }
+    @Test fun `live child waits when preferred cloud parent is deleted but legacy parent is live`()=runTest {
+        val local=local()
+        val cloudParent=catalog.definitions.single {it.parentKey==null}.seedRecord(UserId(OWNER),null,DEVICE,NOW).copy(syncVersion=9,deletedAt=NOW)
+        local.records[cloudParent.id]=cloudParent.toCloudRecord()
+        val before=local.queued.toList()
+        val remote=FakeRemoteStore().apply {systemPages.add(SystemCategoryPage(listOf(row("Cloud child",NOW,7)),null))}
+        assertEquals(CategoryPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(before,local.queued)
+        assertEquals(row(),local.records[CATEGORY_ID])
+        assertEquals(PARENT_ID,local.records[CATEGORY_ID]!!.payload.string("parent_category_id"))
+        assertEquals(0,remote.writeCalls)
+    }
     private class FakeLocalStore(
         records: Map<String, CloudRecord>,
         val queued: MutableList<QueuedMutation>,
@@ -256,6 +312,7 @@ class SystemCategorySeedPushTest {
             val plan=planSystemCategoryIdentityMigration(expected,queued,remote,catalog,deviceId,now)
             this.queued.remove(queued)
             if(plan.removesSourceIdentity) records.remove(plan.adoption.source.id)
+            plan.retainedCategories.forEach {records[it.id]=it}
             records[plan.adoption.target.id]=plan.adoption.target
             plan.adoption.mutation?.let {this.queued.add(QueuedMutation(it,0,0,null,remoteIdentityObserved=true))}
             plan.references.mutations.forEach {change ->

@@ -564,6 +564,7 @@ class RoomLocalStore(
             pending.baseVersion,pending.deviceId,queued.attemptCount,pending.kind.name.lowercase(),pending.payload?.toString(),queued.remoteIdentityObserved)==1)
         database.categoryTranslationOutboxDao().deleteCategory(expected.owner.value,adoption.source.id)
         if(plan.removesSourceIdentity) check(database.cloudRecordDao().deleteRecord(expected.owner.value,CloudEntity.TRANSACTION_CATEGORY.table,adoption.source.id)==1)
+        plan.retainedCategories.forEach {database.cloudRecordDao().upsert(it.toEntity(false,System.currentTimeMillis()))}
         val targetMutation=adoption.mutation
         if(targetMutation==null) database.cloudRecordDao().upsert(adoption.target.toEntity(false,System.currentTimeMillis()))
         else commitMutationRows(adoption.target,targetMutation,remoteIdentityObserved=true)

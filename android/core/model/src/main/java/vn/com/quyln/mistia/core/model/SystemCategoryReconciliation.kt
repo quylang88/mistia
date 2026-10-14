@@ -68,7 +68,7 @@ fun rewriteOwnedCategoryReference(owner:UserId,record:CloudRecord,pending:Pendin
     val payload=JsonObject(record.payload+mapOf(field to JsonPrimitive(newId),"updated_at" to JsonPrimitive(timestamp),
         "last_modified_by_device_id" to JsonPrimitive(device)))
     val changed=record.copy(payload=payload,updatedAt=timestamp)
-    val mutation=PendingMutation(entity,record.id,owner.value,pending?.kind ?: if(record.deletedAt!=null) MutationKind.DELETE else MutationKind.UPSERT,
+    val mutation=PendingMutation(entity,record.id,owner.value,pending?.kind ?: if(record.deletedAt!=null && entity!=CloudEntity.TRANSACTION_CATEGORY) MutationKind.DELETE else MutationKind.UPSERT,
         payload,timestamp,pending?.baseVersion ?: record.syncVersion,device)
     return CategoryReferenceMutation(changed,mutation)
 }

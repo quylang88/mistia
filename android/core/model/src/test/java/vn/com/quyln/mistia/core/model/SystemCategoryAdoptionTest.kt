@@ -141,6 +141,83 @@ class SystemCategoryAdoptionTest {
         val known=source.pending.single().copy(remoteIdentityObserved=true)
         assertThrows(IllegalArgumentException::class.java) {prepareSystemCategoryAdoption(source.copy(pending=listOf(known)),known,listOf(remote()),catalog,device,now)}
     }
+    @Test fun `retained tombstone alias metadata and its financial references converge to active identity`() {
+        val initial=referencedSnapshot()
+        val ledger=initial.records.getValue(CloudEntity.LEDGER_TRANSACTION).single().let {it.copy(payload=JsonObject(it.payload+("category_id" to JsonPrimitive(legacy))))}
+        val source=initial.copy(records=initial.records+mapOf(CloudEntity.LEDGER_TRANSACTION to listOf(ledger)))
+        val active=remote(seed.id)
+        val tombstone=TransactionCategoryRecord.fromCloudRecord(remote()).copy(deletedAt=now).toCloudRecord().let {
+            it.copy(payload=JsonObject(it.payload+("future_alias_metadata" to JsonPrimitive(9007199254740995L))))}
+        val plan=migration(source,listOf(active,tombstone))
+        assertFalse(plan.removesSourceIdentity)
+        assertEquals(active,plan.adoption.target)
+        assertEquals(listOf(tombstone),plan.retainedCategories)
+        assertEquals(seed.id,plan.references.mutations.single().record.payload["category_id"]!!.jsonPrimitive.content)
+        assertEquals(9007199254740995L,plan.references.mutations.single().record.payload["amount_minor"]!!.jsonPrimitive.long)
+    }
+    @Test fun `multiple deleted aliases can coexist with an unpersisted seed moving to a legacy live identity`() {
+        val deleted=TransactionCategoryRecord.fromCloudRecord(remote(device)).copy(deletedAt=now).toCloudRecord()
+        val plan=migration(referencedSnapshot(),listOf(remote(),deleted))
+        assertTrue(plan.removesSourceIdentity)
+        assertEquals(legacy,plan.adoption.target.id)
+        assertEquals(listOf(deleted),plan.retainedCategories)
+        assertEquals(legacy,plan.references.mutations.single().record.payload["category_id"]!!.jsonPrimitive.content)
+    }
+    @Test fun `pending local alias edit prevents remote tombstone metadata overwrite`() {
+        val original=snapshot()
+        val deleted=TransactionCategoryRecord.fromCloudRecord(remote()).copy(deletedAt=now).toCloudRecord()
+        val edited=TransactionCategoryRecord.fromCloudRecord(deleted).copy(name="Pending local edit").toCloudRecord()
+        val queue=QueuedMutation(PendingMutation(CloudEntity.TRANSACTION_CATEGORY,legacy,owner.value,MutationKind.UPSERT,edited.payload,now,edited.syncVersion,device),0,0,null,true)
+        val source=original.copy(records=original.records+mapOf(CloudEntity.TRANSACTION_CATEGORY to listOf(seed.toCloudRecord(),edited)),pending=original.pending+queue)
+        assertThrows(IllegalArgumentException::class.java) {migration(source,listOf(remote(seed.id),deleted))}
+    }
+    @Test fun `adopted child parent follows real active parent identity rather than a retained tombstone`() {
+        val childCatalog=SystemCategoryCatalog.parse("""[
+            {"id":"home","kind":"expense","active":true,"icon":"house.fill","fallbackIcon":"house.fill","color":"#123456",
+            "translations":{"vi":"Nhà","en":"Home","ja":"家"},"aliases":[],"children":[
+              {"id":"rent","active":true,"icon":"house.fill","fallbackIcon":"house.fill","color":"#123456",
+              "translations":{"vi":"Thuê","en":"Rent","ja":"家賃"},"aliases":[]}]}
+        ]""")
+        val parent=childCatalog.activeDefinitions.single {it.key=="home"}.seedRecord(owner,null,device,now).copy(syncVersion=9)
+        val legacyParent=parent.copy(id=legacy,deletedAt=now)
+        val childSeed=childCatalog.activeDefinitions.single {it.key=="rent"}.seedRecord(owner,parent.id,device,now)
+        val childRemote=childSeed.copy(id=device,parentCategoryId=legacy,syncVersion=7).toCloudRecord()
+        val queue=QueuedMutation(childSeed.bootstrapMutation(),0,0,null)
+        val source=CategoryReferenceSnapshot(owner,categoryReferenceEntities.associateWith {
+            if(it==CloudEntity.TRANSACTION_CATEGORY) listOf(parent.toCloudRecord(),legacyParent.toCloudRecord(),childSeed.toCloudRecord()) else emptyList()
+        },listOf(queue),emptyList())
+        val plan=prepareSystemCategoryAdoption(source,queue,listOf(childRemote),childCatalog,device,now)
+        assertEquals(parent.id,plan.target.payload["parent_category_id"]!!.jsonPrimitive.content)
+        assertEquals(7L,plan.mutation!!.baseVersion)
+        assertEquals(device,plan.target.id)
+    }
+    @Test fun `viewer alias references remain read only while retained metadata is preserved`() {
+        val initial=referencedSnapshot(true)
+        val viewer=initial.records.getValue(CloudEntity.LEDGER_TRANSACTION).single().let {it.copy(payload=JsonObject(it.payload+("category_id" to JsonPrimitive(legacy))))}
+        val source=initial.copy(records=initial.records+mapOf(CloudEntity.LEDGER_TRANSACTION to listOf(viewer)))
+        val deleted=TransactionCategoryRecord.fromCloudRecord(remote()).copy(deletedAt=now).toCloudRecord()
+        val plan=migration(source,listOf(remote(seed.id),deleted))
+        assertTrue(plan.references.mutations.isEmpty())
+        assertEquals(listOf(deleted),plan.retainedCategories)
+        assertFalse(plan.removesSourceIdentity)
+    }
+    @Test fun `live child cannot move from live legacy parent to deleted owner cloud parent`() {
+        val childCatalog=SystemCategoryCatalog.parse("""[
+            {"id":"home","kind":"expense","active":true,"icon":"house.fill","fallbackIcon":"house.fill","color":"#123456",
+            "translations":{"vi":"Nhà","en":"Home","ja":"家"},"aliases":[],"children":[
+              {"id":"rent","active":true,"icon":"house.fill","fallbackIcon":"house.fill","color":"#123456",
+              "translations":{"vi":"Thuê","en":"Rent","ja":"家賃"},"aliases":[]}]}
+        ]""")
+        val canonical=childCatalog.activeDefinitions.single {it.key=="home"}.seedRecord(owner,null,device,now).copy(syncVersion=9,deletedAt=now)
+        val liveLegacy=canonical.copy(id=legacy,deletedAt=null)
+        val childSeed=childCatalog.activeDefinitions.single {it.key=="rent"}.seedRecord(owner,legacy,device,now)
+        val childRemote=childSeed.copy(id=device,syncVersion=7).toCloudRecord()
+        val queue=QueuedMutation(childSeed.bootstrapMutation(),0,0,null)
+        val source=CategoryReferenceSnapshot(owner,categoryReferenceEntities.associateWith {
+            if(it==CloudEntity.TRANSACTION_CATEGORY) listOf(canonical.toCloudRecord(),liveLegacy.toCloudRecord(),childSeed.toCloudRecord()) else emptyList()
+        },listOf(queue),emptyList())
+        assertThrows(CategoryParentReconciliationRequired::class.java) {prepareSystemCategoryAdoption(source,queue,listOf(childRemote),childCatalog,device,now)}
+    }
     @Test fun `pending source translation moves to the adopted wire identity preserving explicit language`() {
         val local=seed.copy(nameEnglish="User English").toCloudRecord()
         val task=QueuedCategoryTranslation(PendingCategoryTranslation(owner.value,seed.id,"User English",CategoryNameLanguage.ENGLISH,now,device),3,Long.MAX_VALUE,"old_failure")

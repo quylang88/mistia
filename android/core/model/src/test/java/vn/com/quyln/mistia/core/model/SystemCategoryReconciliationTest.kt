@@ -90,6 +90,15 @@ class SystemCategoryReconciliationTest {
         assertEquals(MutationKind.DELETE,change.mutation.kind)
         assertEquals(row.syncVersion,change.mutation.baseVersion)
     }
+    @Test fun `deleted category FK repair uses full upsert without resurrecting or inventing category delete`() {
+        val row=reference(CloudEntity.TRANSACTION_CATEGORY,now)
+        val change=rewriteOwnedCategoryReference(owner,row,null,old,target,device,now)!!
+        assertEquals(MutationKind.UPSERT,change.mutation.kind)
+        assertEquals(now,change.record.deletedAt)
+        assertEquals(JsonPrimitive(target),change.record.payload["parent_category_id"])
+        assertEquals(row.syncVersion,change.mutation.baseVersion)
+        assertEquals(MutationKind.DELETE,rewriteOwnedCategoryReference(owner,row,pending(row,MutationKind.DELETE),old,target,device,now)!!.mutation.kind)
+    }
     @Test fun `previously synced reference gets new matching outbox without incrementing remote version`() {
         val row=reference(CloudEntity.BUDGET_PLAN)
         val change=rewriteOwnedCategoryReference(owner,row,null,old,target,device,now)!!

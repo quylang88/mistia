@@ -35,8 +35,14 @@ internal class SystemCategorySeedReconciler(
             require(page.records.isNotEmpty() && next>offset && next==Math.addExact(offset,page.records.size)) {"Invalid category key pagination"}
             offset=next
         }
-        selectSystemCategoryRemote(owner,key,records)
-        if(records.size>1) return MutationPreflight.Conflict("system_category_duplicates_require_reconciliation")
+        val selection=selectSystemCategoryRemote(owner,key,records)
+        if(selection!=null && records.any {it.id!=selection.identity.id && it.deletedAt==null})
+            return MutationPreflight.Conflict("system_category_duplicates_require_reconciliation")
+        if(selection!=null) {
+            val aliases=records.filter {it.id!=selection.identity.id}.map {it.id}.toSet()
+            if(snapshot.pending.any {it.mutation.entity==CloudEntity.TRANSACTION_CATEGORY && it.mutation.recordId in aliases} ||
+                snapshot.translations.any {it.translation.categoryId in aliases}) return MutationPreflight.Deferred
+        }
         if(records.isEmpty()) {
             if(parentID!=null) {
                 val parent=requireNotNull(snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY).singleOrNull {it.id==parentID})
@@ -45,8 +51,10 @@ internal class SystemCategorySeedReconciler(
             }
             return MutationPreflight.Continue
         }
-        val applied=localStore.commitSystemCategoryIdentityMigration(snapshot,queued,records,catalog,queued.mutation.deviceId,
-            Instant.ofEpochMilli(nowEpochMillis()).toString())
+        val applied=try {
+            localStore.commitSystemCategoryIdentityMigration(snapshot,queued,records,catalog,queued.mutation.deviceId,
+                Instant.ofEpochMilli(nowEpochMillis()).toString())
+        } catch (_:CategoryParentReconciliationRequired) {return MutationPreflight.Deferred}
         return if(applied) MutationPreflight.Reconciled else MutationPreflight.Stale
     }
 }

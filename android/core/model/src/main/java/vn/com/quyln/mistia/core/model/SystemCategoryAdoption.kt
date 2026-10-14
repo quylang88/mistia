@@ -4,6 +4,8 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.json.*
 
+class CategoryParentReconciliationRequired : IllegalArgumentException("Category parent reconciliation required")
+
 /** Preparation only: identity installation/removal and dependent repairs must commit together. */
 data class SystemCategoryAdoption(
     val source: CloudRecord,
@@ -60,6 +62,30 @@ fun prepareSystemCategoryAdoption(snapshot:CategoryReferenceSnapshot,queued:Queu
         "id" to JsonPrimitive(identity.id),"user_id" to JsonPrimitive(snapshot.owner.value),
         "sync_version" to JsonPrimitive(identity.syncVersion),"created_at" to requireNotNull(identity.payload["created_at"]),
     )).toMutableMap()
+    // A child imported after its parent group was reconciled must use the real
+    // preferred parent identity, including when the old parent is retained deleted metadata.
+    (fields["parent_category_id"] as? JsonPrimitive)?.contentOrNull?.let {parentID ->
+        val parentRow=requireNotNull(categories.singleOrNull {it.id==parentID}) {"Target parent metadata unavailable"}
+        val parentCategory=TransactionCategoryRecord.fromCloudRecord(parentRow)
+        require(parentRow.ownerUserId==snapshot.owner.value && parentCategory.ownerUserId==snapshot.owner.value &&
+            parentCategory.hierarchyRole==CategoryHierarchyRole.PARENT && parentCategory.parentCategoryId==null &&
+            parentCategory.kindWireValue==(fields["kind_raw_value"] as? JsonPrimitive)?.content)
+        if(parentCategory.isSystem && parentCategory.systemKey!=null) {
+            val parents=categories.filter {row ->
+                if((row.payload["user_id"] as? JsonPrimitive)?.content!=snapshot.owner.value) false else {
+                    val typed=TransactionCategoryRecord.fromCloudRecord(row)
+                    val queuedParent=snapshot.pending.singleOrNull {it.mutation.entity==CloudEntity.TRANSACTION_CATEGORY && it.mutation.recordId==row.id}
+                    typed.isSystem && typed.systemKey==parentCategory.systemKey &&
+                        (queuedParent==null || queuedParent.remoteIdentityObserved || row.syncVersion>0)
+                }
+            }
+            val selectedParent=requireNotNull(selectSystemCategoryRemote(snapshot.owner,requireNotNull(parentCategory.systemKey),parents)) {"Parent identity has not been observed remotely"}
+            val preferredParent=TransactionCategoryRecord.fromCloudRecord(selectedParent.identity)
+            require(preferredParent.hierarchyRole==CategoryHierarchyRole.PARENT && preferredParent.parentCategoryId==null && preferredParent.kindWireValue==parentCategory.kindWireValue)
+            if(selectedParent.identity.deletedAt!=null && fields["deleted_at"]==JsonNull) throw CategoryParentReconciliationRequired()
+            fields["parent_category_id"]=JsonPrimitive(selectedParent.identity.id)
+        }
+    }
     val ignored=setOf("updated_at","last_modified_by_device_id")
     val changed=fields.filterKeys {it !in ignored}!=identity.payload.filterKeys {it !in ignored}
     val target=if(!changed) identity else {
@@ -82,24 +108,48 @@ private fun CategoryNameLanguage.categoryNameField()=when(this) {
     CategoryNameLanguage.JAPANESE -> "name_japanese"
 }
 
-data class SystemCategoryIdentityMigration(val adoption:SystemCategoryAdoption,val references:CategoryReferenceRepairs,val removesSourceIdentity:Boolean)
+data class SystemCategoryIdentityMigration(val adoption:SystemCategoryAdoption,val references:CategoryReferenceRepairs,val removesSourceIdentity:Boolean,val retainedCategories:List<CloudRecord> = emptyList())
 
-/** Bounded migration of one fully enumerated remote identity; duplicates require explicit cleanup. */
+/** Retains deleted aliases; an active competing identity needs ordered cloud cleanup. */
 fun planSystemCategoryIdentityMigration(snapshot:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):SystemCategoryIdentityMigration {
-    require(remote.size==1) {"Remote duplicates require explicit reconciliation"}
     val adoption=prepareSystemCategoryAdoption(snapshot,queued,remote,catalog,deviceId,now)
-    val removes=adoption.source.id!=adoption.target.id
-    if(!removes) return SystemCategoryIdentityMigration(adoption,CategoryReferenceRepairs(emptyList(),emptyList()),false)
-    val category=TransactionCategoryRecord.fromCloudRecord(adoption.source)
-    require(adoption.source.id==SystemCategoryIdentity.cloudId(requireNotNull(category.systemKey),snapshot.owner)) {"Only unpersisted owner-cloud seeds may be removed"}
-    require(remote.none {it.id==adoption.source.id}) {"Persisted source requires cloud cleanup"}
-    snapshot.records.forEach { (entity,rows) ->
-        val field=if(entity==CloudEntity.TRANSACTION_CATEGORY) "parent_category_id" else "category_id"
-        require(rows.none {row -> (row.payload["user_id"] as? JsonPrimitive)?.content!=snapshot.owner.value &&
-            (row.payload[field] as? JsonPrimitive)?.content==adoption.source.id}) {"Viewer reference prevents source identity removal"}
+    val retained=remote.filter {it.id!=adoption.target.id}
+    require(retained.all {it.deletedAt!=null}) {"Active competing identity requires cloud cleanup before adoption"}
+    val storedCategories=snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY)
+    retained.forEach {row ->
+        require(snapshot.pending.none {it.mutation.entity==CloudEntity.TRANSACTION_CATEGORY && it.mutation.recordId==row.id}) {"Retained alias has pending local edits"}
+        require(snapshot.translations.none {it.translation.categoryId==row.id}) {"Retained alias has pending translation"}
+        storedCategories.singleOrNull {it.id==row.id}?.let {existing ->
+            selectSystemCategoryRemote(snapshot.owner,requireNotNull(TransactionCategoryRecord.fromCloudRecord(row).systemKey),listOf(existing))
+            require(existing.syncVersion<=row.syncVersion) {"Retained alias advanced after lookup"}
+        }
     }
-    val categories=snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY).filterNot {it.id==adoption.target.id}+adoption.target
-    val working=snapshot.copy(records=snapshot.records+mapOf(CloudEntity.TRANSACTION_CATEGORY to categories))
-    val references=planCategoryReferenceRepairs(working,adoption.source.id,adoption.target.id,deviceId,now,allowDeletedTarget=true)
-    return SystemCategoryIdentityMigration(adoption,references,true)
+    val removes=adoption.source.id!=adoption.target.id
+    if(removes) {
+        val category=TransactionCategoryRecord.fromCloudRecord(adoption.source)
+        require(adoption.source.id==SystemCategoryIdentity.cloudId(requireNotNull(category.systemKey),snapshot.owner)) {"Only unpersisted owner-cloud seeds may be removed"}
+        require(remote.none {it.id==adoption.source.id}) {"Persisted source requires cloud cleanup"}
+        snapshot.records.forEach { (entity,rows) ->
+            val field=if(entity==CloudEntity.TRANSACTION_CATEGORY) "parent_category_id" else "category_id"
+            require(rows.none {row -> (row.payload["user_id"] as? JsonPrimitive)?.content!=snapshot.owner.value &&
+                (row.payload[field] as? JsonPrimitive)?.content==adoption.source.id}) {"Viewer reference prevents source identity removal"}
+        }
+    }
+    val imported=retained+adoption.target
+    val categories=storedCategories.filterNot {row -> imported.any {it.id==row.id}}+imported
+    var working=snapshot.copy(records=snapshot.records+mapOf(CloudEntity.TRANSACTION_CATEGORY to categories))
+    val mutations=linkedMapOf<Pair<CloudEntity,String>,CategoryReferenceMutation>()
+    val tasks=linkedMapOf<String,PendingCategoryTranslation>()
+    val aliases=(if(removes) listOf(adoption.source.id) else emptyList())+retained.map {it.id}
+    for(alias in aliases) {
+        val changes=planCategoryReferenceRepairs(working,alias,adoption.target.id,deviceId,now,allowDeletedTarget=true)
+        changes.mutations.forEach {change -> mutations[requireNotNull(CloudEntity.fromTable(change.record.entity)) to change.record.id]=change}
+        changes.translations.forEach {tasks[it.categoryId]=it}
+        val updatedRecords=working.records.mapValues { (entity,rows) -> rows.map {row -> mutations[entity to row.id]?.record ?: row} }
+        val updatedPending=working.pending.filterNot {mutations.containsKey(it.mutation.entity to it.mutation.recordId)}+
+            mutations.values.map {QueuedMutation(it.mutation,0,0,null)}
+        val updatedTasks=working.translations.map {task -> tasks[task.translation.categoryId]?.let {QueuedCategoryTranslation(it,0,0,null)} ?: task}
+        working=working.copy(records=updatedRecords,pending=updatedPending,translations=updatedTasks)
+    }
+    return SystemCategoryIdentityMigration(adoption,CategoryReferenceRepairs(mutations.values.toList(),tasks.values.toList()),removes,retained)
 }

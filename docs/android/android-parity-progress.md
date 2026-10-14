@@ -1637,3 +1637,12 @@ Evidence: `docs/android/evidence/2026-10-14-category-key-reconciliation.md`.
 - [ ] Retained tombstone duplicates / active-key cleanup before startup; no device/live cloud verification; full APK1–4 continues.
 
 Evidence: `docs/android/evidence/2026-10-14-observed-category-identity.md`.
+
+## Retained category tombstone aliases — 2026-10-14
+
+- [x] Atomic real target adoption plus raw deleted-alias metadata retention and reference convergence from every alias; pending alias edits/tasks defer, viewer references remain read only.
+- [x] Child parent uses real observed parent identity; live children defer when preferred identity is deleted. Review P2 runtime RED/fixed/rereview clean. Deleted category FK repair uses full tombstoned UPSERT, preserving existing pending kinds.
+- [x]11 new regressions;718 JVM/80 suites and full checks pass. Retained-alias Room reopen/rollback compile only. APK27; nine write flagsfalse.
+- [ ] Active legacy competitor cleanup before cloud identity resurrection, parent maintenance/startup, physical verification and full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-retained-category-aliases.md`.
