@@ -7,6 +7,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vn.com.quyln.mistia.core.model.*
+import kotlinx.serialization.json.*
 import vn.com.quyln.mistia.core.model.AuthRepository
 import vn.com.quyln.mistia.core.model.AuthSession
 import vn.com.quyln.mistia.core.model.AuthState
@@ -66,6 +68,119 @@ class PullOnlySyncEnginePushOrderTest {
         assertEquals("pull:transaction_categories", events[8])
     }
 
+    private val maintenanceCatalog=SystemCategoryCatalog.parse("""[
+        {"id":"home","kind":"expense","active":true,"icon":"house.fill","fallbackIcon":"house.fill","color":"#123456",
+        "translations":{"vi":"Nhà","en":"Home","ja":"家"},"aliases":[],"children":[]}
+    ]""")
+    private val maintenanceDevice="22222222-2222-2222-2222-222222222222"
+    @Test fun `syncNow and pullAll reconcile actual raw category rows after every table finishes`()=runTest {
+        for(pullOnly in listOf(false,true)) {
+            val events=mutableListOf<String>();val received=mutableListOf<CloudRecord>()
+            val raw=maintenanceCatalog.activeDefinitions.single().seedRecord(UserId(OWNER),null,maintenanceDevice,"2026-10-14T00:00:00Z").copy(syncVersion=7,name="Remote raw").toCloudRecord()
+            val cached=TransactionCategoryRecord.fromCloudRecord(raw).copy(name="Cached local").toCloudRecord()
+            val local=object:LocalStore by EmptyLocalStore() {
+                override suspend fun categoryReferenceSnapshot(owner:UserId)=CategoryReferenceSnapshot(owner,
+                    categoryReferenceEntities.associateWith {if(it==CloudEntity.TRANSACTION_CATEGORY) listOf(cached) else emptyList()},emptyList(),emptyList())
+                override suspend fun commitObservedSystemCategoryMaintenance(expected:CategoryReferenceSnapshot,key:String,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean {
+                    events.add("maintenance");received+=remote
+                    planObservedSystemCategoryMaintenance(expected,key,remote,catalog,deviceId,now)
+                    return true
+                }
+            }
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                    events.add("pull:$table")
+                    return RemotePage(if(table==CloudEntity.TRANSACTION_CATEGORY.table) listOf(raw.payload) else emptyList(),null)
+                }
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),
+                categoryMaintenanceCoordinator=CategoryMaintenanceCoordinator(local,maintenanceCatalog,{maintenanceDevice}) {0L})
+            val result=if(pullOnly) engine.pullAll() else engine.syncNow()
+            assertTrue(result.isSuccess)
+            assertEquals(listOf(raw),received)
+            assertEquals("maintenance",events.last())
+            assertEquals(CloudEntity.entries.size+ReadOnlyCloudCollection.entries.size+1,events.size)
+        }
+    }
+    @Test fun `incomplete pull never runs category maintenance from a partial snapshot`()=runTest {
+        val events=mutableListOf<String>()
+        val raw=maintenanceCatalog.activeDefinitions.single().seedRecord(UserId(OWNER),null,maintenanceDevice,"2026-10-14T00:00:00Z").copy(syncVersion=7).toCloudRecord()
+        val local=object:LocalStore by EmptyLocalStore() {
+            override suspend fun categoryReferenceSnapshot(owner:UserId):CategoryReferenceSnapshot {
+                events.add("maintenance")
+                error("No maintenance until full pull")
+            }
+        }
+        val remote=object:RemoteStore {
+            override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                if(table==CloudEntity.BUDGET_PLAN.table) throw java.io.IOException("interrupted pull")
+                return RemotePage(if(table==CloudEntity.TRANSACTION_CATEGORY.table) listOf(raw.payload) else emptyList(),null)
+            }
+        }
+        val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),
+            categoryMaintenanceCoordinator=CategoryMaintenanceCoordinator(local,maintenanceCatalog,{maintenanceDevice}))
+        assertTrue(engine.syncNow().isFailure)
+        assertTrue(events.isEmpty())
+    }
+    @Test fun `invalid pull pagination fails immediately before category maintenance`()=runTest {
+        val raw=maintenanceCatalog.activeDefinitions.single().seedRecord(UserId(OWNER),null,maintenanceDevice,"2026-10-14T00:00:00Z").toPayload()
+        for(page in listOf(RemotePage(listOf(raw),0),RemotePage(listOf(raw),2),RemotePage(emptyList(),1))) {
+            var calls=0
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                    calls++
+                    check(calls==1) {"Repeated invalid pagination"}
+                    return page
+                }
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),EmptyLocalStore(),remote,emptyList())
+            val result=engine.pullAll()
+            assertTrue(result.isFailure)
+            assertEquals("Invalid pull pagination",result.exceptionOrNull()!!.message)
+            assertEquals(1,calls)
+        }
+    }
+    @Test fun `pull cancellation propagates from syncNow and pullAll without maintenance`()=runTest {
+        for(pullOnly in listOf(false,true)) {
+            var maintenanceCalls=0
+            val local=object:LocalStore by EmptyLocalStore() {
+                override suspend fun categoryReferenceSnapshot(owner:UserId):CategoryReferenceSnapshot {
+                    maintenanceCalls++
+                    error("Cancelled pull cannot maintain categories")
+                }
+            }
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage =
+                    throw kotlinx.coroutines.CancellationException("cancelled pull")
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),
+                categoryMaintenanceCoordinator=CategoryMaintenanceCoordinator(local,maintenanceCatalog,{maintenanceDevice}))
+            val failure=runCatching {if(pullOnly) engine.pullAll() else engine.syncNow()}.exceptionOrNull()
+            assertTrue(failure is kotlinx.coroutines.CancellationException)
+            assertEquals(0,maintenanceCalls)
+        }
+    }
+    @Test fun `maintenance hook cancellation propagates through both engine entry points`()=runTest {
+        for(pullOnly in listOf(false,true)) {
+            var maintenanceCalls=0
+            val raw=maintenanceCatalog.activeDefinitions.single().seedRecord(UserId(OWNER),null,maintenanceDevice,"2026-10-14T00:00:00Z").copy(syncVersion=7).toCloudRecord()
+            val local=object:LocalStore by EmptyLocalStore() {
+                override suspend fun categoryReferenceSnapshot(owner:UserId):CategoryReferenceSnapshot {
+                    maintenanceCalls++
+                    throw kotlinx.coroutines.CancellationException("cancelled maintenance hook")
+                }
+            }
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int)=
+                    RemotePage(if(table==CloudEntity.TRANSACTION_CATEGORY.table) listOf(raw.payload) else emptyList(),null)
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),
+                categoryMaintenanceCoordinator=CategoryMaintenanceCoordinator(local,maintenanceCatalog,{maintenanceDevice}))
+            val failure=runCatching {if(pullOnly) engine.pullAll() else engine.syncNow()}.exceptionOrNull()
+            assertTrue(failure is kotlinx.coroutines.CancellationException)
+            assertEquals(1,maintenanceCalls)
+        }
+    }
     private class RecordingPushCoordinator(
         override val entity: CloudEntity,
         private val events: MutableList<String>,

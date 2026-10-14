@@ -345,12 +345,79 @@ class SystemCategorySeedPushTest {
         assertEquals(1,remote.keyCalls)
         assertEquals(1,local.queued.size)
     }
+    private fun maintenance(local:LocalStore)=CategoryMaintenanceCoordinator(local,catalog,{DEVICE}) {NOW_MILLIS}
+    @Test fun `post pull maintenance uses actual raw cloud rows and queues clean group repair`()=runTest {
+        val raw=duplicateRemote().serverRows!!.values.toList()
+        val local=local().apply {queued.clear();records.putAll(raw.associateBy {it.id})}
+        assertEquals(CategoryMaintenanceSummary(processedGroups=1),maintenance(local).reconcileObserved(UserId(OWNER),raw))
+        assertEquals(setOf(CATEGORY_ID,CHILD_ID),local.queued.map {it.mutation.recordId}.toSet())
+        assertEquals("Live legacy",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(42L,local.queued.single {it.mutation.recordId==CATEGORY_ID}.mutation.baseVersion)
+    }
+    @Test fun `maintenance processes root group first and defers children queued by parent repair`()=runTest {
+        val cloudParent=SystemCategoryIdentity.cloudId(parent.systemKey!!,UserId(OWNER))
+        val root=parent.copy(id=cloudParent,deletedAt=NOW,syncVersion=42).toCloudRecord()
+        val oldParent=parent.copy(syncVersion=7).toCloudRecord()
+        val childRows=duplicateRemote().serverRows!!.values.toList()
+        val raw=childRows+listOf(oldParent,root)
+        val local=FakeLocalStore(raw.associateBy {it.id},mutableListOf())
+        val summary=maintenance(local).reconcileObserved(UserId(OWNER),raw)
+        assertEquals(CategoryMaintenanceSummary(processedGroups=1,deferredGroups=1),summary)
+        assertEquals(cloudParent,local.records[CATEGORY_ID]!!.payload.string("parent_category_id"))
+        assertEquals(cloudParent,local.records[CHILD_ID]!!.payload.string("parent_category_id"))
+        assertTrue(local.queued.any {it.mutation.recordId==cloudParent})
+        assertTrue(local.queued.any {it.mutation.recordId==PARENT_ID && it.mutation.payload!!["deleted_at"]!=JsonNull})
+    }
+    @Test fun `maintenance protects local future edits and leaves foreign viewer category untouched`()=runTest {
+        val raw=duplicateRemote().serverRows!!.values.toList()
+        val local=local(row("Pending name",LATER,42)).apply {queued[0]=queued[0].copy(nextAttemptAtEpochMillis=Long.MAX_VALUE)}
+        val before=local.queued.toList()
+        val viewer=TransactionCategoryRecord.fromCloudRecord(raw.last()).copy(ownerUserId=DEVICE).toCloudRecord().copy(ownerUserId=OWNER)
+        assertEquals(CategoryMaintenanceSummary(deferredGroups=1),maintenance(local).reconcileObserved(UserId(OWNER),raw+viewer))
+        assertEquals(before,local.queued)
+        assertEquals("Pending name",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(CategoryMaintenanceSummary(),maintenance(local).reconcileObserved(UserId(OWNER),listOf(viewer)))
+    }
+    @Test fun `maintenance stale snapshot and cancellation never erase newer local mutation`()=runTest {
+        val raw=duplicateRemote().serverRows!!.values.toList()
+        val local=local().apply {queued.clear();records.putAll(raw.associateBy {it.id})}
+        val newer=pending(row("Concurrent edit",LATER,42))
+        local.beforeObservedCommit={local.queued.add(newer);local.records[CATEGORY_ID]=row("Concurrent edit",LATER,42)}
+        assertEquals(CategoryMaintenanceSummary(staleGroups=1),maintenance(local).reconcileObserved(UserId(OWNER),raw))
+        assertEquals(newer,local.queued.single())
+        local.beforeObservedCommit={throw CancellationException("cancel maintenance")}
+        val failure=runCatching {maintenance(local).reconcileObserved(UserId(OWNER),raw)}.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals(newer,local.queued.single())
+    }
+    @Test fun `invalid owned remote metadata fails closed before any maintenance write`()=runTest {
+        val malformed=row(version=7).let {it.copy(payload=JsonObject(it.payload+("sync_version" to JsonPrimitive("7"))))}
+        val local=local().apply {queued.clear()}
+        assertTrue(runCatching {maintenance(local).reconcileObserved(UserId(OWNER),listOf(malformed))}.isFailure)
+        assertTrue(local.queued.isEmpty())
+        assertEquals(row(),local.records[CATEGORY_ID])
+    }
     private class FakeLocalStore(
         records: Map<String, CloudRecord>,
         val queued: MutableList<QueuedMutation>,
     ) : LocalStore {
         val records = records.toMutableMap()
 
+        var beforeObservedCommit:(()->Unit)?=null
+        override suspend fun commitObservedSystemCategoryMaintenance(expected:CategoryReferenceSnapshot,key:String,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean {
+            beforeObservedCommit?.invoke()
+            try {expected.requireUnchanged(categoryReferenceSnapshot(expected.owner))} catch (_:IllegalArgumentException) {return false}
+            val plan=planObservedSystemCategoryMaintenance(expected,key,remote,catalog,deviceId,now) ?: return true
+            plan.retainedCategories.forEach {records[it.id]=it}
+            records[plan.adoption.target.id]=plan.adoption.target
+            plan.adoption.mutation?.let {queued.add(QueuedMutation(it,0,0,null,true))}
+            plan.references.mutations.forEach {change ->
+                records[change.record.id]=change.record
+                queued.removeAll {it.mutation.entity==change.mutation.entity && it.mutation.recordId==change.record.id}
+                queued.add(QueuedMutation(change.mutation,0,0,null,true))
+            }
+            return true
+        }
         override suspend fun categoryReferenceSnapshot(owner:UserId)=CategoryReferenceSnapshot(owner,
             categoryReferenceEntities.associateWith {entity -> records.values.filter {it.entity==entity.table && it.ownerUserId==owner.value}},
             queued.filter {it.mutation.subjectUserId==owner.value && it.mutation.entity in categoryReferenceEntities},emptyList())

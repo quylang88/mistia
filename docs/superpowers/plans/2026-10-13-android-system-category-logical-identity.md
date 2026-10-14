@@ -149,3 +149,22 @@ native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remai
 - [ ] Next wire maintenance using complete real owner-key snapshots, parent groups
   before children, retry/defer/cancellation and bootstrap integration. Do not
   use locally merged pending records as if they were authoritative remote rows.
+
+
+## Post-pull maintenance integration
+
+- [x] Add CategoryMaintenanceCoordinator(localStore,catalog,deviceIdProvider,now)
+  with reconcileObserved(owner,remoteCategories): CategoryMaintenanceSummary.
+  Consume only raw fully-pulled remote category rows. Filter valid viewer-owned
+  rows, process known root keys before children, retain unknown keys unchanged.
+  Each group captures a fresh full snapshot and calls atomic observed maintenance.
+  Pending edits/tasks/parent reconciliation defer; stale CAS is counted separately;
+  cancellation propagates. This performs local queued repairs only, no HTTP writes.
+- [x] Test raw-input preservation, root-before-child and dependent deferral,
+  future queued edits, stale snapshot, foreign viewer, invalid owner/metadata and
+  cancellation. Confirm runtime REDs then GREEN with actual pure plans in store.
+- [x] Inject optional coordinator into PullOnlySyncEngine/AppModule; invoke only
+  after every required/optional table finishes. Test both syncNow and pullAll,
+  failure before completion and exact raw remote group versus merged local rows.
+- [x] Full checks/review/evidence/commit. Default seed startup creation remains
+  separately scoped until this integration is verified; nine cloud gatesfalse.

@@ -55,6 +55,7 @@ import vn.com.quyln.mistia.core.model.CategoryNameTranslator
 import vn.com.quyln.mistia.core.network.SupabaseCategoryNameTranslator
 import vn.com.quyln.mistia.core.network.FrankfurterExchangeRateRepository
 import vn.com.quyln.mistia.core.network.SupabaseReceiptAnalysisClient
+import vn.com.quyln.mistia.core.sync.CategoryMaintenanceCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 
 @Module
@@ -225,6 +226,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideCategoryMaintenanceCoordinator(localStore:LocalStore,catalog:SystemCategoryCatalog,deviceIdStore:SecureDeviceIdStore):CategoryMaintenanceCoordinator =
+        CategoryMaintenanceCoordinator(localStore,catalog,deviceIdStore::getOrCreate)
+
+    @Provides
+    @Singleton
     fun provideCategoryPushCoordinator(
         localStore: LocalStore,
         remoteStore: RemoteMutationStore,
@@ -330,6 +336,7 @@ object AppModule {
         recurringBillPushCoordinator: RecurringBillPushCoordinator,
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
+        categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
     ): SyncEngine = PullOnlySyncEngine(
         context,
         authRepository,
@@ -346,5 +353,6 @@ object AppModule {
             dueOccurrencePushCoordinator,
         ),
         categoryTranslationCoordinator,
+        categoryMaintenanceCoordinator,
     )
 }

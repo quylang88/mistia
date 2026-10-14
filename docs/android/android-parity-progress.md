@@ -1677,3 +1677,18 @@ Evidence: `docs/android/evidence/2026-10-14-category-active-alias-cleanup.md`.
   remain open; all nine write flags remain false.
 
 Evidence: `docs/android/evidence/2026-10-14-observed-category-maintenance-api.md`.
+
+
+## Post-pull category maintenance integration — 2026-10-14
+
+- [x] Complete actual remote category input after all tables, roots first, fresh
+  snapshots and atomic per-group repair; future edits/tasks and viewer rows kept.
+  Local pending records are not substituted for authoritative cloud input.
+- [x] AppModule wiring for syncNow/pullAll; incomplete/invalid paged pulls refuse
+  maintenance. Review P2 cancellation was reproduced/fixed; re-review noP1/P2.
+- [x]10 new regressions;738 JVM/80 suites and full Android/Swift23/contracts/l10n/
+  SQLite checks pass. APK30; nine flagsfalse; no device/live cloud execution.
+- [ ] Default bootstrap startup/offline recovery, remaining APK1–4 features and
+  physical verification remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-postpull-category-maintenance.md`.

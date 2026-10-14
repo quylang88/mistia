@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import java.io.IOException
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,7 @@ class PullOnlySyncEngine(
     private val remoteStore: RemoteStore,
     private val pushCoordinators: List<DomainPushCoordinator>,
     private val categoryTranslationCoordinator: CategoryTranslationCoordinator? = null,
+    private val categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator? = null,
 ) : SyncEngine {
     private val mutex = Mutex()
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
@@ -73,6 +75,7 @@ class PullOnlySyncEngine(
             }
             totalRecords
         }.onFailure { error ->
+            if(error is CancellationException) throw error
             mutableStatus.value = SyncStatus.Failed(
                 message = error.message ?: error::class.java.simpleName,
                 retryable = error.isRetryableSyncFailure(),
@@ -87,6 +90,7 @@ class PullOnlySyncEngine(
                 mutableStatus.value = SyncStatus.Success(totalRecords, System.currentTimeMillis())
             }
         }.onFailure { error ->
+            if(error is CancellationException) throw error
             mutableStatus.value = SyncStatus.Failed(
                 message = error.message ?: error::class.java.simpleName,
                 retryable = error.isRetryableSyncFailure(),
@@ -126,7 +130,9 @@ class PullOnlySyncEngine(
                 limit = PAGE_SIZE,
             )
             page.records.mapNotNullTo(result) { it.toCloudRecord(table, ownerUserId) }
-            offset = page.nextOffset
+            val next=page.nextOffset
+            require(next==null || (page.records.isNotEmpty() && next>offset && next==Math.addExact(offset,page.records.size))) {"Invalid pull pagination"}
+            offset = next
         }
         return result
     }
@@ -140,6 +146,7 @@ class PullOnlySyncEngine(
         val optionalTables = ReadOnlyCloudCollection.entries.map(ReadOnlyCloudCollection::table)
         val allTables = requiredTables + optionalTables
         var totalRecords = 0
+        var rawCategories=emptyList<CloudRecord>()
         allTables.forEachIndexed { index, table ->
             mutableStatus.value = SyncStatus.Pulling(table, index, allTables.size)
             val rows = try {
@@ -148,9 +155,11 @@ class PullOnlySyncEngine(
                 if (table in optionalTables && error.statusCode in setOf(400, 404)) emptyList()
                 else throw error
             }
+            if(table==CloudEntity.TRANSACTION_CATEGORY.table) rawCategories=rows
             localStore.replacePullSnapshot(ownerUserId, table, rows)
             totalRecords += rows.size
         }
+        categoryMaintenanceCoordinator?.reconcileObserved(ownerUserId,rawCategories)
         return totalRecords
     }
 
