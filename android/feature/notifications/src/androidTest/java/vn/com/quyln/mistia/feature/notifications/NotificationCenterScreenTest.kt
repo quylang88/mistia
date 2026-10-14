@@ -17,7 +17,7 @@ class NotificationCenterScreenTest {
     @get:Rule val compose=createComposeRule()
     private val owner=UserId("11111111-1111-1111-1111-111111111111")
     private val other=UserId("22222222-2222-2222-2222-222222222222")
-    private val now="2026-10-14T00:00:00Z"
+    private val now=java.time.Instant.now().minusSeconds(3600).toString()
     private fun row(user:UserId=owner)=AppNotificationRecord(user.value,"bill-${user.value}","Payment reminder","Body","billOverdue",createdAt=now,updatedAt=now)
     private class Repository(initial:List<AppNotificationRecord>):AppNotificationRepository {
         val rows=MutableStateFlow(initial)
@@ -47,5 +47,13 @@ class NotificationCenterScreenTest {
         compose.runOnIdle {active.value=other}
         compose.onNodeWithTag("notification-group-BUDGETS").assertIsDisplayed()
         compose.onNodeWithTag("notification-${row().key}").assertDoesNotExist()
+    }    @Test fun detailTapForwardsOriginalNotificationAfterReadAction() {
+        val repo=Repository(listOf(row()))
+        var opened:String?=null
+        compose.setContent {MaterialTheme {NotificationCenterScreen(owner,repo,{}, {Result.success(0)},onOpenNotification={opened=it.key})}}
+        compose.onNodeWithTag("notification-group-BILLS").performClick()
+        compose.onNodeWithTag("notification-${row().key}").performClick()
+        compose.runOnIdle {assertEquals(row().key,opened)}
     }
+
 }

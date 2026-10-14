@@ -1813,3 +1813,20 @@ Evidence: `docs/android/evidence/2026-10-14-bill-notification-batch.md`.
   full APK1–4 parity remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-native-local-notification-center.md`.
+
+
+## Notification bill payment/top-up actions — 2026-10-14
+
+- [x] Native payment-required/overdue action opens current bill payment sheet;
+  auto failure opens existing internal transfer editor with destination-only preset.
+  Current owner/cycle/bill/wallet validation, stale amount/currency refusal,
+  malformed cycle protection and one-time pause parity.
+- [x] Payment/skip resolve cycle notifications in the Room mutation transaction;
+  pause/archive/delete resolve the bill. Undo/pending/foreign writes preserve alerts.
+- [x]10 new tests with runtimeRED/GREEN;798 JVM/86 suites plus full Android/Swift53/
+  contracts/l10n/SQLite checks pass. Room pay/skip/pause rollback and Compose callback
+  tests compile only. APK39; all nine flagsfalse.
+- [ ] Reminder preferences/guarded maintenance hooks, family/card/investment actions,
+  Fluent visual/device QA, independent review and full APK1–4 remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-notification-bill-actions.md`.

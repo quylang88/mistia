@@ -402,3 +402,7 @@ internal fun LedgerTransactionRecord.supportsNativeTransactionEditor(): Boolean 
         }
     }
 }
+
+internal fun notificationTopUpState(now:String,destinationWalletId:String):TransactionEditorState = TransactionEditorState.new(now).copy(
+    primaryKind=TransactionPrimaryKind.TRANSFER,transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,
+    destinationWalletId=java.util.UUID.fromString(destinationWalletId).toString())

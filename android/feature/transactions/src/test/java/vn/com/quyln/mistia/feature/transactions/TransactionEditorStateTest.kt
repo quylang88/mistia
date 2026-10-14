@@ -15,6 +15,16 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test fun `notification top up preselects only destination without inventing source or amounts`() {
+        val id="22222222-2222-2222-2222-222222222222"
+        val state=notificationTopUpState("2026-10-14T00:00:00Z",id)
+        assertEquals(TransactionPrimaryKind.TRANSFER,state.primaryKind)
+        assertEquals(TransactionTransferSubtype.INTERNAL_TRANSFER,state.transferSubtype)
+        assertEquals(id,state.destinationWalletId)
+        assertNull(state.sourceWalletId)
+        assertEquals("",state.amountText);assertEquals("",state.destinationAmountText)
+    }
+
     @Test
     fun `receipt expense draft maps every supported editor field`() {
         val state = ReceiptItemTransactionDraft(

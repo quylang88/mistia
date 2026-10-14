@@ -56,3 +56,11 @@ arrivals. Wire Overview bell/unread badge and an owner-keyed native navigation
 route, group opening/read-all/pull refresh/back behavior. Compose tests compile
 only until device available. Payment/top-up actions, Fluent visual assets, family
 remote records and maintenance/preferences hooks remain separate remaining work.
+
+
+Bill notification actions milestone: native current-data payment and destination-
+only internal top-up wrappers, owner/cycle guards and atomic manual pay/skip/pause
+notification resolution are implemented. One-time legacy pause and malformed
+failure cycle regressions fixed with runtime RED/GREEN. Next wire reminder
+preferences and guarded foreground/background maintenance; verify account changes,
+cancellation, duplicate runs, disabled reminders and device notification delivery.

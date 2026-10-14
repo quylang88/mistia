@@ -90,5 +90,22 @@ class BillNotificationsTest {
         val result=plan(snapshot(changed,rows=listOf(reminder))).single()
         assertTrue(result.isRead);assertEquals("resolved",result.actionState)
     }
+    @Test fun `committed paid or skipped write resolves matching actionable cycle immediately`() {
+        val value=bill().copy(paymentStartDay=1,dueDay=10,firstScheduledMonth="2026-10-01T00:00:00Z")
+        val reminder=plan(snapshot(value)).single()
+        val success=reminder.copy(key="success",kind="billAutoPaymentSucceeded")
+        for(status in listOf("paid","skipped")) {
+            val result=resolveTerminalBillWriteNotifications(value.toCloudRecord(),"2026-10",listOf(occurrence(status=status).toCloudRecord()),listOf(reminder,success),date.toString())
+            assertEquals("resolved",result.first().actionState);assertTrue(result.first().isRead)
+            assertEquals(success,result.last())
+        }
+    }
+    @Test fun `undo pending foreign and different cycle writes cannot resolve active reminder`() {
+        val value=bill().copy(paymentStartDay=1,dueDay=10,firstScheduledMonth="2026-10-01T00:00:00Z")
+        val reminder=plan(snapshot(value)).single()
+        for(write in listOf(occurrence(),occurrence(status="paid").copy(deletedAt=date.toString()),occurrence(month="2026-09",status="paid"),
+            occurrence(status="paid").copy(ownerUserId="99999999-9999-9999-9999-999999999999")))
+            assertEquals(listOf(reminder),resolveTerminalBillWriteNotifications(value.toCloudRecord(),"2026-10",listOf(write.toCloudRecord()),listOf(reminder),date.toString()))
+    }
 
 }

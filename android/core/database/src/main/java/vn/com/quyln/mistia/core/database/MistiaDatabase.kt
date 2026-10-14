@@ -18,6 +18,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.resolveLocalBillNotifications
+import vn.com.quyln.mistia.core.model.resolveTerminalBillWriteNotifications
 import vn.com.quyln.mistia.core.model.BillNotificationSnapshot
 import vn.com.quyln.mistia.core.model.requireUnchangedBillNotifications
 import vn.com.quyln.mistia.core.model.upsertLocalNotification
@@ -716,6 +718,7 @@ class RoomLocalStore(
                 else record(UserId(bill.ownerUserId),pair.first.entity,pair.first.id)==null
             }) {"Occurrence identity occupied"}
             commitMutations(mutations)
+            resolveBillNotificationsInTransaction(bill,monthKey,mutations.map {it.first})
         }
     }
 
@@ -727,6 +730,7 @@ class RoomLocalStore(
             })
             require(snapshot.receiptTransactionIds==billMoneyReceiptTransactionIds(snapshot.owner)) { "Receipt dependencies changed during bill payment" }
             commitMutations(mutations)
+            resolveBillNotificationsInTransaction(snapshot.bill,snapshot.month.toString(),mutations.map {it.first})
             snapshot.automaticPaymentNotification?.let {incoming ->
                 val existing=localNotifications(snapshot.owner).singleOrNull {it.key==incoming.key}
                 val notification=upsertLocalNotification(existing,incoming)
@@ -1013,6 +1017,16 @@ class RoomLocalStore(
         }
     }
 
+    private suspend fun resolveBillNotificationsInTransaction(bill:CloudRecord,month:String?,writes:List<CloudRecord>?=null) {
+        val owner=UserId(bill.ownerUserId)
+        val current=localNotifications(owner)
+        val now=java.time.Instant.now().toString()
+        val resolved=if(writes==null) resolveLocalBillNotifications(owner,current,bill.id,month,now)
+            else resolveTerminalBillWriteNotifications(bill,requireNotNull(month),writes,current,now)
+        val changed=resolved.filterIndexed {index,row -> row!=current[index]}
+        database.localNotificationDao().upsert(changed.map {LocalNotificationEntity(owner.value,it.key,json.encodeToString(AppNotificationRecord.serializer(),it))})
+    }
+
     private suspend fun commitMutationRows(record: CloudRecord, mutation: PendingMutation, remoteIdentityObserved:Boolean=false) {
         require(record.ownerUserId == mutation.subjectUserId) { "Mutation owner does not match record owner" }
         require(record.entity == mutation.entity.table) { "Mutation entity does not match record entity" }
@@ -1040,6 +1054,10 @@ class RoomLocalStore(
                 remoteIdentityObserved = observed,
             )
         )
+        if(record.entity==CloudEntity.RECURRING_BILL_PLAN.table && record.payload["user_id"]==JsonPrimitive(record.ownerUserId) &&
+            record.payload["id"]==JsonPrimitive(record.id) &&
+            (record.deletedAt!=null || record.payload["is_paused"]==JsonPrimitive(true) || record.payload["is_archived"]==JsonPrimitive(true)))
+            resolveBillNotificationsInTransaction(record,null)
     }
 
     private fun CloudRecordEntity.toCloudRecord(): CloudRecord = CloudRecord(

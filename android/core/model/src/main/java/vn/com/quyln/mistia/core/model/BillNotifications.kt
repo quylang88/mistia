@@ -74,3 +74,11 @@ fun planBillNotifications(snapshot:BillNotificationSnapshot,report:BillMaintenan
     }
     return byKey.values.toList()
 }
+
+fun resolveTerminalBillWriteNotifications(bill:CloudRecord,month:String,writes:List<CloudRecord>,rows:List<AppNotificationRecord>,now:String):List<AppNotificationRecord> {
+    require(bill.entity==CloudEntity.RECURRING_BILL_PLAN.table)
+    if(bill.payload["user_id"]!=JsonPrimitive(bill.ownerUserId) || bill.payload["id"]!=JsonPrimitive(bill.id)) return rows
+    val terminal=billCycleRecords(writes,bill,month).any {it.deletedAt==null && it.payload["user_id"]==JsonPrimitive(bill.ownerUserId) &&
+        (it.payload["status_raw_value"] as? JsonPrimitive)?.content in setOf("paid","skipped")}
+    return if(terminal) resolveLocalBillNotifications(UserId(bill.ownerUserId),rows,bill.id,month,now) else rows
+}

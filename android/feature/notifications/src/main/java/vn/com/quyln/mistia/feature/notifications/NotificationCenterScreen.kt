@@ -30,14 +30,14 @@ import vn.com.quyln.mistia.core.model.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationCenterScreen(owner:UserId,repository:AppNotificationRepository,onBack:()->Unit,
-    onRefresh:suspend ()->Result<*>,modifier:Modifier=Modifier) {
-    key(owner.value) {NotificationCenterContent(owner,repository,onBack,onRefresh,modifier)}
+    onRefresh:suspend ()->Result<*>,modifier:Modifier=Modifier,onOpenNotification:(AppNotificationRecord)->Unit={}) {
+    key(owner.value) {NotificationCenterContent(owner,repository,onBack,onRefresh,modifier,onOpenNotification)}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationCenterContent(owner:UserId,repository:AppNotificationRepository,onBack:()->Unit,
-    onRefresh:suspend ()->Result<*>,modifier:Modifier) {
+    onRefresh:suspend ()->Result<*>,modifier:Modifier,onOpenNotification:(AppNotificationRecord)->Unit) {
     val rows by remember(owner,repository) {repository.observeAppNotifications(owner)}.collectAsStateWithLifecycle(emptyList())
     val groups=notificationGroups(owner,rows,Instant.now())
     var selected by rememberSaveable(owner.value) {mutableStateOf<String?>(null)}
@@ -106,9 +106,12 @@ private fun NotificationCenterContent(owner:UserId,repository:AppNotificationRep
                 days.forEach {(day,dayRows) ->
                     item(key="day-$day") {Text(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).format(day),Modifier.padding(16.dp),style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)}
                     items(dayRows.asReversed(),key={it.key}) {row ->
-                        ListItem(modifier=Modifier.testTag("notification-${row.key}").clickable(enabled=!busy) {read(setOf(row.key))},
+                        ListItem(modifier=Modifier.testTag("notification-${row.key}").clickable(enabled=!busy) {read(setOf(row.key));onOpenNotification(row)},
                             headlineContent={Text(row.title)},supportingContent={Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                                 Text(row.body);Text(localDate(row.createdAt),style=MaterialTheme.typography.labelSmall)
+                                if(row.actionState!="resolved" && row.kind in setOf("billPaymentRequired","billOverdue","billAutoPaymentFailed"))
+                                    Text(stringResource(if(row.kind=="billAutoPaymentFailed") R.string.notifications_notificationcenter_tap_to_add_funds_to_wallet
+                                        else R.string.notifications_notificationcenter_tap_to_pay),color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelMedium)
                             }},leadingContent={Icon(group.id.icon(),null,tint=MaterialTheme.colorScheme.primary)},
                             trailingContent={if(!row.isRead) Badge()})
                         HorizontalDivider(Modifier.padding(start=62.dp))

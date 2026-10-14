@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -187,10 +188,11 @@ private fun SignedInRoot(
     receiptImageRepository: TransactionReceiptImageRepository,
     openedFromFamilyInvite: Boolean,
 ) {
-    val notificationRows by remember(authState.session.userId,financeRepository) {
-        financeRepository.observeAppNotifications(authState.session.userId)
-    }.collectAsStateWithLifecycle(emptyList())
-    val unreadNotifications=vn.com.quyln.mistia.core.model.notificationGroups(authState.session.userId,notificationRows,java.time.Instant.now()).sumOf {it.unreadCount}
+    val notificationRows by produceState<List<vn.com.quyln.mistia.core.model.AppNotificationRecord>?>(null,authState.session.userId,financeRepository) {
+        financeRepository.observeAppNotifications(authState.session.userId).collect {value=it}
+    }
+    var notificationActionKey by rememberSaveable(authState.session.userId.value) {mutableStateOf<String?>(null)}
+    val unreadNotifications=vn.com.quyln.mistia.core.model.notificationGroups(authState.session.userId,notificationRows.orEmpty(),java.time.Instant.now()).sumOf {it.unreadCount}
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
     LaunchedEffect(openedFromFamilyInvite) {
@@ -264,7 +266,9 @@ private fun SignedInRoot(
         }
         composable("notifications") {
             vn.com.quyln.mistia.feature.notifications.NotificationCenterScreen(authState.session.userId,financeRepository,
-                onBack={navController.popBackStack()},onRefresh={syncEngine.syncNow()})
+                onBack={navController.popBackStack()},onRefresh={syncEngine.syncNow()},onOpenNotification={row ->
+                    if(row.kind in setOf("billPaymentRequired","billOverdue","billAutoPaymentFailed")) notificationActionKey=row.key
+                })
         }
         composable("family") {
             FamilyScreen(
@@ -280,6 +284,12 @@ private fun SignedInRoot(
                 onBack = { navController.popBackStack() },
             )
         }
+    }
+    if(notificationActionKey!=null && notificationRows!=null) {
+        val row=notificationRows!!.singleOrNull {it.key==notificationActionKey}
+        if(row==null) LaunchedEffect(notificationActionKey) {notificationActionKey=null}
+        else NotificationActionHost(authState.session.userId,row,financeRepository,exchangeRateRepository,
+            {deviceIdStore.getOrCreate()},{notificationActionKey=null})
     }
 }
 

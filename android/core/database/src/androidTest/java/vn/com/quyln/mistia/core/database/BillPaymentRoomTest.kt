@@ -74,6 +74,55 @@ class BillPaymentRoomTest {
             assertTrue(store.localNotifications(owner).isEmpty())
         } finally {db.close()}
     }
+    private fun reminder(bill:RecurringBillPlanRecord,cycle:String="2026-10",kind:String="billPaymentRequired")=AppNotificationRecord(owner.value,
+        "mistia.bill.payment.deadline.${bill.id}.$cycle",kind,"Body",kind,resourceType="bill",resourceId=bill.id,createdAt=now,updatedAt=now,
+        metadata=kotlinx.serialization.json.buildJsonObject {put("dueMonthKey",kotlinx.serialization.json.JsonPrimitive(cycle))})
+    @Test fun paySkipAndPauseResolveNotificationsInsideTheMutationTransaction()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        for(operation in listOf("pay","skip","pause")) {
+            val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+            try {
+                val store=RoomLocalStore(db);val repo=OfflineFirstFinanceRepository(store,zone,catalog);val bill=prepare(repo)
+                val success=reminder(bill,kind="billAutoPaymentSucceeded").copy(key="success")
+                val initial=listOf(reminder(bill),reminder(bill,"2026-09"),success)
+                assertTrue(store.commitLocalNotifications(owner,emptyList(),initial))
+                when(operation) {
+                    "pay" -> repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).getOrThrow()
+                    "skip" -> repo.skipRecurringBill(owner,RecordId(bill.id),month,device,now).getOrThrow()
+                    else -> repo.pauseRecurringBill(owner,RecordId(bill.id),device,now).getOrThrow()
+                }
+                val rows=store.localNotifications(owner)
+                assertEquals("resolved",rows.single {it.key==initial.first().key}.actionState)
+                assertTrue(rows.single {it.key==initial.first().key}.isRead)
+                assertEquals(operation=="pause",rows.single {it.key==initial[1].key}.isRead)
+                assertEquals(success,rows.single {it.key=="success"})
+            } finally {db.close()}
+        }
+    }
+    @Test fun resolutionFailureRollsBackPaidSkippedAndPausedStateWithOutbox()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        for(operation in listOf("pay","skip","pause")) {
+            val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+            try {
+                val store=RoomLocalStore(db);val repo=OfflineFirstFinanceRepository(store,zone,catalog);val bill=prepare(repo)
+                val initial=listOf(reminder(bill))
+                assertTrue(store.commitLocalNotifications(owner,emptyList(),initial))
+                val before=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)}
+                val outbox=CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)}
+                db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_resolution BEFORE INSERT ON local_app_notifications
+                    BEGIN SELECT RAISE(ABORT,'simulated resolution failure'); END""")
+                val result=when(operation) {
+                    "pay" -> repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now)
+                    "skip" -> repo.skipRecurringBill(owner,RecordId(bill.id),month,device,now)
+                    else -> repo.pauseRecurringBill(owner,RecordId(bill.id),device,now)
+                }
+                assertTrue(result.isFailure)
+                assertEquals(before,CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)})
+                assertEquals(outbox,CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)})
+                assertEquals(initial,store.localNotifications(owner))
+            } finally {db.close()}
+        }
+    }
     @Test fun payReopenUndoPreservesExactLedgerOccurrenceAndDeleteOutbox()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="bill-money-${UUID.randomUUID()}.db"
