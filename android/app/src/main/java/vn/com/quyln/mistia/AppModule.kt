@@ -25,6 +25,9 @@ import vn.com.quyln.mistia.core.database.LocalTransactionReceiptImageRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstFamilyRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstFinanceRepository
 import vn.com.quyln.mistia.core.database.OfflineFirstInvestmentRepository
+import vn.com.quyln.mistia.core.database.LocalNotificationPreferencesStore
+import vn.com.quyln.mistia.core.model.NotificationPreferencesStore
+import vn.com.quyln.mistia.core.model.ReminderKind
 import vn.com.quyln.mistia.core.database.RoomLocalStore
 import vn.com.quyln.mistia.core.model.AuthRepository
 import vn.com.quyln.mistia.core.model.DeviceRegistry
@@ -101,7 +104,12 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideLocalStore(database: MistiaDatabase, json: Json): LocalStore = RoomLocalStore(database, json)
+    fun provideLocalStore(database: MistiaDatabase, json: Json,preferences:NotificationPreferencesStore): LocalStore =
+        RoomLocalStore(database,json,billRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.BILLS)})
+
+    @Provides
+    @Singleton
+    fun provideNotificationPreferences(@ApplicationContext context:Context):NotificationPreferencesStore = LocalNotificationPreferencesStore(context)
 
     @Provides
     @Singleton
@@ -347,6 +355,7 @@ object AppModule {
         financeRepository: FinanceRepository,
         catalog: SystemCategoryCatalog,
         deviceIdStore: SecureDeviceIdStore,
+        preferences:NotificationPreferencesStore,
     ): SyncEngine = PullOnlySyncEngine(
         context,
         authRepository,
@@ -368,5 +377,6 @@ object AppModule {
             financeRepository.ensureDefaultSystemCategories(owner,catalog,deviceIdStore.getOrCreate(),Instant.now().toString()).getOrThrow()
             Unit
         },
+        familyNotificationsEnabled={preferences.state.value.familyEnabled},
     )
 }

@@ -11,7 +11,7 @@ data class BillPaymentRequest(
     val automatic: Boolean = false,
 )
 
-data class BillAutomaticPaymentText(val transactionTitle:String,val successTitle:String,val successBody:String)
+data class BillAutomaticPaymentText(val transactionTitle:String,val successTitle:String,val successBody:String,val emitNotification:Boolean=true)
 
 data class SavedBillPayment(
     val transaction: LedgerTransactionRecord,

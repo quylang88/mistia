@@ -45,6 +45,7 @@ class PullOnlySyncEngine(
     private val categoryTranslationCoordinator: CategoryTranslationCoordinator? = null,
     private val categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator? = null,
     private val ensureDefaultCategories: (suspend (UserId)->Unit)? = null,
+    private val familyNotificationsEnabled:()->Boolean = {true},
 ) : SyncEngine {
     private val mutex = Mutex()
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
@@ -170,6 +171,7 @@ class PullOnlySyncEngine(
         var rawCategories=emptyList<CloudRecord>()
         allTables.forEachIndexed { index, table ->
             ensureCurrentOwner(ownerUserId)
+            if(table==ReadOnlyCloudCollection.FAMILY_NOTIFICATION.table && !familyNotificationsEnabled()) return@forEachIndexed
             mutableStatus.value = SyncStatus.Pulling(table, index, allTables.size)
             val rows = try {
                 pullTable(table, accessToken, ownerUserId)
@@ -178,6 +180,7 @@ class PullOnlySyncEngine(
                 else throw error
             }
             ensureCurrentOwner(ownerUserId)
+            if(table==ReadOnlyCloudCollection.FAMILY_NOTIFICATION.table && !familyNotificationsEnabled()) return@forEachIndexed
             if(table==CloudEntity.TRANSACTION_CATEGORY.table) rawCategories=rows
             localStore.replacePullSnapshot(ownerUserId, table, rows)
             totalRecords += rows.size

@@ -64,3 +64,12 @@ notification resolution are implemented. One-time legacy pause and malformed
 failure cycle regressions fixed with runtime RED/GREEN. Next wire reminder
 preferences and guarded foreground/background maintenance; verify account changes,
 cancellation, duplicate runs, disabled reminders and device notification delivery.
+
+
+Notification preferences milestone: durable device choices, explicit-enable permission
+request, commit-time bill notification gates and before/after family inbox pull gates
+are implemented. Legacy appearance initializes missing details without resetting family.
+Next implement current-account guarded foreground/background bill maintenance, with
+cancellation, offline support, duplicate invocation and no notification-master gate on
+money. Then OS delivery and remaining notification domains. Independent review/device
+verification and full APK1–4 remain pending.

@@ -251,6 +251,23 @@ class BillPaymentRepositoryTest {
         assertEquals(now,captured!!.createdAt)
         assertEquals(1,notificationGroups(owner,listOf(captured!!),java.time.Instant.parse(now)).size)
     }
+    @Test fun `disabled notification preference does not disable auto pay or its localized transaction title`()=runTest {
+        val bill=autoBill()
+        var notification:AppNotificationRecord?=null
+        val capturing=object:LocalStore by store {
+            override suspend fun commitBillMoneyMutations(snapshot:BillMoneySnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+                notification=snapshot.automaticPaymentNotification
+                store.commitBillMoneyMutations(snapshot,mutations)
+            }
+        }
+        val payment=OfflineBillPaymentRepository(capturing,zone,catalog) {value,_ ->
+            BillAutomaticPaymentText("Auto-paid ${value.name}","Complete","Paid",emitNotification=false)
+        }
+        val saved=payment.payRecurringBill(owner,request(bill).copy(automatic=true),device,now).getOrThrow()
+        assertEquals("Auto-paid Internet",saved.transaction.title)
+        assertNull(notification)
+        assertEquals(DueStatus.PAID,saved.occurrences.single().status)
+    }
     @Test fun `payment atomically creates posted expense and linked paid cycle with exact amounts`() = runTest {
         val exact = 9007199254740993L
         val bill = prepare(exact, exact)

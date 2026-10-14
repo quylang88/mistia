@@ -18,6 +18,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.applyBillReminderPreference
 import vn.com.quyln.mistia.core.model.resolveLocalBillNotifications
 import vn.com.quyln.mistia.core.model.resolveTerminalBillWriteNotifications
 import vn.com.quyln.mistia.core.model.BillNotificationSnapshot
@@ -570,6 +571,7 @@ private fun TransactionReceiptImageRecord.toEntity() = TransactionReceiptImageEn
 class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
+    private val billRemindersEnabled:()->Boolean = {true},
 ) : LocalStore {
     override suspend fun billNotificationSnapshot(owner:UserId):BillNotificationSnapshot = database.withTransaction {
         BillNotificationSnapshot(owner,recordsIncludingDeleted(owner,CloudEntity.RECURRING_BILL_PLAN.table),
@@ -579,7 +581,10 @@ class RoomLocalStore(
     override suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
         val current=billNotificationSnapshot(expected.owner)
         try {expected.requireUnchangedBillNotifications(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
-        commitLocalNotifications(expected.owner,expected.notifications,replacement)
+        replacement.forEach {it.requireValidLocalNotification();require(it.ownerUserId==expected.owner.value)}
+        require(replacement.map {it.key}.distinct().size==replacement.size)
+        commitLocalNotifications(expected.owner,expected.notifications,
+            applyBillReminderPreference(expected.notifications,replacement,billRemindersEnabled()))
     }
 
     override fun observeLocalNotifications(owner:UserId):Flow<List<AppNotificationRecord>> =
@@ -731,7 +736,7 @@ class RoomLocalStore(
             require(snapshot.receiptTransactionIds==billMoneyReceiptTransactionIds(snapshot.owner)) { "Receipt dependencies changed during bill payment" }
             commitMutations(mutations)
             resolveBillNotificationsInTransaction(snapshot.bill,snapshot.month.toString(),mutations.map {it.first})
-            snapshot.automaticPaymentNotification?.let {incoming ->
+            snapshot.automaticPaymentNotification?.takeIf {billRemindersEnabled()}?.let {incoming ->
                 val existing=localNotifications(snapshot.owner).singleOrNull {it.key==incoming.key}
                 val notification=upsertLocalNotification(existing,incoming)
                 database.localNotificationDao().upsert(listOf(LocalNotificationEntity(snapshot.owner.value,notification.key,

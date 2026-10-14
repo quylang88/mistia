@@ -123,6 +123,25 @@ class BillPaymentRoomTest {
             } finally {db.close()}
         }
     }
+    @Test fun latestReminderPreferenceAtMoneyCommitDoesNotCancelAutomaticPayment()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        for(finalEnabled in listOf(false,true)) {
+            val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+            try {
+                var enabled=!finalEnabled
+                val store=RoomLocalStore(db,billRemindersEnabled={enabled})
+                val repo=OfflineFirstFinanceRepository(store,zone,catalog,automaticBillText={bill,amount ->
+                    enabled=finalEnabled
+                    BillAutomaticPaymentText("Auto-paid ${bill.name}","Complete","Paid $amount")
+                })
+                val bill=automaticBill(repo,store)
+                repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,automatic=true),device,now).getOrThrow()
+                assertEquals(1,repo.observeTransactions(owner).first().size)
+                assertEquals(DueStatus.PAID,repo.observeDueOccurrences(owner).first().single().status)
+                assertEquals(if(finalEnabled) 1 else 0,store.localNotifications(owner).size)
+            } finally {db.close()}
+        }
+    }
     @Test fun payReopenUndoPreservesExactLedgerOccurrenceAndDeleteOutbox()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="bill-money-${UUID.randomUUID()}.db"

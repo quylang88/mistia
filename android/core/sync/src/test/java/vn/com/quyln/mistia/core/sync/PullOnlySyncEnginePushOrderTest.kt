@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import vn.com.quyln.mistia.core.model.*
 import kotlinx.serialization.json.*
@@ -283,6 +284,36 @@ class PullOnlySyncEnginePushOrderTest {
         val engine=PullOnlySyncEngine(null,auth,local,remote,emptyList())
         assertTrue(runCatching {engine.pullAll()}.exceptionOrNull() is kotlinx.coroutines.CancellationException)
         assertEquals(0,stored)
+    }
+    @Test fun `disabled family notifications skip inbox pull without clearing cached rows`()=runTest {
+        val pulled=mutableListOf<String>();val replaced=mutableListOf<String>()
+        val remote=object:RemoteStore {
+            override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                pulled+=table;return RemotePage(emptyList(),null)
+            }
+        }
+        val local=object:LocalStore by EmptyLocalStore() {
+            override suspend fun replacePullSnapshot(ownerUserId:UserId,entity:String,records:List<CloudRecord>) {replaced+=entity}
+        }
+        val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),familyNotificationsEnabled={false})
+        assertTrue(engine.pullAll().isSuccess)
+        assertFalse(pulled.contains(ReadOnlyCloudCollection.FAMILY_NOTIFICATION.table))
+        assertFalse(replaced.contains(ReadOnlyCloudCollection.FAMILY_NOTIFICATION.table))
+    }
+    @Test fun `family preference disabled while inbox response is in flight refuses cache replacement`()=runTest {
+        var enabled=true;val replaced=mutableListOf<String>()
+        val remote=object:RemoteStore {
+            override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                if(table==ReadOnlyCloudCollection.FAMILY_NOTIFICATION.table) enabled=false
+                return RemotePage(emptyList(),null)
+            }
+        }
+        val local=object:LocalStore by EmptyLocalStore() {
+            override suspend fun replacePullSnapshot(ownerUserId:UserId,entity:String,records:List<CloudRecord>) {replaced+=entity}
+        }
+        val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),familyNotificationsEnabled={enabled})
+        assertTrue(engine.pullAll().isSuccess)
+        assertFalse(replaced.contains(ReadOnlyCloudCollection.FAMILY_NOTIFICATION.table))
     }
     private class RecordingPushCoordinator(
         override val entity: CloudEntity,

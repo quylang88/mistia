@@ -62,6 +62,22 @@ class LocalNotificationsRoomTest {
             assertEquals(read,store.localNotifications(owner))
         } finally {db.close()}
     }
+    @Test fun disabledBillPreferencePreservesHistoryAndOnlyAppliesResolution()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+        try {
+            val store:LocalStore=RoomLocalStore(db,billRemindersEnabled={false})
+            val old=row()
+            assertTrue(store.commitLocalNotifications(owner,emptyList(),listOf(old)))
+            val expected=store.billNotificationSnapshot(owner)
+            assertTrue(store.commitBillNotifications(expected,listOf(old.copy(title="New copy"),row(key="new"))))
+            assertEquals(listOf(old),store.localNotifications(owner))
+            val current=store.billNotificationSnapshot(owner)
+            assertTrue(store.commitBillNotifications(current,listOf(markLocalNotificationRead(old,now).copy(title="New copy",actionState="resolved"))))
+            val resolved=store.localNotifications(owner).single()
+            assertEquals(old.title,resolved.title);assertTrue(resolved.isRead);assertEquals("resolved",resolved.actionState)
+        } finally {db.close()}
+    }
     @Test fun staleBatchCannotOverwriteReadStateAndFailedBatchRollsBack()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()

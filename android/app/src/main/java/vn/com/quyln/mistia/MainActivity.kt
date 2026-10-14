@@ -1,5 +1,11 @@
 package vn.com.quyln.mistia
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import vn.com.quyln.mistia.core.model.NotificationPreferencesStore
 import android.os.Bundle
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -66,6 +72,7 @@ import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var authRepository: AuthRepository
+    @Inject lateinit var notificationPreferences:NotificationPreferencesStore
     @Inject lateinit var financeRepository: FinanceRepository
     @Inject lateinit var familyRepository: FamilyRepository
     @Inject lateinit var investmentRepository: InvestmentRepository
@@ -88,6 +95,7 @@ class MainActivity : ComponentActivity() {
                 MistiaApp(
                     authRepository = authRepository,
                     financeRepository = financeRepository,
+                    notificationPreferences=notificationPreferences,
                     familyRepository = familyRepository,
                     investmentRepository = investmentRepository,
                     syncEngine = syncEngine,
@@ -108,6 +116,7 @@ class MainActivity : ComponentActivity() {
 private fun MistiaApp(
     authRepository: AuthRepository,
     financeRepository: FinanceRepository,
+    notificationPreferences:NotificationPreferencesStore,
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
@@ -151,6 +160,7 @@ private fun MistiaApp(
                 authState = state,
                 authRepository = authRepository,
                 financeRepository = financeRepository,
+                notificationPreferences=notificationPreferences,
                 familyRepository = familyRepository,
                 investmentRepository = investmentRepository,
                 syncEngine = syncEngine,
@@ -178,6 +188,7 @@ private fun SignedInRoot(
     authState: AuthState.SignedIn,
     authRepository: AuthRepository,
     financeRepository: FinanceRepository,
+    notificationPreferences:NotificationPreferencesStore,
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
@@ -259,10 +270,20 @@ private fun SignedInRoot(
                         onSignOut = { scope.launch { authRepository.signOut() } },
                         onOpenFamily = { navController.navigate("family") },
                         onOpenInvestment = { navController.navigate("investment") },
+                        onOpenNotificationSettings={navController.navigate("notification-settings")},
                         modifier = modifier,
                     )
                 }
             }
+        }
+        composable("notification-settings") {
+            val context=LocalContext.current
+            val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+            vn.com.quyln.mistia.feature.settings.NotificationSettingsScreen(notificationPreferences,
+                onBack={navController.popBackStack()},onRequestPermission={
+                    if(Build.VERSION.SDK_INT>=33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+                        permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                })
         }
         composable("notifications") {
             vn.com.quyln.mistia.feature.notifications.NotificationCenterScreen(authState.session.userId,financeRepository,

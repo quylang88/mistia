@@ -1830,3 +1830,18 @@ Evidence: `docs/android/evidence/2026-10-14-native-local-notification-center.md`
   Fluent visual/device QA, independent review and full APK1–4 remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-notification-bill-actions.md`.
+
+
+## Native notification preferences — 2026-10-14
+
+- [x] Persistent device-level master/detail/family choices and native settings route;
+  explicit-enable Android permission flow; legacy initialization preserves family.
+- [x] Commit-time bill preference gates suppress notifications without suppressing
+  payment; disabled reminder history still resolves; late family fetch cannot replace cache.
+- [x] Runtime RED/GREEN;808 JVM/87 suites plus Android/SwiftNotification13/contracts/
+  localization/SQLite checks pass. Room/SharedPreferences/Compose tests compile only.
+  APK40; all nine cloud flagsfalse; no device/live cloud.
+- [ ] Guarded maintenance/background hooks, OS delivery, independent review,
+  Fluent visual/device QA and full APK1–4 parity remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-notification-preferences.md`.

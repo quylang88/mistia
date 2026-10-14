@@ -73,6 +73,7 @@ fun ManagementScreen(
     onOpenFamily: () -> Unit,
     onOpenInvestment: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenNotificationSettings:()->Unit={},
 ) {
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
@@ -168,6 +169,11 @@ fun ManagementScreen(
         item {
             Button(onClick = onSyncNow, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.management_managementauth_sync_now))
+            }
+        }
+        item {
+            OutlinedButton(onClick=onOpenNotificationSettings,modifier=Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_notifications_title))
             }
         }
         item {
