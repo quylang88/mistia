@@ -80,3 +80,23 @@ native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remai
   Explicitly edited offline seeds need preservation/reconciliation coverage too.
 - [ ] Only enable startup pull/bootstrap once these paths are proven. Then resume
   native bill UI/payment/maintenance and remaining APK2–4 without waiting for ADB.
+
+## 2026-10-14 implementation sequence
+
+1. Pure remote selection and lossless reference rewrite. Compare Swift
+   deduplicatingRemoteSystemCategories remote priority exactly: active value
+   candidates first, timestamp seconds plus1000 for actual owner-cloud identity.
+   Use an existing owner-cloud row as identity when present, otherwise the actual
+   value winner ID; never fabricate an absent remote wire row. Keep identity and
+   values separate, retain all duplicate candidates for atomic reconciliation.
+   Rewrite only owned category parent /ledger-budget-bill category FK fields,
+   preserve frozen display/identity snapshots, explicit nulls/unknown fields and
+   Long versions. Preserve pending DELETE/base versions; reject stale inputs.
+2. Atomic Room identity/reference/outbox/translation migration, with exact source
+   queued-seed/target/dependent/task snapshots. Preserve edited seeds with an
+   explicit merge, never ACK a different ID through same-ID ACK.
+3. Integrate before category create and after409, including complete owner-key
+   paging, cancellation/gate-off/retry and duplicate candidates. Then startup
+   pull/bootstrap and remaining APK1–4. Each component gets RED/GREEN, full
+   appropriate checks, review, evidence and independent commit; components alone
+   do not establish full cloud reconciliation or startup readiness.

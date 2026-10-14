@@ -1549,3 +1549,18 @@ VersionCode20; nine write flagsfalse. Evidence:
 
 VersionCode21, nine write gatesfalse. Evidence:
 `docs/android/evidence/2026-10-13-native-bill-payments.md`.
+
+
+## System category selection / lossless FK repair component — 2026-10-14
+
+- [x] Swift-priority value selection separate from actual stored identity;
+  all candidates retained, owner/key/version/deletion validation, no synthetic ACK.
+- [x] Owned category-parent /ledger-budget-bill FK repair preserves money,
+  unknown JSON, frozen snapshots, pending kind/base, tombstones and clock ordering.
+- [x]12 runtime RED/GREEN tests; full642 JVM/77 suites and23 Swift category tests,
+  lint/build/Room/UI compile, contracts/l10n/diff pass. Static review noP1/P2.
+- [ ] Room/reference/outbox/translation reconciliation and coordinator wiring next.
+  Before that, transaction DELETE push must support pending bill undo tombstones.
+  Startup and full APK1–4 remain open; no ADB/live-cloud verification.
+
+Evidence: `docs/android/evidence/2026-10-14-category-reconciliation-model.md`.
