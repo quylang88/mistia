@@ -7,8 +7,8 @@ vectors and full checks. No production card payment feature is complete yet.
 Next slices:
 
 1. Completed native Management card statement/history read slice (v50);
-   see evidence/2026-10-14-credit-card-statement-history.md. Payment action and
-   generated-title localization remain unfinished. No device/visual proof yet.
+   see evidence/2026-10-14-credit-card-statement-history.md. Generated-title localization completed in v51; payment action remains unfinished.
+   No device/visual proof yet.
 2. Owned raw snapshot/CAS transaction+occurrence money pipeline for manual payment,
    undo, duplicate-link checks, current affordability, receipt/investment protections,
    captured calendar/clock and lossless unknown fields/Long base versions.

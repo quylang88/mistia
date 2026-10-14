@@ -31,6 +31,7 @@ import java.util.concurrent.CancellationException
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.designsystem.localizedTransactionTitle
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
@@ -55,6 +56,8 @@ fun TransactionsScreen(
     val records by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val titleCategories by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val titleCategoriesById = remember(titleCategories, ownerUserId) { titleCategories.filter { it.ownerUserId == ownerUserId.value }.associateBy { it.id } }
     val creditCardProfiles by repository.observeCreditCardProfiles(ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
     val dueOccurrences by repository.observe(CloudEntity.DUE_OCCURRENCE_RECORD, ownerUserId)
@@ -175,7 +178,7 @@ fun TransactionsScreen(
                         walletCurrencies[record.destinationWalletId],
                     )
                     MistiaRecordRow(
-                        title = record.title.ifBlank {
+                        title = localizedTransactionTitle(record, titleCategoriesById[record.categoryId]).ifBlank {
                             stringResource(R.string.shared_corelogic_transaction_unknown_name)
                         },
                         subtitle = if (isLockedByPaidStatement) {

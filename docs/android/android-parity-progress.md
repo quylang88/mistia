@@ -1996,3 +1996,17 @@ Evidence: `docs/android/evidence/2026-10-14-credit-card-statement-model.md`.
   APK1–4 parity remain unfinished. No device/visual/live cloud verification.
 
 Evidence: `docs/android/evidence/2026-10-14-credit-card-statement-history.md`.
+
+
+## Generated transaction-title localization — 2026-10-14
+
+- [x] Shared Swift-matching title recognition with semantic restrictions and preserved
+  custom titles; current-language display in Overview, Transactions and card history.
+  Uses generated vi/en/ja resources and owned category metadata; no persisted mutation.
+- [x]24 runtime RED/GREEN cases against shared xcstrings;965 JVM/101 suites; full
+  Android/Swift602 +focusedTransaction37/contracts/l10n/SQLite pass.2 resource/Compose
+  tests compile only. APK51; nine write flagsfalse; no device/live cloud verification.
+- [ ] General Finance read-scope audit, card payment/maintenance/pending currency
+  choice, installments, independent/device/visual QA and full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-generated-transaction-titles.md`.

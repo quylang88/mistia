@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.designsystem.localizedTransactionTitle
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
@@ -223,7 +224,7 @@ private fun StatementCharge(tx: LedgerTransactionRecord, category: TransactionCa
             category?.iconColorHex ?: "#F76E75", Modifier.size(32.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(tx.title.ifEmpty { category?.let { categoryName(it, currentCategoryLanguage(LocalConfiguration.current.locales[0])) }.orEmpty() },
+                Text(localizedTransactionTitle(tx, category).ifEmpty { category?.let { categoryName(it, currentCategoryLanguage(LocalConfiguration.current.locales[0])) }.orEmpty() },
                     Modifier.weight(1f, fill = false), maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 if (locked) Icon(Icons.Default.Lock, stringResource(R.string.management_managementcreditcardstatement_paid),
                     Modifier.size(12.dp).testTag("statement.chargeLock.${tx.id}"), tint = MaterialTheme.colorScheme.onSurfaceVariant)

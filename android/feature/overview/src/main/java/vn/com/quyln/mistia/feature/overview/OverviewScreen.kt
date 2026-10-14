@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -28,10 +29,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.MistiaSectionCard
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.designsystem.localizedTransactionTitle
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.designsystem.string
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
+import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.SyncStatus
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.transactionDisplayMoney
@@ -52,6 +55,8 @@ fun OverviewScreen(
     val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
     val walletCurrencies = wallets.associate { it.id to it.string("currency_code") }
+    val titleCategories by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val titleCategoriesById = remember(titleCategories, ownerUserId) { titleCategories.filter { it.ownerUserId == ownerUserId.value }.associateBy { it.id } }
     val status by syncStatus.collectAsStateWithLifecycle()
     val countMap = counts.associate { it.entity to it.count }
 
@@ -112,9 +117,13 @@ fun OverviewScreen(
                             walletCurrencies[transaction.string("source_wallet_id")],
                             walletCurrencies[transaction.string("destination_wallet_id")],
                         )
+                        val typed = remember(transaction, ownerUserId) {
+                            if (transaction.ownerUserId != ownerUserId.value) null else runCatching { LedgerTransactionRecord.fromCloudRecord(transaction) }
+                                .getOrNull()?.takeIf { it.ownerUserId == ownerUserId.value }
+                        }
                         MistiaRecordRow(
-                            title = transaction.string("title")
-                                ?: stringResource(R.string.shared_corelogic_transaction_unknown_name),
+                            title = typed?.let { localizedTransactionTitle(it, titleCategoriesById[it.categoryId]) }
+                                ?: transaction.string("title") ?: stringResource(R.string.shared_corelogic_transaction_unknown_name),
                             subtitle = transaction.string("occurred_at"),
                             trailing = money?.let { formatMinorUnits(it.minor, it.currencyCode) },
                         )
