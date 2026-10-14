@@ -17,13 +17,13 @@ internal class OfflineRecurringBillRepository(private val store:LocalStore,priva
     constructor(store:LocalStore,zone:ZoneId):this(store,{zone})
     private val mutex=Mutex()
     override fun observeRecurringBills(ownerUserId:UserId):Flow<List<RecurringBillPlanRecord>> =
-        store.observe(CloudEntity.RECURRING_BILL_PLAN.table,ownerUserId).map { rows ->
+        store.observeOwnedFinanceRows(CloudEntity.RECURRING_BILL_PLAN,ownerUserId).map { rows ->
             rows.filter { it.ownerUserId==ownerUserId.value && it.deletedAt==null }.mapNotNull { row ->
                 runCatching { RecurringBillPlanRecord.fromCloudRecord(row).takeIf { it.id==row.id && it.ownerUserId==ownerUserId.value && it.deletedAt==null } }.getOrNull()
             }.sortedWith(compareBy(RecurringBillPlanRecord::createdAt,RecurringBillPlanRecord::id))
         }
     override fun observeDueOccurrences(ownerUserId:UserId):Flow<List<DueOccurrenceRecord>> =
-        store.observe(CloudEntity.DUE_OCCURRENCE_RECORD.table,ownerUserId).map { rows ->
+        store.observeOwnedFinanceRows(CloudEntity.DUE_OCCURRENCE_RECORD,ownerUserId).map { rows ->
             rows.filter { it.ownerUserId==ownerUserId.value && it.deletedAt==null }.mapNotNull { row ->
                 runCatching { DueOccurrenceRecord.fromCloudRecord(row).takeIf { it.id==row.id && it.ownerUserId==ownerUserId.value && it.deletedAt==null } }.getOrNull()
             }.sortedWith(compareBy(DueOccurrenceRecord::createdAt,DueOccurrenceRecord::id))

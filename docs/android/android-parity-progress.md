@@ -2010,3 +2010,19 @@ Evidence: `docs/android/evidence/2026-10-14-credit-card-statement-history.md`.
   choice, installments, independent/device/visual QA and full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-generated-transaction-titles.md`.
+
+
+## Personal Finance repository read scoping — 2026-10-14
+
+- [x] All15 raw financial collections plus wallet/category/profile/transaction and
+  delegated budget/goal/bill/due streams validate entity, row/payload owner+UUID ID and
+  both tombstones before exposing live data. Historical category metadata retains
+  owned tombstones while excluding aliases; family viewer/subject repositories stay separate.
+- [x] Personal financial counts derive from the same validated streams and respond
+  to payload changes with unchanged storage count; no storage/outbox repair/write.
+- [x]21 initial REDs;23 new cases;988 JVM/104 suites; full Android/Swift602/contracts/
+  l10n/SQLite pass.2 new DAO+repository Room tests compile only. APK52; flagsfalse.
+- [ ] Device/independent review, card payment/maintenance/currency choice, installments,
+  remaining APK1–4 and RC are unfinished. No device/live cloud verification.
+
+Evidence: `docs/android/evidence/2026-10-14-finance-read-scope.md`.

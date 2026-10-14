@@ -2,6 +2,7 @@ package vn.com.quyln.mistia.core.database
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.Instant
@@ -57,13 +58,15 @@ class OfflineFirstFinanceRepository(
     vn.com.quyln.mistia.core.model.RecurringBillRepository by OfflineRecurringBillRepository(localStore, {budgetZoneId ?: ZoneId.systemDefault()}),
     vn.com.quyln.mistia.core.model.SystemCategoryBootstrapRepository by OfflineSystemCategoryBootstrapRepository(localStore) {
     override fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>> =
-        localStore.observe(entity.table, ownerUserId)
+        localStore.observeOwnedFinanceRows(entity, ownerUserId)
 
     override fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>> =
-        localStore.observeEntityCounts(ownerUserId)
+        combine(CloudEntity.entries.map { entity ->
+            observe(entity, ownerUserId).map { rows -> EntityCount(entity.table, rows.size) }
+        }) { counts -> counts.filter { it.count > 0 }.sortedBy { it.entity } }.distinctUntilChanged()
 
     override fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>> =
-        localStore.observe(CloudEntity.LEDGER_WALLET.table, ownerUserId).map { records ->
+        localStore.observeOwnedFinanceRows(CloudEntity.LEDGER_WALLET, ownerUserId).map { records ->
             records.mapNotNull { record ->
                 runCatching { LedgerWalletRecord.fromCloudRecord(record) }.getOrNull()
             }.filterNot(LedgerWalletRecord::isArchived)
@@ -71,7 +74,7 @@ class OfflineFirstFinanceRepository(
         }
 
     override fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>> =
-        localStore.observe(CloudEntity.TRANSACTION_CATEGORY.table, ownerUserId).map { records ->
+        localStore.observeOwnedFinanceRows(CloudEntity.TRANSACTION_CATEGORY, ownerUserId).map { records ->
             records.mapNotNull { record ->
                 runCatching { TransactionCategoryRecord.fromCloudRecord(record) }.getOrNull()
             }.filterNot(TransactionCategoryRecord::isArchived)
@@ -85,14 +88,14 @@ class OfflineFirstFinanceRepository(
         }
 
     override fun observeCreditCardProfiles(ownerUserId: UserId): Flow<List<CreditCardProfileRecord>> =
-        localStore.observe(CloudEntity.CREDIT_CARD_PROFILE.table, ownerUserId).map { records ->
+        localStore.observeOwnedFinanceRows(CloudEntity.CREDIT_CARD_PROFILE, ownerUserId).map { records ->
             records.mapNotNull { record ->
                 runCatching { CreditCardProfileRecord.fromCloudRecord(record) }.getOrNull()
             }.sortedWith(compareBy(CreditCardProfileRecord::createdAt, CreditCardProfileRecord::id))
         }
 
     override fun observeTransactions(ownerUserId: UserId): Flow<List<LedgerTransactionRecord>> =
-        localStore.observe(CloudEntity.LEDGER_TRANSACTION.table, ownerUserId).map { records ->
+        localStore.observeOwnedFinanceRows(CloudEntity.LEDGER_TRANSACTION, ownerUserId).map { records ->
             records.mapNotNull { record ->
                 runCatching { LedgerTransactionRecord.fromCloudRecord(record) }.getOrNull()
             }.filterNot(LedgerTransactionRecord::isArchived)

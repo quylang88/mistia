@@ -14,7 +14,7 @@ import vn.com.quyln.mistia.core.model.*
 internal class OfflineSavingsGoalRepository(private val store: LocalStore): SavingsGoalRepository {
     private val mutex=Mutex()
     override fun observeSavingsGoals(ownerUserId: UserId): Flow<List<SavingsGoalRecord>> =
-        store.observe(CloudEntity.SAVINGS_GOAL.table,ownerUserId).map { records ->
+        store.observeOwnedFinanceRows(CloudEntity.SAVINGS_GOAL,ownerUserId).map { records ->
             records.filter { it.ownerUserId==ownerUserId.value && it.deletedAt==null }.mapNotNull { row ->
                 runCatching { SavingsGoalRecord.fromCloudRecord(row).takeIf { it.id==row.id && it.ownerUserId==ownerUserId.value } }.getOrNull()
             }.filter { !it.isArchived && it.deletedAt==null }

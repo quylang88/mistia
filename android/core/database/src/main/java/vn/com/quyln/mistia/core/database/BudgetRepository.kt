@@ -18,7 +18,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
     private val mutex = Mutex()
 
     override fun observeBudgets(ownerUserId: UserId): Flow<List<BudgetPlanRecord>> =
-        store.observe(CloudEntity.BUDGET_PLAN.table, ownerUserId).map { rows ->
+        store.observeOwnedFinanceRows(CloudEntity.BUDGET_PLAN, ownerUserId).map { rows ->
             rows.filter { it.ownerUserId == ownerUserId.value && it.deletedAt == null }
                 .mapNotNull { runCatching { BudgetPlanRecord.fromCloudRecord(it) }.getOrNull() }
                 .filterNot { it.ownerUserId != ownerUserId.value || it.isArchived || it.deletedAt != null }
@@ -26,7 +26,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
         }
 
     override fun observeBudgetCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>> =
-        store.observe(CloudEntity.TRANSACTION_CATEGORY.table, ownerUserId).map { rows ->
+        store.observeOwnedFinanceRows(CloudEntity.TRANSACTION_CATEGORY, ownerUserId).map { rows ->
             rows.mapNotNull { runCatching { TransactionCategoryRecord.fromCloudRecord(it) }.getOrNull() }
                 .filter { it.ownerUserId == ownerUserId.value && it.deletedAt == null }
                 .sortedWith(compareBy(TransactionCategoryRecord::sortOrder, TransactionCategoryRecord::createdAt, TransactionCategoryRecord::id))
@@ -37,9 +37,7 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
 
     private suspend fun categoryMetadata(owner: UserId): List<TransactionCategoryRecord> =
         store.recordsIncludingDeleted(owner, CloudEntity.TRANSACTION_CATEGORY.table).mapNotNull { row ->
-            val payloadOwner = (row.payload["user_id"] as? JsonPrimitive)?.content
-                ?.let { runCatching { UUID.fromString(it.trim()).toString() }.getOrNull() }
-            if (row.ownerUserId != owner.value || payloadOwner != owner.value) return@mapNotNull null
+            if (!row.matchesFinanceReadScope(owner, CloudEntity.TRANSACTION_CATEGORY, includingDeleted = true)) return@mapNotNull null
             runCatching { TransactionCategoryRecord.fromCloudRecord(row) }.getOrNull()?.takeIf { it.ownerUserId == owner.value }
         }
 
