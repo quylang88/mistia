@@ -82,3 +82,12 @@ coordinator tests pass; Room rollback tests compile only. Next wire foreground
 resume/day/preference triggers and a background worker with reliable cold-process
 auth restoration. Keep money independent of reminder master and preserve current
 owner guards through every hook. Then OS delivery and remaining APK domains.
+
+
+Foreground hook milestone: resumed owner-keyed lifecycle syncs once then invokes
+actual guarded local recurring-bill maintenance each minute, cancels when no longer
+resumed and supports cached offline payment. Five runtime tests and full checks pass.
+Next: reliable worker cold-process auth restoration, background scheduling, immediate
+preference triggers and dynamic device ZoneId. OS notification delivery remains
+unimplemented. Keep existing account/transaction/preference guards, and do not claim
+background/device/visual verification from JVM or AndroidTest compilation.

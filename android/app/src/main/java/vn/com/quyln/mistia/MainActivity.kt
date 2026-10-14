@@ -1,5 +1,10 @@
 package vn.com.quyln.mistia
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator
+import vn.com.quyln.mistia.core.sync.runForegroundBillMaintenance
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,6 +81,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var financeRepository: FinanceRepository
     @Inject lateinit var familyRepository: FamilyRepository
     @Inject lateinit var investmentRepository: InvestmentRepository
+    @Inject lateinit var billMaintenance:BillMaintenanceCoordinator
     @Inject lateinit var syncEngine: SyncEngine
     @Inject lateinit var deviceRegistry: DeviceRegistry
     @Inject lateinit var deviceIdStore: SecureDeviceIdStore
@@ -99,6 +105,7 @@ class MainActivity : ComponentActivity() {
                     familyRepository = familyRepository,
                     investmentRepository = investmentRepository,
                     syncEngine = syncEngine,
+                    billMaintenance=billMaintenance,
                     deviceRegistry = deviceRegistry,
                     deviceIdStore = deviceIdStore,
                     categoryTranslationCoordinator = categoryTranslationCoordinator,
@@ -120,6 +127,7 @@ private fun MistiaApp(
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
+    billMaintenance:BillMaintenanceCoordinator,
     deviceRegistry: DeviceRegistry,
     deviceIdStore: SecureDeviceIdStore,
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
@@ -128,6 +136,7 @@ private fun MistiaApp(
     receiptImageRepository: TransactionReceiptImageRepository,
     openedFromFamilyInvite: Boolean,
 ) {
+    val lifecycleOwner=LocalLifecycleOwner.current
     val authState by authRepository.state.collectAsStateWithLifecycle()
     LaunchedEffect(authRepository) { authRepository.restore() }
 
@@ -137,7 +146,7 @@ private fun MistiaApp(
         is AuthState.Failure,
         -> vn.com.quyln.mistia.auth.AuthScreen()
         is AuthState.SignedIn -> {
-            LaunchedEffect(state.session.userId.value) {
+            LaunchedEffect(state.session.userId.value,lifecycleOwner) {
                 deviceRegistry.register(
                     state.session,
                     DeviceRegistration(
@@ -153,7 +162,9 @@ private fun MistiaApp(
                     ),
                 )
                 syncEngine.scheduleBackgroundSync()
-                syncEngine.syncNow()
+                lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    runForegroundBillMaintenance(synchronize={syncEngine.syncNow()},maintain={billMaintenance.run()})
+                }
             }
             key(state.session.userId.value) {
             SignedInRoot(

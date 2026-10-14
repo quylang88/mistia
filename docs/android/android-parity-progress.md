@@ -1860,3 +1860,17 @@ Evidence: `docs/android/evidence/2026-10-14-notification-preferences.md`.
   review/device verification and full APK1–4 parity remain unfinished.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-account-guard.md`.
+
+
+## Foreground recurring-bill maintenance — 2026-10-14
+
+- [x] Owner-keyed resumed lifecycle runs sync once then actual guarded local bill
+  maintenance immediately/every minute; backgrounding cancels. Offline sync permits
+  cached payment; no reminder preference gate on money. Storage retries next tick.
+- [x]5 runtime RED/GREEN regressions;821 JVM/89 suites; full Android/SwiftPlanning53/
+  contracts/l10n/SQLite checks pass. App/Room AndroidTests compile only; APK42.
+- [ ] Background/cold-process restore, OS delivery, immediate preference triggers,
+  dynamic device time-zone, independent review/device QA and full APK1–4 remain open.
+  Nine cloud flagsfalse; no device/live cloud writes.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-foreground-maintenance.md`.
