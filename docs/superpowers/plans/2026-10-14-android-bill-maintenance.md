@@ -140,3 +140,11 @@ Next: immediate bill/family preference actions and remaining APK2 card statement
 installment/budget maintenance, then unfinished APK3–4 domains and complete native
 visual/device QA. Native OS timing/sound/reboot/permission/tap behavior still needs
 real device verification; do not infer that from JVM, DEX or compile checks.
+
+
+Immediate bill preference milestone: user master/reminder/detail changes trigger the
+actual guarded bill coordinator; per-owner baseline and expectedOwner after mutex
+prevent gesture replay across accounts. Seven runtime cases/full checks pass. Next
+prioritize APK2 card statement/installment/budget due logic and native UI; family
+preference refresh needs a targeted owner-scoped inbox path and remains APK3 work.
+OS/device/visual verification and independent review are still pending.

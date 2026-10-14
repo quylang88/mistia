@@ -15,8 +15,10 @@ class BillMaintenanceCoordinator(
     private val now:()->String,
 ) {
     private val mutex=Mutex()
-    suspend fun run():Result<BillMaintenanceReport?> = mutex.withLock {
-        val owner=currentOwner() ?: return@withLock Result.success(null)
+    suspend fun run(expectedOwner:UserId?=null):Result<BillMaintenanceReport?> = mutex.withLock {
+        val current=currentOwner()
+        if(expectedOwner!=null && current!=expectedOwner) throw CancellationException("Bill maintenance initiating account changed")
+        val owner=current ?: return@withLock Result.success(null)
         try {
             coroutineScope {
                 val work=async(start=CoroutineStart.LAZY) {

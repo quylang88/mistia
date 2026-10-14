@@ -63,6 +63,13 @@ class BillMaintenanceCoordinatorTest {
         assertSame(error,coordinator(auth) {_,_,_ -> Result.failure(error)}.run().exceptionOrNull())
         assertTrue(runCatching {coordinator(auth) {_,_,_ -> throw CancellationException("stopped")}.run()}.exceptionOrNull() is CancellationException)
     }
+    @Test fun `queued preference gesture cannot execute maintenance for a replacement owner`()=runTest {
+        val auth=MutableStateFlow<AuthState>(signedIn());val entered=CompletableDeferred<Unit>();val calls=mutableListOf<UserId>()
+        val runner=coordinator(auth) {id,_,_ -> calls+=id;entered.complete(Unit);delay(100);Result.success(report)}
+        val first=async {runner.run()};entered.await();val queued=async {runner.run(expectedOwner=owner)};runCurrent()
+        auth.value=signedIn(other);advanceUntilIdle()
+        assertTrue(first.isCancelled);assertTrue(queued.isCancelled);assertEquals(listOf(owner),calls)
+    }
     @Test fun `queued caller rechecks owner after previous run completes`()=runTest {
         val auth=MutableStateFlow<AuthState>(signedIn());val entered=CompletableDeferred<Unit>();var calls=0
         val runner=coordinator(auth) {_,_,_ -> calls++;entered.complete(Unit);delay(100);Result.success(report)}

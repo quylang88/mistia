@@ -1949,3 +1949,18 @@ Evidence: `docs/android/evidence/2026-10-14-wallet-reminder-inbox.md`.
   domains and complete APK1–4 parity remain unfinished. No live cloud writes.
 
 Evidence: `docs/android/evidence/2026-10-14-native-wallet-reminders.md`.
+
+
+## Immediate bill notification preference maintenance — 2026-10-14
+
+- [x] User master/reminder/detail changes invoke actual guarded bill maintenance
+  immediately. Master disable skips new work; money remains independent of bill
+  notification detail. Owner transitions take a fresh baseline without replaying gestures.
+- [x] Expected-owner guard after coordinator mutex prevents queued old-owner action
+  from running money for replacement account; token/family/history changes stay quiet.
+- [x]7 runtime RED/GREEN cases;898 JVM/97 suites; full Android/SwiftNotification13/
+  contracts/l10n/SQLite pass. AndroidTests compile only; APK48; nine flagsfalse.
+- [ ] Card/budget due maintenance, targeted family inbox preference refresh/actions,
+  independent review/device/visual QA and full APK1–4 remain unfinished.
+
+Evidence: `docs/android/evidence/2026-10-14-immediate-bill-preferences.md`.
