@@ -30,3 +30,9 @@ fun recurringBillMaintenanceEvents(owner:UserId,bills:List<RecurringBillPlanReco
         }
     }
 }
+
+data class BillAutomaticPaymentResult(val event:BillMaintenanceEvent,val result:Result<SavedBillPayment>)
+data class BillMaintenanceReport(val payments:List<BillAutomaticPaymentResult>,val reminders:List<BillMaintenanceEvent>)
+interface BillMaintenanceRepository {
+    suspend fun maintainRecurringBills(owner:UserId,deviceId:String,now:String):Result<BillMaintenanceReport>
+}

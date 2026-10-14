@@ -1736,3 +1736,16 @@ Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-events.md`.
   native hooks, independent review and full APK1–4 remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-auto-payment-repository-guards.md`.
+
+
+## Local recurring bill maintenance executor — 2026-10-14
+
+- [x] Public FinanceRepository maintenance API executes automatic intents through
+  atomic money repository; per-payment results, repeat suppression, owner scope,
+  exact Long amounts and cancellation. Reminders re-read cycle state after money.
+- [x]6 new regressions (5 runtimeRED/GREEN);762 JVM/81 suites plus full Android/
+  Swift53/contracts/l10n/SQLite checks pass. APK34; nine flagsfalse.
+- [ ] Durable notification batch/success recovery, localized auto title, native
+  hooks, independent review (usage limit), device and full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-executor.md`.

@@ -86,6 +86,71 @@ class BillPaymentRepositoryTest {
         assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
         assertEquals(false,repo.observeRecurringBills(owner).first().single().autoPayEnabled)
     }
+    private fun maintenance(store:LocalStore=this.store,payments:BillPaymentRepository=repo)=OfflineBillMaintenanceRepository(store,zone,payments)
+    @Test fun `maintenance executes automatic money payment and suppresses paid reminders on replay`()=runTest {
+        val bill=autoBill()
+        val first=maintenance().maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(1,first.payments.size)
+        val paid=first.payments.single().result.getOrThrow()
+        assertEquals(bill.id,first.payments.single().event.due.bill.id)
+        assertEquals(5000L,paid.transaction.amountMinor)
+        assertTrue(first.reminders.isEmpty())
+        val next=maintenance().maintainRecurringBills(owner,device,now).getOrThrow()
+        assertTrue(next.payments.isEmpty());assertTrue(next.reminders.isEmpty())
+        assertEquals(listOf(paid.transaction),repo.observeTransactions(owner).first())
+    }
+    @Test fun `maintenance payment failure retains pending cycle and due reminder`()=runTest {
+        val bill=autoBill().copy(amountMinor=20000,dueDay=13)
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        val report=maintenance().maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(TransactionValidationError.INSUFFICIENT_WALLET_BALANCE,
+            (report.payments.single().result.exceptionOrNull() as TransactionValidationException).reason)
+        assertEquals(BillMaintenanceEventKind.DEADLINE,report.reminders.single().kind)
+        assertTrue(repo.observeTransactions(owner).first().isEmpty())
+        assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
+    }
+    @Test fun `maintenance uses current configured same currency wallet without overriding`()=runTest {
+        val bill=autoBill()
+        val wallet=LedgerWalletRecord.fromCloudRecord(store.record(owner,CloudEntity.LEDGER_WALLET.table,bill.paymentWalletId!!)!!).copy(currencyCode="VND")
+        store.commitMutation(wallet.toCloudRecord(),PendingMutation(CloudEntity.LEDGER_WALLET,wallet.id,owner.value,MutationKind.UPSERT,wallet.toPayload(),now,0,device))
+        val report=maintenance().maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(BillPaymentError.WALLET_CURRENCY_MISMATCH,reason(report.payments.single().result))
+        assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
+    @Test fun `maintenance recomputes reminders after a concurrent manual payment`()=runTest {
+        val bill=autoBill().copy(dueDay=13)
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        val raced=object:BillPaymentRepository by repo {
+            override suspend fun payRecurringBill(owner:UserId,request:BillPaymentRequest,deviceId:String,now:String):Result<SavedBillPayment> {
+                repo.payRecurringBill(owner,request.copy(automatic=false),deviceId,now).getOrThrow()
+                return repo.payRecurringBill(owner,request,deviceId,now)
+            }
+        }
+        val report=maintenance(payments=raced).maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(BillPaymentError.CYCLE_NOT_PENDING,reason(report.payments.single().result))
+        assertTrue(report.reminders.isEmpty())
+        assertEquals(1,repo.observeTransactions(owner).first().size)
+    }
+    @Test fun `maintenance payment cancellation propagates without processing further bills`()=runTest {
+        autoBill()
+        val cancelled=object:BillPaymentRepository by repo {
+            override suspend fun payRecurringBill(owner:UserId,request:BillPaymentRequest,deviceId:String,now:String):Result<SavedBillPayment> =
+                throw kotlinx.coroutines.CancellationException("cancel auto pay")
+        }
+        assertTrue(runCatching {maintenance(payments=cancelled).maintainRecurringBills(owner,device,now)}.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+        assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
+    @Test fun `maintenance report only includes current owner and exact configured payment`()=runTest {
+        val bill=autoBill().copy(amountMinor=9007199254740993L)
+        val wallet=LedgerWalletRecord.fromCloudRecord(store.record(owner,CloudEntity.LEDGER_WALLET.table,bill.paymentWalletId!!)!!).copy(openingBalanceMinor=bill.amountMinor!!)
+        store.commitMutation(wallet.toCloudRecord(),PendingMutation(CloudEntity.LEDGER_WALLET,wallet.id,owner.value,MutationKind.UPSERT,wallet.toPayload(),now,0,device))
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        assertTrue(repo.maintainRecurringBills(other,device,now).getOrThrow().payments.isEmpty())
+        assertTrue(repo.observeTransactions(owner).first().isEmpty())
+        val report=repo.maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(9007199254740993L,report.payments.single().result.getOrThrow().transaction.amountMinor)
+        assertTrue(repo.maintainRecurringBills(owner,device,now).getOrThrow().payments.isEmpty())
+    }
     @Test fun `payment atomically creates posted expense and linked paid cycle with exact amounts`() = runTest {
         val exact = 9007199254740993L
         val bill = prepare(exact, exact)
