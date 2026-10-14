@@ -240,6 +240,12 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun categoryReferenceSnapshot(owner:UserId):CategoryReferenceSnapshot =
+        throw UnsupportedOperationException("Complete category reference snapshot unavailable")
+    /** Does not remove/reassign category identities; commits only validated FK/outbox/task repairs. */
+    suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
+        throw UnsupportedOperationException("Atomic category reference repairs unavailable")
+
     suspend fun billMoneyReceiptTransactionIds(owner: UserId): Set<String> =
         throw UnsupportedOperationException("Bill receipt dependency snapshots unavailable")
     suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {

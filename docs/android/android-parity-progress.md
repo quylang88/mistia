@@ -1592,3 +1592,12 @@ Evidence: `docs/android/evidence/2026-10-14-bill-repayment.md`.
 - [ ] Atomic identity/reference reconciliation and create409/startup next; Android device/live cloud verification and full APK1–4 remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-category-translation-snapshot.md`.
+
+## Atomic category FK/outbox/task repair primitive — 2026-10-14
+
+- [x] Complete Room snapshots of category/ledger/budget/bill records, future/failed outbox and all translation tasks; exact atomic compare before raw reference and task writes.
+- [x] Valid owned same-key target hierarchy; lossless money/frozen/unknown metadata, pending kind/base versions, viewer isolation, strict category clocks and translation input/language preservation.
+- [x]9 model regressions RED/GREEN;681 JVM/79 suites, full Android and Swift SystemCategory23 checks pass. Three Room tests compile only; independent component review noP1/P2.
+- [ ] Identity merge/reassignment/deletion and seed edits are not yet combined with this primitive; create409/startup, device verification and full APK1–4 remain open. Nine write flagsfalse.
+
+Evidence: `docs/android/evidence/2026-10-14-category-reference-room.md`.

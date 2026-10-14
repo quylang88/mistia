@@ -1,0 +1,13 @@
+# Atomic category reference/outbox/task repairs — 2026-10-14
+
+Basebcc0341. Bounded prerequisite: repairs references between two already stored owned system-category identities of the same key. It does not choose/reassign/delete identities, acknowledge a different remote ID, reconcile seed edits, or wire create/409/startup.
+
+Room captures all four reference tables including tombstones/viewer envelopes, all matching outbox entries including failed/future retries, and all owner translation tasks without batch limits. Apply compares these complete snapshots in the same transaction as raw FK/outbox/task writes. Changes to records, target, pending payload/kind/version/retry, or translation tasks reject the operation. The live target must already exist with consistent owned system metadata and compatible parent/child hierarchy. Parent validation prevents retargeting a category to itself or introducing a two-level hierarchy cycle.
+
+Only owned category parent_category_id and ledger/budget/bill category_id fields change. Existing pending DELETE/base versions and all other raw fields, frozen budget identity/display, unknown JSON and >2^53 amounts remain exact. Previously clean references get a matching outbox mutation. Changed category clocks strictly advance; matching pending translation input/language is retained and retimed atomically, resetting retry for the new task. Stale translation tasks remain for the normal exact-discard/maintenance path. Viewer payloads and their translation tasks remain untouched.
+
+TDD runtime RED5 at unavailable implementation, GREEN; self-parent regression RED1 then GREEN. Nine model tests pass. Three real Room tests compile: persistent reopen with large versions/frozen fields/task survival, SQL-trigger rollback of the whole batch, and stale dependent edit/retry rejection. No Android device was available to run those Room tests.
+
+Full681 Android JVM tests /79 suites pass, Room/planning instrumentation compile, lint/debug build, Swift SystemCategory23, contracts15, Android/strict Swift localization, actual SQLite outbox/task CAS5 methods and diff checks pass. Independent static review found no actionable P1/P2 in this bounded component. ADB empty; no emulator/Samsung/live Supabase/production write. All nine gates remainfalse. Latest user-facing APK artifact remains v24; this unwired primitive does not introduce a new behavior checkpoint.
+
+Next: identity merge/seed-edit preservation and removal in the same transaction as these repairs, then owner-key precreate/409 integration, duplicate/tombstone handling and startup. Full APK1–4 remains incomplete.

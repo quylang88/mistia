@@ -100,3 +100,18 @@ native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remai
    pull/bootstrap and remaining APK1–4. Each component gets RED/GREEN, full
    appropriate checks, review, evidence and independent commit; components alone
    do not establish full cloud reconciliation or startup readiness.
+
+## Atomic reference primitive completed 2026-10-14
+
+- Complete four-table/outbox/translation snapshots and conditional Room FK repair
+  are available;9 model tests plus3 Room tests compiled. Identity removal and
+  target adoption must still be combined in one transaction before startup.
+- Translation apply now compares exact raw source records and exact task device;
+  reference changes retime pending task input/language with strictly later clocks.
+- Next identity merge must preserve actual target wire ID/base version, use remote
+  values for untouched seeds, merge only edited local fields against registry
+  baseline, retain unknown fields, and refuse occupied/newer local target edits.
+  Remote tombstones/duplicates and edited seed conflicts must not silently erase
+  user data; no synthetic remote ACK. Integrate before create and after409 only
+  once this transaction is complete. Existing FK primitive requires a live target;
+  authoritative tombstone adoption needs an explicit separately tested path.

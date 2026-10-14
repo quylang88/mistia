@@ -18,6 +18,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
+import vn.com.quyln.mistia.core.model.categoryReferenceEntities
+import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
 import vn.com.quyln.mistia.core.model.billCycleRecords
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
 import vn.com.quyln.mistia.core.model.requireValidMutations
@@ -288,6 +291,9 @@ interface SyncOutboxDao {
 
 @Dao
 interface CategoryTranslationOutboxDao {
+    @Query("SELECT * FROM category_translation_outbox WHERE owner_user_id = :ownerUserId ORDER BY category_id ASC")
+    suspend fun rows(ownerUserId: String): List<CategoryTranslationOutboxEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(row: CategoryTranslationOutboxEntity)
 
@@ -525,6 +531,29 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : LocalStore {
+    override suspend fun categoryReferenceSnapshot(owner: UserId): CategoryReferenceSnapshot = database.withTransaction {
+        readCategoryReferenceSnapshot(owner)
+    }
+
+    private suspend fun readCategoryReferenceSnapshot(owner: UserId) = CategoryReferenceSnapshot(
+        owner,
+        categoryReferenceEntities.associateWith { entity ->
+            database.cloudRecordDao().recordsIncludingDeleted(owner.value, entity.table).map {it.toCloudRecord()}
+        },
+        database.syncOutboxDao().rows(owner.value)
+            .filter {CloudEntity.fromTable(it.entity) in categoryReferenceEntities}.map {it.toQueuedMutation()},
+        database.categoryTranslationOutboxDao().rows(owner.value).map {it.toQueuedTranslation()},
+    )
+
+    override suspend fun commitCategoryReferenceRepairs(expected: CategoryReferenceSnapshot, oldId: String, newId: String, deviceId: String, now: String): Boolean = database.withTransaction {
+        val current = readCategoryReferenceSnapshot(expected.owner)
+        try { expected.requireUnchanged(current) } catch (_: IllegalArgumentException) { return@withTransaction false }
+        val plan = planCategoryReferenceRepairs(expected, oldId, newId, deviceId, now)
+        plan.mutations.forEach {commitMutationRows(it.record, it.mutation)}
+        plan.translations.forEach {database.categoryTranslationOutboxDao().upsert(it.toEntity())}
+        true
+    }
+
     override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
 
