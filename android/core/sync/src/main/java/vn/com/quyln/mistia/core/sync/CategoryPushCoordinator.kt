@@ -58,6 +58,7 @@ class CategoryPushCoordinator(
             mutations.withIndex().sortedWith(
                 compareBy<IndexedValue<QueuedMutation>>(
                     { if (it.value.mutation.recordId in childRecordIds) 1 else 0 },
+                    { if (it.value.mutation.payload?.get("deleted_at").let { value -> value != null && value != JsonNull }) 0 else 1 },
                     { it.value.mutation.modifiedAt },
                     { it.index },
                 )

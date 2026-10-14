@@ -115,3 +115,19 @@ native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remai
   user data; no synthetic remote ACK. Integrate before create and after409 only
   once this transaction is complete. Existing FK primitive requires a live target;
   authoritative tombstone adoption needs an explicit separately tested path.
+
+
+## Ordered active alias cleanup — 2026-10-14
+
+- Bootstrap reconciliation of a real canonical tombstone and a single live legacy
+  queues exact-base full tombstone UPSERT for the legacy and activation UPSERT for
+  the canonical in the same Room transaction. All alias history/raw JSON remains.
+- Parent-first category ordering additionally sends tombstones before active rows.
+  Future/retrying sibling cleanup defers activation. Observed active identities,
+  including server version0, require a complete owner-key lookup and refuse an
+  active competing remote identity. A remote-winning alias edit therefore blocks
+  activation instead of overwriting the edit or violating the active-key index.
+- Next: general owner-key maintenance for already-pulled clean groups without a
+  bootstrap queue. Reuse lossless atomic reference/alias repairs, protect pending
+  edits/tasks and full snapshot CAS; process parent groups before children.
+  Startup pull/bootstrap remains disabled until these paths are verified.

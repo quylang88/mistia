@@ -225,14 +225,14 @@ class SystemCategorySeedPushTest {
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
         assertEquals(1,remote.writeCalls)
         assertTrue(local.queued.isEmpty())
-        assertEquals(1,remote.keyCalls)
+        assertEquals(2,remote.keyCalls)
     }
     @Test fun `observed zero version edit returning to defaults cannot use untouched seed preference`()=runTest {
         val local=local().apply {queued[0]=queued[0].copy(remoteIdentityObserved=true)}
         val cloud=row(time="2026-09-22T00:00:00Z").let {it.copy(payload=JsonObject(it.payload+("is_favorite" to JsonPrimitive(true))))}
         val remote=FakeRemoteStore().apply {fetchedResults.add(cloud);updatedResults.add(row(version=1))}
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
-        assertEquals(0,remote.keyCalls)
+        assertEquals(1,remote.keyCalls)
         assertEquals(JsonPrimitive(false),local.records[CATEGORY_ID]!!.payload["is_favorite"])
         assertTrue(local.queued.isEmpty())
     }
@@ -291,6 +291,59 @@ class SystemCategorySeedPushTest {
         assertEquals(row(),local.records[CATEGORY_ID])
         assertEquals(PARENT_ID,local.records[CATEGORY_ID]!!.payload.string("parent_category_id"))
         assertEquals(0,remote.writeCalls)
+    }
+    private fun duplicateRemote():FakeRemoteStore {
+        val canonical=TransactionCategoryRecord.fromCloudRecord(row("Deleted canonical",NOW,42)).copy(deletedAt=NOW).toCloudRecord()
+        val legacy=TransactionCategoryRecord.fromCloudRecord(row("Live legacy",NOW,9007199254740993L)).copy(id=CHILD_ID).toCloudRecord()
+        return FakeRemoteStore().apply {serverRows=linkedMapOf(canonical.id to canonical,legacy.id to legacy)}
+    }
+    @Test fun `canonical resurrection follows legacy cleanup with exact server versions and uniqueness`()=runTest {
+        val local=local();val remote=duplicateRemote()
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        assertEquals(0,remote.writeCalls)
+        assertEquals(setOf(CATEGORY_ID,CHILD_ID),local.queued.map {it.mutation.recordId}.toSet())
+        assertEquals(2,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
+        assertEquals(listOf(CHILD_ID,CATEGORY_ID),remote.updatedPayloads.map {it.string("id")})
+        assertEquals(listOf(9007199254740993L,42L),remote.updateExpectedVersions)
+        assertEquals(CATEGORY_ID,remote.serverRows!!.values.single {it.deletedAt==null}.id)
+        assertEquals("Live legacy",remote.serverRows!![CATEGORY_ID]!!.payload.string("name"))
+        assertTrue(local.queued.isEmpty())
+    }
+    @Test fun `failed cleanup defers canonical activation including future retries`()=runTest {
+        val local=local();val remote=duplicateRemote()
+        coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        remote.updateFailure=SupabaseHttpException(503,"offline")
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).retryableFailures)
+        assertEquals(listOf(CHILD_ID),remote.updatedPayloads.map {it.string("id")})
+        assertEquals(2,local.queued.size)
+        assertEquals(CategoryPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(1,remote.writeCalls)
+        assertEquals(CHILD_ID,remote.serverRows!!.values.single {it.deletedAt==null}.id)
+        remote.updateFailure=null
+        val retry=CategoryPushCoordinator(local,remote,true,catalog) {NOW_MILLIS+30000}
+        assertEquals(2,retry.pushPending(UserId(OWNER),TOKEN).pushed)
+        assertEquals(CATEGORY_ID,remote.serverRows!!.values.single {it.deletedAt==null}.id)
+        assertTrue(local.queued.isEmpty())
+    }
+    @Test fun `remote winning live alias prevents canonical resurrection after cleanup ACK`()=runTest {
+        val local=local();val remote=duplicateRemote()
+        coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        val live=TransactionCategoryRecord.fromCloudRecord(remote.serverRows!![CHILD_ID]!!).copy(updatedAt="2099-01-01T00:00:00Z",syncVersion=9007199254740994L).toCloudRecord()
+        remote.serverRows!![CHILD_ID]=live
+        val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,result.acknowledged);assertEquals(1,result.conflicts)
+        assertEquals(0,remote.writeCalls)
+        assertEquals(live,local.records[CHILD_ID])
+        assertEquals(CATEGORY_ID,local.queued.single().mutation.recordId)
+        assertEquals(CHILD_ID,remote.serverRows!!.values.single {it.deletedAt==null}.id)
+    }
+    @Test fun `observed zero version active edit checks complete key before resurrection`()=runTest {
+        val local=local().apply {queued[0]=queued[0].copy(remoteIdentityObserved=true)}
+        val remote=duplicateRemote()
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).conflicts)
+        assertEquals(0,remote.writeCalls)
+        assertEquals(1,remote.keyCalls)
+        assertEquals(1,local.queued.size)
     }
     private class FakeLocalStore(
         records: Map<String, CloudRecord>,
@@ -376,6 +429,8 @@ class SystemCategorySeedPushTest {
     }
 
     private class FakeRemoteStore : RemoteMutationStore {
+        var serverRows:MutableMap<String,CloudRecord>?=null
+        var updateFailure:Throwable?=null
         val systemPages=ArrayDeque<SystemCategoryPage>()
         var keyFailure:Throwable?=null
         var keyCalls=0
@@ -386,6 +441,7 @@ class SystemCategorySeedPushTest {
             keyOffsets.add(offset)
             onKey?.invoke()
             keyFailure?.let {throw it}
+            serverRows?.let {return SystemCategoryPage(it.values.filter {row -> (row.payload["system_key"] as? JsonPrimitive)?.content==systemKey},null)}
             if(systemPages.isNotEmpty()) return systemPages.removeFirst()
             return SystemCategoryPage(listOfNotNull(fetchedResults.firstOrNull()),null)
         }
@@ -407,6 +463,7 @@ class SystemCategorySeedPushTest {
             ownerUserId: UserId,
         ): CloudRecord? {
             fetchCalls++
+            serverRows?.let {return it[recordId]}
             if (fetchFailures.isNotEmpty()) throw fetchFailures.removeFirst()
             return if (fetchedResults.isNotEmpty()) fetchedResults.removeFirst() else null
         }
@@ -434,6 +491,18 @@ class SystemCategorySeedPushTest {
             writeCalls++
             updateExpectedVersions.add(expectedVersion)
             updatedPayloads.add(payload)
+            updateFailure?.let {throw it}
+            serverRows?.let {rows ->
+                val previous=rows[recordId] ?: return null
+                if(previous.syncVersion!=expectedVersion) return null
+                if(payload["deleted_at"]==JsonNull && rows.values.any {it.id!=recordId && it.deletedAt==null && it.payload["system_key"]==payload["system_key"]})
+                    throw SupabaseHttpException(409,"active system key unique violation")
+                val version=Math.addExact(expectedVersion,1)
+                val result=previous.copy(payload=JsonObject(payload+("sync_version" to JsonPrimitive(version))),syncVersion=version,
+                    updatedAt=(payload["updated_at"] as JsonPrimitive).content,deletedAt=(payload["deleted_at"] as? JsonPrimitive)?.takeUnless {it==JsonNull}?.content)
+                rows[recordId]=result
+                return result
+            }
             return if (updatedResults.isNotEmpty()) updatedResults.removeFirst() else null
         }
     }

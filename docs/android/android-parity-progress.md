@@ -1646,3 +1646,19 @@ Evidence: `docs/android/evidence/2026-10-14-observed-category-identity.md`.
 - [ ] Active legacy competitor cleanup before cloud identity resurrection, parent maintenance/startup, physical verification and full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-retained-category-aliases.md`.
+
+
+## Ordered active category alias cleanup — 2026-10-14
+
+- [x] Atomically queue exact-base live legacy tombstone and canonical restoration,
+  preserve raw metadata/history/references, send parent-first and cleanup-first.
+- [x] Pending/future cleanup defers activation; complete owner-key lookup for
+  observed active edits (including version0) blocks remote-winning live aliases.
+  Occupied target edits/tasks defer adoption without dropping queued user work.
+- [x]5 new JVM regressions RED/GREEN;723 total /80 suites and full Android,
+  Swift23, contracts/l10n/SQLite checks pass. Independent review noP1/P2.
+  Room cleanup reopen test compiles only; APK28; all nine flagsfalse.
+- [ ] Generic clean-group maintenance, startup, device/live cloud verification
+  and full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-category-active-alias-cleanup.md`.

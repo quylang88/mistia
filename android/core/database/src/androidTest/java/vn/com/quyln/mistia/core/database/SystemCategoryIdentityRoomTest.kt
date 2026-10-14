@@ -76,6 +76,30 @@ class SystemCategoryIdentityRoomTest {
             assertTrue(store.categoryReferenceSnapshot(UserId(device)).pending.isEmpty())
         } finally {db.close();context.deleteDatabase(name)}
     }
+    @Test fun activeLegacyCleanupAndCanonicalRestoreSurviveReopenTogether()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="category-cleanup-${UUID.randomUUID()}.db"
+        var db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build()
+        try {
+            var store:LocalStore=RoomLocalStore(db)
+            store.commitMutation(seed.toCloudRecord(),seed.bootstrapMutation())
+            val before=store.categoryReferenceSnapshot(owner)
+            val canonical=TransactionCategoryRecord.fromCloudRecord(remote(seed.id)).copy(deletedAt=now,syncVersion=0).toCloudRecord()
+            val active=TransactionCategoryRecord.fromCloudRecord(remote()).copy(syncVersion=0).toCloudRecord().let {
+                it.copy(payload=JsonObject(it.payload+("unknown_amount" to JsonPrimitive(9007199254740995L))))}
+            assertTrue(store.commitSystemCategoryIdentityMigration(before,source(before),listOf(canonical,active),catalog,device,now))
+            db.close();db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build();store=RoomLocalStore(db)
+            val pending=store.pendingMutations(owner,CloudEntity.TRANSACTION_CATEGORY,Long.MAX_VALUE)
+            assertEquals(2,pending.size)
+            assertTrue(pending.all {it.remoteIdentityObserved && it.mutation.kind==MutationKind.UPSERT && it.mutation.baseVersion==0L})
+            assertNull(store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,seed.id)!!.deletedAt)
+            val alias=store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,legacy)!!
+            assertNotNull(alias.deletedAt)
+            assertEquals(alias.updatedAt,alias.deletedAt)
+            assertEquals(JsonPrimitive(9007199254740995L),alias.payload["unknown_amount"])
+            pending.forEach {queued -> assertEquals(store.record(owner,queued.mutation.entity.table,queued.mutation.recordId)!!.payload,queued.mutation.payload)}
+        } finally {db.close();context.deleteDatabase(name)}
+    }
     @Test fun zeroVersionRemoteProvenanceSurvivesReopenAndSubsequentEdits()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="category-provenance-${UUID.randomUUID()}.db"

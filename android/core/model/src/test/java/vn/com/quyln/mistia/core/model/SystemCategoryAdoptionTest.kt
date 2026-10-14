@@ -126,6 +126,23 @@ class SystemCategoryAdoptionTest {
         assertNull(plan.adoption.mutation)
         assertEquals(legacy,plan.references.mutations.single().record.payload["category_id"]!!.jsonPrimitive.content)
     }
+    @Test fun `deleted canonical and active legacy plan exact cleanup before canonical restoration`() {
+        val canonical=TransactionCategoryRecord.fromCloudRecord(remote(seed.id)).copy(deletedAt=now,syncVersion=42).toCloudRecord()
+        val active=remote().let {it.copy(payload=JsonObject(it.payload+("future_alias_metadata" to JsonPrimitive(9007199254740995L))))}
+        val initial=referencedSnapshot()
+        val ledger=initial.records.getValue(CloudEntity.LEDGER_TRANSACTION).single().let {it.copy(payload=JsonObject(it.payload+("category_id" to JsonPrimitive(legacy))))}
+        val source=initial.copy(records=initial.records+mapOf(CloudEntity.LEDGER_TRANSACTION to listOf(ledger)))
+        val plan=migration(source,listOf(canonical,active))
+        assertNull(plan.adoption.target.deletedAt)
+        assertEquals(42L,plan.adoption.mutation!!.baseVersion)
+        val cleanup=plan.references.mutations.single {it.record.id==legacy}
+        assertNotNull(cleanup.record.deletedAt)
+        assertEquals(cleanup.record.deletedAt,cleanup.record.updatedAt)
+        assertEquals(MutationKind.UPSERT,cleanup.mutation.kind)
+        assertEquals(9007199254740993L,cleanup.mutation.baseVersion)
+        assertEquals(JsonPrimitive(9007199254740995L),cleanup.record.payload["future_alias_metadata"])
+        assertEquals(seed.id,plan.references.mutations.single {it.record.entity==CloudEntity.LEDGER_TRANSACTION.table}.record.payload["category_id"]!!.jsonPrimitive.content)
+    }
     @Test fun `foreign references block source removal and duplicate remote cleanup stays explicit`() {
         assertThrows(IllegalArgumentException::class.java) {migration(referencedSnapshot(true))}
         assertThrows(IllegalArgumentException::class.java) {migration(snapshot(),listOf(remote(),remote(seed.id)))}

@@ -110,11 +110,11 @@ private fun CategoryNameLanguage.categoryNameField()=when(this) {
 
 data class SystemCategoryIdentityMigration(val adoption:SystemCategoryAdoption,val references:CategoryReferenceRepairs,val removesSourceIdentity:Boolean,val retainedCategories:List<CloudRecord> = emptyList())
 
-/** Retains deleted aliases; an active competing identity needs ordered cloud cleanup. */
+/** Retains aliases and queues active legacy cleanup before canonical activation. */
 fun planSystemCategoryIdentityMigration(snapshot:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):SystemCategoryIdentityMigration {
     val adoption=prepareSystemCategoryAdoption(snapshot,queued,remote,catalog,deviceId,now)
     val retained=remote.filter {it.id!=adoption.target.id}
-    require(retained.all {it.deletedAt!=null}) {"Active competing identity requires cloud cleanup before adoption"}
+    require(remote.count {it.deletedAt==null}<=1) {"Multiple active remote identities violate the system-key contract"}
     val storedCategories=snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY)
     retained.forEach {row ->
         require(snapshot.pending.none {it.mutation.entity==CloudEntity.TRANSACTION_CATEGORY && it.mutation.recordId==row.id}) {"Retained alias has pending local edits"}
@@ -137,8 +137,18 @@ fun planSystemCategoryIdentityMigration(snapshot:CategoryReferenceSnapshot,queue
     }
     val imported=retained+adoption.target
     val categories=storedCategories.filterNot {row -> imported.any {it.id==row.id}}+imported
-    var working=snapshot.copy(records=snapshot.records+mapOf(CloudEntity.TRANSACTION_CATEGORY to categories))
+    val cleanup=retained.filter {it.deletedAt==null}.map {row ->
+        val timestamp=maxOf(Instant.parse(now),Instant.parse(requireNotNull(row.updatedAt)).plusMillis(1)).toString()
+        val payload=JsonObject(row.payload+mapOf("deleted_at" to JsonPrimitive(timestamp),"updated_at" to JsonPrimitive(timestamp),
+            "last_modified_by_device_id" to JsonPrimitive(deviceId)))
+        val record=row.copy(payload=payload,updatedAt=timestamp,deletedAt=timestamp)
+        CategoryReferenceMutation(record,PendingMutation(CloudEntity.TRANSACTION_CATEGORY,row.id,snapshot.owner.value,
+            MutationKind.UPSERT,payload,timestamp,row.syncVersion,deviceId))
+    }
+    var working=snapshot.copy(records=snapshot.records+mapOf(CloudEntity.TRANSACTION_CATEGORY to categories.map {row -> cleanup.singleOrNull {it.record.id==row.id}?.record ?: row}),
+        pending=snapshot.pending+cleanup.map {QueuedMutation(it.mutation,0,0,null,true)})
     val mutations=linkedMapOf<Pair<CloudEntity,String>,CategoryReferenceMutation>()
+    cleanup.forEach {mutations[CloudEntity.TRANSACTION_CATEGORY to it.record.id]=it}
     val tasks=linkedMapOf<String,PendingCategoryTranslation>()
     val aliases=(if(removes) listOf(adoption.source.id) else emptyList())+retained.map {it.id}
     for(alias in aliases) {
