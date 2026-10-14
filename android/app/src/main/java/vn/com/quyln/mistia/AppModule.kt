@@ -328,6 +328,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSessionRestoration(auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.SessionRestorationCoordinator(auth.state) {auth.restore()}
+
+    @Provides
+    @Singleton
     fun provideBillMaintenanceCoordinator(auth:AuthRepository,finance:FinanceRepository,device:SecureDeviceIdStore)=
         vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator(auth.state,finance,{device.getOrCreate()},{Instant.now().toString()})
 

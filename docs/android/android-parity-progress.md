@@ -1874,3 +1874,17 @@ Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-account-guard.md`.
   Nine cloud flagsfalse; no device/live cloud writes.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-foreground-maintenance.md`.
+
+
+## Background-safe session restoration — 2026-10-14
+
+- [x] Shared initial restoration gate for Activity/worker callers; serialized restore,
+  resolved-state guard, retry/cancellation behavior. Activity uses gate.
+- [x] Five reproduced late auth-response races fixed with session generation guards,
+  immediate local sign-out and serial owner-checked refresh; signed-out cache cannot resurrect.
+- [x]13 added tests;834 JVM/90 suites; full Android +Swift601/contracts/l10n/SQLite pass.
+  Room/app AndroidTests compile only; APK43; nine cloud flagsfalse; no device/live cloud.
+- [ ] Background worker/cold-process device run, OS delivery, preference/time-zone
+  hooks, independent review/device QA and full APK1–4 remain unfinished.
+
+Evidence: `docs/android/evidence/2026-10-14-background-session-restoration.md`.

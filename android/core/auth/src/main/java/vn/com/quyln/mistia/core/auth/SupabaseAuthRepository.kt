@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,25 +98,35 @@ class SupabaseAuthRepository(
 ) : AuthRepository {
     private val mutableState = MutableStateFlow<AuthState>(AuthState.Restoring)
     override val state: StateFlow<AuthState> = mutableState.asStateFlow()
+    private val sessionLock=Any()
+    private var generation=0L
+    private val refreshMutex=Mutex()
 
     override suspend fun restore() {
-        val saved = secureStore.read()
-        if (saved == null) {
-            mutableState.value = AuthState.SignedOut
-            return
+        val (saved,epoch)=synchronized(sessionLock) {
+            if(mutableState.value!=AuthState.Restoring) return
+            val saved=secureStore.read()
+            if(saved==null) {mutableState.value=AuthState.SignedOut;return}
+            generation++
+            mutableState.value=AuthState.SignedIn(saved)
+            saved to generation
         }
-        mutableState.value = AuthState.SignedIn(saved)
-        if (saved.shouldRefresh(nowEpochSeconds())) {
-            refreshIfNeeded().onFailure { error ->
-                if (error is SupabaseHttpException && error.statusCode in 400..499) {
-                    secureStore.clear()
-                    mutableState.value = AuthState.SignedOut
+        if(saved.shouldRefresh(nowEpochSeconds())) {
+            refreshIfNeeded().onFailure {error ->
+                if(error is CancellationException) throw error
+                if(error is SupabaseHttpException && error.statusCode in 400..499) synchronized(sessionLock) {
+                    if(generation==epoch && (mutableState.value as? AuthState.SignedIn)?.session==saved) {
+                        generation++
+                        secureStore.clear()
+                        mutableState.value=AuthState.SignedOut
+                    }
                 }
             }
         }
     }
 
     override suspend fun signIn(email: String, password: String): Result<AuthSession> = runCatching {
+        val epoch=beginSessionChange()
         val response = post(
             path = "auth/v1/token",
             query = "grant_type" to "password",
@@ -122,10 +135,11 @@ class SupabaseAuthRepository(
                 put("password", password)
             },
         )
-        response.toSession().also(::persist)
+        response.toSession().also {persist(it,epoch)}
     }
 
     override suspend fun signUp(email: String, password: String, displayName: String): Result<AuthSession?> = runCatching {
+        val epoch=beginSessionChange()
         val response = post(
             path = "auth/v1/signup",
             payload = buildJsonObject {
@@ -135,7 +149,7 @@ class SupabaseAuthRepository(
             },
         )
         val token = response["access_token"]?.jsonPrimitive?.contentOrNull
-        if (token == null) null else response.toSession().also(::persist)
+        if (token == null) null else response.toSession().also {persist(it,epoch)}
     }
 
     override suspend fun resendConfirmation(email: String): Result<Unit> = runCatching {
@@ -155,6 +169,7 @@ class SupabaseAuthRepository(
     }
 
     override suspend fun exchangeGoogleIdToken(idToken: String, nonce: String?): Result<AuthSession> = runCatching {
+        val epoch=beginSessionChange()
         val response = post(
             path = "auth/v1/token",
             query = "grant_type" to "id_token",
@@ -164,34 +179,47 @@ class SupabaseAuthRepository(
                 put("nonce", nonce?.let(::JsonPrimitive) ?: JsonNull)
             },
         )
-        response.toSession().also(::persist)
+        response.toSession().also {persist(it,epoch)}
     }
 
-    override suspend fun refreshIfNeeded(): Result<AuthSession?> = runCatching {
-        val current = (mutableState.value as? AuthState.SignedIn)?.session ?: secureStore.read()
-            ?: return@runCatching null
-        if (!current.shouldRefresh(nowEpochSeconds())) return@runCatching current
-        val response = post(
-            path = "auth/v1/token",
-            query = "grant_type" to "refresh_token",
-            payload = buildJsonObject { put("refresh_token", current.refreshToken) },
-        )
-        response.toSession().also(::persist)
+    override suspend fun refreshIfNeeded(): Result<AuthSession?> = refreshMutex.withLock {
+        runCatching {
+            val observation=synchronized(sessionLock) {
+                (mutableState.value as? AuthState.SignedIn)?.session?.let {it to generation}
+            } ?: return@runCatching null
+            val (current,epoch)=observation
+            if(!current.shouldRefresh(nowEpochSeconds())) return@runCatching current
+            val response=post(
+                path="auth/v1/token",
+                query="grant_type" to "refresh_token",
+                payload=buildJsonObject {put("refresh_token",current.refreshToken)},
+            )
+            val refreshed=response.toSession()
+            require(refreshed.userId==current.userId) {"Refresh session owner changed"}
+            persist(refreshed,epoch)
+            refreshed
+        }
     }
 
     override suspend fun signOut(clearLocalSession: Boolean) {
-        val current = (mutableState.value as? AuthState.SignedIn)?.session
-        if (current != null) {
-            runCatching { post(path = "auth/v1/logout", accessToken = current.accessToken) }
+        val current=synchronized(sessionLock) {
+            val current=(mutableState.value as? AuthState.SignedIn)?.session
+            generation++
+            if(clearLocalSession) secureStore.clear()
+            mutableState.value=AuthState.SignedOut
+            current
         }
-        if (clearLocalSession) secureStore.clear()
-        mutableState.value = AuthState.SignedOut
-        runCatching { clearCredentialState() }
+        runCatching {clearCredentialState()}
+        if(current!=null) runCatching {post(path="auth/v1/logout",accessToken=current.accessToken)}
     }
 
-    private fun persist(session: AuthSession) {
+    private fun beginSessionChange():Long = synchronized(sessionLock) {++generation}
+
+    private fun persist(session:AuthSession,expectedGeneration:Long) = synchronized(sessionLock) {
+        if(generation!=expectedGeneration) throw CancellationException("Session changed during authentication")
         secureStore.write(session)
-        mutableState.value = AuthState.SignedIn(session)
+        generation++
+        mutableState.value=AuthState.SignedIn(session)
     }
 
     private fun JsonObject.toSession(): AuthSession {

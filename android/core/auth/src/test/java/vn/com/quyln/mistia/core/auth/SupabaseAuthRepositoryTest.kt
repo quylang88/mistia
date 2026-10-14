@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.core.auth
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -117,6 +118,67 @@ class SupabaseAuthRepositoryTest {
     @Test fun networkExceptionMessageNeverEchoesServerPayload() {
         val error = SupabaseHttpException(400, "{\"access_token\":\"secret-access\"}")
         assertFalse(error.message.orEmpty().contains("secret-access"))
+    }
+
+    private fun expiredSession()=AuthSession(UserId("test-user"),null,"old-access","old-refresh",0)
+    private fun delayed(body:String,code:Int=200)=MockResponse().setResponseCode(code).setBody(body).setBodyDelay(300,TimeUnit.MILLISECONDS)
+
+    @Test fun lateRefreshCannotRestoreSignedOutOwner()=runBlocking {
+        store.session=expiredSession()
+        server.enqueue(delayed(sessionJson));server.enqueue(MockResponse().setBody("{}"))
+        val restoring=async(start=CoroutineStart.UNDISPATCHED) {runCatching {repository.restore()}}
+        server.takeRequest()
+        repository.signOut()
+        restoring.await()
+        assertNull(store.session);assertEquals(AuthState.SignedOut,repository.state.value)
+    }
+    @Test fun lateLogoutCannotClearNewlySignedInOwner()=runBlocking {
+        store.session=expiredSession().copy(expiresAtEpochSeconds=9999)
+        repository.restore()
+        server.enqueue(delayed("{}"));server.enqueue(MockResponse().setBody(sessionJson.replace("test-user","new-user")))
+        val logout=async(start=CoroutineStart.UNDISPATCHED) {repository.signOut()}
+        server.takeRequest()
+        val newSession=repository.signIn("new@example.test","password").getOrThrow()
+        logout.await()
+        assertEquals(newSession,store.session);assertEquals(AuthState.SignedIn(newSession),repository.state.value)
+    }
+    @Test fun rejectedOldRestoreCannotClearNewActiveOwner()=runBlocking {
+        store.session=expiredSession()
+        server.enqueue(delayed("{}",401));server.enqueue(MockResponse().setBody(sessionJson.replace("test-user","new-user")))
+        val restoring=async(start=CoroutineStart.UNDISPATCHED) {runCatching {repository.restore()}}
+        server.takeRequest()
+        val newSession=repository.signIn("new@example.test","password").getOrThrow()
+        restoring.await()
+        assertEquals(newSession,store.session);assertEquals(AuthState.SignedIn(newSession),repository.state.value)
+    }
+    @Test fun signedOutSessionCannotBeResurrectedFromRetainedSecureCache()=runBlocking {
+        store.session=expiredSession().copy(expiresAtEpochSeconds=9999)
+        repository.restore();server.enqueue(MockResponse().setBody("{}"));repository.signOut(clearLocalSession=false)
+        repository.restore()
+        assertEquals(AuthState.SignedOut,repository.state.value)
+        assertNull(repository.refreshIfNeeded().getOrThrow())
+    }
+    @Test fun lateLoginCannotRestoreSessionAfterSignOut()=runBlocking {
+        server.enqueue(delayed(sessionJson))
+        val login=async(start=CoroutineStart.UNDISPATCHED) {repository.signIn("user@example.test","password")}
+        server.takeRequest();repository.signOut();assertTrue(login.await().isFailure)
+        assertNull(store.session);assertEquals(AuthState.SignedOut,repository.state.value)
+    }
+
+    @Test fun refreshCannotReplaceActiveOwnerWithForeignResponse()=runBlocking {
+        val original=expiredSession();store.session=original
+        server.enqueue(MockResponse().setBody(sessionJson.replace("test-user","foreign-user")))
+        repository.restore()
+        assertEquals(original,store.session);assertEquals(AuthState.SignedIn(original),repository.state.value)
+    }
+    @Test fun overlappingRefreshesUseOneRotatingTokenRequest()=runBlocking {
+        store.session=expiredSession();server.enqueue(MockResponse().setResponseCode(503).setBody("{}"));repository.restore()
+        server.takeRequest();server.enqueue(delayed(sessionJson))
+        val first=async(start=CoroutineStart.UNDISPATCHED) {repository.refreshIfNeeded().getOrThrow()}
+        server.takeRequest()
+        val second=async(start=CoroutineStart.UNDISPATCHED) {repository.refreshIfNeeded().getOrThrow()}
+        assertEquals(first.await(),second.await());assertEquals(2,server.requestCount)
+        assertEquals(AuthState.SignedIn(store.session!!),repository.state.value)
     }
 
     private class MemorySessionStore : SecureSessionStore {

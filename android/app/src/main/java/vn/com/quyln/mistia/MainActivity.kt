@@ -3,6 +3,7 @@ package vn.com.quyln.mistia
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import vn.com.quyln.mistia.core.sync.SessionRestorationCoordinator
 import vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator
 import vn.com.quyln.mistia.core.sync.runForegroundBillMaintenance
 import android.Manifest
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var financeRepository: FinanceRepository
     @Inject lateinit var familyRepository: FamilyRepository
     @Inject lateinit var investmentRepository: InvestmentRepository
+    @Inject lateinit var sessionRestoration:SessionRestorationCoordinator
     @Inject lateinit var billMaintenance:BillMaintenanceCoordinator
     @Inject lateinit var syncEngine: SyncEngine
     @Inject lateinit var deviceRegistry: DeviceRegistry
@@ -106,6 +108,7 @@ class MainActivity : ComponentActivity() {
                     investmentRepository = investmentRepository,
                     syncEngine = syncEngine,
                     billMaintenance=billMaintenance,
+                    sessionRestoration=sessionRestoration,
                     deviceRegistry = deviceRegistry,
                     deviceIdStore = deviceIdStore,
                     categoryTranslationCoordinator = categoryTranslationCoordinator,
@@ -128,6 +131,7 @@ private fun MistiaApp(
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
     billMaintenance:BillMaintenanceCoordinator,
+    sessionRestoration:SessionRestorationCoordinator,
     deviceRegistry: DeviceRegistry,
     deviceIdStore: SecureDeviceIdStore,
     categoryTranslationCoordinator: CategoryTranslationCoordinator,
@@ -138,7 +142,7 @@ private fun MistiaApp(
 ) {
     val lifecycleOwner=LocalLifecycleOwner.current
     val authState by authRepository.state.collectAsStateWithLifecycle()
-    LaunchedEffect(authRepository) { authRepository.restore() }
+    LaunchedEffect(sessionRestoration) {sessionRestoration.ensureRestored()}
 
     when (val state = authState) {
         AuthState.Restoring -> FullScreenProgress()

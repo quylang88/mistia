@@ -91,3 +91,12 @@ Next: reliable worker cold-process auth restoration, background scheduling, imme
 preference triggers and dynamic device ZoneId. OS notification delivery remains
 unimplemented. Keep existing account/transaction/preference guards, and do not claim
 background/device/visual verification from JVM or AndroidTest compilation.
+
+
+Cold-process restoration prerequisite: shared restoration gate is wired into Activity;
+actual late refresh/login/logout/401 races are reproduced and fixed with auth generation
+checks and serialized refresh. Full checks pass. Next worker should resolve dependencies
+through a Hilt application entry point, call this shared gate then existing guarded bill
+coordinator, schedule unique periodic local work without a network constraint, propagate
+cancellation and retry transient failures. No UI/static engine dependency. OS delivery
+and remaining APK1–4 scope remain pending.
