@@ -100,3 +100,12 @@ through a Hilt application entry point, call this shared gate then existing guar
 coordinator, schedule unique periodic local work without a network constraint, propagate
 cancellation and retry transient failures. No UI/static engine dependency. OS delivery
 and remaining APK1–4 scope remain pending.
+
+
+Background bill worker milestone: Application enqueues unique hourly WorkManager local
+work with no network constraint; worker resolves Hilt entry point, shared restoration,
+and guarded bill coordinator. Six runtime pipeline tests and full checks pass. OS worker
+timing/cold-process execution remain device-unverified. Next implement preference change
+triggers and dynamic ZoneId, then owner-scoped Android OS notification delivery using
+persisted inbox state, permission/preferences and duplicate/read/action cleanup. Keep
+financial commit independent of presentation/OS failures. Full APK1–4 still pending.

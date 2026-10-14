@@ -338,6 +338,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideBackgroundBillMaintenance(restoration:vn.com.quyln.mistia.core.sync.SessionRestorationCoordinator,
+        maintenance:vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator)=
+        vn.com.quyln.mistia.core.sync.BackgroundBillMaintenanceTask(restoration,maintenance)
+
+    @Provides
+    @Singleton
     fun provideFamilyRepository(localStore: LocalStore): FamilyRepository =
         OfflineFirstFamilyRepository(localStore)
 

@@ -1888,3 +1888,17 @@ Evidence: `docs/android/evidence/2026-10-14-bill-foreground-maintenance.md`.
   hooks, independent review/device QA and full APK1–4 remain unfinished.
 
 Evidence: `docs/android/evidence/2026-10-14-background-session-restoration.md`.
+
+
+## Background recurring-bill maintenance — 2026-10-14
+
+- [x] Unique hourly local WorkManager job, no network/permission constraint, retry
+  backoff; Hilt entry point resolves cold-process dependencies without UI/static state.
+- [x] Shared restore then actual account-guarded bill pipeline; signed-out no-op,
+  repository error retry and cancellation propagation; reminder flags do not gate money.
+- [x]6 runtime pipeline tests (5 REDs);840 JVM/91 suites; full Android/SwiftPlanning53/
+  contracts/l10n/SQLite pass. App/Room AndroidTests compile only; APK44; cloud flagsfalse.
+- [ ] Actual OS scheduling/cold-process/boot/device verification, OS delivery,
+  preference/time-zone hooks, independent review and full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-background-bill-maintenance.md`.

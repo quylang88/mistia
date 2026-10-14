@@ -13,5 +13,6 @@ class MistiaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         SyncRuntime.engine = syncEngine
+        BillMaintenanceWorker.schedule(this)
     }
 }
