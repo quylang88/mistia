@@ -22,3 +22,12 @@ Keep all nine cloud write gates false and perform no production writes.
 4. Per slice full Android/Swift/contracts/l10n/SQLite checks, evidence and commit.
    Independent reviewer is currently unavailable due usage limit; record this
    limitation and complete review when available. Device checks remain pending.
+
+
+Storage/model milestone: local notification schema5 and exact owner batch CAS,
+read/unread/resolved model semantics are implemented and verified. Remaining:
+notification copy and action metadata from bill events; success notification must
+commit with money or have durable recovery before enabling automatic hooks.
+Resolve read state from fresh notification snapshots so a late maintenance pass
+cannot overwrite a user's newer read/resolved action. Then native center and
+foreground/background scheduling, account cancellation and permission flow.

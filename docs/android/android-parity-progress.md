@@ -1749,3 +1749,18 @@ Evidence: `docs/android/evidence/2026-10-14-auto-payment-repository-guards.md`.
   hooks, independent review (usage limit), device and full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-executor.md`.
+
+
+## Owner-scoped local notification storage — 2026-10-14
+
+- [x] Room schema5/migration4→5, separate local notification table, owner/key
+  partition, exact snapshot CAS batch, flow/read APIs and account cleanup.
+- [x] Swift upsert/read/resolve semantics, exact Long/null metadata, protected
+  family/success/other-cycle/owner rows. No notification cloud outbox writes.
+- [x]6 model runtimeRED/GREEN;768 JVM/82 suites and full Android/SwiftNotification13/
+  contracts/l10n checks. Actual SQLite notification3 +outbox7 methods pass.
+  Room/migration tests compile only; APK35; nine flagsfalse.
+- [ ] Durable bill notification generation with money, localized copy/native
+  notification center/hooks, independent review/device/full APK1–4 remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-local-notification-store.md`.

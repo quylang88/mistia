@@ -22,7 +22,7 @@ class OutboxCompareAndSwapTests(unittest.TestCase):
         db = sqlite3.connect(':memory:')
         self.addCleanup(db.close)
         schema_dir = pathlib.Path(__file__).resolve().parents[1] / 'android/core/database/schemas/vn.com.quyln.mistia.core.database.MistiaDatabase'
-        schema = json.loads((schema_dir / '4.json').read_text())['database']
+        schema = json.loads((schema_dir / '5.json').read_text())['database']
         table = next(item for item in schema['entities'] if item['tableName'] == 'sync_outbox')
         db.execute(table['createSql'].replace('${TABLE_NAME}', 'sync_outbox'))
         db.execute("""INSERT INTO sync_outbox(owner_user_id,entity,record_id,kind,payload_json,modified_at,

@@ -242,6 +242,13 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    fun observeLocalNotifications(owner:UserId):Flow<List<AppNotificationRecord>> =
+        throw UnsupportedOperationException("Local notifications unavailable")
+    suspend fun localNotifications(owner:UserId):List<AppNotificationRecord> =
+        throw UnsupportedOperationException("Local notifications unavailable")
+    suspend fun commitLocalNotifications(owner:UserId,expected:List<AppNotificationRecord>,replacement:List<AppNotificationRecord>):Boolean =
+        throw UnsupportedOperationException("Atomic local notification batch unavailable")
+
     suspend fun commitObservedSystemCategoryMaintenance(expected:CategoryReferenceSnapshot,key:String,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic observed category maintenance unavailable")
 

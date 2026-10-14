@@ -18,6 +18,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.AppNotificationRecord
+import vn.com.quyln.mistia.core.model.requireValidLocalNotification
 import vn.com.quyln.mistia.core.model.SystemCategoryIdentityMigration
 import vn.com.quyln.mistia.core.model.planObservedSystemCategoryMaintenance
 import vn.com.quyln.mistia.core.model.SystemCategoryCatalog
@@ -426,11 +428,13 @@ interface TransactionReceiptImageDao {
         SyncCursorEntity::class,
         CategoryTranslationOutboxEntity::class,
         TransactionReceiptImageEntity::class,
+        LocalNotificationEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class MistiaDatabase : RoomDatabase() {
+    abstract fun localNotificationDao(): LocalNotificationDao
     abstract fun cloudRecordDao(): CloudRecordDao
     abstract fun syncOutboxDao(): SyncOutboxDao
     abstract fun categoryTranslationOutboxDao(): CategoryTranslationOutboxDao
@@ -440,8 +444,14 @@ abstract class MistiaDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): MistiaDatabase =
             Room.databaseBuilder(context, MistiaDatabase::class.java, "mistia-android.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS local_app_notifications (owner_user_id TEXT NOT NULL, notification_key TEXT NOT NULL, payload_json TEXT NOT NULL, PRIMARY KEY(owner_user_id, notification_key))")
+            }
+        }
 
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -556,6 +566,27 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : LocalStore {
+    override fun observeLocalNotifications(owner:UserId):Flow<List<AppNotificationRecord>> =
+        database.localNotificationDao().observe(owner.value).map {rows -> rows.map {decodeNotification(owner,it)}}
+
+    override suspend fun localNotifications(owner:UserId):List<AppNotificationRecord> =
+        database.localNotificationDao().rows(owner.value).map {decodeNotification(owner,it)}
+
+    private fun decodeNotification(owner:UserId,row:LocalNotificationEntity):AppNotificationRecord =
+        json.decodeFromString<AppNotificationRecord>(row.payloadJson).also {
+            it.requireValidLocalNotification()
+            require(it.ownerUserId==owner.value && row.ownerUserId==owner.value && row.notificationKey==it.key)
+        }
+
+    override suspend fun commitLocalNotifications(owner:UserId,expected:List<AppNotificationRecord>,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
+        (expected+replacement).forEach {it.requireValidLocalNotification();require(it.ownerUserId==owner.value)}
+        require(expected.map {it.key}.distinct().size==expected.size && replacement.map {it.key}.distinct().size==replacement.size)
+        if(localNotifications(owner).associateBy {it.key}!=expected.associateBy {it.key}) return@withTransaction false
+        database.localNotificationDao().deleteAccount(owner.value)
+        database.localNotificationDao().upsert(replacement.map {LocalNotificationEntity(owner.value,it.key,json.encodeToString(AppNotificationRecord.serializer(),it))})
+        true
+    }
+
     override suspend fun commitSystemCategoryIdentityMigration(expected:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean = database.withTransaction {
         val current=readCategoryReferenceSnapshot(expected.owner)
         try {expected.requireUnchanged(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
@@ -954,6 +985,7 @@ class RoomLocalStore(
 
     override suspend fun clearAccount(ownerUserId: UserId) {
         database.withTransaction {
+            database.localNotificationDao().deleteAccount(ownerUserId.value)
             database.cloudRecordDao().deleteAccount(ownerUserId.value)
             database.syncOutboxDao().deleteAccount(ownerUserId.value)
             database.syncCursorDao().deleteAccount(ownerUserId.value)
