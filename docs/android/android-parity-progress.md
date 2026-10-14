@@ -1981,3 +1981,18 @@ Evidence: `docs/android/evidence/2026-10-14-immediate-bill-preferences.md`.
   independent review/device/visual QA and full APK1–4 remain unfinished.
 
 Evidence: `docs/android/evidence/2026-10-14-credit-card-statement-model.md`.
+
+
+## Native credit-card statement/history view — 2026-10-14
+
+- [x] Management card navigation plus separate existing editor; owned statement summary,
+  states/dates/linked wallet, raw charge history and static paid-history locks.
+- [x] Bounded local month navigation, Save/Cancel month/year dialog, owner/card-scoped
+  saved state, lifecycle observation/loading/error/retry and resumed calendar refresh.
+- [x]7 runtime RED/GREEN cases;941 JVM/100 suites; full Android/Swift602/contracts/
+  l10n/SQLite pass.3 new Compose tests compile only. APK50; nine write flagsfalse.
+- [ ] Actual card payment/undo/maintenance, pending card currency policy, generated
+  transaction-title localization, installment/UI/device/independent review and complete
+  APK1–4 parity remain unfinished. No device/visual/live cloud verification.
+
+Evidence: `docs/android/evidence/2026-10-14-credit-card-statement-history.md`.

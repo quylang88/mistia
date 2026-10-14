@@ -293,11 +293,17 @@ private fun SignedInRoot(
                         onSignOut = { scope.launch { authRepository.signOut() } },
                         onOpenFamily = { navController.navigate("family") },
                         onOpenInvestment = { navController.navigate("investment") },
+                        onOpenCreditCardStatements = { walletId -> navController.navigate("credit-card-statements/$walletId") },
                         onOpenNotificationSettings={navController.navigate("notification-settings")},
                         modifier = modifier,
                     )
                 }
             }
+        }
+        composable("credit-card-statements/{walletId}") { entry ->
+            val walletId = entry.arguments?.getString("walletId") ?: return@composable
+            vn.com.quyln.mistia.feature.management.CreditCardStatementScreen(
+                authState.session.userId, walletId, financeRepository, onBack = { navController.popBackStack() })
         }
         composable("notification-settings") {
             val context=LocalContext.current

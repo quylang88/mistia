@@ -6,8 +6,9 @@ vectors and full checks. No production card payment feature is complete yet.
 
 Next slices:
 
-1. Native Management card statement/history view matching Swift month selection,
-   state/amount/date/source projection, expenses/read-only history and navigation.
+1. Completed native Management card statement/history read slice (v50);
+   see evidence/2026-10-14-credit-card-statement-history.md. Payment action and
+   generated-title localization remain unfinished. No device/visual proof yet.
 2. Owned raw snapshot/CAS transaction+occurrence money pipeline for manual payment,
    undo, duplicate-link checks, current affordability, receipt/investment protections,
    captured calendar/clock and lossless unknown fields/Long base versions.

@@ -847,6 +847,7 @@
     <string name="management_managementauth_your_data_is_currently_fully_synced_no">Hiện tại dữ liệu của bạn đã được đồng bộ hoàn toàn, không có bất đồng bộ nào cần xử lý.</string>
     <string name="management_managementcreditcardstatement_charges_in_cycle">Chi tiêu trong kỳ</string>
     <string name="management_managementcreditcardstatement_closing_date">Ngày chốt</string>
+    <string name="management_managementcreditcardstatement_could_not_load">Không thể tải sao kê lúc này.</string>
     <string name="management_managementcreditcardstatement_due">Hạn</string>
     <string name="management_managementcreditcardstatement_due_date">Hạn thanh toán</string>
     <string name="management_managementcreditcardstatement_linked_wallet">Ví liên kết</string>
@@ -860,6 +861,7 @@
     <string name="management_managementcreditcardstatement_pay_now">Thanh toán ngay</string>
     <string name="management_managementcreditcardstatement_payable">Cần thanh toán</string>
     <string name="management_managementcreditcardstatement_please_set_a_linked_payment_wallet_for">Vui lòng thiết lập ví liên kết cho thẻ này.</string>
+    <string name="management_managementcreditcardstatement_retry">Thử lại</string>
     <string name="management_managementcreditcardstatement_statement_paid">Đã thanh toán sao kê.</string>
     <string name="management_managementcreditcardstatement_statement_period">Kỳ sao kê</string>
     <string name="management_managementcreditcardstatement_the_linked_wallet_balance_is_not_enough">Số dư ví liên kết không đủ để thanh toán sao kê này.</string>

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
@@ -37,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +74,7 @@ fun ManagementScreen(
     onSignOut: () -> Unit,
     onOpenFamily: () -> Unit,
     onOpenInvestment: () -> Unit,
+    onOpenCreditCardStatements: (String) -> Unit,
     modifier: Modifier = Modifier,
     onOpenNotificationSettings:()->Unit={},
 ) {
@@ -107,6 +110,7 @@ fun ManagementScreen(
                 creditCardProfiles = creditCardProfiles,
                 onAddWallet = { walletEditorTarget = WalletEditorTarget(null) },
                 onAddCreditCard = { creditCardEditorTarget = CreditCardEditorTarget(null) },
+                onOpenCreditCardStatements = onOpenCreditCardStatements,
                 onEdit = { wallet ->
                     if (wallet.kind == WalletKind.CREDIT_CARD) {
                         creditCardEditorTarget = CreditCardEditorTarget(wallet.id)
@@ -503,6 +507,7 @@ private fun WalletsSection(
     creditCardProfiles: List<CreditCardProfileRecord>,
     onAddWallet: () -> Unit,
     onAddCreditCard: () -> Unit,
+    onOpenCreditCardStatements: (String) -> Unit,
     onEdit: (LedgerWalletRecord) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -553,7 +558,9 @@ private fun WalletsSection(
                 Column {
                     wallets.forEachIndexed { index, wallet ->
                         val profile = creditCardProfiles.firstOrNull { it.walletId == wallet.id }
-                        WalletRow(wallet = wallet, creditCardProfile = profile, onClick = { onEdit(wallet) })
+                        WalletRow(wallet = wallet, creditCardProfile = profile,
+                            onClick = { if (wallet.kind == WalletKind.CREDIT_CARD) onOpenCreditCardStatements(wallet.id) else onEdit(wallet) },
+                            onEditCreditCard = { onEdit(wallet) })
                         if (index != wallets.lastIndex) {
                             HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                         }
@@ -580,16 +587,17 @@ private fun WalletsSection(
 }
 
 @Composable
-private fun WalletRow(
+internal fun WalletRow(
     wallet: LedgerWalletRecord,
     creditCardProfile: CreditCardProfileRecord?,
     onClick: () -> Unit,
+    onEditCreditCard: () -> Unit,
 ) {
-    val editable = wallet.kind in WalletEditorState.supportedKinds ||
-        (wallet.kind == WalletKind.CREDIT_CARD && creditCardProfile != null)
+    val editable = wallet.kind in WalletEditorState.supportedKinds || wallet.kind == WalletKind.CREDIT_CARD
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (wallet.kind == WalletKind.CREDIT_CARD) Modifier.testTag("management.card.${wallet.id}") else Modifier)
             .clickable(enabled = editable, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -617,6 +625,11 @@ private fun WalletRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (wallet.kind == WalletKind.CREDIT_CARD && creditCardProfile != null) {
+            IconButton(onClick = onEditCreditCard, modifier = Modifier.testTag("management.editCard.${wallet.id}")) {
+                Icon(Icons.Default.Edit, stringResource(R.string.management_management_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         Column(horizontalAlignment = Alignment.End) {
             if (creditCardProfile != null) {

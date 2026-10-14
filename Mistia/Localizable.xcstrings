@@ -19459,6 +19459,29 @@
         }
       }
     },
+    "management.managementcreditcardstatement.couldNotLoad" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load this statement right now."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在、明細を読み込めません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể tải sao kê lúc này."
+          }
+        }
+      }
+    },
     "management.managementcreditcardstatement.due" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -19754,6 +19777,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vui lòng thiết lập ví liên kết cho thẻ này."
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再試行"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thử lại"
           }
         }
       }
