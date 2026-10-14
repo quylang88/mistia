@@ -23,6 +23,7 @@ import vn.com.quyln.mistia.core.model.RemoteMutationStore
 import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.network.SupabaseHttpException
 
+import vn.com.quyln.mistia.core.model.*
 import vn.com.quyln.mistia.core.model.seedRecord
 import vn.com.quyln.mistia.core.model.bootstrapMutation
 class SystemCategorySeedPushTest {
@@ -41,19 +42,30 @@ class SystemCategorySeedPushTest {
         val local=local()
         val remoteRow=row("Remote custom","2026-09-22T00:00:00Z",7)
         val remote=FakeRemoteStore().apply {fetchedResults.add(remoteRow)}
-        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
         assertEquals(0,remote.writeCalls);assertEquals(remoteRow,local.records[CATEGORY_ID]);assertTrue(local.queued.isEmpty())
     }
     @Test fun `explicit edit follows normal local winner instead of bootstrap preference`()=runTest {
         val local=local(row("User edit",LATER))
         val remote=FakeRemoteStore().apply {fetchedResults.add(row("Remote custom",NOW,7));updatedResults.add(row("User edit",LATER,8))}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        assertEquals(0,remote.writeCalls)
+        assertEquals("User edit",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(7L,local.queued.single().mutation.baseVersion)
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
-        assertEquals(1,remote.writeCalls);assertEquals("User edit",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(1,remote.writeCalls)
     }
     @Test fun `favorite edit at same clock does not classify as untouched seed`()=runTest {
         val edited=row().let {it.copy(payload=JsonObject(it.payload+("is_favorite" to JsonPrimitive(true))))}
         val local=local(edited)
         val remote=FakeRemoteStore().apply {fetchedResults.add(row("Remote custom","2026-09-22T00:00:00Z",7));updatedResults.add(edited.copy(syncVersion=8,payload=JsonObject(edited.payload+("sync_version" to JsonPrimitive(8)))))}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        assertEquals("Remote custom",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(JsonPrimitive(true),local.records[CATEGORY_ID]!!.payload["is_favorite"])
+        assertEquals(0,remote.writeCalls)
+        val merged=local.records[CATEGORY_ID]!!
+        remote.updatedResults.clear()
+        remote.updatedResults.add(merged.copy(syncVersion=8,payload=JsonObject(merged.payload+("sync_version" to JsonPrimitive(8)))))
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
         assertEquals(1,remote.writeCalls)
     }
@@ -61,13 +73,13 @@ class SystemCategorySeedPushTest {
         val local=local()
         val remoteRow=row("Deleted","2026-09-22T00:00:00Z",7).let {it.copy(deletedAt=NOW,payload=JsonObject(it.payload+("deleted_at" to JsonPrimitive(NOW))))}
         val remote=FakeRemoteStore().apply {fetchedResults.add(remoteRow)}
-        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
         assertEquals(0,remote.writeCalls);assertEquals(NOW,local.records[CATEGORY_ID]!!.deletedAt)
     }
     @Test fun `create race accepts remote customization instead of force updating it`()=runTest {
         val local=local()
         val remote=FakeRemoteStore().apply {fetchedResults.add(null);fetchedResults.add(row("Racer","2026-09-22T00:00:00Z",1));createFailures.add(SupabaseHttpException(409,"duplicate"))}
-        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
         assertEquals(1,remote.writeCalls);assertTrue(remote.updatedPayloads.isEmpty())
     }
     @Test fun `late preference ACK cannot delete a replacement user mutation`()=runTest {
@@ -76,6 +88,9 @@ class SystemCategorySeedPushTest {
         val remote=FakeRemoteStore().apply {fetchedResults.add(row("Remote","2026-09-22T00:00:00Z",7));fetchedResults.add(row("Remote","2026-09-22T00:00:00Z",7));updatedResults.add(row("User edit",LATER,8))}
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).staleResponses)
         assertEquals(newer,local.queued.single());assertEquals(0,remote.writeCalls)
+        assertEquals("User edit",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        assertEquals(7L,local.queued.single().mutation.baseVersion)
         assertEquals("User edit",local.records[CATEGORY_ID]!!.payload.string("name"))
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
         assertEquals("User edit",local.records[CATEGORY_ID]!!.payload.string("name"));assertTrue(local.queued.isEmpty())
@@ -89,7 +104,7 @@ class SystemCategorySeedPushTest {
     @Test fun `disabled category gate remains silent even with bootstrap catalog`()=runTest {
         val local=local();val remote=FakeRemoteStore()
         assertEquals(CategoryPushSummary(),CategoryPushCoordinator(local,remote,false,catalog) {NOW_MILLIS}.pushPending(UserId(OWNER),TOKEN))
-        assertEquals(0,remote.fetchCalls);assertEquals(1,local.queued.size)
+        assertEquals(0,remote.fetchCalls);assertEquals(0,remote.keyCalls);assertEquals(1,local.queued.size)
     }
     @Test fun `previously uploaded system category still follows normal winner semantics`()=runTest {
         val local=local(row(time=LATER,version=5))
@@ -97,19 +112,146 @@ class SystemCategorySeedPushTest {
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
         assertEquals(1,remote.writeCalls)
     }
+    @Test fun `existing different ID is found by owner key before create and refs migrate atomically`()=runTest {
+        val local=local()
+        val ledgerId="66666666-6666-6666-6666-666666666666"
+        val ledger=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,ledgerId,OWNER,JsonObject(mapOf(
+            "id" to JsonPrimitive(ledgerId),"user_id" to JsonPrimitive(OWNER),"category_id" to JsonPrimitive(CATEGORY_ID),
+            "amount_minor" to JsonPrimitive(9007199254740993L),"sync_version" to JsonPrimitive(7),"updated_at" to JsonPrimitive(NOW),"deleted_at" to JsonNull,
+        )),NOW,null,7)
+        local.records[ledgerId]=ledger
+        val legacy=row("Remote custom","2026-09-22T00:00:00Z",7).let {it.copy(id=CHILD_ID,payload=JsonObject(it.payload+("id" to JsonPrimitive(CHILD_ID))))}
+        val remote=FakeRemoteStore().apply {systemPages.add(SystemCategoryPage(listOf(legacy),null))}
+        coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(0,remote.writeCalls)
+        assertNull(local.records[CATEGORY_ID])
+        assertEquals(legacy,local.records[CHILD_ID])
+        assertEquals(CHILD_ID,local.records[ledgerId]!!.payload.string("category_id"))
+        assertEquals(9007199254740993L,local.records[ledgerId]!!.payload.long("amount_minor"))
+        assertEquals(1,remote.keyCalls)
+    }
+    @Test fun `different ID create409 race repeats complete key lookup before local migration`()=runTest {
+        val local=local()
+        val legacy=row("Racer",NOW,1).let {it.copy(id=CHILD_ID,payload=JsonObject(it.payload+("id" to JsonPrimitive(CHILD_ID))))}
+        val remote=FakeRemoteStore().apply {
+            systemPages.add(SystemCategoryPage(emptyList(),null));systemPages.add(SystemCategoryPage(listOf(legacy),null))
+            createFailures.add(SupabaseHttpException(409,"duplicate system key"))
+        }
+        coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(legacy,local.records[CHILD_ID])
+        assertNull(local.records[CATEGORY_ID]);assertTrue(local.queued.isEmpty())
+        assertEquals(2,remote.keyCalls);assertEquals(1,remote.writeCalls)
+    }
+    @Test fun `key lookup cancellation propagates without modifying pending seed`()=runTest {
+        val local=local();val before=local.queued.toList()
+        val remote=FakeRemoteStore().apply {keyFailure=CancellationException("cancelled")}
+        val failure=runCatching {coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)}.exceptionOrNull()
+        assertTrue(failure is CancellationException)
+        assertEquals(before,local.queued);assertEquals(0,remote.writeCalls)
+    }
+    @Test fun `complete key pagination retains remote duplicates as explicit conflict`()=runTest {
+        val local=local()
+        val first=row(version=7).let {it.copy(id=CHILD_ID,payload=JsonObject(it.payload+("id" to JsonPrimitive(CHILD_ID))))}
+        val remote=FakeRemoteStore().apply {
+            systemPages.add(SystemCategoryPage(listOf(first),1));systemPages.add(SystemCategoryPage(listOf(row(version=8)),null))
+        }
+        val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,result.conflicts)
+        assertEquals(listOf(0,1),remote.keyOffsets)
+        assertEquals(0,remote.writeCalls)
+        assertEquals(row(),local.records[CATEGORY_ID])
+        assertEquals(Long.MAX_VALUE,local.queued.single().nextAttemptAtEpochMillis)
+    }
+    @Test fun `key lookup failure retries exact seed without create or lost ownership`()=runTest {
+        val local=local();val before=local.queued.single()
+        val remote=FakeRemoteStore().apply {keyFailure=SupabaseHttpException(503,"unavailable")}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).retryableFailures)
+        assertEquals(before.mutation,local.queued.single().mutation)
+        assertEquals(1,local.queued.single().attemptCount)
+        assertEquals(NOW_MILLIS+30000,local.queued.single().nextAttemptAtEpochMillis)
+        assertEquals(0,remote.writeCalls)
+    }
+    @Test fun `same clock edit while key lookup is in flight rejects stale migration`()=runTest {
+        val local=local();val edited=row("Same clock edit")
+        val legacy=row(version=7).let {it.copy(id=CHILD_ID,payload=JsonObject(it.payload+("id" to JsonPrimitive(CHILD_ID))))}
+        val remote=FakeRemoteStore().apply {
+            systemPages.add(SystemCategoryPage(listOf(legacy),null))
+            onKey={local.records[CATEGORY_ID]=edited;local.queued.clear();local.queued.add(pending(edited))}
+        }
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).staleResponses)
+        assertEquals(edited,local.records[CATEGORY_ID]);assertEquals(pending(edited),local.queued.single())
+        assertNull(local.records[CHILD_ID]);assertEquals(0,remote.writeCalls)
+    }
+    @Test fun `foreign key response and non advancing pagination refuse mutation`()=runTest {
+        val foreign=row(version=7).let {it.copy(payload=JsonObject(it.payload+("user_id" to JsonPrimitive(DEVICE))))}
+        listOf(SystemCategoryPage(listOf(foreign),null),SystemCategoryPage(listOf(row(version=7)),0)).forEach {page ->
+            val local=local();val remote=FakeRemoteStore().apply {systemPages.add(page)}
+            assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).permanentFailures)
+            assertEquals(0,remote.writeCalls);assertEquals(row(),local.records[CATEGORY_ID])
+            assertEquals(1,local.queued.size)
+        }
+    }
+    @Test fun `future failed parent defers both seed and uploaded child without any request`()=runTest {
+        for(version in listOf(0L,5L)) {
+            val child=row(version=version)
+            val local=local(child).apply {queued.add(pending(parent.toCloudRecord()).copy(nextAttemptAtEpochMillis=Long.MAX_VALUE))}
+            val remote=FakeRemoteStore()
+            assertEquals(CategoryPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+            assertEquals(0,remote.fetchCalls);assertEquals(0,remote.keyCalls);assertEquals(0,remote.writeCalls)
+            assertEquals(pending(child),local.queued.first())
+        }
+    }
+    @Test fun `missing cloud child of deleted parent is retained without being created`()=runTest {
+        val local=local().apply {records[PARENT_ID]=parent.copy(deletedAt=NOW).toCloudRecord()}
+        val remote=FakeRemoteStore()
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).conflicts)
+        assertEquals(0,remote.writeCalls)
+        assertEquals("conflict_system_category_parent_deleted",local.queued.single().lastError)
+    }
+    @Test fun `existing child tombstone can be adopted under deleted parent without resurrection`()=runTest {
+        val local=local().apply {records[PARENT_ID]=parent.copy(deletedAt=NOW).toCloudRecord()}
+        val deleted=TransactionCategoryRecord.fromCloudRecord(row(version=7)).copy(deletedAt=NOW).toCloudRecord()
+        val remote=FakeRemoteStore().apply {systemPages.add(SystemCategoryPage(listOf(deleted),null))}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        assertEquals(deleted,local.records[CATEGORY_ID]);assertTrue(local.queued.isEmpty())
+        assertEquals(0,remote.writeCalls)
+    }
     private class FakeLocalStore(
         records: Map<String, CloudRecord>,
         val queued: MutableList<QueuedMutation>,
     ) : LocalStore {
         val records = records.toMutableMap()
 
+        override suspend fun categoryReferenceSnapshot(owner:UserId)=CategoryReferenceSnapshot(owner,
+            categoryReferenceEntities.associateWith {entity -> records.values.filter {it.entity==entity.table && it.ownerUserId==owner.value}},
+            queued.filter {it.mutation.subjectUserId==owner.value && it.mutation.entity in categoryReferenceEntities},emptyList())
+        override suspend fun commitSystemCategoryIdentityMigration(expected:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean {
+            replacementOnAcknowledge?.let {newer ->
+                this.queued.remove(queued);this.queued.add(newer)
+                replacementRecordOnAcknowledge?.let {records[it.id]=it}
+                replacementOnAcknowledge=null
+                return false
+            }
+            try {expected.requireUnchanged(categoryReferenceSnapshot(expected.owner))} catch (_:IllegalArgumentException) {return false}
+            val plan=planSystemCategoryIdentityMigration(expected,queued,remote,catalog,deviceId,now)
+            this.queued.remove(queued)
+            if(plan.removesSourceIdentity) records.remove(plan.adoption.source.id)
+            records[plan.adoption.target.id]=plan.adoption.target
+            plan.adoption.mutation?.let {this.queued.add(QueuedMutation(it,0,0,null))}
+            plan.references.mutations.forEach {change ->
+                records[change.record.id]=change.record
+                this.queued.removeAll {it.mutation.entity==change.mutation.entity && it.mutation.recordId==change.record.id}
+                this.queued.add(QueuedMutation(change.mutation,0,0,null))
+            }
+            return true
+        }
         var replacementOnAcknowledge: QueuedMutation? = null
         var replacementRecordOnAcknowledge: CloudRecord? = null
         override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
             MutableStateFlow(records.values.toList())
         override fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>> =
             MutableStateFlow(emptyList())
-        override suspend fun record(ownerUserId: UserId, entity: String, recordId: String) = records[recordId]
+        override suspend fun record(ownerUserId: UserId, entity: String, recordId: String) = records[recordId]?.takeIf {it.entity==entity && it.ownerUserId==ownerUserId.value}
         override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) = Unit
         override suspend fun pendingMutations(
             ownerUserId: UserId,
@@ -152,11 +294,24 @@ class SystemCategorySeedPushTest {
 
         override suspend fun replacePullSnapshot(ownerUserId: UserId, entity: String, records: List<CloudRecord>) = Unit
         override suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String) =
-            queued.mapTo(mutableSetOf()) { it.mutation.recordId }
+            queued.filter {it.mutation.entity.table==entity && it.mutation.subjectUserId==ownerUserId.value}.mapTo(mutableSetOf()) { it.mutation.recordId }
         override suspend fun clearAccount(ownerUserId: UserId) = Unit
     }
 
     private class FakeRemoteStore : RemoteMutationStore {
+        val systemPages=ArrayDeque<SystemCategoryPage>()
+        var keyFailure:Throwable?=null
+        var keyCalls=0
+        val keyOffsets=mutableListOf<Int>()
+        var onKey:(()->Unit)?=null
+        override suspend fun fetchSystemCategoryPage(systemKey:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):SystemCategoryPage {
+            keyCalls++
+            keyOffsets.add(offset)
+            onKey?.invoke()
+            keyFailure?.let {throw it}
+            if(systemPages.isNotEmpty()) return systemPages.removeFirst()
+            return SystemCategoryPage(listOfNotNull(fetchedResults.firstOrNull()),null)
+        }
         val fetchedResults = ArrayDeque<CloudRecord?>()
         val fetchFailures = ArrayDeque<Throwable>()
         val createdResults = ArrayDeque<CloudRecord>()

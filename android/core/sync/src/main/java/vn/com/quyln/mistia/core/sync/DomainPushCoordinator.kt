@@ -21,6 +21,7 @@ data class DomainPushSummary(
     val retryableFailures: Int = 0,
     val permanentFailures: Int = 0,
     val staleResponses: Int = 0,
+    val reconciled: Int = 0,
 )
 
 interface DomainPushCoordinator {
@@ -30,6 +31,9 @@ interface DomainPushCoordinator {
 
 internal sealed interface MutationPreflight {
     data object Continue : MutationPreflight
+    data object Reconciled : MutationPreflight
+    data object Stale : MutationPreflight
+    data object Deferred : MutationPreflight
     data class Acknowledge(val record: CloudRecord) : MutationPreflight
     data class Conflict(val reason: String) : MutationPreflight
 }
@@ -61,6 +65,8 @@ internal class OutboxPushCoordinator(
             summary = try {
                 when (pushOne(queued, ownerUserId, accessToken)) {
                     PushOutcome.PUSHED -> summary.copy(pushed = summary.pushed + 1)
+                    PushOutcome.RECONCILED -> summary.copy(reconciled = summary.reconciled + 1)
+                    PushOutcome.DEFERRED -> summary
                     PushOutcome.ACKNOWLEDGED -> summary.copy(acknowledged = summary.acknowledged + 1)
                     PushOutcome.CONFLICT -> summary.copy(conflicts = summary.conflicts + 1)
                     PushOutcome.STALE -> summary.copy(staleResponses = summary.staleResponses + 1)
@@ -97,11 +103,7 @@ internal class OutboxPushCoordinator(
         }
         validateRecord(local)
 
-        when (val decision = preflight(queued, local, ownerUserId, accessToken)) {
-            MutationPreflight.Continue -> Unit
-            is MutationPreflight.Acknowledge -> return acknowledge(queued, decision.record, PushOutcome.ACKNOWLEDGED)
-            is MutationPreflight.Conflict -> return retainConflict(queued, decision.reason)
-        }
+        preflightOutcome(queued, local, ownerUserId, accessToken)?.let {return it}
 
         if (mutation.kind == MutationKind.DELETE) return pushDelete(queued, local, ownerUserId, accessToken)
 
@@ -126,6 +128,7 @@ internal class OutboxPushCoordinator(
                 )
             } catch (error: SupabaseHttpException) {
                 if (error.statusCode != 409) throw error
+                preflightOutcome(queued, local, ownerUserId, accessToken)?.let {return it}
                 val winner = remoteStore.fetchRecord(entity, mutation.recordId, accessToken, ownerUserId)
                     ?: throw error
                 return resolveConflict(queued, local, winner, ownerUserId, accessToken)
@@ -153,6 +156,16 @@ internal class OutboxPushCoordinator(
 
         return resolveConflict(queued, local, remote, ownerUserId, accessToken)
     }
+
+    private suspend fun preflightOutcome(queued:QueuedMutation,local:CloudRecord,owner:UserId,token:String):PushOutcome? =
+        when(val decision=preflight(queued,local,owner,token)) {
+            MutationPreflight.Continue -> null
+            MutationPreflight.Reconciled -> PushOutcome.RECONCILED
+            MutationPreflight.Stale -> PushOutcome.STALE
+            MutationPreflight.Deferred -> PushOutcome.DEFERRED
+            is MutationPreflight.Acknowledge -> acknowledge(queued,decision.record,PushOutcome.ACKNOWLEDGED)
+            is MutationPreflight.Conflict -> retainConflict(queued,decision.reason)
+        }
 
     private suspend fun pushDelete(
         queued: QueuedMutation,
@@ -298,5 +311,5 @@ internal class OutboxPushCoordinator(
         return min(30_000L * (1L shl exponent), 6L * 60L * 60L * 1_000L)
     }
 
-    private enum class PushOutcome { PUSHED, ACKNOWLEDGED, CONFLICT, STALE }
+    private enum class PushOutcome { PUSHED, ACKNOWLEDGED, CONFLICT, STALE, RECONCILED, DEFERRED }
 }

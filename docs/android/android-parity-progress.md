@@ -1619,3 +1619,12 @@ Evidence: `docs/android/evidence/2026-10-14-system-category-adoption-model.md`.
 - [ ] Owner-key lookup/create409/parent-dependency wiring and duplicate reconciliation before startup; physical/live cloud and complete APK1–4 remain pending. Nine flagsfalse.
 
 Evidence: `docs/android/evidence/2026-10-14-category-identity-room.md`.
+
+## Category precreate / create409 owner-key integration — 2026-10-14
+
+- [x] Full owner-key pagination and exact snapshot-checked single-identity migration before create and after409. Separate reconciled count; edited seeds preserve remote values and queue correctly based target UPSERT.
+- [x] Pending-parent deferral, deleted-parent create refusal/tombstone adoption, owner/pagination validation, same-clock edit protection, retry/cancellation/gate-off behavior.
+- [x]10 new integration cases RED/GREEN;704 JVM/80 suites plus full checks pass. Independent review noP1/P2. APK25 / nine flagsfalse; no device/live cloud execution.
+- [ ] Multiple remote identities remain explicit conflicts. Duplicate/tombstone cleanup must honor the SQL active-key unique index before startup. Full APK1–4 continues.
+
+Evidence: `docs/android/evidence/2026-10-14-category-key-reconciliation.md`.

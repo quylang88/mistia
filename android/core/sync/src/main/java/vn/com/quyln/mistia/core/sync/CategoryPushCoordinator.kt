@@ -25,6 +25,7 @@ class CategoryPushCoordinator(
         remoteStore = remoteStore,
         writesEnabled = writesEnabled,
         nowEpochMillis = nowEpochMillis,
+        preflight = SystemCategorySeedReconciler(localStore,remoteStore,catalog,nowEpochMillis)::prepare,
         preferRemoteRecord = { queued, local, remote ->
             if (catalog == null || queued.mutation.baseVersion != 0L || local.syncVersion != 0L) false else {
                 val decoded=TransactionCategoryRecord.fromCloudRecord(local)
