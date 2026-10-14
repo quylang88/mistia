@@ -57,6 +57,112 @@ class BillPaymentRepositoryTest {
         assertEquals(now, occurrence.paidAt)
         assertEquals(0L, TransactionWalletBalanceIndex(repo.observeWallets(owner).first(), repo.observeTransactions(owner).first()).balance(bill.paymentWalletId!!))
     }
+    @Test fun `undo then repay coalesces stable ledger and occurrence identities with exact base versions`() = runTest {
+        val bill = prepare()
+        val first = repo.payRecurringBill(owner, request(bill), device, now).getOrThrow()
+        val version = 9007199254740993L
+        val remoteTx = first.transaction.copy(syncVersion=version)
+        val remoteOccurrence = first.occurrences.single().copy(syncVersion=version)
+        store.commitMutation(remoteTx.toCloudRecord(), first.transaction.toCloudRecord().let {
+            PendingMutation(CloudEntity.LEDGER_TRANSACTION,it.id,owner.value,MutationKind.UPSERT,remoteTx.toPayload(),now,version,device)
+        })
+        store.commitMutation(remoteOccurrence.toCloudRecord(), remoteOccurrence.pendingMutation())
+        repo.undoRecurringBillPayment(owner, RecordId(bill.id), month, device, now).getOrThrow()
+        val second = repo.payRecurringBill(owner, request(bill).copy(amountMinorOverride=6000), device, now).getOrThrow()
+        assertEquals(first.transaction.id, second.transaction.id)
+        assertEquals(first.occurrences.single().id, second.occurrences.single().id)
+        assertEquals(version, second.transaction.syncVersion)
+        assertEquals(version, second.occurrences.single().syncVersion)
+        assertEquals(first.transaction.createdAt, second.transaction.createdAt)
+        assertEquals(6000L, second.transaction.amountMinor)
+        assertTrue(java.time.Instant.parse(second.transaction.updatedAt).isAfter(java.time.Instant.parse(now)))
+        assertNull(second.transaction.deletedAt)
+        assertNull(second.occurrences.single().deletedAt)
+        assertEquals(1, store.recordsIncludingDeleted(owner,CloudEntity.LEDGER_TRANSACTION.table).size)
+        assertEquals(1, store.recordsIncludingDeleted(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table).size)
+        val pending = store.outboxRows(owner.value).filter {it.entity in setOf(CloudEntity.LEDGER_TRANSACTION,CloudEntity.DUE_OCCURRENCE_RECORD)}
+        assertEquals(2,pending.size)
+        assertTrue(pending.all {it.kind==MutationKind.UPSERT && it.baseVersion==version})
+    }
+    @Test fun `repay refuses a surviving prior ledger instead of charging twice`() = runTest {
+        val bill = prepare()
+        val first = repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,now).getOrThrow()
+        val live=first.transaction.copy(syncVersion=2)
+        store.commitMutation(live.toCloudRecord(),PendingMutation(CloudEntity.LEDGER_TRANSACTION,live.id,owner.value,MutationKind.UPSERT,live.toPayload(),now,2,device))
+        val before=store.outboxRows(owner.value)
+        assertEquals(BillPaymentError.CYCLE_NOT_PENDING,reason(repo.payRecurringBill(owner,request(bill),device,now)))
+        assertEquals(before,store.outboxRows(owner.value))
+        assertEquals(listOf(live),repo.observeTransactions(owner).first())
+    }
+    @Test fun `repay cannot revive tombstoned shared payment metadata`() = runTest {
+        val bill = prepare()
+        val first = repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,now).getOrThrow()
+        val old=LedgerTransactionRecord.fromCloudRecord(store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,first.transaction.id)!!)
+            .copy(settlementGroupId=other.value)
+        store.commitMutation(old.toCloudRecord(),PendingMutation(CloudEntity.LEDGER_TRANSACTION,old.id,owner.value,MutationKind.DELETE,old.toPayload(),now,old.syncVersion,device))
+        val before=store.outboxRows(owner.value)
+        assertEquals(BillPaymentError.UNSUPPORTED_LINKED_STATE,reason(repo.payRecurringBill(owner,request(bill),device,now)))
+        assertEquals(before,store.outboxRows(owner.value))
+    }
+    @Test fun `repay revives all matching paid duplicates and respects future undo clocks`() = runTest {
+        val bill=prepare()
+        val first=repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        val duplicate=first.occurrences.single().copy(id=other.value)
+        store.commitMutation(duplicate.toCloudRecord(),duplicate.pendingMutation())
+        val future="2027-01-01T00:00:00Z"
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,future).getOrThrow()
+        val second=repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        assertEquals(setOf(first.occurrences.single().id,duplicate.id),second.occurrences.map {it.id}.toSet())
+        assertTrue(second.occurrences.all {it.deletedAt==null && it.linkedTransactionId==first.transaction.id})
+        assertEquals("2027-01-01T00:00:00.001Z",second.transaction.updatedAt)
+        assertEquals(now,second.transaction.occurredAt)
+        assertEquals(1,repo.observeTransactions(owner).first().size)
+    }
+    @Test fun `repay cannot bypass receipt cleanup or missing previous payment dependencies`() = runTest {
+        val bill=prepare()
+        val first=repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,now).getOrThrow()
+        store.billReceiptIds=setOf(first.transaction.id)
+        assertEquals(BillPaymentError.UNSUPPORTED_LINKED_STATE,reason(repo.payRecurringBill(owner,request(bill),device,now)))
+        store.billReceiptIds=emptySet()
+        val missing=object:LocalStore by store {
+            override suspend fun recordsIncludingDeleted(ownerUserId:UserId,entity:String)=
+                if(entity==CloudEntity.LEDGER_TRANSACTION.table) emptyList() else store.recordsIncludingDeleted(ownerUserId,entity)
+        }
+        assertEquals(BillPaymentError.UNSUPPORTED_LINKED_STATE,reason(OfflineFirstFinanceRepository(missing,zone,catalog).payRecurringBill(owner,request(bill),device,now)))
+        assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
+    @Test fun `repay cannot move an old locked card charge into a new month and wallet`() = runTest {
+        val bill=prepare()
+        val card=repo.saveCreditCard(owner,CreditCardDraft(name="Card",creditLimitMinor=10000,paymentSourceWalletId=bill.paymentWalletId),device,now).getOrThrow()
+        repo.payRecurringBill(owner,request(bill).copy(walletId=RecordId(card.wallet.id)),device,now).getOrThrow()
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,now).getOrThrow()
+        repo.saveTransaction(owner,TransactionDraft(primaryKind=TransactionPrimaryKind.TRANSFER,
+            transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,title="Card payment 10/2026",amountMinor=5000,
+            occurredAt="2026-10-30T00:00:00Z",sourceWalletId=bill.paymentWalletId,destinationWalletId=card.wallet.id),device,now).getOrThrow()
+        val before=store.outboxRows(owner.value)
+        val result=repo.payRecurringBill(owner,request(bill),device,"2026-11-01T00:00:00Z")
+        assertEquals(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT,(result.exceptionOrNull() as? TransactionValidationException)?.reason)
+        assertEquals(before,store.outboxRows(owner.value))
+    }
+    @Test fun `undo and repay preserve unmodeled ledger and occurrence payload fields`() = runTest {
+        val bill=prepare()
+        val first=repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        val extra=kotlinx.serialization.json.JsonObject(mapOf("minor" to kotlinx.serialization.json.JsonPrimitive(9007199254740993L)))
+        val ledger=first.transaction.toCloudRecord().let {it.copy(payload=kotlinx.serialization.json.JsonObject(it.payload+("future_money_metadata" to extra)))}
+        store.commitMutation(ledger,PendingMutation(CloudEntity.LEDGER_TRANSACTION,ledger.id,owner.value,MutationKind.UPSERT,ledger.payload,now,0,device))
+        val occurrence=first.occurrences.single().toCloudRecord().let {it.copy(payload=kotlinx.serialization.json.JsonObject(it.payload+("future_due_metadata" to extra)))}
+        store.commitMutation(occurrence,first.occurrences.single().pendingMutation().copy(payload=occurrence.payload))
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,now).getOrThrow()
+        assertEquals(extra,store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,ledger.id)!!.payload["future_money_metadata"])
+        assertEquals(extra,store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,occurrence.id)!!.payload["future_due_metadata"])
+        repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        assertEquals(extra,store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,ledger.id)!!.payload["future_money_metadata"])
+        assertEquals(extra,store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,occurrence.id)!!.payload["future_due_metadata"])
+        assertTrue(store.outboxRows(owner.value).filter {it.recordId in setOf(ledger.id,occurrence.id)}.all {it.payload!!.values.contains(extra)})
+    }
     @Test fun `nil bill amount requires positive override and preserves original bill`() = runTest {
         val bill = prepare(null)
         assertEquals(BillPaymentError.MISSING_AMOUNT, reason(repo.payRecurringBill(owner, request(bill), device, now)))

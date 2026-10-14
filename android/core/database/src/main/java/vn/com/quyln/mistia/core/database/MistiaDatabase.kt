@@ -709,8 +709,8 @@ class RoomLocalStore(
             baseVersion = pending.baseVersion,
             deviceId = pending.deviceId,
             attemptCount = mutation.attemptCount,
-                kind = pending.kind.name.lowercase(),
-                payloadJson = pending.payload?.toString(),
+            kind = pending.kind.name.lowercase(),
+            payloadJson = pending.payload?.toString(),
             nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
             errorCode = safeErrorCode,
         ) == 1

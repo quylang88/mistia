@@ -1574,3 +1574,12 @@ Evidence: `docs/android/evidence/2026-10-14-category-reconciliation-model.md`.
 - [ ] Immediate undo→repay identity race next. No ADB/device/live cloud verification; complete APK1–4 remains active.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-undo-sync.md`.
+
+## Stable bill repayment identity — 2026-10-14
+
+- [x] Undo→repay reuses original ledger/paid-cycle IDs and exact versions; atomically replaces DELETE with UPSERT, preserves audit and advances clocks without moving occurredAt.
+- [x] Live/missing/ambiguous/unsupported prior payment guards; both original/proposed statement locks; unknown raw ledger/occurrence JSON preserved through undo and repayment.
+- [x]8 added JVM regressions (including late coordinator DELETE response);666 total/78 suites, full Android checks and Swift Planning53 pass. Review P1/P2 each runtime RED/fixed/rereview clean. APK23, nine write flagsfalse.
+- [ ] Category atomic reconciliation/create409/startup next. No Android device/live cloud verification; full APK1–4 remains active.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-repayment.md`.

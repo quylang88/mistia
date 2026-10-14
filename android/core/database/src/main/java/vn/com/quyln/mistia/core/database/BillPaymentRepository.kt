@@ -5,6 +5,7 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import vn.com.quyln.mistia.core.model.*
 
@@ -19,6 +20,25 @@ internal class OfflineBillPaymentRepository(
         val occurrences = owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
         val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue=="recurringBill" && it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() }
         if (cycle.any { it.status!=DueStatus.PENDING || it.linkedTransactionId!=null }) fail(BillPaymentError.CYCLE_NOT_PENDING)
+        // Reuse the prior payment identity when undo is followed by repayment.
+        // An in-flight DELETE can then conflict with one UPSERT, never a second expense ID.
+        val undone = occurrences.filter { it.deletedAt!=null && it.sourceKindWireValue=="recurringBill" &&
+            it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() && it.status==DueStatus.PAID && it.linkedTransactionId!=null }
+        val oldLinked = undone.mapNotNull { it.linkedTransactionId }.toSet()
+        if (oldLinked.size>1) fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
+        val allTransactions = owned(snapshot, CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord)
+        val previous = oldLinked.singleOrNull()?.let { id ->
+            val tx = allTransactions.singleOrNull { it.id==id } ?: fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
+            if (tx.deletedAt==null) fail(BillPaymentError.CYCLE_NOT_PENDING)
+            if (tx.primaryKind!=TransactionPrimaryKind.EXPENSE || tx.isArchived || tx.settlementGroupId!=null ||
+                tx.settlementObligationId!=null || tx.settlementRoleWireValue!=null || tx.id in snapshot.receiptTransactionIds ||
+                tx.reportingAmountMinor!=null || tx.reportingExpenseMinor!=null || tx.reportingIncomeMinor!=null ||
+                !billPaymentCurrenciesMatch(tx.sourceCurrencyCode.orEmpty(),bill.currencyCode) ||
+                occurrences.any { it.deletedAt==null && it.linkedTransactionId==id } ||
+                owned(snapshot,CloudEntity.INVESTMENT_POSTING).any { it.deletedAt==null && (it.payload["ledger_transaction_id"] as? JsonPrimitive)?.content==id })
+                fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
+            tx
+        }
         val due = recurringBillDueRows(owner, listOf(bill), occurrences.filter { it.deletedAt==null }, request.month, zone).singleOrNull()
             ?: fail(BillPaymentError.NOT_SCHEDULED)
         val wallets = owned(snapshot, CloudEntity.LEDGER_WALLET).map(LedgerWalletRecord::fromCloudRecord).filter { it.deletedAt==null }
@@ -57,25 +77,32 @@ internal class OfflineBillPaymentRepository(
         val parent = (categories+categoryWrites).firstOrNull { it.id==category.parentCategoryId && it.kind==TransactionCategoryKind.EXPENSE && it.hierarchyRole==CategoryHierarchyRole.PARENT }
             ?: fail(BillPaymentError.INVALID_CATEGORY)
         require(parent.ownerUserId==owner.value)
-        val timestamp = Instant.parse(now).toString()
+        val occurredAt = Instant.parse(now)
+        val priorClock = (undone.map { Instant.parse(it.updatedAt) }+listOfNotNull(previous?.updatedAt?.let(Instant::parse))).maxOrNull()
+        val timestamp = if (priorClock!=null && !occurredAt.isAfter(priorClock)) priorClock.plusMillis(1).toString() else occurredAt.toString()
         val device = UUID.fromString(deviceId).toString()
         // Swift's ensureSystemCategory also permits retained archived system categories.
         val mutation = TransactionDraft(primaryKind=TransactionPrimaryKind.EXPENSE, title=bill.name,
-            amountMinor=amount, occurredAt=timestamp, sourceWalletId=wallet.id, categoryId=category.id)
-            .toMutation(owner, null, wallet, null, category.copy(isArchived=false), device, timestamp)
+            amountMinor=amount, occurredAt=occurredAt.toString(), sourceWalletId=wallet.id, categoryId=category.id)
+            .toMutation(owner, previous, wallet, null, category.copy(isArchived=false), device, timestamp)
         val transactions = owned(snapshot, CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord).filter { it.deletedAt==null }
         val profiles = owned(snapshot, CloudEntity.CREDIT_CARD_PROFILE).map(CreditCardProfileRecord::fromCloudRecord).filter { it.deletedAt==null }
+        if (previous?.isLockedByPaidCreditCardStatement(wallets, profiles, categories, transactions,
+                owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone)==true)
+            throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
         if (mutation.record.isLockedByPaidCreditCardStatement(wallets, profiles, categories, transactions+mutation.record,
                 owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone))
             throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
         mutation.record.requireAffordable(wallets, transactions, profiles, null)
-        val paid = if (cycle.isEmpty()) listOf(DueOccurrenceRecord(UUID.randomUUID().toString(), owner.value,
+        val paymentOccurrences = cycle+undone
+        val paid = if (paymentOccurrences.isEmpty()) listOf(DueOccurrenceRecord(UUID.randomUUID().toString(), owner.value,
             "recurringBill", bill.id, request.month.toString(), due.dueDate.toString(), amount, "paid", timestamp,
-            mutation.record.id, timestamp, timestamp, null, 0, device)) else cycle.map {
+            mutation.record.id, timestamp, timestamp, null, 0, device)) else paymentOccurrences.map {
             it.copy(scheduledDate=due.dueDate.toString(), amountMinorSnapshot=amount, statusWireValue="paid", paidAt=timestamp,
-                linkedTransactionId=mutation.record.id, updatedAt=timestamp, lastModifiedByDeviceId=device)
+                linkedTransactionId=mutation.record.id, updatedAt=timestamp, deletedAt=null, lastModifiedByDeviceId=device)
         }
-        store.commitBillMoneyMutations(snapshot, categoryWrites.map { it.toCloudRecord() to it.bootstrapMutation() }+listOf(mutation.record.toCloudRecord() to mutation.pending)+paid.map { it.toCloudRecord() to it.pendingMutation() })
+        val writes = categoryWrites.map { it.toCloudRecord() to it.bootstrapMutation() }+listOf(mutation.record.toCloudRecord() to mutation.pending)+paid.map { it.toCloudRecord() to it.pendingMutation() }
+        store.commitBillMoneyMutations(snapshot, writes.map { preservePayloadExtensions(snapshot, it) })
         SavedBillPayment(mutation.record, paid)
     }
 
@@ -108,7 +135,15 @@ internal class OfflineBillPaymentRepository(
         val mutations = deletedTransactions.map { tx -> tx.toCloudRecord() to PendingMutation(CloudEntity.LEDGER_TRANSACTION,
             tx.id, owner.value, MutationKind.DELETE, tx.toPayload(), timestamp, tx.syncVersion, device) } +
             deletedOccurrences.map { it.toCloudRecord() to it.pendingMutation(MutationKind.DELETE) }
-        store.commitBillMoneyMutations(snapshot, mutations)
+        store.commitBillMoneyMutations(snapshot, mutations.map { preservePayloadExtensions(snapshot, it) })
+    }
+
+    private fun preservePayloadExtensions(snapshot: BillMoneySnapshot, write: Pair<CloudRecord, PendingMutation>): Pair<CloudRecord, PendingMutation> {
+        val (record, pending) = write
+        val original = snapshot.recordsByEntity.getValue(requireNotNull(CloudEntity.fromTable(record.entity))).firstOrNull { it.id==record.id }
+            ?: return write
+        val payload = JsonObject(original.payload+record.payload)
+        return record.copy(payload=payload) to pending.copy(payload=payload)
     }
 
     private suspend fun snapshot(owner: UserId, billId: RecordId, month: YearMonth): BillMoneySnapshot {

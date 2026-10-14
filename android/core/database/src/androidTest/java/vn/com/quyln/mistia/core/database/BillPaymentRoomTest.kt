@@ -51,6 +51,16 @@ class BillPaymentRoomTest {
             assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
             assertEquals(MutationKind.DELETE,store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single().mutation.kind)
             assertEquals(MutationKind.DELETE,store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).single().mutation.kind)
+            val sentUndo=store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single()
+            val repayment=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).getOrThrow()
+            assertEquals(paid.transaction.id,repayment.transaction.id)
+            assertEquals(paid.occurrences.single().id,repayment.occurrences.single().id)
+            assertFalse(store.acknowledgeMutation(sentUndo,LedgerTransactionRecord.fromCloudRecord(
+                store.recordsIncludingDeleted(owner,CloudEntity.LEDGER_TRANSACTION.table).single()
+            ).copy(deletedAt=now,syncVersion=1).toCloudRecord()))
+            assertFalse(store.recordMutationFailure(sentUndo,Long.MAX_VALUE,"stale_undo"))
+            assertEquals(listOf(repayment.transaction),repo.observeTransactions(owner).first())
+            assertEquals(MutationKind.UPSERT,store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single().mutation.kind)
         } finally {db.close();context.deleteDatabase(name)}
     }
     @Test fun occurrenceOutboxFailureRollsBackLedgerRecordAndOutbox()=runTest {

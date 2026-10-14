@@ -182,6 +182,29 @@ class TransactionPushCoordinatorTest {
         }
     }
 
+    @Test fun `late undo response preserves repayment which resurrects one remote ledger identity`()=runTest {
+        val row=tombstone(7)
+        val local=FakeLocalStore(row,deletion(row))
+        val repaid=record(7,"Repayment","2026-09-26T00:00:00.001Z")
+        val replacement=QueuedMutation(PendingMutation(CloudEntity.LEDGER_TRANSACTION,TRANSACTION_ID,OWNER,
+            MutationKind.UPSERT,repaid.payload,repaid.updatedAt!!,7,DEVICE),0,0,null)
+        val deletedRemote=tombstone(8)
+        val remote=FakeRemoteStore().apply {
+            fetched=remoteRecord(7);updatedResult=deletedRemote
+            beforeUpdate={local.record=repaid;local.queued=replacement}
+        }
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).staleResponses)
+        assertEquals(replacement,local.queued);assertEquals(repaid,local.record)
+        remote.beforeUpdate=null;remote.fetched=deletedRemote
+        remote.updatedResult=repaid.copy(syncVersion=9,payload=JsonObject(repaid.payload+("sync_version" to JsonPrimitive(9))))
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
+        assertNull(local.queued);assertNull(local.record!!.deletedAt)
+        assertEquals(TRANSACTION_ID,local.record!!.id)
+        assertEquals(9L,local.record!!.syncVersion)
+        assertNull(remote.createdPayload)
+        assertEquals(2,remote.updateCalls)
+    }
+
     @Test fun `bill undo occurrence waits until real transaction coordinator clears ledger delete`()=runTest { verifyBillUndoFlow(false) }
     @Test fun `remote winning ledger edit restores paid occurrence instead of deleting its history`()=runTest { verifyBillUndoFlow(true) }
     private suspend fun verifyBillUndoFlow(remoteWins:Boolean) {
