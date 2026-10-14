@@ -98,6 +98,44 @@ class SystemCategoryAdoptionTest {
         assertNotNull(plan.mutation)
         assertEquals("Home",plan.translation!!.inputName)
     }
+    private fun migration(source:CategoryReferenceSnapshot,rows:List<CloudRecord> = listOf(remote())) =
+        planSystemCategoryIdentityMigration(source,source.pending.first(),rows,catalog,device,now)
+    private fun referencedSnapshot(foreign:Boolean=false):CategoryReferenceSnapshot {
+        val source=snapshot()
+        val ledger=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,device,owner.value,buildJsonObject {
+            put("id",device);put("user_id",if(foreign) legacy else owner.value);put("category_id",seed.id)
+            put("amount_minor",9007199254740995L);put("category_name_snapshot","Frozen name")
+            put("updated_at",now);put("deleted_at",JsonNull);put("sync_version",9007199254740993L)
+        },now,null,9007199254740993L)
+        return source.copy(records=source.records+mapOf(CloudEntity.LEDGER_TRANSACTION to listOf(ledger)))
+    }
+    @Test fun `identity plan combines exact adoption with lossless dependent repair`() {
+        val plan=migration(referencedSnapshot())
+        assertTrue(plan.removesSourceIdentity)
+        assertEquals(remote(),plan.adoption.target)
+        val ledger=plan.references.mutations.single()
+        assertEquals(legacy,ledger.record.payload["category_id"]!!.jsonPrimitive.content)
+        assertEquals(9007199254740995L,ledger.record.payload["amount_minor"]!!.jsonPrimitive.long)
+        assertEquals("Frozen name",ledger.record.payload["category_name_snapshot"]!!.jsonPrimitive.content)
+        assertEquals(9007199254740993L,ledger.mutation.baseVersion)
+    }
+    @Test fun `authoritative tombstone adoption repairs references without resurrecting target`() {
+        val deleted=TransactionCategoryRecord.fromCloudRecord(remote()).copy(deletedAt=now).toCloudRecord()
+        val plan=migration(referencedSnapshot(),listOf(deleted))
+        assertEquals(deleted,plan.adoption.target)
+        assertNull(plan.adoption.mutation)
+        assertEquals(legacy,plan.references.mutations.single().record.payload["category_id"]!!.jsonPrimitive.content)
+    }
+    @Test fun `foreign references block source removal and duplicate remote cleanup stays explicit`() {
+        assertThrows(IllegalArgumentException::class.java) {migration(referencedSnapshot(true))}
+        assertThrows(IllegalArgumentException::class.java) {migration(snapshot(),listOf(remote(),remote(seed.id)))}
+    }
+    @Test fun `same identity adoption retains identity and needs no FK rewrite`() {
+        val plan=migration(referencedSnapshot(),listOf(remote(seed.id)))
+        assertFalse(plan.removesSourceIdentity)
+        assertTrue(plan.references.mutations.isEmpty())
+        assertEquals(seed.id,plan.adoption.target.id)
+    }
     @Test fun `pending source translation moves to the adopted wire identity preserving explicit language`() {
         val local=seed.copy(nameEnglish="User English").toCloudRecord()
         val task=QueuedCategoryTranslation(PendingCategoryTranslation(owner.value,seed.id,"User English",CategoryNameLanguage.ENGLISH,now,device),3,Long.MAX_VALUE,"old_failure")

@@ -24,7 +24,7 @@ fun CategoryReferenceSnapshot.requireUnchanged(current: CategoryReferenceSnapsho
     require(pending.associateBy {it.mutation.entity to it.mutation.recordId}==current.pending.associateBy {it.mutation.entity to it.mutation.recordId}) {"Category reference outbox changed"}
     require(translations.associateBy {it.translation.categoryId}==current.translations.associateBy {it.translation.categoryId}) {"Category translation tasks changed"}
 }
-fun planCategoryReferenceRepairs(snapshot:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):CategoryReferenceRepairs {
+fun planCategoryReferenceRepairs(snapshot:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String,allowDeletedTarget:Boolean=false):CategoryReferenceRepairs {
     snapshot.validate()
     UUID.fromString(oldId); UUID.fromString(newId); UUID.fromString(deviceId); Instant.parse(now)
     require(oldId!=newId)
@@ -45,7 +45,7 @@ fun planCategoryReferenceRepairs(snapshot:CategoryReferenceSnapshot,oldId:String
     }
     val key=requireNotNull(sourceCategory.systemKey)
     selectSystemCategoryRemote(snapshot.owner,key,listOf(source,target)) // Validate both actual stored identities.
-    require(target.deletedAt==null) {"Reference target must already be live"}
+    require(target.deletedAt==null || allowDeletedTarget) {"Reference target must already be live"}
     val pending=snapshot.pending.associateBy {it.mutation.entity to it.mutation.recordId}
     val changes=snapshot.records.flatMap { (entity,rows) -> rows.mapNotNull {row ->
         val timestamp=if(entity==CloudEntity.TRANSACTION_CATEGORY && row.updatedAt!=null)

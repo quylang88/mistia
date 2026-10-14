@@ -1610,3 +1610,12 @@ Evidence: `docs/android/evidence/2026-10-14-category-reference-room.md`.
 - [ ] Atomic target/source identity installation/removal with FK/outbox/tasks and create409/startup remain pending. No device/live cloud writes; full APK1–4 continues.
 
 Evidence: `docs/android/evidence/2026-10-14-system-category-adoption-model.md`.
+
+## Atomic single-remote system category identity migration — 2026-10-14
+
+- [x] Complete snapshot CAS + exact source queue/task removal, real target install, safe unpersisted source identity removal and all FK/outbox/translation repairs in one Room transaction.
+- [x] Same-ID adoption, explicit tombstone preservation, viewer-reference/remotely persisted-source guards; no different-ID normal ACK. Multiple remote duplicates remain explicitly rejected.
+- [x]4 new combined model regressions RED/GREEN;694 JVM/80 suites and full checks pass. Four Room tests compile only; independent review noP1/P2.
+- [ ] Owner-key lookup/create409/parent-dependency wiring and duplicate reconciliation before startup; physical/live cloud and complete APK1–4 remain pending. Nine flagsfalse.
+
+Evidence: `docs/android/evidence/2026-10-14-category-identity-room.md`.

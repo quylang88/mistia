@@ -18,6 +18,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.SystemCategoryCatalog
+import vn.com.quyln.mistia.core.model.planSystemCategoryIdentityMigration
 import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
 import vn.com.quyln.mistia.core.model.categoryReferenceEntities
 import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
@@ -136,6 +138,9 @@ data class EntityCountProjection(
 
 @Dao
 interface CloudRecordDao {
+    @Query("DELETE FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity = :entity AND record_id = :recordId")
+    suspend fun deleteRecord(ownerUserId:String,entity:String,recordId:String):Int
+
     @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity = :entity ORDER BY record_id ASC")
     suspend fun recordsIncludingDeleted(ownerUserId: String, entity: String): List<CloudRecordEntity>
 
@@ -291,6 +296,9 @@ interface SyncOutboxDao {
 
 @Dao
 interface CategoryTranslationOutboxDao {
+    @Query("DELETE FROM category_translation_outbox WHERE owner_user_id = :ownerUserId AND category_id = :categoryId")
+    suspend fun deleteCategory(ownerUserId:String,categoryId:String):Int
+
     @Query("SELECT * FROM category_translation_outbox WHERE owner_user_id = :ownerUserId ORDER BY category_id ASC")
     suspend fun rows(ownerUserId: String): List<CategoryTranslationOutboxEntity>
 
@@ -531,6 +539,24 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : LocalStore {
+    override suspend fun commitSystemCategoryIdentityMigration(expected:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean = database.withTransaction {
+        val current=readCategoryReferenceSnapshot(expected.owner)
+        try {expected.requireUnchanged(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
+        val plan=planSystemCategoryIdentityMigration(expected,queued,remote,catalog,deviceId,now)
+        val adoption=plan.adoption
+        val pending=queued.mutation
+        check(database.syncOutboxDao().deleteExact(pending.subjectUserId,pending.entity.table,pending.recordId,pending.modifiedAt,
+            pending.baseVersion,pending.deviceId,queued.attemptCount,pending.kind.name.lowercase(),pending.payload?.toString())==1)
+        database.categoryTranslationOutboxDao().deleteCategory(expected.owner.value,adoption.source.id)
+        if(plan.removesSourceIdentity) check(database.cloudRecordDao().deleteRecord(expected.owner.value,CloudEntity.TRANSACTION_CATEGORY.table,adoption.source.id)==1)
+        val targetMutation=adoption.mutation
+        if(targetMutation==null) database.cloudRecordDao().upsert(adoption.target.toEntity(false,System.currentTimeMillis()))
+        else commitMutationRows(adoption.target,targetMutation)
+        plan.references.mutations.forEach {commitMutationRows(it.record,it.mutation)}
+        (plan.references.translations+listOfNotNull(adoption.translation)).forEach {database.categoryTranslationOutboxDao().upsert(it.toEntity())}
+        true
+    }
+
     override suspend fun categoryReferenceSnapshot(owner: UserId): CategoryReferenceSnapshot = database.withTransaction {
         readCategoryReferenceSnapshot(owner)
     }

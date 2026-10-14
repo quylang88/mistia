@@ -240,6 +240,9 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun commitSystemCategoryIdentityMigration(expected:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean =
+        throw UnsupportedOperationException("Atomic category identity migration unavailable")
+
     suspend fun categoryReferenceSnapshot(owner:UserId):CategoryReferenceSnapshot =
         throw UnsupportedOperationException("Complete category reference snapshot unavailable")
     /** Does not remove/reassign category identities; commits only validated FK/outbox/task repairs. */

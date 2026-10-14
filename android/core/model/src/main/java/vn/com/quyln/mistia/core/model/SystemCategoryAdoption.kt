@@ -80,3 +80,25 @@ private fun CategoryNameLanguage.categoryNameField()=when(this) {
     CategoryNameLanguage.ENGLISH -> "name_english"
     CategoryNameLanguage.JAPANESE -> "name_japanese"
 }
+
+data class SystemCategoryIdentityMigration(val adoption:SystemCategoryAdoption,val references:CategoryReferenceRepairs,val removesSourceIdentity:Boolean)
+
+/** Bounded migration of one fully enumerated remote identity; duplicates require explicit cleanup. */
+fun planSystemCategoryIdentityMigration(snapshot:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):SystemCategoryIdentityMigration {
+    require(remote.size==1) {"Remote duplicates require explicit reconciliation"}
+    val adoption=prepareSystemCategoryAdoption(snapshot,queued,remote,catalog,deviceId,now)
+    val removes=adoption.source.id!=adoption.target.id
+    if(!removes) return SystemCategoryIdentityMigration(adoption,CategoryReferenceRepairs(emptyList(),emptyList()),false)
+    val category=TransactionCategoryRecord.fromCloudRecord(adoption.source)
+    require(adoption.source.id==SystemCategoryIdentity.cloudId(requireNotNull(category.systemKey),snapshot.owner)) {"Only unpersisted owner-cloud seeds may be removed"}
+    require(remote.none {it.id==adoption.source.id}) {"Persisted source requires cloud cleanup"}
+    snapshot.records.forEach { (entity,rows) ->
+        val field=if(entity==CloudEntity.TRANSACTION_CATEGORY) "parent_category_id" else "category_id"
+        require(rows.none {row -> (row.payload["user_id"] as? JsonPrimitive)?.content!=snapshot.owner.value &&
+            (row.payload[field] as? JsonPrimitive)?.content==adoption.source.id}) {"Viewer reference prevents source identity removal"}
+    }
+    val categories=snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY).filterNot {it.id==adoption.target.id}+adoption.target
+    val working=snapshot.copy(records=snapshot.records+mapOf(CloudEntity.TRANSACTION_CATEGORY to categories))
+    val references=planCategoryReferenceRepairs(working,adoption.source.id,adoption.target.id,deviceId,now,allowDeletedTarget=true)
+    return SystemCategoryIdentityMigration(adoption,references,true)
+}
