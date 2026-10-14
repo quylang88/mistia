@@ -1780,3 +1780,19 @@ Evidence: `docs/android/evidence/2026-10-14-local-notification-store.md`.
   review/device and full APK1–4 parity remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-atomic-auto-payment-notification.md`.
+
+
+## Persistent recurring-bill reminder/failure batch — 2026-10-14
+
+- [x] Production localized current reminder/failure generation, stable Swift keys,
+  structured current action metadata and existing read/success history protection.
+- [x] Full bill/occurrence/notification snapshot CAS with up to3 fresh retries;
+  paid/read races cannot resurrect stale alerts. Paid/skipped/paused/archive/delete/
+  missing/changed-unpayable cycles resolve actionable notifications.
+- [x]11 new tests (model5 REDs +scheduleRED);780 JVM/83 suites plus full Android/
+  SwiftNotification13/contracts/l10n/SQLite checks pass. Room race test compiles only.
+  APK37; all nine flagsfalse; no device/live cloud.
+- [ ] Native center/actions, immediate manual resolution/preferences/hooks,
+  independent review and full APK1–4 remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-notification-batch.md`.

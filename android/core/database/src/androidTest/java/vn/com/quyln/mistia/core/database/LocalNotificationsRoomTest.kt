@@ -37,6 +37,31 @@ class LocalNotificationsRoomTest {
             assertEquals(listOf(row(other)),store.localNotifications(other))
         } finally {db.close();context.deleteDatabase(name)}
     }
+    @Test fun billBatchRejectsPaidCycleAndReadRacesBeforeChangingNotificationRows()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+        try {
+            val store:LocalStore=RoomLocalStore(db)
+            val bill=CloudRecord(CloudEntity.RECURRING_BILL_PLAN.table,other.value,owner.value,buildJsonObject {
+                put("id",other.value);put("user_id",owner.value);put("updated_at",now);put("unknown_minor",9007199254740993L)
+            },now,null,0)
+            store.replacePullSnapshot(owner,CloudEntity.RECURRING_BILL_PLAN.table,listOf(bill))
+            val initial=store.billNotificationSnapshot(owner)
+            assertTrue(store.commitBillNotifications(initial,listOf(row())))
+            val expected=store.billNotificationSnapshot(owner)
+            val occurrence=CloudRecord(CloudEntity.DUE_OCCURRENCE_RECORD.table,other.value,owner.value,buildJsonObject {
+                put("id",other.value);put("user_id",owner.value);put("status_raw_value","paid");put("updated_at",now)
+            },now,null,0)
+            store.replacePullSnapshot(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,listOf(occurrence))
+            assertFalse(store.commitBillNotifications(expected,emptyList()))
+            assertEquals(listOf(row()),store.localNotifications(owner))
+            val beforeRead=store.billNotificationSnapshot(owner)
+            val read=listOf(markLocalNotificationRead(row(),now))
+            assertTrue(store.commitLocalNotifications(owner,beforeRead.notifications,read))
+            assertFalse(store.commitBillNotifications(beforeRead,emptyList()))
+            assertEquals(read,store.localNotifications(owner))
+        } finally {db.close()}
+    }
     @Test fun staleBatchCannotOverwriteReadStateAndFailedBatchRollsBack()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()

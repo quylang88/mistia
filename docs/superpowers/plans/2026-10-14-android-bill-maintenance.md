@@ -38,3 +38,11 @@ localized production presentation, exact bill/wallet/month guards and preserved
 read state. Next persist failure/reminder reports from fresh notification
 snapshots and resolve paid/skipped/paused actionable rows. Native center/hooks
 must enforce current account, permission/preferences and no stale reminder writes.
+
+
+Reminder/failure batch milestone: localized production formatter, fresh bill/cycle/
+notification snapshot CAS with retries, protected read state and stale failure/
+reminder suppression are implemented. Native center must expose groups and local
+read actions, then bill action sheet and immediate manual pay/skip resolution.
+Do not enable automatic scheduling before current-account cancellation and
+notification preferences are wired. Existing independent review queue remains.

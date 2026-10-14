@@ -242,6 +242,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun billNotificationSnapshot(owner:UserId):BillNotificationSnapshot =
+        throw UnsupportedOperationException("Bill notification snapshot unavailable")
+    suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean =
+        throw UnsupportedOperationException("Atomic bill notification batch unavailable")
+
     fun observeLocalNotifications(owner:UserId):Flow<List<AppNotificationRecord>> =
         throw UnsupportedOperationException("Local notifications unavailable")
     suspend fun localNotifications(owner:UserId):List<AppNotificationRecord> =

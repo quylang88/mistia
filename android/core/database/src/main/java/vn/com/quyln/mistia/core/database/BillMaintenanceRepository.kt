@@ -11,9 +11,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonPrimitive
 import vn.com.quyln.mistia.core.model.*
 
-/** Local money execution only; notification storage/delivery belongs to its caller. */
+/** Executes local money and optionally persists current notification reminders/failures. */
 internal class OfflineBillMaintenanceRepository(private val store:LocalStore,private val zone:ZoneId,
-    private val payments:BillPaymentRepository):BillMaintenanceRepository {
+    private val payments:BillPaymentRepository,private val notificationText:((BillNotificationMessage)->BillNotificationText)?=null):BillMaintenanceRepository {
     private val mutex=Mutex()
     override suspend fun maintainRecurringBills(owner:UserId,deviceId:String,now:String):Result<BillMaintenanceReport> = try {
         Result.success(mutex.withLock {
@@ -29,7 +29,9 @@ internal class OfflineBillMaintenanceRepository(private val store:LocalStore,pri
             currentCoroutineContext().ensureActive()
             // A manual payment/skip can win while an auto attempt is in flight.
             // Re-read statuses rather than sending reminders from the old plan.
-            BillMaintenanceReport(outcomes,events(owner,reference).filter {it.kind!=BillMaintenanceEventKind.AUTO_PAY})
+            val report=BillMaintenanceReport(outcomes,events(owner,reference).filter {it.kind!=BillMaintenanceEventKind.AUTO_PAY})
+            notificationText?.let {OfflineBillNotificationRepository(store,zone,it).persist(owner,report,reference)}
+            report
         })
     } catch(cancelled:CancellationException) {throw cancelled}
       catch(error:Exception) {Result.failure(error)}

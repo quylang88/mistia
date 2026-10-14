@@ -18,6 +18,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.BillNotificationSnapshot
+import vn.com.quyln.mistia.core.model.requireUnchangedBillNotifications
 import vn.com.quyln.mistia.core.model.upsertLocalNotification
 import vn.com.quyln.mistia.core.model.AppNotificationRecord
 import vn.com.quyln.mistia.core.model.requireValidLocalNotification
@@ -567,6 +569,17 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : LocalStore {
+    override suspend fun billNotificationSnapshot(owner:UserId):BillNotificationSnapshot = database.withTransaction {
+        BillNotificationSnapshot(owner,recordsIncludingDeleted(owner,CloudEntity.RECURRING_BILL_PLAN.table),
+            recordsIncludingDeleted(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table),localNotifications(owner))
+    }
+
+    override suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
+        val current=billNotificationSnapshot(expected.owner)
+        try {expected.requireUnchangedBillNotifications(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
+        commitLocalNotifications(expected.owner,expected.notifications,replacement)
+    }
+
     override fun observeLocalNotifications(owner:UserId):Flow<List<AppNotificationRecord>> =
         database.localNotificationDao().observe(owner.value).map {rows -> rows.map {decodeNotification(owner,it)}}
 

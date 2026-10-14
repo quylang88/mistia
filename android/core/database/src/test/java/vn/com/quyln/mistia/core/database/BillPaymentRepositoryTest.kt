@@ -185,6 +185,55 @@ class BillPaymentRepositoryTest {
             automaticPaymentNotification=notification)
         assertTrue(runCatching {disabledSnapshot.requireValidMutations(writes)}.isFailure)
     }
+    private class NotificationStore(private val delegate:LocalStore):LocalStore by delegate {
+        var rows=emptyList<AppNotificationRecord>()
+        var beforeCommit:(suspend ()->Unit)?=null
+        var commits=0
+        override suspend fun billNotificationSnapshot(owner:UserId)=BillNotificationSnapshot(owner,
+            delegate.recordsIncludingDeleted(owner,CloudEntity.RECURRING_BILL_PLAN.table),
+            delegate.recordsIncludingDeleted(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table),rows)
+        override suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean {
+            commits++
+            beforeCommit?.let {beforeCommit=null;it()}
+            try {expected.requireUnchangedBillNotifications(billNotificationSnapshot(expected.owner))} catch (_:IllegalArgumentException) {return false}
+            rows=replacement;return true
+        }
+    }
+    private fun notifiedMaintenance(store:LocalStore)=OfflineBillMaintenanceRepository(store,zone,repo) {message ->
+        BillNotificationText(message.kind,message.event.due.amountMinor.toString())
+    }
+    @Test fun `configured maintenance persists current reminder and preserves read on repeated run`()=runTest {
+        val bill=autoBill(false).copy(dueDay=13)
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        val notifications=NotificationStore(store)
+        notifiedMaintenance(notifications).maintainRecurringBills(owner,device,now).getOrThrow()
+        val first=notifications.rows.single()
+        assertEquals("billPaymentRequired",first.kind)
+        notifications.rows=listOf(markLocalNotificationRead(first,now))
+        notifiedMaintenance(notifications).maintainRecurringBills(owner,device,now).getOrThrow()
+        assertTrue(notifications.rows.single().isRead)
+        assertEquals(1,notifications.rows.size)
+    }
+    @Test fun `payment racing reminder commit retries fresh snapshot without stale alert`()=runTest {
+        val bill=autoBill(false).copy(dueDay=13)
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        val notifications=NotificationStore(store)
+        notifications.beforeCommit={repo.payRecurringBill(owner,request(bill),device,now).getOrThrow();Unit}
+        notifiedMaintenance(notifications).maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(2,notifications.commits)
+        assertTrue(notifications.rows.isEmpty())
+        assertEquals(1,repo.observeTransactions(owner).first().size)
+    }
+    @Test fun `notification read racing batch commit retries without losing new read state`()=runTest {
+        val bill=autoBill(false).copy(dueDay=13)
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        val notifications=NotificationStore(store)
+        notifiedMaintenance(notifications).maintainRecurringBills(owner,device,now).getOrThrow()
+        notifications.beforeCommit={notifications.rows=notifications.rows.map {markLocalNotificationRead(it,now)}}
+        notifiedMaintenance(notifications).maintainRecurringBills(owner,device,now).getOrThrow()
+        assertEquals(3,notifications.commits)
+        assertTrue(notifications.rows.single().isRead)
+    }
     @Test fun `payment atomically creates posted expense and linked paid cycle with exact amounts`() = runTest {
         val exact = 9007199254740993L
         val bill = prepare(exact, exact)

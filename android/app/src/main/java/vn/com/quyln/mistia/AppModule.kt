@@ -309,7 +309,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideFinanceRepository(@ApplicationContext context:Context,localStore: LocalStore, catalog: SystemCategoryCatalog): FinanceRepository =
-        OfflineFirstFinanceRepository(localStore, systemCategoryCatalog=catalog,automaticBillText={bill,amount ->
+        OfflineFirstFinanceRepository(localStore, systemCategoryCatalog=catalog,billNotificationText={formatBillNotification(context,it)},automaticBillText={bill,amount ->
             vn.com.quyln.mistia.core.model.BillAutomaticPaymentText(
                 context.getString(vn.com.quyln.mistia.core.designsystem.R.string.shared_notifications_mistiarecurringbillmaintenance_auto_paid_value,bill.name),
                 context.getString(vn.com.quyln.mistia.core.designsystem.R.string.shared_notifications_mistiarecurringbillmaintenance_auto_payment_complete),
