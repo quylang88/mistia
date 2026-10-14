@@ -235,6 +235,8 @@ interface SyncOutboxDao {
           AND base_version = :baseVersion
           AND device_id = :deviceId
           AND attempt_count = :attemptCount
+          AND kind = :kind
+          AND payload_json IS :payloadJson
         """
     )
     suspend fun deleteExact(
@@ -245,6 +247,8 @@ interface SyncOutboxDao {
         baseVersion: Long,
         deviceId: String,
         attemptCount: Int,
+        kind: String,
+        payloadJson: String?,
     ): Int
 
     @Query(
@@ -260,6 +264,8 @@ interface SyncOutboxDao {
           AND base_version = :baseVersion
           AND device_id = :deviceId
           AND attempt_count = :attemptCount
+          AND kind = :kind
+          AND payload_json IS :payloadJson
         """
     )
     suspend fun markFailureExact(
@@ -270,6 +276,8 @@ interface SyncOutboxDao {
         baseVersion: Long,
         deviceId: String,
         attemptCount: Int,
+        kind: String,
+        payloadJson: String?,
         nextAttemptAtEpochMillis: Long,
         errorCode: String,
     ): Int
@@ -669,6 +677,8 @@ class RoomLocalStore(
                 baseVersion = pending.baseVersion,
                 deviceId = pending.deviceId,
                 attemptCount = mutation.attemptCount,
+                kind = pending.kind.name.lowercase(),
+                payloadJson = pending.payload?.toString(),
             ) == 1
             if (removed) {
                 database.cloudRecordDao().upsert(
@@ -699,6 +709,8 @@ class RoomLocalStore(
             baseVersion = pending.baseVersion,
             deviceId = pending.deviceId,
             attemptCount = mutation.attemptCount,
+                kind = pending.kind.name.lowercase(),
+                payloadJson = pending.payload?.toString(),
             nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
             errorCode = safeErrorCode,
         ) == 1

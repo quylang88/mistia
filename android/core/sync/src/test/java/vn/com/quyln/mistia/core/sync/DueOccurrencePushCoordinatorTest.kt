@@ -105,6 +105,38 @@ class DueOccurrencePushCoordinatorTest {
         try {coordinator(fresh,remote).pushPending(UserId(OWNER),TOKEN);org.junit.Assert.fail("cancel swallowed")} catch(expected:CancellationException) {}
         assertEquals(0,fresh.queued!!.attemptCount)
     }
+    @Test fun `live linked ledger retains undo when paid occurrence is absent deleted or incompatible`()=runTest {
+        val liveLedger=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,TX,OWNER,JsonObject(mapOf(
+            "id" to JsonPrimitive(TX), "user_id" to JsonPrimitive(OWNER), "deleted_at" to kotlinx.serialization.json.JsonNull,
+        )),NOW,null,3)
+        val wrongCycle=record(4,linked=TX).let {it.copy(payload=JsonObject(it.payload+("selected_month_key" to JsonPrimitive("2026-11"))))}
+        listOf(null,deleted(4,linked=TX),wrongCycle).forEach {remoteOccurrence ->
+            val tombstone=deleted(3,linked=TX)
+            val pending=queued(3).let {it.copy(mutation=it.mutation.copy(kind=MutationKind.DELETE,payload=tombstone.payload))}
+            val local=FakeLocalStore(tombstone,pending)
+            val remote=FakeRemoteStore().apply {fetchResults.add(liveLedger);fetchResults.add(remoteOccurrence)}
+            assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).conflicts)
+            assertEquals(0,remote.writeCalls)
+            assertEquals(Long.MAX_VALUE,local.queued!!.nextAttemptAtEpochMillis)
+            assertNotNull(local.record!!.deletedAt)
+        }
+    }
+    @Test fun `restoring remote paid occurrence cannot erase a newer same clock mutation`()=runTest {
+        val tombstone=deleted(3,linked=TX)
+        val pending=queued(3).let {it.copy(mutation=it.mutation.copy(kind=MutationKind.DELETE,payload=tombstone.payload))}
+        val local=FakeLocalStore(tombstone,pending)
+        val ledger=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,TX,OWNER,JsonObject(mapOf(
+            "id" to JsonPrimitive(TX), "user_id" to JsonPrimitive(OWNER), "deleted_at" to kotlinx.serialization.json.JsonNull,
+        )),NOW,null,3)
+        val replacement=pending.copy(mutation=pending.mutation.copy(kind=MutationKind.UPSERT))
+        val remote=FakeRemoteStore().apply {
+            fetchResults.add(ledger);fetchResults.add(record(4,linked=TX))
+            onFetch={if(fetchCalls==2) local.queued=replacement}
+        }
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).staleResponses)
+        assertSame(replacement,local.queued)
+        assertEquals(0,remote.writeCalls)
+    }
     private fun coordinator(local:LocalStore,remote:RemoteMutationStore)=DueOccurrencePushCoordinator(local,remote,true) {NOW_MILLIS}
     private fun queued(version:Long)=QueuedMutation(vn.com.quyln.mistia.core.model.DueOccurrenceRecord.fromCloudRecord(record(version)).pendingMutation(),0,0,null)
     private fun record(version:Long,amount:Long=9007199254740993L,linked:String?=null)=vn.com.quyln.mistia.core.model.DueOccurrenceRecord(
@@ -121,7 +153,8 @@ class DueOccurrencePushCoordinatorTest {
         override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> = records
         override fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>> =
             MutableStateFlow(emptyList())
-        override suspend fun record(ownerUserId: UserId, entity: String, recordId: String) = record
+        override suspend fun record(ownerUserId: UserId, entity: String, recordId: String) =
+            record?.takeIf {it.ownerUserId==ownerUserId.value && it.entity==entity && it.id==recordId}
         override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) = Unit
         override suspend fun pendingMutations(
             ownerUserId: UserId,

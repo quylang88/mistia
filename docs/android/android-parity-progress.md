@@ -1564,3 +1564,13 @@ VersionCode21, nine write gatesfalse. Evidence:
   Startup and full APK1–4 remain open; no ADB/live-cloud verification.
 
 Evidence: `docs/android/evidence/2026-10-14-category-reconciliation-model.md`.
+
+## Bill undo sync / exact outbox CAS — 2026-10-14
+
+- [x] Gated ordinary transaction DELETE, sparse audit metadata, Long CAS, no-create ACK, investment RPC-role refusal.
+- [x] Ledger-first occurrence undo; remote-winning live ledger restores matching paid occurrence or retains conflict. Review P1 reproduced and fixed.
+- [x] Actual Room ACK/failure predicates match kind and nullable payload, protecting same-clock replacement edits. SQLite RED6/GREEN4 methods and Room test compile.
+- [x]658 JVM/78 suites, full Android checks, Swift outbox5, contracts/l10n/diff pass; independent review no further P1/P2 in slice. APK22 / nine flagsfalse.
+- [ ] Immediate undo→repay identity race next. No ADB/device/live cloud verification; complete APK1–4 remains active.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-undo-sync.md`.

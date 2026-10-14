@@ -122,6 +122,22 @@ class WalletRoomTest {
     }
 
     @Test
+    fun sameClockEditRejectsOldAcknowledgementAndFailure() = runTest {
+        repository.saveWallet(UserId(OWNER_A), cashDraft(), DEVICE, NOW).getOrThrow()
+        val sent = localStore.pendingMutations(UserId(OWNER_A), CloudEntity.LEDGER_WALLET, 0).single()
+        repository.saveWallet(UserId(OWNER_A), cashDraft().copy(name = "Same clock edit"), DEVICE, NOW)
+            .getOrThrow()
+        val remote = LedgerWalletRecord.fromCloudRecord(sent.mutation.payloadRecord()).copy(syncVersion = 1)
+            .toCloudRecord().withSyncVersion(1)
+
+        assertFalse(localStore.acknowledgeMutation(sent, remote))
+        assertFalse(localStore.recordMutationFailure(sent, Long.MAX_VALUE, "stale_failure"))
+        val current = localStore.pendingMutations(UserId(OWNER_A), CloudEntity.LEDGER_WALLET, 0).single()
+        assertEquals(0, current.attemptCount)
+        assertEquals("Same clock edit", repository.observeWallets(UserId(OWNER_A)).first().single().name)
+    }
+
+    @Test
     fun failureMetadataUpdatesOnlyTheExactQueuedMutation() = runTest {
         repository.saveWallet(UserId(OWNER_A), cashDraft(), DEVICE, NOW).getOrThrow()
         val queued = localStore.pendingMutations(UserId(OWNER_A), CloudEntity.LEDGER_WALLET, 0).single()

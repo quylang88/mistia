@@ -15,6 +15,31 @@ class DueOccurrencePushCoordinator(
             val decoded=DueOccurrenceRecord.fromCloudRecord(record)
             require(decoded.id==record.id && decoded.ownerUserId==record.ownerUserId && decoded.syncVersion==record.syncVersion)
         },
+        preflight={queued,local,owner,token ->
+            val occurrence=DueOccurrenceRecord.fromCloudRecord(local)
+            val linked=occurrence.linkedTransactionId
+            if(queued.mutation.kind!=MutationKind.DELETE || linked==null) MutationPreflight.Continue
+            else {
+                val ledger=localStore.record(owner,CloudEntity.LEDGER_TRANSACTION.table,linked)
+                    ?: remoteStore.fetchRecord(CloudEntity.LEDGER_TRANSACTION,linked,token,owner)
+                ledger?.let {
+                    require(it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==linked && it.ownerUserId==owner.value)
+                    require((it.payload["id"] as? JsonPrimitive)?.content==linked && (it.payload["user_id"] as? JsonPrimitive)?.content==owner.value)
+                    require((it.payload["deleted_at"] as? JsonPrimitive)?.contentOrNull==it.deletedAt)
+                }
+                if(ledger==null || ledger.deletedAt!=null) MutationPreflight.Continue
+                else {
+                    // A later remote edit can win the linked ledger DELETE.
+                    // Restore the matching authoritative paid occurrence too.
+                    val remote=remoteStore.fetchRecord(CloudEntity.DUE_OCCURRENCE_RECORD,local.id,token,owner)
+                    val paid=remote?.let(DueOccurrenceRecord::fromCloudRecord)
+                    if(paid!=null && paid.deletedAt==null && paid.status==DueStatus.PAID && paid.linkedTransactionId==linked &&
+                        paid.sourceKind==occurrence.sourceKind && paid.sourceId==occurrence.sourceId && paid.selectedMonthKey==occurrence.selectedMonthKey)
+                        MutationPreflight.Acknowledge(remote)
+                    else MutationPreflight.Conflict("linked_transaction_still_live")
+                }
+            }
+        },
         normalizeSemanticPayload={payload ->
             val id=(payload["id"] as JsonPrimitive).content
             val owner=(payload["user_id"] as JsonPrimitive).content

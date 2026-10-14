@@ -16,6 +16,7 @@ import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.MutationKind
+import vn.com.quyln.mistia.core.model.pendingMutation
 import vn.com.quyln.mistia.core.model.PendingMutation
 import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
@@ -78,6 +79,163 @@ class TransactionPushCoordinatorTest {
         assertEquals(TransactionPushSummary(), result)
         assertSame(original, local.queued)
         assertEquals(0, remote.fetchCalls)
+    }
+
+
+    private fun tombstone(version:Long,deleted:String=DELETED)=record(version,"Local",deleted).let {
+        it.copy(deletedAt=deleted,payload=JsonObject(it.payload+mapOf("deleted_at" to JsonPrimitive(deleted))))
+    }
+    private fun deletion(row:CloudRecord)=queued(row.syncVersion).let {
+        it.copy(mutation=it.mutation.copy(kind=MutationKind.DELETE,payload=row.payload,modifiedAt=row.updatedAt!!))
+    }
+    @Test fun `bill undo delete uses exact conditional version and transaction actor metadata only`()=runTest {
+        val version=9007199254740993L
+        val row=tombstone(version)
+        val local=FakeLocalStore(row,deletion(row))
+        val remote=FakeRemoteStore().apply {fetched=remoteRecord(version);updatedResult=tombstone(version+1)}
+        val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,result.pushed)
+        assertEquals(version,remote.expectedVersion)
+        assertEquals(version+1,remote.updatedPayload?.long("sync_version"))
+        assertEquals(OWNER,remote.updatedPayload?.string("last_modified_by_user_id"))
+        assertEquals(DELETED,remote.updatedPayload?.string("deleted_at"))
+        assertEquals(setOf("id","user_id","updated_at","deleted_at","sync_version","last_modified_by_device_id","last_modified_by_user_id"),remote.updatedPayload?.keys)
+        assertNull(local.queued)
+    }
+    @Test fun `never uploaded deleted transaction acknowledges locally without creating a remote row`()=runTest {
+        val row=tombstone(0)
+        val local=FakeLocalStore(row,deletion(row))
+        val remote=FakeRemoteStore()
+        val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,result.acknowledged);assertNull(local.queued)
+        assertEquals(row,local.record);assertNull(remote.createdPayload);assertNull(remote.updatedPayload)
+    }
+    @Test fun `already deleted remote ledger is acknowledged losslessly`()=runTest {
+        val row=tombstone(7)
+        val local=FakeLocalStore(row,deletion(row))
+        val acknowledged=tombstone(9)
+        val remote=FakeRemoteStore().apply {fetched=acknowledged}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
+        assertEquals(acknowledged,local.record);assertNull(remote.updatedPayload)
+    }
+    @Test fun `new pending tombstone arriving during network update survives stale ACK`()=runTest {
+        val row=tombstone(7)
+        val local=FakeLocalStore(row,deletion(row))
+        val replacement=tombstone(7,"2026-09-25T12:00:00.000Z")
+        val newer=deletion(replacement)
+        val remote=FakeRemoteStore().apply {
+            fetched=remoteRecord(7);updatedResult=tombstone(8)
+            beforeUpdate={local.record=replacement;local.queued=newer}
+        }
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).staleResponses)
+        assertEquals(newer,local.queued);assertEquals(replacement,local.record)
+    }
+    @Test fun `delete cancellation propagates and offline failure retains bounded retry`()=runTest {
+        val row=tombstone(7)
+        val queued=deletion(row)
+        val local=FakeLocalStore(row,queued)
+        val remote=FakeRemoteStore().apply {fetchFailure=kotlinx.coroutines.CancellationException("cancelled")}
+        try {coordinator(local,remote).pushPending(UserId(OWNER),TOKEN);org.junit.Assert.fail("Cancellation swallowed")}
+        catch (_:kotlinx.coroutines.CancellationException) { }
+        assertEquals(queued,local.queued)
+        remote.fetchFailure=IOException("offline")
+        val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,result.retryableFailures)
+        assertEquals(NOW_MILLIS+30000,local.queued?.nextAttemptAtEpochMillis)
+        assertEquals(MutationKind.DELETE,local.queued?.mutation?.kind)
+    }
+    @Test fun `disabled transaction delete gate makes no network request`()=runTest {
+        val row=tombstone(7)
+        val queued=deletion(row)
+        val local=FakeLocalStore(row,queued)
+        val remote=FakeRemoteStore()
+        assertEquals(DomainPushSummary(),TransactionPushCoordinator(local,remote,false) {NOW_MILLIS}.pushPending(UserId(OWNER),TOKEN))
+        assertEquals(0,remote.fetchCalls);assertEquals(queued,local.queued)
+    }
+    @Test fun `conditional delete race is bounded and keeps conflict tombstone`()=runTest {
+        val row=tombstone(7)
+        val local=FakeLocalStore(row,deletion(row))
+        val remote=FakeRemoteStore().apply {fetched=remoteRecord(7)}
+        val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,result.conflicts);assertEquals(2,remote.updateCalls)
+        assertEquals(Long.MAX_VALUE,local.queued?.nextAttemptAtEpochMillis)
+        assertEquals("conflict_force_delete_race",local.queued?.lastError)
+        assertEquals(row,local.record)
+    }
+    @Test fun `delete edit conflict follows later remote edit and preserves its full payload`()=runTest {
+        val row=tombstone(7)
+        val local=FakeLocalStore(row,deletion(row))
+        val winner=record(9,"Remote edited","2026-09-26T12:00:00.000Z")
+        val remote=FakeRemoteStore().apply {fetched=winner}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
+        assertEquals(winner,local.record);assertNull(remote.updatedPayload)
+    }
+    @Test fun `investment cash events cannot bypass their required RPC as direct ledger writes`()=runTest {
+        for(role in listOf("investmentCashDeposit","investmentCashWithdrawal")) for(kind in listOf(MutationKind.UPSERT,MutationKind.DELETE)) {
+            val base=if(kind==MutationKind.DELETE) tombstone(0) else localRecord(0)
+            val row=base.copy(payload=JsonObject(base.payload+mapOf("settlement_role_raw_value" to JsonPrimitive(role))))
+            val queued=if(kind==MutationKind.DELETE) deletion(row) else queued(0).let {it.copy(mutation=it.mutation.copy(payload=row.payload))}
+            val local=FakeLocalStore(row,queued)
+            val remote=FakeRemoteStore()
+            assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).permanentFailures)
+            assertEquals(0,remote.fetchCalls);assertNull(remote.createdPayload);assertNull(remote.updatedPayload)
+        }
+    }
+
+    @Test fun `bill undo occurrence waits until real transaction coordinator clears ledger delete`()=runTest { verifyBillUndoFlow(false) }
+    @Test fun `remote winning ledger edit restores paid occurrence instead of deleting its history`()=runTest { verifyBillUndoFlow(true) }
+    private suspend fun verifyBillUndoFlow(remoteWins:Boolean) {
+        val row=tombstone(7)
+        val ledger=FakeLocalStore(row,deletion(row))
+        val occurrence=vn.com.quyln.mistia.core.model.DueOccurrenceRecord(CATEGORY_ID,OWNER,"recurringBill",SOURCE_WALLET_ID,
+            "2026-09",NOW,1250,"paid",NOW,TRANSACTION_ID,NOW,DELETED,DELETED,7,DEVICE)
+        val occurrenceMutation=QueuedMutation(occurrence.pendingMutation(MutationKind.DELETE),0,0,null)
+        val due=FakeLocalStore(occurrence.toCloudRecord(),occurrenceMutation)
+        val local=object:LocalStore by ledger {
+            override suspend fun record(ownerUserId:UserId,entity:String,recordId:String)=when(entity) {
+                CloudEntity.LEDGER_TRANSACTION.table -> ledger.record
+                CloudEntity.DUE_OCCURRENCE_RECORD.table -> due.record
+                else -> null
+            }
+            override suspend fun pendingMutations(ownerUserId:UserId,entity:CloudEntity,dueAtEpochMillis:Long,limit:Int)=
+                ledger.pendingMutations(ownerUserId,entity,dueAtEpochMillis,limit)+due.pendingMutations(ownerUserId,entity,dueAtEpochMillis,limit)
+            override suspend fun pendingMutationRecordIds(ownerUserId:UserId,entity:String)=
+                listOfNotNull(ledger.queued,due.queued).filter {it.mutation.entity.table==entity && it.mutation.subjectUserId==ownerUserId.value}.mapTo(mutableSetOf()) {it.mutation.recordId}
+            override suspend fun acknowledgeMutation(mutation:QueuedMutation,remoteRecord:CloudRecord)=
+                if(mutation.mutation.entity==CloudEntity.LEDGER_TRANSACTION) ledger.acknowledgeMutation(mutation,remoteRecord) else due.acknowledgeMutation(mutation,remoteRecord)
+        }
+        val authoritativeLedger=if(remoteWins) record(9,"Remote edited","2026-09-26T12:00:00.000Z") else remoteRecord(7)
+        val authoritativeOccurrence=occurrence.copy(deletedAt=null,updatedAt=NOW).toCloudRecord()
+        val records=mutableMapOf(CloudEntity.LEDGER_TRANSACTION to authoritativeLedger,CloudEntity.DUE_OCCURRENCE_RECORD to authoritativeOccurrence)
+        val patches=mutableListOf<CloudEntity>()
+        val remote=object:RemoteMutationStore {
+            override suspend fun fetchRecord(entity:CloudEntity,recordId:String,accessToken:String,ownerUserId:UserId)=records[entity]
+            override suspend fun createRecord(entity:CloudEntity,accessToken:String,ownerUserId:UserId,payload:JsonObject):CloudRecord=error("Undo never creates remote records")
+            override suspend fun conditionalUpdate(entity:CloudEntity,recordId:String,accessToken:String,ownerUserId:UserId,expectedVersion:Long,payload:JsonObject):CloudRecord? {
+                val current=records[entity] ?: return null
+                if(current.syncVersion!=expectedVersion) return null
+                patches+=entity
+                return current.copy(payload=JsonObject(current.payload+payload),updatedAt=payload.string("updated_at"),
+                    deletedAt=payload.string("deleted_at"),syncVersion=payload.long("sync_version")).also {records[entity]=it}
+            }
+        }
+        val occurrencePush=DueOccurrencePushCoordinator(local,remote,true) {NOW_MILLIS}
+        assertEquals(DomainPushSummary(),occurrencePush.pushPending(UserId(OWNER),TOKEN))
+        assertEquals(emptyList<CloudEntity>(),patches)
+        val ledgerResult=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,if(remoteWins) ledgerResult.acknowledged else ledgerResult.pushed)
+        val occurrenceResult=occurrencePush.pushPending(UserId(OWNER),TOKEN)
+        assertEquals(1,if(remoteWins) occurrenceResult.acknowledged else occurrenceResult.pushed)
+        assertNull(ledger.queued);assertNull(due.queued)
+        if(remoteWins) {
+            assertEquals(emptyList<CloudEntity>(),patches)
+            assertEquals(authoritativeLedger,ledger.record)
+            assertEquals(authoritativeOccurrence,due.record)
+        } else {
+            assertEquals(listOf(CloudEntity.LEDGER_TRANSACTION,CloudEntity.DUE_OCCURRENCE_RECORD),patches)
+            assertEquals(DELETED,records.getValue(CloudEntity.LEDGER_TRANSACTION).deletedAt)
+            assertEquals(DELETED,records.getValue(CloudEntity.DUE_OCCURRENCE_RECORD).deletedAt)
+        }
     }
 
     private fun coordinator(local: LocalStore, remote: RemoteMutationStore) =
@@ -189,6 +347,8 @@ class TransactionPushCoordinatorTest {
         var updatedPayload: JsonObject? = null
         var expectedVersion: Long? = null
         var fetchCalls = 0
+        var updateCalls = 0
+        var beforeUpdate: (() -> Unit)? = null
 
         override suspend fun fetchRecord(
             entity: CloudEntity,
@@ -217,6 +377,8 @@ class TransactionPushCoordinatorTest {
             expectedVersion: Long,
             payload: JsonObject,
         ): CloudRecord? {
+            updateCalls++
+            beforeUpdate?.invoke()
             this.expectedVersion = expectedVersion
             updatedPayload = payload
             return updatedResult
@@ -234,6 +396,7 @@ class TransactionPushCoordinatorTest {
         const val DEVICE = "55555555-5555-5555-5555-555555555555"
         const val TOKEN = "access-token"
         const val NOW = "2026-09-23T12:00:00.000Z"
+        const val DELETED = "2026-09-24T12:00:00.000Z"
         const val NOW_MILLIS = 1_795_000_000_000L
     }
 }

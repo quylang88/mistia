@@ -28,6 +28,12 @@ interface DomainPushCoordinator {
     suspend fun pushPending(ownerUserId: UserId, accessToken: String): DomainPushSummary
 }
 
+internal sealed interface MutationPreflight {
+    data object Continue : MutationPreflight
+    data class Acknowledge(val record: CloudRecord) : MutationPreflight
+    data class Conflict(val reason: String) : MutationPreflight
+}
+
 internal class OutboxPushCoordinator(
     override val entity: CloudEntity,
     private val localStore: LocalStore,
@@ -39,6 +45,7 @@ internal class OutboxPushCoordinator(
     private val validateRecord: (CloudRecord) -> Unit = {},
     private val preferRemoteRecord: suspend (QueuedMutation, CloudRecord, CloudRecord) -> Boolean = { _, _, _ -> false },
     private val orderMutations: suspend (List<QueuedMutation>, UserId) -> List<QueuedMutation> = { rows, _ -> rows },
+    private val preflight: suspend (QueuedMutation, CloudRecord, UserId, String) -> MutationPreflight = { _, _, _, _ -> MutationPreflight.Continue },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
         ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
@@ -89,6 +96,12 @@ internal class OutboxPushCoordinator(
             "Local ${entity.table} identity does not match outbox"
         }
         validateRecord(local)
+
+        when (val decision = preflight(queued, local, ownerUserId, accessToken)) {
+            MutationPreflight.Continue -> Unit
+            is MutationPreflight.Acknowledge -> return acknowledge(queued, decision.record, PushOutcome.ACKNOWLEDGED)
+            is MutationPreflight.Conflict -> return retainConflict(queued, decision.reason)
+        }
 
         if (mutation.kind == MutationKind.DELETE) return pushDelete(queued, local, ownerUserId, accessToken)
 
@@ -197,7 +210,9 @@ internal class OutboxPushCoordinator(
         "deleted_at" to JsonPrimitive(requireNotNull(deletedAt)),
         "sync_version" to JsonPrimitive(version),
         "last_modified_by_device_id" to JsonPrimitive(device),
-    ))
+    ) + if (entity == CloudEntity.LEDGER_TRANSACTION.table) mapOf(
+        "last_modified_by_user_id" to JsonPrimitive(ownerUserId),
+    ) else emptyMap())
 
     private fun nextVersion(current: Long): Long {
         require(current >= 0 && current < Long.MAX_VALUE) { "Sync version cannot be incremented" }
