@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var familyRepository: FamilyRepository
     @Inject lateinit var investmentRepository: InvestmentRepository
     @Inject lateinit var sessionRestoration:SessionRestorationCoordinator
+    @Inject lateinit var walletReminders:vn.com.quyln.mistia.core.model.WalletReminderRepository
     @Inject lateinit var billMaintenance:BillMaintenanceCoordinator
     @Inject lateinit var syncEngine: SyncEngine
     @Inject lateinit var deviceRegistry: DeviceRegistry
@@ -108,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     investmentRepository = investmentRepository,
                     syncEngine = syncEngine,
                     billMaintenance=billMaintenance,
+                    walletReminders=walletReminders,
                     sessionRestoration=sessionRestoration,
                     deviceRegistry = deviceRegistry,
                     deviceIdStore = deviceIdStore,
@@ -131,6 +133,7 @@ private fun MistiaApp(
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
     billMaintenance:BillMaintenanceCoordinator,
+    walletReminders:vn.com.quyln.mistia.core.model.WalletReminderRepository,
     sessionRestoration:SessionRestorationCoordinator,
     deviceRegistry: DeviceRegistry,
     deviceIdStore: SecureDeviceIdStore,
@@ -167,7 +170,10 @@ private fun MistiaApp(
                 )
                 syncEngine.scheduleBackgroundSync()
                 lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                    runForegroundBillMaintenance(synchronize={syncEngine.syncNow()},maintain={billMaintenance.run()})
+                    runForegroundBillMaintenance(synchronize={syncEngine.syncNow()},maintain={
+                        billMaintenance.run()
+                        walletReminders.maintainWalletReminders(state.session.userId,java.time.Instant.now().toString()).getOrThrow()
+                    })
                 }
             }
             key(state.session.userId.value) {

@@ -242,6 +242,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun walletReminderSnapshot(owner:UserId):WalletReminderSnapshot =
+        throw UnsupportedOperationException("Wallet reminder snapshot unavailable")
+    suspend fun commitWalletReminders(expected:WalletReminderSnapshot,replacement:List<AppNotificationRecord>):Boolean =
+        throw UnsupportedOperationException("Atomic wallet reminders unavailable")
+
     suspend fun billNotificationSnapshot(owner:UserId):BillNotificationSnapshot =
         throw UnsupportedOperationException("Bill notification snapshot unavailable")
     suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean =

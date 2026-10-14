@@ -1916,3 +1916,18 @@ Evidence: `docs/android/evidence/2026-10-14-background-bill-maintenance.md`.
   remaining notification domains, independent review and full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-dynamic-planning-calendar.md`.
+
+
+## Persistent next-morning wallet reminders — 2026-10-14
+
+- [x] Local low-cash-wallet inbox and intended next-09:00 targets, exact Long balance,
+  current zone/DST, owner/activity filters, archived shared-debt exclusion, preserved
+  read history and stale/obsolete cleanup; hooked after bill foreground/background passes.
+- [x] Full raw wallet/transaction/group/inbox snapshot CAS with3 fresh retries and
+  commit-time owner/preferences checks; no financial/outbox mutation.
+- [x]15 new runtime cases;861 JVM/93 suites; full Android/SwiftNotification13/contracts/
+  l10n/SQLite pass. Room race/preferences/rollback tests compile only; APK46; flagsfalse.
+- [ ] Actual Android OS schedule/posting/cleanup, immediate preference triggers,
+  independent review/device/visual QA and full APK1–4 remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-wallet-reminder-inbox.md`.

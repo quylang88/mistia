@@ -106,6 +106,7 @@ object AppModule {
     @Singleton
     fun provideLocalStore(database: MistiaDatabase, json: Json,preferences:NotificationPreferencesStore,auth:AuthRepository): LocalStore =
         RoomLocalStore(database,json,billRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.BILLS)},
+            walletRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.WALLETS)},
             currentBillOwner={(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId})
 
     @Provides
@@ -328,6 +329,18 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideWalletReminders(@ApplicationContext context:Context,store:LocalStore,auth:AuthRepository,
+        preferences:NotificationPreferencesStore):vn.com.quyln.mistia.core.model.WalletReminderRepository =
+        vn.com.quyln.mistia.core.database.OfflineWalletReminderRepository(store,{java.time.ZoneId.systemDefault()},
+            {preferences.state.value.reminderEnabled(ReminderKind.WALLETS)},
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId}) {wallet,balance ->
+                vn.com.quyln.mistia.core.model.WalletReminderText(
+                    context.getString(vn.com.quyln.mistia.core.designsystem.R.string.shared_notifications_mistialocalnotificationscheduler_low_wallet_balance),
+                    wallet.name+" — "+vn.com.quyln.mistia.core.designsystem.formatMinorUnits(balance,wallet.currencyCode))
+            }
+
+    @Provides
+    @Singleton
     fun provideSessionRestoration(auth:AuthRepository)=
         vn.com.quyln.mistia.core.sync.SessionRestorationCoordinator(auth.state) {auth.restore()}
 
@@ -339,8 +352,13 @@ object AppModule {
     @Provides
     @Singleton
     fun provideBackgroundBillMaintenance(restoration:vn.com.quyln.mistia.core.sync.SessionRestorationCoordinator,
-        maintenance:vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator)=
-        vn.com.quyln.mistia.core.sync.BackgroundBillMaintenanceTask(restoration,maintenance)
+        maintenance:vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator,auth:AuthRepository,
+        wallets:vn.com.quyln.mistia.core.model.WalletReminderRepository)=
+        vn.com.quyln.mistia.core.sync.BackgroundBillMaintenanceTask(restoration,maintenance) {
+            (auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId?.let {owner ->
+                wallets.maintainWalletReminders(owner,Instant.now().toString()).getOrThrow()
+            }
+        }
 
     @Provides
     @Singleton

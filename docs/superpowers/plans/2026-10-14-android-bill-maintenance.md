@@ -118,3 +118,12 @@ low-cash-wallet alerts at next 09:00; bill notices remain inbox-only. Next imple
 wallet reminder snapshots/next-morning plans, preference/owner/CAS guards and native
 OS schedule/delivery/cleanup. Preserve read history and exact Long balance, and
 keep OS presentation independent of committed money. Device/full APK1–4 still pending.
+
+
+Wallet inbox milestone: actual low-cash-wallet planner and full raw snapshot CAS
+repository are wired after bill maintenance in foreground/background. Exact balance,
+local09:00/DST, archived shared-debt filtering, read preservation and preference/owner
+commit guards pass local checks. Native OS delivery remains next: durable alarm identity,
+latest owned wallet balance and permission/preferences at posting, cancellation of stale
+schedules on sign-out/master/detail change, and no duplicate/replaced native alerts.
+Future inbox rows are schedule targets only; do not claim OS/device delivery yet.

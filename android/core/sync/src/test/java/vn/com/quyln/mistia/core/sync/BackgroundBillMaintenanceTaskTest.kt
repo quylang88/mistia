@@ -43,6 +43,17 @@ class BackgroundBillMaintenanceTaskTest {
         runCurrent();assertTrue(entered.isCompleted);state.value=AuthState.SignedOut
         advanceUntilIdle();assertTrue(work.isCancelled);assertFalse(late)
     }
+    @Test fun `wallet reminder pass runs after restored bill maintenance`()=runTest {
+        val state=MutableStateFlow<AuthState>(AuthState.Restoring);val events=mutableListOf<String>()
+        val restoration=SessionRestorationCoordinator(state) {events+="restore";state.value=signedIn}
+        val bills=BillMaintenanceCoordinator(state,object:BillMaintenanceRepository {
+            override suspend fun maintainRecurringBills(owner:UserId,deviceId:String,now:String):Result<BillMaintenanceReport> {
+                events+="bill";return Result.success(report)
+            }
+        },{"22222222-2222-2222-2222-222222222222"},{"2026-10-14T00:00:00Z"})
+        assertEquals(report,BackgroundBillMaintenanceTask(restoration,bills) {events+="wallet"}.run().getOrThrow())
+        assertEquals(listOf("restore","bill","wallet"),events)
+    }
     @Test fun `worker cancellation during restore is propagated rather than retried`()=runTest {
         val state=MutableStateFlow<AuthState>(AuthState.Restoring)
         assertTrue(runCatching {task(state,{throw CancellationException("work stopped")}) {error("must not pay")}.run()}.exceptionOrNull() is CancellationException)

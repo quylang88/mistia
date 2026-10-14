@@ -18,6 +18,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.WalletReminderSnapshot
 import vn.com.quyln.mistia.core.model.applyBillReminderPreference
 import vn.com.quyln.mistia.core.model.resolveLocalBillNotifications
 import vn.com.quyln.mistia.core.model.resolveTerminalBillWriteNotifications
@@ -572,11 +573,26 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val billRemindersEnabled:()->Boolean = {true},
+    private val walletRemindersEnabled:()->Boolean = {true},
     private val currentBillOwner:(()->UserId?)? = null,
 ) : LocalStore {
     private fun ensureCurrentBillOwner(owner:UserId) {
         if(currentBillOwner!=null && currentBillOwner.invoke()!=owner)
             throw kotlinx.coroutines.CancellationException("Bill operation account changed")
+    }
+
+    override suspend fun walletReminderSnapshot(owner:UserId):WalletReminderSnapshot = database.withTransaction {
+        WalletReminderSnapshot(owner,WalletReminderSnapshot.entities.associateWith {recordsIncludingDeleted(owner,it.table)},localNotifications(owner))
+    }
+    override suspend fun commitWalletReminders(expected:WalletReminderSnapshot,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
+        ensureCurrentBillOwner(expected.owner)
+        try {expected.requireUnchanged(walletReminderSnapshot(expected.owner))} catch(_:IllegalArgumentException) {return@withTransaction false}
+        replacement.forEach {it.requireValidLocalNotification();require(it.ownerUserId==expected.owner.value)}
+        require(replacement.map {it.key}.distinct().size==replacement.size)
+        val rows=if(walletRemindersEnabled()) replacement else expected.notifications.filterNot {it.kind=="dueSoon" || it.key.startsWith("mistia.reminder.due.")}
+        val committed=commitLocalNotifications(expected.owner,expected.notifications,rows)
+        ensureCurrentBillOwner(expected.owner)
+        committed
     }
 
     override suspend fun billNotificationSnapshot(owner:UserId):BillNotificationSnapshot = database.withTransaction {
