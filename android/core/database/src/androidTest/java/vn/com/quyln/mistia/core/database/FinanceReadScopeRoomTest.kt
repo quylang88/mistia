@@ -44,6 +44,13 @@ class FinanceReadScopeRoomTest {
         assertEquals(2, database.cloudRecordDao().recordsIncludingDeleted(owner.value, CloudEntity.LEDGER_WALLET.table).size)
         assertTrue(database.syncOutboxDao().rows(owner.value).isEmpty())
     }
+    @Test fun importedInstallmentReadPreservesInt64AndNullableMetadataWithoutWriting() = runTest {
+        val plan = InstallmentPlanRecord(id, owner.value, "Imported", "mistia.plan.installment", 9007199254740993L,
+            31, null, 1, null, "VND", false, now, now, null, 9007199254740995L, null)
+        database.cloudRecordDao().upsert(listOf(entity(plan.toCloudRecord())))
+        assertEquals(listOf(plan), repository.observeInstallments(owner).first())
+        assertTrue(database.syncOutboxDao().rows(owner.value).isEmpty())
+    }
     @Test fun historicalMetadataRetainsOwnedDeletedCategoryAndIgnoresAliasedId() = runTest {
         val valid = CategoryDraft(id = id, name = "Historical", kind = TransactionCategoryKind.EXPENSE, hierarchyRole = CategoryHierarchyRole.PARENT)
             .toMutation(owner, null, null, id, now).record.copy(isArchived = true, deletedAt = now).toCloudRecord()

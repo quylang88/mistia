@@ -2026,3 +2026,19 @@ Evidence: `docs/android/evidence/2026-10-14-generated-transaction-titles.md`.
   remaining APK1–4 and RC are unfinished. No device/live cloud verification.
 
 Evidence: `docs/android/evidence/2026-10-14-finance-read-scope.md`.
+
+
+## Owned installment due read view — 2026-10-14
+
+- [x] Strict16-field installment codec, exact Long/nullable metadata, envelope identity;
+  typed owned live read and selected-month scheduling/frozen occurrence projection.
+- [x] Replaced installment count placeholder with native amount/status/due-day rows,
+  loading/error/retry/empty states, owner/month/zone state isolation and resumed clock.
+- [x]35 common JSON vectors run against actual Swift/Kotlin; duplicate settled/pending,
+  finite/month/legacy schedules, DST/Japan/Vietnam, exact amounts and frozen history.
+- [x]44 new runtime cases;1032 JVM/107 suites; full Android/Swift603/contracts/l10n/
+  SQLite pass.2 Compose +1 Room checks compile only. APK53; nine write flagsfalse.
+- [ ] Installment CRUD/payment/undo/skip/maintenance/push, pending card currency
+  decision, independent/device/visual QA and full APK1–4/RC remain unfinished.
+
+Evidence: `docs/android/evidence/2026-10-14-installment-due-read.md`.

@@ -186,6 +186,7 @@ interface FinanceRepository : AppNotificationRepository, BillMaintenanceReposito
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeCreditCardProfiles(ownerUserId: UserId): Flow<List<CreditCardProfileRecord>>
     fun observeTransactions(ownerUserId: UserId): Flow<List<LedgerTransactionRecord>>
+    fun observeInstallments(ownerUserId: UserId): Flow<List<InstallmentPlanRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun saveWallet(
         ownerUserId: UserId,

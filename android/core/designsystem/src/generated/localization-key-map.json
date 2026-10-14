@@ -998,6 +998,8 @@
   "planning.duepayment.undoSkipMessage": "planning_duepayment_undo_skip_message",
   "planning.goalEditor.discardMessage": "planning_goal_editor_discard_message",
   "planning.goalEditor.invalidAmount": "planning_goal_editor_invalid_amount",
+  "planning.installment.loadError": "planning_installment_load_error",
+  "planning.installment.retry": "planning_installment_retry",
   "planning.planning.aMatchingPaymentWalletCouldNotBe": "planning_planning_a_matching_payment_wallet_could_not_be",
   "planning.planning.accessRequested": "planning_planning_access_requested",
   "planning.planning.activeGoals": "planning_planning_active_goals",

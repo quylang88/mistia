@@ -1000,6 +1000,8 @@
     <string name="planning_duepayment_undo_skip_message">この請求のスキップを取り消しますか？未払い状態に戻ります。</string>
     <string name="planning_goal_editor_discard_message">未保存の目標の変更は失われます。</string>
     <string name="planning_goal_editor_invalid_amount">対応範囲内の有効な金額を入力してください。</string>
+    <string name="planning_installment_load_error">現在、分割払いを読み込めません。</string>
+    <string name="planning_installment_retry">再試行</string>
     <string name="planning_planning_a_matching_payment_wallet_could_not_be">支払いに使うウォレットが見つかりません。</string>
     <string name="planning_planning_access_requested">権限をリクエスト済み</string>
     <string name="planning_planning_active_goals">進行中の目標</string>

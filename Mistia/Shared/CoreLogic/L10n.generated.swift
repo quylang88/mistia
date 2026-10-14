@@ -2537,6 +2537,13 @@ nonisolated enum L10n {
             static func invalidAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.goalEditor.invalidAmount", vi: "Nhập số tiền hợp lệ trong phạm vi được hỗ trợ.", en: "Enter valid amounts within the supported range.", ja: "対応範囲内の有効な金額を入力してください。", language: language) }
         }
 
+        nonisolated enum installment {
+            static var loadError: String { L10n.tr("planning.installment.loadError", vi: "Không thể tải các khoản trả góp lúc này.", en: "Couldn't load installments right now.", ja: "現在、分割払いを読み込めません。") }
+            static func loadError(language: MistiaAppLanguage) -> String { L10n.tr("planning.installment.loadError", vi: "Không thể tải các khoản trả góp lúc này.", en: "Couldn't load installments right now.", ja: "現在、分割払いを読み込めません。", language: language) }
+            static var retry: String { L10n.tr("planning.installment.retry", vi: "Thử lại", en: "Retry", ja: "再試行") }
+            static func retry(language: MistiaAppLanguage) -> String { L10n.tr("planning.installment.retry", vi: "Thử lại", en: "Retry", ja: "再試行", language: language) }
+        }
+
         nonisolated enum planning {
             static var aMatchingPaymentWalletCouldNotBe: String { L10n.tr("planning.planning.aMatchingPaymentWalletCouldNotBe", vi: "Không tìm thấy ví thanh toán phù hợp.", en: "A matching payment wallet could not be found.", ja: "支払いに使うウォレットが見つかりません。") }
             static func aMatchingPaymentWalletCouldNotBe(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.aMatchingPaymentWalletCouldNotBe", vi: "Không tìm thấy ví thanh toán phù hợp.", en: "A matching payment wallet could not be found.", ja: "支払いに使うウォレットが見つかりません。", language: language) }

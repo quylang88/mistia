@@ -27,6 +27,7 @@ import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
+import vn.com.quyln.mistia.core.model.InstallmentPlanRecord
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
@@ -104,6 +105,13 @@ class OfflineFirstFinanceRepository(
                         .thenByDescending(LedgerTransactionRecord::createdAt)
                         .thenBy(LedgerTransactionRecord::id)
                 )
+        }
+
+    override fun observeInstallments(ownerUserId: UserId): Flow<List<InstallmentPlanRecord>> =
+        localStore.observeOwnedFinanceRows(CloudEntity.INSTALLMENT_PLAN, ownerUserId).map { records ->
+            records.mapNotNull { runCatching { InstallmentPlanRecord.fromCloudRecord(it) }.getOrNull() }
+                .filter { !it.isArchived && it.deletedAt == null }
+                .sortedWith(compareBy<InstallmentPlanRecord> { Instant.parse(it.createdAt) }.thenBy { it.id })
         }
 
     override suspend fun saveWallet(

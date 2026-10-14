@@ -1,0 +1,1493 @@
+{
+  "version": 1,
+  "owner": "11111111-1111-1111-1111-111111111111",
+  "cases": [
+    {
+      "name": "monthly_due_clamps_short_month",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "creation_month_is_first_cycle_even_before_creation_day",
+      "month": "2026-01",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-01-30T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "month_before_creation_is_absent",
+      "month": "2025-12",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "quarterly_scheduled_month",
+      "month": "2026-04",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 3,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-04-29T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 3,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "quarterly_intermediate_month_is_absent",
+      "month": "2026-03",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 3,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "finite_last_cycle_is_present",
+      "month": "2026-03",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": 2,
+          "frequency": 2,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-03-30T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 2,
+          "totalCycles": 2
+        }
+      ]
+    },
+    {
+      "name": "finite_cycle_after_end_is_absent",
+      "month": "2026-05",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": 2,
+          "frequency": 2,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "legacy_total_cycles_0_has_no_due",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": 0,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "legacy_total_cycles_-1_has_no_due",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": -1,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "legacy_frequency_0_schedules_monthly",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 0,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 0,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "legacy_frequency_-3_schedules_monthly",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": -3,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": -3,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "legacy_due_day_0_clamps",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 0,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-01-31T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "legacy_due_day_99_clamps",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 99,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "leap_year_due_clamps_to_february_29",
+      "month": "2028-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2028-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2028-02-28T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "dst_transition_due_uses_midnight_before_clock_jump",
+      "month": "2026-03",
+      "zone": "America/Los_Angeles",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 8,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-03-08T08:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "dst_after_transition_due_uses_new_offset",
+      "month": "2026-03",
+      "zone": "America/Los_Angeles",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-03-31T07:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "same_instant_is_next_anchor_month_in_japan",
+      "month": "2026-01",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-31T16:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "same_instant_is_current_anchor_month_in_vietnam",
+      "month": "2026-01",
+      "zone": "Asia/Ho_Chi_Minh",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-31T16:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-01-30T17:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "anchor_month_due_may_precede_actual_creation_day",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 1,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-02-28T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-01-31T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "pending_snapshot_amount_is_frozen",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 777,
+          "status": "pending",
+          "linked": null,
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 777,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "paid_snapshot_keeps_amount_status_and_link",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 888,
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 888,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "zero_snapshot_does_not_fall_back_to_plan_amount",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 0,
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 0,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "skipped_nil_snapshot_uses_current_plan_amount",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": null,
+          "status": "skipped",
+          "linked": null,
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "skipped",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "settled_occurrence_replaces_pending_duplicate",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 1,
+          "status": "pending",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 888,
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 888,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "first_settled_occurrence_wins_over_later_settled",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 444,
+          "status": "skipped",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 888,
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 444,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "skipped",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "later_pending_cannot_replace_paid_history",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 888,
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 1,
+          "status": "pending",
+          "linked": null,
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 888,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "first_pending_occurrence_wins_among_pending_duplicates",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 123,
+          "status": "pending",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 456,
+          "status": "pending",
+          "linked": null,
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 123,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "unrelated_or_deleted_occurrences_do_not_override_plan",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "55555555-5555-5555-5555-555555555555",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 1,
+          "status": "paid",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "creditCard",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 2,
+          "status": "paid",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "55555555-5555-5555-5555-555555555555",
+          "month": "2026-02",
+          "amount": 3,
+          "status": "paid",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-03",
+          "amount": 4,
+          "status": "paid",
+          "linked": null,
+          "deleted": false
+        },
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 5,
+          "status": "paid",
+          "linked": null,
+          "deleted": true
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "unknown_status_resolves_pending",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 123,
+          "status": "futureStatus",
+          "linked": null,
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 123,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "pending_link_is_preserved_without_inventing_paid_status",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": null,
+          "status": "pending",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        }
+      ],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "Int64_amount_and_unlinked_currency_are_exact",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 9007199254740993,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": null,
+          "currency": "VND",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Loan",
+          "amount": 9007199254740993,
+          "currency": "VND",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": null,
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "foreign_archived_and_deleted_plans_are_not_visible",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "55555555-5555-5555-5555-555555555555",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        },
+        {
+          "id": "66666666-6666-6666-6666-666666666666",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": true,
+          "deleted": false
+        },
+        {
+          "id": "33333333-3333-3333-3333-333333333333",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": true
+        }
+      ],
+      "occurrences": [],
+      "expected": []
+    },
+    {
+      "name": "same_due_date_sorts_by_name",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Zulu",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        },
+        {
+          "id": "66666666-6666-6666-6666-666666666666",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Alpha",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "66666666-6666-6666-6666-666666666666",
+          "name": "Alpha",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        },
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Zulu",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "date_sort_precedes_name_sort",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Alpha",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        },
+        {
+          "id": "66666666-6666-6666-6666-666666666666",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Zulu",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 1,
+          "totalCycles": null,
+          "frequency": 1,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [],
+      "expected": [
+        {
+          "id": "66666666-6666-6666-6666-666666666666",
+          "name": "Zulu",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-01-31T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        },
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Alpha",
+          "amount": 10001,
+          "currency": "JPY",
+          "due": "2026-02-27T15:00:00Z",
+          "status": "pending",
+          "linked": null,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "frequency": 1,
+          "totalCycles": null
+        }
+      ]
+    },
+    {
+      "name": "paid_occurrence_cannot_invent_an_unscheduled_cycle",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "plans": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "name": "Loan",
+          "icon": "mistia.plan.installment",
+          "amount": 10001,
+          "dueDay": 31,
+          "totalCycles": null,
+          "frequency": 3,
+          "paymentWallet": "33333333-3333-3333-3333-333333333333",
+          "currency": "JPY",
+          "createdAt": "2026-01-15T00:00:00Z",
+          "archived": false,
+          "deleted": false
+        }
+      ],
+      "occurrences": [
+        {
+          "owner": "11111111-1111-1111-1111-111111111111",
+          "sourceKind": "installment",
+          "sourceId": "22222222-2222-2222-2222-222222222222",
+          "month": "2026-02",
+          "amount": 888,
+          "status": "paid",
+          "linked": "44444444-4444-4444-4444-444444444444",
+          "deleted": false
+        }
+      ],
+      "expected": []
+    }
+  ]
+}
