@@ -1709,3 +1709,16 @@ Evidence: `docs/android/evidence/2026-10-14-postpull-category-maintenance.md`.
   Full APK1–4 and physical verification remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-category-startup-offline-recovery.md`.
+
+
+## Recurring bill maintenance event planner — 2026-10-14
+
+- [x] Previous/current local pending cycles, exact snapshot amount, normalized
+  auto-pay intent, start/deadline reminder and daily overdue keys, terminal/owner/
+  paused/archive/deleted filtering matching direct Swift maintenance comparison.
+- [x]5 new tests runtime RED/GREEN;752 JVM/81 suites plus full Android/SwiftPlanning53/
+  contracts/l10n/SQLite checks pass; APK32, all nine flagsfalse.
+- [ ] Auto-pay execution, persistent notifications/native hooks, independent review
+  (usage limit) and device verification remain incomplete; full APK1–4 continues.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-events.md`.

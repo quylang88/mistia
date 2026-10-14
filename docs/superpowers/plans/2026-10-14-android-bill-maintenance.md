@@ -1,0 +1,24 @@
+# Android recurring bill maintenance
+
+Goal: match MistiaRecurringBillMaintenance.swift pending-cycle scanning, safe
+same-currency automatic payment and persistent idempotent notification behavior.
+Keep all nine cloud write gates false and perform no production writes.
+
+1. Pure maintenance event planner in core/model/BillMaintenance.kt consumes owned
+   bill/occurrence snapshots, reference Instant and ZoneId. Use previous/current
+   local cycle months only, skip terminal/paused/archived/deleted/viewer bills.
+   Emit auto-pay intents only on configured normalized date, payment-start/deadline
+   reminders with Swift keys and overdue daily keys. Preserve exact Long amounts.
+   Runtime RED/GREEN tests cover cross-month deadlines, local midnight keys,
+   normalized auto-pay, terminal filtering and one-time windows. Intent output is
+   not an actual payment or notification; gate those claims separately.
+2. Repository/orchestrator executes auto-pay through existing atomic payment
+   repository with current wallet balance, same currency and investment protection.
+   Recheck owner/cycle/dependencies before money writes. Coalesce repeated runs and
+   failures; maintain paid/skip/undo notification cleanup. No duplicate ledger IDs.
+3. Persistent notification batch and native display permission flow: exact Swift
+   notification keys/kinds/source metadata, owner scoped and repeat-safe. Background
+   and foreground hooks must cancel on account change and not show stale alerts.
+4. Per slice full Android/Swift/contracts/l10n/SQLite checks, evidence and commit.
+   Independent reviewer is currently unavailable due usage limit; record this
+   limitation and complete review when available. Device checks remain pending.
