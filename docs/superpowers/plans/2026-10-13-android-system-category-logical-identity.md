@@ -168,3 +168,23 @@ native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remai
   failure before completion and exact raw remote group versus merged local rows.
 - [x] Full checks/review/evidence/commit. Default seed startup creation remains
   separately scoped until this integration is verified; nine cloud gatesfalse.
+
+
+## Signed-in default bootstrap / offline recovery
+
+- [x] Completed raw pull must also reconcile an exact queued owner-cloud base0
+  unobserved seed locally, including tombstones while cloud writes are disabled.
+  Reuse commitSystemCategoryIdentityMigration; defer other group edits/tasks.
+  Test untouched tombstone, edited seed+legacy cleanup, future alias protection.
+- [x] Add optional ensureDefaultCategories:suspend(UserId)->Unit to sync engine.
+  Run only after complete pull+maintenance on success. On retryable transport
+  failure run insert-only defaults from account cache, preserve network failure;
+  skip fallback for cancellation/permanent malformed input. Ensure coroutine active.
+- [x] Wire AppModule to FinanceRepository.ensureDefaultSystemCategories with
+  registry, secure device ID and current UTC time. Test sequence, offline fallback,
+  cancellation/permanent refusal; existing repository tests prove insert-only,
+  archived/tombstone/favorite preservation and duplicate-safe category creation.
+- [ ] Full checks, review, evidence and independent commit. Nine cloud flagsfalse;
+  no device/live cloud assertions. Then resume remaining bill/APK1–4 parity work.
+
+- Independent review for startup slice remains pending: reviewer usage limit. Local full verification and self-review completed.

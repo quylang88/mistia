@@ -181,6 +181,109 @@ class PullOnlySyncEnginePushOrderTest {
             assertEquals(1,maintenanceCalls)
         }
     }
+    @Test fun `default bootstrap follows complete pull and maintenance for both entry points`()=runTest {
+        for(pullOnly in listOf(false,true)) {
+            val events=mutableListOf<String>()
+            val raw=maintenanceCatalog.activeDefinitions.single().seedRecord(UserId(OWNER),null,maintenanceDevice,"2026-10-14T00:00:00Z").copy(syncVersion=7).toCloudRecord()
+            val local=object:LocalStore by EmptyLocalStore() {
+                override suspend fun categoryReferenceSnapshot(owner:UserId)=CategoryReferenceSnapshot(owner,
+                    categoryReferenceEntities.associateWith {if(it==CloudEntity.TRANSACTION_CATEGORY) listOf(raw) else emptyList()},emptyList(),emptyList())
+                override suspend fun commitObservedSystemCategoryMaintenance(expected:CategoryReferenceSnapshot,key:String,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean {
+                    events.add("maintenance");return true
+                }
+            }
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                    events.add("pull:$table")
+                    return RemotePage(if(table==CloudEntity.TRANSACTION_CATEGORY.table) listOf(raw.payload) else emptyList(),null)
+                }
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,emptyList(),
+                categoryMaintenanceCoordinator=CategoryMaintenanceCoordinator(local,maintenanceCatalog,{maintenanceDevice}),
+                ensureDefaultCategories={owner -> assertEquals(UserId(OWNER),owner);events.add("defaults")})
+            val result=if(pullOnly) engine.pullAll() else engine.syncNow()
+            assertTrue(result.isSuccess)
+            assertEquals(listOf("maintenance","defaults"),events.takeLast(2))
+            assertEquals(1,events.count {it=="defaults"})
+        }
+    }
+    @Test fun `retryable offline pull creates missing defaults but retains network failure`()=runTest {
+        for(pullOnly in listOf(false,true)) {
+            var defaults=0
+            val failure=java.io.IOException("offline")
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage=throw failure
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),EmptyLocalStore(),remote,emptyList(),
+                ensureDefaultCategories={owner -> assertEquals(UserId(OWNER),owner);defaults++})
+            val result=if(pullOnly) engine.pullAll() else engine.syncNow()
+            assertTrue(result.isFailure)
+            assertEquals(failure,result.exceptionOrNull())
+            assertEquals(1,defaults)
+        }
+    }
+    @Test fun `cancelled and permanently invalid pulls never create fallback defaults`()=runTest {
+        for(failure in listOf(kotlinx.coroutines.CancellationException("cancelled"),IllegalArgumentException("invalid data"))) {
+            var defaults=0
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage=throw failure
+            }
+            val engine=PullOnlySyncEngine(null,SignedInAuthRepository(),EmptyLocalStore(),remote,emptyList(),ensureDefaultCategories={defaults++})
+            if(failure is kotlinx.coroutines.CancellationException) {
+                assertTrue(runCatching {engine.syncNow()}.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+            } else assertTrue(engine.syncNow().isFailure)
+            assertEquals(0,defaults)
+        }
+    }
+    @Test fun `offline auth refresh failure still bootstraps cached signed in owner`()=runTest {
+        for(pullOnly in listOf(false,true)) {
+            val failure=java.io.IOException("refresh offline")
+            val auth=SignedInAuthRepository().apply {refreshError=failure}
+            var defaults=0
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage=error("Cannot pull without refreshed session")
+            }
+            val engine=PullOnlySyncEngine(null,auth,EmptyLocalStore(),remote,emptyList(),ensureDefaultCategories={owner ->
+                assertEquals(UserId(OWNER),owner);defaults++
+            })
+            val result=if(pullOnly) engine.pullAll() else engine.syncNow()
+            assertEquals(failure,result.exceptionOrNull())
+            assertEquals(1,defaults)
+        }
+    }
+    @Test fun `account change during failed or successful pull cannot bootstrap the previous owner`()=runTest {
+        for(networkFailure in listOf(false,true)) {
+            val auth=SignedInAuthRepository()
+            var defaults=0
+            val remote=object:RemoteStore {
+                override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                    auth.state.value=vn.com.quyln.mistia.core.model.AuthState.SignedOut
+                    if(networkFailure) throw java.io.IOException("network after signout")
+                    return RemotePage(emptyList(),null)
+                }
+            }
+            val engine=PullOnlySyncEngine(null,auth,EmptyLocalStore(),remote,emptyList(),ensureDefaultCategories={defaults++})
+            val result=runCatching {engine.syncNow()}
+            if(!networkFailure) assertTrue(result.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+            assertEquals(0,defaults)
+        }
+    }
+    @Test fun `late pull after signout cannot restore cleared account rows`()=runTest {
+        val auth=SignedInAuthRepository()
+        var stored=0
+        val local=object:LocalStore by EmptyLocalStore() {
+            override suspend fun replacePullSnapshot(ownerUserId:UserId,entity:String,records:List<CloudRecord>) {stored++}
+        }
+        val remote=object:RemoteStore {
+            override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                auth.state.value=AuthState.SignedOut
+                return RemotePage(emptyList(),null)
+            }
+        }
+        val engine=PullOnlySyncEngine(null,auth,local,remote,emptyList())
+        assertTrue(runCatching {engine.pullAll()}.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+        assertEquals(0,stored)
+    }
     private class RecordingPushCoordinator(
         override val entity: CloudEntity,
         private val events: MutableList<String>,
@@ -193,14 +296,15 @@ class PullOnlySyncEnginePushOrderTest {
 
     private class SignedInAuthRepository : AuthRepository {
         private val session = AuthSession(UserId(OWNER), null, TOKEN, "refresh", Long.MAX_VALUE)
-        override val state: StateFlow<AuthState> = MutableStateFlow(AuthState.SignedIn(session))
+        override val state: MutableStateFlow<AuthState> = MutableStateFlow(AuthState.SignedIn(session))
+        var refreshError:Throwable?=null
         override suspend fun restore() = Unit
         override suspend fun signIn(email: String, password: String) = Result.success(session)
         override suspend fun signUp(email: String, password: String, displayName: String) = Result.success(session)
         override suspend fun resendConfirmation(email: String) = Result.success(Unit)
         override suspend fun sendPasswordReset(email: String) = Result.success(Unit)
         override suspend fun exchangeGoogleIdToken(idToken: String, nonce: String?) = Result.success(session)
-        override suspend fun refreshIfNeeded() = Result.success(session)
+        override suspend fun refreshIfNeeded():Result<AuthSession?> = refreshError?.let {Result.failure(it)} ?: Result.success(session)
         override suspend fun signOut(clearLocalSession: Boolean) = Unit
     }
 

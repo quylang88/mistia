@@ -2,6 +2,7 @@ package vn.com.quyln.mistia
 
 import android.content.Context
 import java.io.File
+import java.time.Instant
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -337,6 +338,9 @@ object AppModule {
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
         categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
+        financeRepository: FinanceRepository,
+        catalog: SystemCategoryCatalog,
+        deviceIdStore: SecureDeviceIdStore,
     ): SyncEngine = PullOnlySyncEngine(
         context,
         authRepository,
@@ -354,5 +358,9 @@ object AppModule {
         ),
         categoryTranslationCoordinator,
         categoryMaintenanceCoordinator,
+        ensureDefaultCategories={owner ->
+            financeRepository.ensureDefaultSystemCategories(owner,catalog,deviceIdStore.getOrCreate(),Instant.now().toString()).getOrThrow()
+            Unit
+        },
     )
 }

@@ -13,6 +13,8 @@ import java.io.IOException
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,12 +44,15 @@ class PullOnlySyncEngine(
     private val pushCoordinators: List<DomainPushCoordinator>,
     private val categoryTranslationCoordinator: CategoryTranslationCoordinator? = null,
     private val categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator? = null,
+    private val ensureDefaultCategories: (suspend (UserId)->Unit)? = null,
 ) : SyncEngine {
     private val mutex = Mutex()
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
     override val status: StateFlow<SyncStatus> = mutableStatus.asStateFlow()
 
     override suspend fun syncNow(): Result<Int> = mutex.withLock {
+        val startingOwner=(authRepository.state.value as? AuthState.SignedIn)?.session?.userId
+        var defaultsAttempted=false
         runCatching {
             val session = signedInSession()
             categoryTranslationCoordinator?.translatePending(session.userId, session.accessToken)
@@ -59,6 +64,8 @@ class PullOnlySyncEngine(
                     coordinator.entity to coordinator.pushPending(session.userId, session.accessToken)
                 }
             val totalRecords = pullAllTables(session.accessToken, session.userId)
+            defaultsAttempted=true
+            bootstrapDefaults(session.userId)
             val retryableFailures = pushSummaries.sumOf { it.second.retryableFailures }
             val needsAttention = pushSummaries.sumOf {
                 it.second.conflicts + it.second.permanentFailures
@@ -76,6 +83,11 @@ class PullOnlySyncEngine(
             totalRecords
         }.onFailure { error ->
             if(error is CancellationException) throw error
+            val currentOwner=(authRepository.state.value as? AuthState.SignedIn)?.session?.userId
+            if(!defaultsAttempted && error.isRetryableSyncFailure() && currentOwner!=null && currentOwner==startingOwner) {
+                defaultsAttempted=true
+                bootstrapDefaults(currentOwner)
+            }
             mutableStatus.value = SyncStatus.Failed(
                 message = error.message ?: error::class.java.simpleName,
                 retryable = error.isRetryableSyncFailure(),
@@ -84,13 +96,22 @@ class PullOnlySyncEngine(
     }
 
     override suspend fun pullAll(): Result<Int> = mutex.withLock {
+        val startingOwner=(authRepository.state.value as? AuthState.SignedIn)?.session?.userId
+        var defaultsAttempted=false
         runCatching {
             val session = signedInSession()
             pullAllTables(session.accessToken, session.userId).also { totalRecords ->
+                defaultsAttempted=true
+                bootstrapDefaults(session.userId)
                 mutableStatus.value = SyncStatus.Success(totalRecords, System.currentTimeMillis())
             }
         }.onFailure { error ->
             if(error is CancellationException) throw error
+            val currentOwner=(authRepository.state.value as? AuthState.SignedIn)?.session?.userId
+            if(!defaultsAttempted && error.isRetryableSyncFailure() && currentOwner!=null && currentOwner==startingOwner) {
+                defaultsAttempted=true
+                bootstrapDefaults(currentOwner)
+            }
             mutableStatus.value = SyncStatus.Failed(
                 message = error.message ?: error::class.java.simpleName,
                 retryable = error.isRetryableSyncFailure(),
@@ -148,6 +169,7 @@ class PullOnlySyncEngine(
         var totalRecords = 0
         var rawCategories=emptyList<CloudRecord>()
         allTables.forEachIndexed { index, table ->
+            ensureCurrentOwner(ownerUserId)
             mutableStatus.value = SyncStatus.Pulling(table, index, allTables.size)
             val rows = try {
                 pullTable(table, accessToken, ownerUserId)
@@ -155,12 +177,25 @@ class PullOnlySyncEngine(
                 if (table in optionalTables && error.statusCode in setOf(400, 404)) emptyList()
                 else throw error
             }
+            ensureCurrentOwner(ownerUserId)
             if(table==CloudEntity.TRANSACTION_CATEGORY.table) rawCategories=rows
             localStore.replacePullSnapshot(ownerUserId, table, rows)
             totalRecords += rows.size
         }
+        ensureCurrentOwner(ownerUserId)
         categoryMaintenanceCoordinator?.reconcileObserved(ownerUserId,rawCategories)
         return totalRecords
+    }
+
+    private suspend fun ensureCurrentOwner(owner:UserId) {
+        currentCoroutineContext().ensureActive()
+        if((authRepository.state.value as? AuthState.SignedIn)?.session?.userId!=owner)
+            throw CancellationException("Account changed during sync")
+    }
+
+    private suspend fun bootstrapDefaults(owner:UserId) {
+        ensureCurrentOwner(owner)
+        ensureDefaultCategories?.invoke(owner)
     }
 
     private fun JsonObject.toCloudRecord(entity: String, ownerUserId: UserId): CloudRecord? {

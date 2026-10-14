@@ -397,6 +397,36 @@ class SystemCategorySeedPushTest {
         assertTrue(local.queued.isEmpty())
         assertEquals(row(),local.records[CATEGORY_ID])
     }
+    @Test fun `completed pull adopts an untouched offline seed tombstone without cloud writes`()=runTest {
+        val local=local()
+        val tombstone=TransactionCategoryRecord.fromCloudRecord(row("Deleted cloud",NOW,7)).copy(deletedAt=NOW).toCloudRecord()
+        assertEquals(CategoryMaintenanceSummary(processedGroups=1),maintenance(local).reconcileObserved(UserId(OWNER),listOf(tombstone)))
+        assertEquals(tombstone,local.records[CATEGORY_ID])
+        assertTrue(local.queued.isEmpty())
+    }
+    @Test fun `completed pull merges edited offline seed and queues ordered legacy cleanup locally`()=runTest {
+        val source=row().let {it.copy(payload=JsonObject(it.payload+("is_favorite" to JsonPrimitive(true))))}
+        val local=local(source)
+        val rows=duplicateRemote().serverRows!!.values.toList()
+        assertEquals(CategoryMaintenanceSummary(processedGroups=1),maintenance(local).reconcileObserved(UserId(OWNER),rows))
+        assertEquals(JsonPrimitive(true),local.records[CATEGORY_ID]!!.payload["is_favorite"])
+        assertEquals("Live legacy",local.records[CATEGORY_ID]!!.payload.string("name"))
+        assertEquals(42L,local.queued.single {it.mutation.recordId==CATEGORY_ID}.mutation.baseVersion)
+        assertTrue(local.queued.single {it.mutation.recordId==CATEGORY_ID}.remoteIdentityObserved)
+        assertNull(local.records[CATEGORY_ID]!!.deletedAt)
+        assertTrue(local.records[CHILD_ID]!!.deletedAt!=null)
+    }
+    @Test fun `completed pull defers offline seed adoption when real alias has future user edit`()=runTest {
+        val rows=duplicateRemote().serverRows!!.values.toList()
+        val local=local().apply {
+            records[CHILD_ID]=rows.last()
+            queued.add(pending(rows.last()).copy(nextAttemptAtEpochMillis=Long.MAX_VALUE,remoteIdentityObserved=true))
+        }
+        val before=local.queued.toList()
+        assertEquals(CategoryMaintenanceSummary(deferredGroups=1),maintenance(local).reconcileObserved(UserId(OWNER),rows))
+        assertEquals(before,local.queued)
+        assertEquals(row(),local.records[CATEGORY_ID])
+    }
     private class FakeLocalStore(
         records: Map<String, CloudRecord>,
         val queued: MutableList<QueuedMutation>,

@@ -1692,3 +1692,20 @@ Evidence: `docs/android/evidence/2026-10-14-observed-category-maintenance-api.md
   physical verification remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-postpull-category-maintenance.md`.
+
+
+## Default category startup / offline recovery — 2026-10-14
+
+- [x] Insert-only missing defaults after completed raw pull+maintenance; retryable
+  offline/auth-refresh fallback for unchanged signed-in owner. Cancellation and
+  permanent malformed input refuse fallback; no cloud writes.
+- [x] Offline base0 seed reconciliation from full raw pull works with gatesfalse,
+  preserves explicit edits and authoritative tombstones; alias pending edits defer.
+- [x] Owner guards before/after pull and before maintenance/defaults. Runtime late
+  signout response regression reproduced/fixed before local snapshot replacement.
+- [x]9 new regressions;747 JVM/80 suites plus full Android/Swift23/contracts/l10n/
+  SQLite checks pass. APK31; nine flagsfalse; no device/live cloud execution.
+- [ ] Independent review unavailable due reviewer usage limit; remains outstanding.
+  Full APK1–4 and physical verification remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-category-startup-offline-recovery.md`.
