@@ -31,3 +31,10 @@ commit with money or have durable recovery before enabling automatic hooks.
 Resolve read state from fresh notification snapshots so a late maintenance pass
 cannot overwrite a user's newer read/resolved action. Then native center and
 foreground/background scheduling, account cancellation and permission flow.
+
+
+Automatic success companion now commits in the Room money transaction, with
+localized production presentation, exact bill/wallet/month guards and preserved
+read state. Next persist failure/reminder reports from fresh notification
+snapshots and resolve paid/skipped/paused actionable rows. Native center/hooks
+must enforce current account, permission/preferences and no stale reminder writes.

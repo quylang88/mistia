@@ -7,12 +7,15 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import vn.com.quyln.mistia.core.model.*
 
 internal class OfflineBillPaymentRepository(
     private val store: LocalStore,
     private val zone: ZoneId,
     private val catalog: SystemCategoryCatalog?,
+    private val automaticText: ((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)? = null,
 ) : BillPaymentRepository {
     override suspend fun payRecurringBill(owner: UserId, request: BillPaymentRequest, deviceId: String, now: String): Result<SavedBillPayment> = result {
         val snapshot = snapshot(owner, request.billId, request.month)
@@ -88,7 +91,9 @@ internal class OfflineBillPaymentRepository(
         val timestamp = if (priorClock!=null && !occurredAt.isAfter(priorClock)) priorClock.plusMillis(1).toString() else occurredAt.toString()
         val device = UUID.fromString(deviceId).toString()
         // Swift's ensureSystemCategory also permits retained archived system categories.
-        val mutation = TransactionDraft(primaryKind=TransactionPrimaryKind.EXPENSE, title=bill.name,
+        val presentation=if(request.automatic) automaticText?.invoke(bill,amount) else null
+        presentation?.let {require(it.transactionTitle.isNotBlank() && it.successTitle.isNotBlank())}
+        val mutation = TransactionDraft(primaryKind=TransactionPrimaryKind.EXPENSE, title=presentation?.transactionTitle ?: bill.name,
             amountMinor=amount, occurredAt=occurredAt.toString(), sourceWalletId=wallet.id, categoryId=category.id)
             .toMutation(owner, previous, wallet, null, category.copy(isArchived=false), device, timestamp)
         val transactions = owned(snapshot, CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord).filter { it.deletedAt==null }
@@ -108,7 +113,13 @@ internal class OfflineBillPaymentRepository(
                 linkedTransactionId=mutation.record.id, updatedAt=timestamp, deletedAt=null, lastModifiedByDeviceId=device)
         }
         val writes = categoryWrites.map { it.toCloudRecord() to it.bootstrapMutation() }+listOf(mutation.record.toCloudRecord() to mutation.pending)+paid.map { it.toCloudRecord() to it.pendingMutation() }
-        store.commitBillMoneyMutations(snapshot, writes.map { preservePayloadExtensions(snapshot, it) })
+        val notification=presentation?.let {text -> AppNotificationRecord(owner.value,
+            "mistia.bill.autopay.success.${bill.id.lowercase()}.${request.month}",text.successTitle,text.successBody,"billAutoPaymentSucceeded",
+            resourceType="bill",resourceId=bill.id,createdAt=timestamp,updatedAt=timestamp,metadata=buildJsonObject {
+                put("sourceKind","recurringBill");put("sourceId",bill.id);put("dueMonthKey",request.month.toString());put("dueDate",due.dueDate.toString())
+                put("requiresAmountInput",false);put("currencyCode",bill.currencyCode);put("billName",bill.name);put("linkedPaymentWalletId",wallet.id)
+            })}
+        store.commitBillMoneyMutations(snapshot.copy(automaticPaymentNotification=notification), writes.map { preservePayloadExtensions(snapshot, it) })
         SavedBillPayment(mutation.record, paid)
     }
 

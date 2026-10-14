@@ -18,6 +18,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.upsertLocalNotification
 import vn.com.quyln.mistia.core.model.AppNotificationRecord
 import vn.com.quyln.mistia.core.model.requireValidLocalNotification
 import vn.com.quyln.mistia.core.model.SystemCategoryIdentityMigration
@@ -713,6 +714,12 @@ class RoomLocalStore(
             })
             require(snapshot.receiptTransactionIds==billMoneyReceiptTransactionIds(snapshot.owner)) { "Receipt dependencies changed during bill payment" }
             commitMutations(mutations)
+            snapshot.automaticPaymentNotification?.let {incoming ->
+                val existing=localNotifications(snapshot.owner).singleOrNull {it.key==incoming.key}
+                val notification=upsertLocalNotification(existing,incoming)
+                database.localNotificationDao().upsert(listOf(LocalNotificationEntity(snapshot.owner.value,notification.key,
+                    json.encodeToString(AppNotificationRecord.serializer(),notification))))
+            }
         }
     }
 

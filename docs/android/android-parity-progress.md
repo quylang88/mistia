@@ -1764,3 +1764,19 @@ Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-executor.md`.
   notification center/hooks, independent review/device/full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-local-notification-store.md`.
+
+
+## Atomic automatic-payment success notification — 2026-10-14
+
+- [x] Production localized auto expense/success title+body provider; current
+  structured bill/cycle/wallet metadata and stable Swift success key.
+- [x] Success notification companion validates owner/bill/cycle/currency/configured
+  wallet/enabled state and PAID writes, and commits inside money Room transaction.
+  Existing read state is preserved; notification failure rolls money back.
+- [x]Runtime RED/GREEN for presentation/companion and disabled boundary validation;
+  769 JVM/82 suites plus full Android/Swift53/contracts/l10n/SQLite checks pass.
+  New reopen/rollback Room tests compile only. APK36; nine flagsfalse.
+- [ ] Reminder/failure batch, resolution/preferences/native center/hooks, independent
+  review/device and full APK1–4 parity remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-atomic-auto-payment-notification.md`.

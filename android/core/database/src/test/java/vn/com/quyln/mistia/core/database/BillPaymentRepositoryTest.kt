@@ -151,6 +151,40 @@ class BillPaymentRepositoryTest {
         assertEquals(9007199254740993L,report.payments.single().result.getOrThrow().transaction.amountMinor)
         assertTrue(repo.maintainRecurringBills(owner,device,now).getOrThrow().payments.isEmpty())
     }
+    @Test fun `configured automatic presentation becomes durable notification in same money commit`()=runTest {
+        val bill=autoBill()
+        var companion:AppNotificationRecord?=null
+        val capturing=object:LocalStore by store {
+            override suspend fun commitBillMoneyMutations(snapshot:BillMoneySnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+                companion=snapshot.automaticPaymentNotification
+                store.commitBillMoneyMutations(snapshot,mutations)
+            }
+        }
+        val payment=OfflineBillPaymentRepository(capturing,zone,catalog) {value,amount ->
+            BillAutomaticPaymentText("Auto-paid ${value.name}","Complete","Paid $amount")
+        }
+        val saved=payment.payRecurringBill(owner,request(bill).copy(automatic=true),device,now).getOrThrow()
+        assertEquals("Auto-paid Internet",saved.transaction.title)
+        val notification=companion!!
+        assertEquals(owner.value,notification.ownerUserId)
+        assertEquals("mistia.bill.autopay.success.${bill.id}.2026-10",notification.key)
+        assertEquals("billAutoPaymentSucceeded",notification.kind)
+        assertEquals("Complete",notification.title)
+        assertEquals("Paid 5000",notification.body)
+        assertEquals("2026-10",notification.metadata!!["dueMonthKey"]!!.toString().trim('"'))
+        assertEquals(bill.paymentWalletId,notification.metadata!!["linkedPaymentWalletId"]!!.toString().trim('"'))
+        snapshotMustRejectForeignCompanion(bill,notification)
+    }
+    private suspend fun snapshotMustRejectForeignCompanion(bill:RecurringBillPlanRecord,notification:AppNotificationRecord) {
+        val records=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)}
+        val snapshot=BillMoneySnapshot(owner,bill.toCloudRecord(),month,records,automaticPaymentNotification=notification.copy(ownerUserId=other.value))
+        val writes=store.batches.last()
+        assertTrue(runCatching {snapshot.requireValidMutations(writes)}.isFailure)
+        val disabled=bill.copy(autoPayEnabled=false).toCloudRecord()
+        val disabledSnapshot=BillMoneySnapshot(owner,disabled,month,records+mapOf(CloudEntity.RECURRING_BILL_PLAN to listOf(disabled)),
+            automaticPaymentNotification=notification)
+        assertTrue(runCatching {disabledSnapshot.requireValidMutations(writes)}.isFailure)
+    }
     @Test fun `payment atomically creates posted expense and linked paid cycle with exact amounts`() = runTest {
         val exact = 9007199254740993L
         val bill = prepare(exact, exact)

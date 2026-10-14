@@ -11,6 +11,8 @@ data class BillPaymentRequest(
     val automatic: Boolean = false,
 )
 
+data class BillAutomaticPaymentText(val transactionTitle:String,val successTitle:String,val successBody:String)
+
 data class SavedBillPayment(
     val transaction: LedgerTransactionRecord,
     val occurrences: List<DueOccurrenceRecord>,
@@ -37,6 +39,7 @@ data class BillMoneySnapshot(
     val month: YearMonth,
     val recordsByEntity: Map<CloudEntity, List<CloudRecord>>,
     val receiptTransactionIds: Set<String> = emptySet(),
+    val automaticPaymentNotification: AppNotificationRecord? = null,
 )
 
 fun BillMoneySnapshot.requireValidMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
@@ -53,6 +56,17 @@ fun BillMoneySnapshot.requireValidMutations(mutations: List<Pair<CloudRecord, Pe
     val cycle = billCycleRecords(recordsByEntity.getValue(CloudEntity.DUE_OCCURRENCE_RECORD), bill, month.toString())
     val occurrenceWrites = mutations.filter { it.first.entity==CloudEntity.DUE_OCCURRENCE_RECORD.table }
     require(occurrenceWrites.isNotEmpty())
+    automaticPaymentNotification?.let {notification ->
+        notification.requireValidLocalNotification()
+        require(source.autoPayEnabled==true && !source.isPaused)
+        require(notification.metadata?.get("linkedPaymentWalletId")==JsonPrimitive(requireNotNull(source.paymentWalletId)))
+        require(notification.ownerUserId==owner.value && notification.source=="system" && notification.kind=="billAutoPaymentSucceeded" &&
+            notification.resourceType=="bill" && notification.resourceId==bill.id && notification.key=="mistia.bill.autopay.success.${bill.id.lowercase()}.$month")
+        require(notification.metadata?.get("sourceKind")==JsonPrimitive("recurringBill") &&
+            notification.metadata["sourceId"]==JsonPrimitive(bill.id) && notification.metadata["dueMonthKey"]==JsonPrimitive(month.toString()) &&
+            notification.metadata["currencyCode"]==JsonPrimitive(source.currencyCode))
+        require(occurrenceWrites.all {it.first.deletedAt==null && it.first.payload["status_raw_value"]==JsonPrimitive("paid")})
+    }
     val linkedIDs = (cycle+occurrenceWrites.map { it.first }).mapNotNull {
         (it.payload["linked_transaction_id"] as? JsonPrimitive)?.takeIf { value -> value.isString }?.content
     }.toSet()

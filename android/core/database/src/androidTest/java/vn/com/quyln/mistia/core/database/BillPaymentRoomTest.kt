@@ -32,6 +32,48 @@ class BillPaymentRoomTest {
         val wallet=repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY",openingBalanceMinor=9007199254740993L),device,now).getOrThrow()
         return repo.saveRecurringBill(owner,RecurringBillDraft("Internet",category.id,9007199254740993L,wallet.id,"JPY",zoneId=zone),device,now).getOrThrow()
     }
+    private fun automaticRepo(store:LocalStore)=OfflineFirstFinanceRepository(store,zone,catalog) {bill,amount ->
+        BillAutomaticPaymentText("Auto-paid ${bill.name}","Complete","Paid $amount")
+    }
+    private suspend fun automaticBill(repo:OfflineFirstFinanceRepository,store:LocalStore):RecurringBillPlanRecord {
+        val bill=prepare(repo).copy(autoPayEnabled=true,paymentStartDay=10,dueDay=20,hasExplicitDueDate=true,autoPayDay=13)
+        store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+        return bill
+    }
+    @Test fun automaticMoneyAndNotificationReopenTogetherAndRepeatedAttemptDoesNotDuplicate()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="auto-notification-${UUID.randomUUID()}.db"
+        var db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build()
+        try {
+            var store:LocalStore=RoomLocalStore(db);var repo=automaticRepo(store)
+            val bill=automaticBill(repo,store)
+            val paid=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,automatic=true),device,now).getOrThrow()
+            db.close();db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build();store=RoomLocalStore(db);repo=automaticRepo(store)
+            assertEquals("Auto-paid Internet",repo.observeTransactions(owner).first().single().title)
+            val notification=store.localNotifications(owner).single()
+            assertEquals("mistia.bill.autopay.success.${bill.id}.2026-10",notification.key)
+            assertEquals("Paid 9007199254740993",notification.body)
+            assertEquals(paid.occurrences,repo.observeDueOccurrences(owner).first())
+            assertTrue(repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,automatic=true),device,now).isFailure)
+            assertEquals(listOf(notification),store.localNotifications(owner))
+            assertEquals(1,repo.observeTransactions(owner).first().size)
+        } finally {db.close();context.deleteDatabase(name)}
+    }
+    @Test fun notificationFailureRollsBackExpenseOccurrenceAndBothOutboxWrites()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+        try {
+            val store=RoomLocalStore(db);val repo=automaticRepo(store);val bill=automaticBill(repo,store)
+            val before=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)}
+            val outbox=CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)}
+            db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_auto_notification BEFORE INSERT ON local_app_notifications
+                BEGIN SELECT RAISE(ABORT,'simulated notification failure'); END""")
+            assertTrue(repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,automatic=true),device,now).isFailure)
+            assertEquals(before,CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)})
+            assertEquals(outbox,CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)})
+            assertTrue(store.localNotifications(owner).isEmpty())
+        } finally {db.close()}
+    }
     @Test fun payReopenUndoPreservesExactLedgerOccurrenceAndDeleteOutbox()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="bill-money-${UUID.randomUUID()}.db"
