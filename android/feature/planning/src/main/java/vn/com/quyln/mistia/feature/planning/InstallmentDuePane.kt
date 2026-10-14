@@ -1,14 +1,12 @@
 package vn.com.quyln.mistia.feature.planning
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import java.util.UUID
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -34,58 +33,80 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
+private data class InstallmentRecords(val plans: List<InstallmentPlanRecord>, val occurrences: List<DueOccurrenceRecord>, val wallets: List<LedgerWalletRecord>)
 private sealed interface InstallmentLoad {
     data object Loading : InstallmentLoad
-    data class Loaded(val rows: List<InstallmentDueRow>) : InstallmentLoad
+    data class Loaded(val records: InstallmentRecords) : InstallmentLoad
     data object Failed : InstallmentLoad
 }
 
 @Composable
-internal fun InstallmentDuePane(owner: UserId, repository: FinanceRepository, month: YearMonth) {
-    key(owner.value, repository) { OwnedInstallmentDuePane(owner, repository, month) }
+internal fun InstallmentDuePane(owner: UserId, repository: FinanceRepository, month: YearMonth, deviceIdProvider: () -> String, defaultCurrency: String = "JPY", now: () -> Instant = Instant::now) {
+    // Saveable keys must survive repository recreation after process death.
+    key(owner.value) { OwnedInstallmentDuePane(owner, repository, month, deviceIdProvider, defaultCurrency, now) }
 }
 
 @Composable
-private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository, month: YearMonth) {
+private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository, month: YearMonth, deviceIdProvider: () -> String, defaultCurrency: String, now: () -> Instant) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var reference by remember { mutableStateOf(Instant.now()) }
+    val currentTime by rememberUpdatedState(now)
+    var reference by remember { mutableStateOf(currentTime()) }
+    var navigation by rememberSaveable(owner.value, stateSaver = InstallmentEditorNavigation.saver(owner.value)) {
+        mutableStateOf(InstallmentEditorNavigation.closed(owner.value))
+    }
+    LaunchedEffect(navigation) { if (!navigation.valid()) navigation = InstallmentEditorNavigation.closed(owner.value) }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) { reference = Instant.now(); delay(60_000) }
+            while (true) { reference = currentTime(); delay(60_000) }
         }
     }
     val zone = ZoneId.systemDefault()
     var retry by remember { mutableIntStateOf(0) }
-    val load by key(month, zone, retry, lifecycle) {
+    val load by key(repository, retry, lifecycle) {
         produceState<InstallmentLoad>(InstallmentLoad.Loading) {
-            value = InstallmentLoad.Loading
             try {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    combine(repository.observeInstallments(owner), repository.observeDueOccurrences(owner)) { plans, occurrences ->
-                        installmentDueRows(owner, plans, occurrences, month, zone)
+                    combine(repository.observeInstallments(owner), repository.observeDueOccurrences(owner), repository.observe(CloudEntity.LEDGER_WALLET, owner)) { plans, occurrences, rawWallets ->
+                        val wallets = rawWallets.filter { it.ownerUserId == owner.value && it.deletedAt == null }.mapNotNull { row ->
+                            runCatching { LedgerWalletRecord.fromCloudRecord(row).takeIf { it.ownerUserId == owner.value && it.id == row.id && it.deletedAt == null } }.getOrNull()
+                        }
+                        InstallmentRecords(plans, occurrences, wallets)
                     }.collect { value = InstallmentLoad.Loaded(it) }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { value = InstallmentLoad.Failed }
         }
     }
-    when (val state = load) {
-        InstallmentLoad.Loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+    val records = (load as? InstallmentLoad.Loaded)?.records
+    val rows = remember(records, month, zone) { records?.let { runCatching { installmentDueRows(owner, it.plans, it.occurrences, month, zone) } } }
+    when {
+        load == InstallmentLoad.Loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(Modifier.testTag("installment.loading"))
         }
-        InstallmentLoad.Failed -> Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        load == InstallmentLoad.Failed || rows?.isFailure == true -> Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(stringResource(R.string.planning_installment_load_error), Modifier.testTag("installment.error"))
             TextButton(onClick = { retry++ }) { Text(stringResource(R.string.planning_installment_retry)) }
         }
-        is InstallmentLoad.Loaded -> InstallmentDueContent(state.rows, reference, zone)
+        rows?.isSuccess == true -> InstallmentDueContent(rows.getOrThrow(), reference, zone,
+            onAdd = { navigation = InstallmentEditorNavigation.create(owner.value, defaultCurrency, UUID.randomUUID().toString()) },
+            onEdit = { navigation = InstallmentEditorNavigation.edit(owner.value, it) })
     }
+    // Keep the editor composed across month/zone/loading changes so drafts and operations survive.
+    val editorId = navigation.editorId
+    if (editorId != null && navigation.valid()) InstallmentEditorSheet(owner.value, editorId, navigation.baseline(), navigation.currency,
+        records?.wallets.orEmpty(), dataReady = records != null, loadFailed = load == InstallmentLoad.Failed, onRetryLoad = { retry++ },
+        onSave = { draft -> repository.saveInstallment(owner, draft, deviceIdProvider(), currentTime().toString()) },
+        onDelete = { expected -> repository.deleteInstallment(owner, expected, deviceIdProvider(), currentTime().toString()) },
+        onDismiss = { navigation = navigation.closed() })
 }
 
 @Composable
-internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Instant, zone: ZoneId) {
+internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Instant, zone: ZoneId,
+    onAdd: (() -> Unit)? = null, onEdit: ((InstallmentPlanRecord) -> Unit)? = null) {
     val locale = LocalConfiguration.current.locales[0]
     val dates = remember(locale, zone) { DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale).withZone(zone) }
     MistiaGlassCard(contentPadding = PaddingValues(0.dp)) { _ ->
+        Column {
         if (rows.isEmpty()) Text(stringResource(R.string.planning_planning_no_installments_or_loans_yet),
             Modifier.fillMaxWidth().testTag("installment.empty").padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Column {
@@ -101,18 +122,14 @@ internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Ins
                 Column(Modifier.fillMaxWidth().testTag("installment.row.${row.plan.id}").padding(horizontal = 15.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val icon = when (row.plan.iconSymbolName) {
-                            "mistia.plan.loan", "building.columns.fill" -> Icons.Default.AccountBalance
-                            "mistia.plan.payment", "calendar.badge.clock" -> Icons.Default.CalendarMonth
-                            else -> Icons.Default.CreditCard
-                        }
-                        Box(Modifier.size(40.dp).background(color.copy(alpha = 0.12f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                            Icon(icon, null, Modifier.size(22.dp), tint = color)
-                        }
+                        Row(Modifier.weight(1f).then(if (onEdit == null) Modifier else Modifier.testTag("installment.edit.${row.plan.id}").clickable { onEdit(row.plan) }),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        InstallmentIcon(row.plan.iconSymbolName, color)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(row.plan.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(formatMinorUnits(row.amountMinor, row.plan.currencyCode), Modifier.testTag("installment.amount.${row.plan.id}"),
                                 style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         }
                         if (row.status != DueStatus.PENDING) Text(stringResource(if (row.status == DueStatus.PAID) R.string.planning_planning_paid else R.string.planning_duepayment_bill_skipped),
                             Modifier.testTag("installment.status.${row.plan.id}").background(color.copy(alpha = 0.12f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 6.dp),
@@ -130,6 +147,13 @@ internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Ins
                 }
                 if (index < rows.lastIndex) HorizontalDivider(Modifier.padding(start = 52.dp))
             }
+        }
+        if (onAdd != null) {
+            if (rows.isNotEmpty()) HorizontalDivider(Modifier.padding(start = 52.dp))
+            TextButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().testTag("installment.add").padding(vertical = 8.dp)) {
+                Text(stringResource(R.string.planning_planning_add_installment_loan))
+            }
+        }
         }
     }
 }

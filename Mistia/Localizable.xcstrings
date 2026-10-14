@@ -23231,6 +23231,213 @@
         }
       }
     },
+    "planning.installmentEditor.amountPreview" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per cycle: %1$s"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mỗi kỳ: %1$s"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1回あたり：%1$s"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.deleteMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This item and its payment schedule will be removed. Recorded transactions are kept."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khoản này và lịch trả liên quan sẽ được xóa. Các giao dịch đã ghi nhận vẫn được giữ lại."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この項目と支払予定を削除します。記録済みの取引は保持されます。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.discardMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your changes to this installment will not be saved."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Những thay đổi của khoản trả góp này sẽ không được lưu."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この分割払いの変更は保存されません。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.invalidAmount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a positive whole value within the supported range."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhập số nguyên dương trong giới hạn cho phép."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "対応範囲内の正の整数を入力してください。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.invalidCurrency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This currency can't be used for this item."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể lưu khoản này với tiền tệ đã chọn."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この項目ではこの通貨を使用できません。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.invalidSchedule" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a valid due day and frequency."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn ngày trả và tần suất hợp lệ."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有効な支払日と頻度を選んでください。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.invalidTotalCycles" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an integer number of cycles within the supported range, or leave it blank."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhập số kỳ là số nguyên trong giới hạn cho phép, hoặc để trống."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "対応範囲内の整数で回数を入力するか、空欄にしてください。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.notFound" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This item is no longer available."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khoản này không còn khả dụng."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この項目は利用できなくなりました。"
+          }
+        }
+      }
+    },
+    "planning.installmentEditor.staleRecord" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This item changed. Review the latest data before saving."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khoản này đã thay đổi. Kiểm tra dữ liệu mới nhất trước khi lưu."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "項目が変更されました。保存する前に最新の内容を確認してください。"
+          }
+        }
+      }
+    },
     "planning.planning.aMatchingPaymentWalletCouldNotBe" : {
       "extractionState" : "stale",
       "localizations" : {

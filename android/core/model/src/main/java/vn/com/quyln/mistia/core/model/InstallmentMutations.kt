@@ -26,7 +26,7 @@ data class InstallmentDraft(
 )
 
 enum class InstallmentValidationError {
-    NAME_REQUIRED, INVALID_AMOUNT, INVALID_DAYS, INVALID_FREQUENCY, INVALID_CURRENCY,
+    NAME_REQUIRED, INVALID_AMOUNT, INVALID_DAYS, INVALID_FREQUENCY, INVALID_CURRENCY, INVALID_TOTAL_CYCLES,
     INVALID_WALLET, INVALID_IDENTITY, NOT_FOUND, STALE_RECORD,
 }
 class InstallmentValidationException(val reason: InstallmentValidationError) : IllegalArgumentException(reason.name)

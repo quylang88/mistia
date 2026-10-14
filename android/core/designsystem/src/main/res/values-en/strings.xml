@@ -1002,6 +1002,15 @@
     <string name="planning_goal_editor_invalid_amount">Enter valid amounts within the supported range.</string>
     <string name="planning_installment_load_error">Couldn\'t load installments right now.</string>
     <string name="planning_installment_retry">Retry</string>
+    <string name="planning_installment_editor_amount_preview">Per cycle: %1$s</string>
+    <string name="planning_installment_editor_delete_message">This item and its payment schedule will be removed. Recorded transactions are kept.</string>
+    <string name="planning_installment_editor_discard_message">Your changes to this installment will not be saved.</string>
+    <string name="planning_installment_editor_invalid_amount">Enter a positive whole value within the supported range.</string>
+    <string name="planning_installment_editor_invalid_currency">This currency can\'t be used for this item.</string>
+    <string name="planning_installment_editor_invalid_schedule">Choose a valid due day and frequency.</string>
+    <string name="planning_installment_editor_invalid_total_cycles">Enter an integer number of cycles within the supported range, or leave it blank.</string>
+    <string name="planning_installment_editor_not_found">This item is no longer available.</string>
+    <string name="planning_installment_editor_stale_record">This item changed. Review the latest data before saving.</string>
     <string name="planning_planning_a_matching_payment_wallet_could_not_be">A matching payment wallet could not be found.</string>
     <string name="planning_planning_access_requested">Access requested</string>
     <string name="planning_planning_active_goals">Active goals</string>

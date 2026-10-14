@@ -1002,6 +1002,15 @@
     <string name="planning_goal_editor_invalid_amount">Nhập số tiền hợp lệ trong phạm vi được hỗ trợ.</string>
     <string name="planning_installment_load_error">Không thể tải các khoản trả góp lúc này.</string>
     <string name="planning_installment_retry">Thử lại</string>
+    <string name="planning_installment_editor_amount_preview">Mỗi kỳ: %1$s</string>
+    <string name="planning_installment_editor_delete_message">Khoản này và lịch trả liên quan sẽ được xóa. Các giao dịch đã ghi nhận vẫn được giữ lại.</string>
+    <string name="planning_installment_editor_discard_message">Những thay đổi của khoản trả góp này sẽ không được lưu.</string>
+    <string name="planning_installment_editor_invalid_amount">Nhập số nguyên dương trong giới hạn cho phép.</string>
+    <string name="planning_installment_editor_invalid_currency">Không thể lưu khoản này với tiền tệ đã chọn.</string>
+    <string name="planning_installment_editor_invalid_schedule">Chọn ngày trả và tần suất hợp lệ.</string>
+    <string name="planning_installment_editor_invalid_total_cycles">Nhập số kỳ là số nguyên trong giới hạn cho phép, hoặc để trống.</string>
+    <string name="planning_installment_editor_not_found">Khoản này không còn khả dụng.</string>
+    <string name="planning_installment_editor_stale_record">Khoản này đã thay đổi. Kiểm tra dữ liệu mới nhất trước khi lưu.</string>
     <string name="planning_planning_a_matching_payment_wallet_could_not_be">Không tìm thấy ví thanh toán phù hợp.</string>
     <string name="planning_planning_access_requested">Đã yêu cầu quyền</string>
     <string name="planning_planning_active_goals">Mục tiêu đang hoạt động</string>

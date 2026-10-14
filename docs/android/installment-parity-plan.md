@@ -8,12 +8,18 @@ Owned mutation repository is completed locally (APK54):
 `evidence/2026-10-14-installment-mutations.md`. Stable replay IDs, semantic stale/ACK
 checks, raw snapshot CAS and owned plan/cycle tombstones preserve the expense ledger.
 
+Native metadata editor/navigation is completed locally (APK55):
+`evidence/2026-10-14-installment-editor.md`. Actual repository callbacks, stable ID,
+owned savers, frozen currency, exact grouped minor input and confirmations are wired.
+Eleven JVM cases execute; seven new Compose/Room fixtures compile only. Repository
+reconstruction/process-death/device behavior still needs runtime Android verification.
+
 Next coherent slices:
 
-1. Native create/edit/delete form and navigation with owner-scoped saved state, stable
-   create ID, exact currency input, immutable imported currency/anchor, owned wallet/icon
-   selectors, unsaved-change/delete confirmations and real callbacks to the new APIs.
-   Preserve user edits on stale/validation errors; do not claim process-death device proof.
+1. Continue the currency/settings and monetary-input audit across remaining forms.
+   The actual Swift installment currency field groups raw minor integers for all
+   currencies; the new editor matches valid input with a formatted preview, rejecting
+   ambiguous punctuation and overflow instead of silently changing the amount.
 2. Actual selected-month skip/undo and payment/undo with transaction/category/occurrence
    atomic CAS, current affordability, paid card/receipt/investment/settlement guards,
    scoped frozen-history checks and deterministic currency policy. Do not copy raw minor

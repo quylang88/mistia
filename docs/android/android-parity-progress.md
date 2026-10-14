@@ -2059,3 +2059,20 @@ Evidence: `docs/android/evidence/2026-10-14-installment-due-read.md`.
   preflight, pending card currency decision, independent/device/visual QA and APK1–4/RC.
 
 Evidence: `docs/android/evidence/2026-10-14-installment-mutations.md`.
+
+
+## Native installment metadata editor — 2026-10-14
+
+- [x] Planning create/edit/delete sheet wired to actual repository; stable create UUID,
+  exact Swift grouped-minor input with formatted preview, immutable currency/anchor,
+  nullable cycles, owned wallet/four icon selectors and localized failures.
+- [x] Discard/delete confirmations, original delete baseline, busy/late-cancellation
+  guards and owner-scoped form/navigation savers. Editor survives month/loading changes;
+  repository identity removed from saved subtree keys for reconstruction.
+- [x]11 runtime RED/GREEN cases;1078 JVM/111 suites; full Android/Swift603/contracts/
+  l10n/SQLite pass. Seven new Compose/Room workflows compile only. APK55;10 flagsfalse.
+- [ ] Actual installment payment/skip/undo/maintenance/push, card currency decision,
+  app currency/settings and monetary-form audit, Fluent/device/independent/visual QA,
+  remaining APK1–4 and RC. No device/process-death/live cloud verification.
+
+Evidence: `docs/android/evidence/2026-10-14-installment-editor.md`.

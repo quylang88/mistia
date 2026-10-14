@@ -14,6 +14,7 @@ kotlin { jvmToolchain(17) }
 dependencies {
     implementation(project(":core:model")); implementation(project(":core:database")); implementation(project(":core:designsystem"))
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test)
     androidTestImplementation("androidx.test:core:1.7.0")
