@@ -14,5 +14,11 @@ kotlin { jvmToolchain(17) }
 dependencies {
     implementation(project(":core:model")); implementation(project(":core:database")); implementation(project(":core:designsystem"))
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.activity.compose)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    debugImplementation(libs.compose.ui.test.manifest)
     implementation(platform(libs.compose.bom)); implementation(libs.compose.ui); implementation(libs.compose.material3)
 }

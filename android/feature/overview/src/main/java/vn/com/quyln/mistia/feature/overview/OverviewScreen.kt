@@ -9,6 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +43,8 @@ fun OverviewScreen(
     repository: FinanceRepository,
     syncStatus: StateFlow<SyncStatus>,
     modifier: Modifier = Modifier,
+    unreadNotificationCount:Int=0,
+    onOpenNotifications:()->Unit={},
 ) {
     val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
@@ -62,7 +70,14 @@ fun OverviewScreen(
                     text = stringResource(R.string.overview_overview_overview),
                     style = MaterialTheme.typography.headlineMedium,
                 )
-                if (status is SyncStatus.Pulling) CircularProgressIndicator(modifier = Modifier.height(24.dp))
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    if (status is SyncStatus.Pulling) CircularProgressIndicator(modifier = Modifier.height(24.dp))
+                    IconButton(onClick=onOpenNotifications) {
+                        BadgedBox(badge={if(unreadNotificationCount>0) Badge {Text(if(unreadNotificationCount>99) "99+" else unreadNotificationCount.toString())}}) {
+                            Icon(Icons.Default.Notifications,stringResource(R.string.notifications_notificationcenter_notifications))
+                        }
+                    }
+                }
             }
         }
         item {

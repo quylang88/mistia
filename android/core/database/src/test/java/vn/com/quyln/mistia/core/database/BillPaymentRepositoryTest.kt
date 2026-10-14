@@ -234,6 +234,23 @@ class BillPaymentRepositoryTest {
         assertEquals(3,notifications.commits)
         assertTrue(notifications.rows.single().isRead)
     }
+    @Test fun `automatic notification uses real payment time despite future undo sync clock`()=runTest {
+        val bill=autoBill()
+        repo.payRecurringBill(owner,request(bill),device,now).getOrThrow()
+        repo.undoRecurringBillPayment(owner,RecordId(bill.id),month,device,"2027-01-01T00:00:00Z").getOrThrow()
+        var captured:AppNotificationRecord?=null
+        val capturing=object:LocalStore by store {
+            override suspend fun commitBillMoneyMutations(snapshot:BillMoneySnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+                captured=snapshot.automaticPaymentNotification
+                store.commitBillMoneyMutations(snapshot,mutations)
+            }
+        }
+        val payment=OfflineBillPaymentRepository(capturing,zone,catalog) {value,_ -> BillAutomaticPaymentText("Auto-paid ${value.name}","Complete","Paid")}
+        val saved=payment.payRecurringBill(owner,request(bill).copy(automatic=true),device,now).getOrThrow()
+        assertEquals("2027-01-01T00:00:00.001Z",saved.transaction.updatedAt)
+        assertEquals(now,captured!!.createdAt)
+        assertEquals(1,notificationGroups(owner,listOf(captured!!),java.time.Instant.parse(now)).size)
+    }
     @Test fun `payment atomically creates posted expense and linked paid cycle with exact amounts`() = runTest {
         val exact = 9007199254740993L
         val bill = prepare(exact, exact)

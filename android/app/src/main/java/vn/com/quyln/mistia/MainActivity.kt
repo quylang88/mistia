@@ -22,6 +22,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -143,6 +145,7 @@ private fun MistiaApp(
                 syncEngine.scheduleBackgroundSync()
                 syncEngine.syncNow()
             }
+            key(state.session.userId.value) {
             SignedInRoot(
                 authState = state,
                 authRepository = authRepository,
@@ -157,6 +160,7 @@ private fun MistiaApp(
                 receiptImageRepository = receiptImageRepository,
                 openedFromFamilyInvite = openedFromFamilyInvite,
             )
+            }
         }
     }
 }
@@ -183,6 +187,10 @@ private fun SignedInRoot(
     receiptImageRepository: TransactionReceiptImageRepository,
     openedFromFamilyInvite: Boolean,
 ) {
+    val notificationRows by remember(authState.session.userId,financeRepository) {
+        financeRepository.observeAppNotifications(authState.session.userId)
+    }.collectAsStateWithLifecycle(emptyList())
+    val unreadNotifications=vn.com.quyln.mistia.core.model.notificationGroups(authState.session.userId,notificationRows,java.time.Instant.now()).sumOf {it.unreadCount}
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
     LaunchedEffect(openedFromFamilyInvite) {
@@ -212,6 +220,8 @@ private fun SignedInRoot(
                         financeRepository,
                         syncEngine.status,
                         modifier,
+                        unreadNotificationCount=unreadNotifications,
+                        onOpenNotifications={navController.navigate("notifications")},
                     )
                     RootTab.TRANSACTIONS -> TransactionsScreen(
                         ownerUserId = authState.session.userId,
@@ -251,6 +261,10 @@ private fun SignedInRoot(
                     )
                 }
             }
+        }
+        composable("notifications") {
+            vn.com.quyln.mistia.feature.notifications.NotificationCenterScreen(authState.session.userId,financeRepository,
+                onBack={navController.popBackStack()},onRefresh={syncEngine.syncNow()})
         }
         composable("family") {
             FamilyScreen(

@@ -115,7 +115,7 @@ internal class OfflineBillPaymentRepository(
         val writes = categoryWrites.map { it.toCloudRecord() to it.bootstrapMutation() }+listOf(mutation.record.toCloudRecord() to mutation.pending)+paid.map { it.toCloudRecord() to it.pendingMutation() }
         val notification=presentation?.let {text -> AppNotificationRecord(owner.value,
             "mistia.bill.autopay.success.${bill.id.lowercase()}.${request.month}",text.successTitle,text.successBody,"billAutoPaymentSucceeded",
-            resourceType="bill",resourceId=bill.id,createdAt=timestamp,updatedAt=timestamp,metadata=buildJsonObject {
+            resourceType="bill",resourceId=bill.id,createdAt=occurredAt.toString(),updatedAt=occurredAt.toString(),metadata=buildJsonObject {
                 put("sourceKind","recurringBill");put("sourceId",bill.id);put("dueMonthKey",request.month.toString());put("dueDate",due.dueDate.toString())
                 put("requiresAmountInput",false);put("currencyCode",bill.currencyCode);put("billName",bill.name);put("linkedPaymentWalletId",wallet.id)
             })}

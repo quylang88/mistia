@@ -1796,3 +1796,20 @@ Evidence: `docs/android/evidence/2026-10-14-atomic-auto-payment-notification.md`
   independent review and full APK1–4 remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-notification-batch.md`.
+
+
+## Native local notification center — 2026-10-14
+
+- [x] Overview bell/live badge, grouped local center, newest preview/day details,
+  presented-group read, read-all, sync/pull refresh and back gesture.
+- [x] Owner-keyed route/state scopes; exact captured read targets preserve new and
+  same-key replacement unread arrivals during CAS retry.
+- [x]Future undo sync-clock notification visibility regression runtimeRED/fixed;
+  money keeps monotonic audit clock and local notification uses real payment time.
+- [x]8 new regressions;788 JVM/85 suites plus full Android/SwiftNotification13/
+  contracts/l10n/SQLite checks pass. Compose2 tests compile only; APK38; flagsfalse.
+- [ ] Payment/top-up actions, immediate resolution/preferences/maintenance hooks,
+  family remote data/actions, Fluent visual/device QA, independent review and
+  full APK1–4 parity remain open.
+
+Evidence: `docs/android/evidence/2026-10-14-native-local-notification-center.md`.

@@ -46,3 +46,13 @@ reminder suppression are implemented. Native center must expose groups and local
 read actions, then bill action sheet and immediate manual pay/skip resolution.
 Do not enable automatic scheduling before current-account cancellation and
 notification preferences are wired. Existing independent review queue remains.
+
+
+Native local center slice: add NotificationCenter grouping/visibility model with
+Swift group IDs, latest preview/newest-group order and oldest-to-newest detail
+storage, then date sections rendered newest first. Read repository captures exact
+visible records at invocation and retries CAS without marking new or replaced
+arrivals. Wire Overview bell/unread badge and an owner-keyed native navigation
+route, group opening/read-all/pull refresh/back behavior. Compose tests compile
+only until device available. Payment/top-up actions, Fluent visual assets, family
+remote records and maintenance/preferences hooks remain separate remaining work.
