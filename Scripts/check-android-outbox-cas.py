@@ -54,5 +54,20 @@ class OutboxCompareAndSwapTests(unittest.TestCase):
                 self.assertEqual(0, count)
 
 
+class TranslationTaskCompareAndSwapTests(unittest.TestCase):
+    def test_replaced_device_rejects_old_delete_and_failure(self):
+        dao = SOURCE.read_text().split('interface CategoryTranslationOutboxDao {', 1)[1].split('@Dao', 1)[0]
+        queries = dict((name, sql) for sql, name in re.findall(r'@Query\(\s*"""(.*?)"""\s*\)\s*suspend fun (\w+)', dao, re.S))
+        for method in ('deleteExact', 'markFailureExact'):
+            with self.subTest(method=method), sqlite3.connect(':memory:') as db:
+                db.execute("""CREATE TABLE category_translation_outbox(owner_user_id TEXT, category_id TEXT,
+                    input_name TEXT, source_language TEXT, saved_updated_at TEXT, device_id TEXT,
+                    attempt_count INTEGER, next_attempt_at_epoch_millis INTEGER, last_error TEXT)""")
+                db.execute("INSERT INTO category_translation_outbox VALUES ('owner','category','name','vi','clock','new-device',0,0,NULL)")
+                params = dict(ownerUserId='owner', categoryId='category', inputName='name', sourceLanguage='vi',
+                              savedUpdatedAt='clock', deviceId='old-device', attemptCount=0, nextAttemptAtEpochMillis=99, errorCode='old')
+                self.assertEqual(0, db.execute(queries[method], params).rowcount)
+
+
 if __name__ == '__main__':
     unittest.main()

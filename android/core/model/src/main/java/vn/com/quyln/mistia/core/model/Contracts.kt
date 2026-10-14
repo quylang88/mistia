@@ -306,6 +306,7 @@ interface LocalStore {
     ): Int = 0
     suspend fun applyCategoryTranslation(
         task: QueuedCategoryTranslation,
+        expectedRecord: CloudRecord,
         record: CloudRecord,
         mutation: PendingMutation,
     ): Boolean = false

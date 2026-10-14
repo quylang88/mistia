@@ -318,6 +318,7 @@ interface CategoryTranslationOutboxDao {
           AND source_language = :sourceLanguage
           AND saved_updated_at = :savedUpdatedAt
           AND attempt_count = :attemptCount
+          AND device_id = :deviceId
         """
     )
     suspend fun deleteExact(
@@ -327,6 +328,7 @@ interface CategoryTranslationOutboxDao {
         sourceLanguage: String,
         savedUpdatedAt: String,
         attemptCount: Int,
+        deviceId: String,
     ): Int
 
     @Query(
@@ -341,6 +343,7 @@ interface CategoryTranslationOutboxDao {
           AND source_language = :sourceLanguage
           AND saved_updated_at = :savedUpdatedAt
           AND attempt_count = :attemptCount
+          AND device_id = :deviceId
         """
     )
     suspend fun markFailureExact(
@@ -350,6 +353,7 @@ interface CategoryTranslationOutboxDao {
         sourceLanguage: String,
         savedUpdatedAt: String,
         attemptCount: Int,
+        deviceId: String,
         nextAttemptAtEpochMillis: Long,
         errorCode: String,
     ): Int
@@ -758,6 +762,7 @@ class RoomLocalStore(
 
     override suspend fun applyCategoryTranslation(
         task: QueuedCategoryTranslation,
+        expectedRecord: CloudRecord,
         record: CloudRecord,
         mutation: PendingMutation,
     ): Boolean = database.withTransaction {
@@ -767,7 +772,10 @@ class RoomLocalStore(
             CloudEntity.TRANSACTION_CATEGORY.table,
             pending.categoryId,
         )
-        if (current?.updatedAt != pending.savedUpdatedAt) return@withTransaction false
+        if (current?.toCloudRecord() != expectedRecord || expectedRecord.updatedAt != pending.savedUpdatedAt) return@withTransaction false
+        require(expectedRecord.entity==CloudEntity.TRANSACTION_CATEGORY.table && expectedRecord.id==pending.categoryId && expectedRecord.ownerUserId==pending.ownerUserId && expectedRecord.deletedAt==null)
+        require(record.entity==expectedRecord.entity && record.id==expectedRecord.id && record.ownerUserId==expectedRecord.ownerUserId && record.deletedAt==null)
+        require(record.syncVersion==expectedRecord.syncVersion && mutation.entity==CloudEntity.TRANSACTION_CATEGORY && mutation.recordId==record.id && mutation.subjectUserId==record.ownerUserId && mutation.payload==record.payload && mutation.kind==MutationKind.UPSERT && mutation.baseVersion==record.syncVersion)
         val removed = database.categoryTranslationOutboxDao().deleteExact(
             pending.ownerUserId,
             pending.categoryId,
@@ -775,6 +783,7 @@ class RoomLocalStore(
             pending.sourceLanguage.wireValue,
             pending.savedUpdatedAt,
             task.attemptCount,
+            pending.deviceId,
         ) == 1
         if (removed) commitMutationRows(record, mutation)
         removed
@@ -789,6 +798,7 @@ class RoomLocalStore(
             pending.sourceLanguage.wireValue,
             pending.savedUpdatedAt,
             task.attemptCount,
+            pending.deviceId,
         ) == 1
     }
 
@@ -807,6 +817,7 @@ class RoomLocalStore(
             pending.sourceLanguage.wireValue,
             pending.savedUpdatedAt,
             task.attemptCount,
+            pending.deviceId,
             nextAttemptAtEpochMillis,
             safeErrorCode,
         ) == 1

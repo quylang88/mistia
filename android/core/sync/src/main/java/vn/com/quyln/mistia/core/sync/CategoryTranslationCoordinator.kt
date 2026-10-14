@@ -3,9 +3,11 @@ package vn.com.quyln.mistia.core.sync
 import java.io.IOException
 import java.time.Instant
 import kotlin.math.min
+import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import vn.com.quyln.mistia.core.model.CategoryNameLanguage
 import vn.com.quyln.mistia.core.model.CategoryNameTranslations
 import vn.com.quyln.mistia.core.model.CategoryNameTranslator
 import vn.com.quyln.mistia.core.model.CloudEntity
@@ -80,6 +82,21 @@ class CategoryTranslationCoordinator(
         }
 
         val category = TransactionCategoryRecord.fromCloudRecord(local)
+        require(local.entity==CloudEntity.TRANSACTION_CATEGORY.table && local.id==pending.categoryId && local.ownerUserId==ownerUserId.value)
+        require(category.id==local.id && category.ownerUserId==ownerUserId.value && category.updatedAt==local.updatedAt && category.syncVersion==local.syncVersion && category.deletedAt==local.deletedAt)
+        if (category.deletedAt!=null) {
+            localStore.discardCategoryTranslation(task)
+            return TranslationOutcome.STALE
+        }
+        val sourceName = when(pending.sourceLanguage) {
+            CategoryNameLanguage.VIETNAMESE -> category.name
+            CategoryNameLanguage.ENGLISH -> category.nameEnglish
+            CategoryNameLanguage.JAPANESE -> category.nameJapanese
+        }
+        if (sourceName?.trim()!=pending.inputName.trim()) {
+            localStore.discardCategoryTranslation(task)
+            return TranslationOutcome.STALE
+        }
         val fallback = CategoryNameTranslations(
             category.name,
             category.nameEnglish,
@@ -92,14 +109,14 @@ class CategoryTranslationCoordinator(
         ).mergedWithFallback(fallback)
         if (translated == fallback) throw NoTranslationChangeException()
 
-        val updatedAt = nowIsoString()
+        val updatedAt = maxOf(Instant.parse(nowIsoString()), Instant.parse(category.updatedAt).plusMillis(1)).toString()
         val translatedRecord = category.copy(
             name = translated.name,
             nameEnglish = translated.nameEnglish,
             nameJapanese = translated.nameJapanese,
             updatedAt = updatedAt,
             lastModifiedByDeviceId = pending.deviceId,
-        ).toCloudRecord()
+        ).toCloudRecord().let { it.copy(payload=JsonObject(local.payload+it.payload)) }
         val mutation = PendingMutation(
             entity = CloudEntity.TRANSACTION_CATEGORY,
             recordId = translatedRecord.id,
@@ -110,7 +127,7 @@ class CategoryTranslationCoordinator(
             baseVersion = translatedRecord.syncVersion,
             deviceId = pending.deviceId,
         )
-        return if (localStore.applyCategoryTranslation(task, translatedRecord, mutation)) {
+        return if (localStore.applyCategoryTranslation(task, local, translatedRecord, mutation)) {
             TranslationOutcome.TRANSLATED
         } else {
             TranslationOutcome.STALE

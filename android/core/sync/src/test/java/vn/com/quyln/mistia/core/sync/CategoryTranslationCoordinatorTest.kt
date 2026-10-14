@@ -42,7 +42,7 @@ class CategoryTranslationCoordinatorTest {
         assertNull(local.task)
         assertEquals("Dining", local.record.payload.string("name_english"))
         assertEquals("外食", local.record.payload.string("name_japanese"))
-        assertEquals(LATER, local.record.updatedAt)
+        assertEquals(java.time.Instant.parse(LATER), java.time.Instant.parse(local.record.updatedAt))
         assertEquals(NOW, local.appliedExpectedUpdatedAt)
         assertEquals("Ăn ngoài", translator.inputName)
     }
@@ -58,7 +58,7 @@ class CategoryTranslationCoordinatorTest {
         assertEquals(1, result.staleResponses)
         assertNull(local.task)
         assertEquals(0, translator.calls)
-        assertEquals(LATER, local.record.updatedAt)
+        assertEquals(java.time.Instant.parse(LATER), java.time.Instant.parse(local.record.updatedAt))
     }
 
     @Test
@@ -134,6 +134,65 @@ class CategoryTranslationCoordinatorTest {
         assertSame(original, local.task)
     }
 
+    @Test fun `translation preserves unknown payload fields and cannot move a future clock backwards`()=runTest {
+        val future="2027-01-01T00:00:00Z"
+        val extra=JsonObject(mapOf("minor" to JsonPrimitive(9007199254740993L)))
+        val row=categoryRecord(future).let {it.copy(payload=JsonObject(it.payload+("future_metadata" to extra)))}
+        val pending=task().let {it.copy(translation=it.translation.copy(savedUpdatedAt=future))}
+        val local=FakeLocalStore(row,pending)
+        val translator=FakeTranslator(CategoryNameTranslations("Ăn ngoài","Dining","外食"))
+        assertEquals(1,coordinator(local,translator).translatePending(UserId(OWNER),TOKEN).translated)
+        assertEquals(extra,local.record.payload["future_metadata"])
+        assertTrue(!java.time.Instant.parse(local.record.updatedAt).isBefore(java.time.Instant.parse(future)))
+    }
+    @Test fun `viewer envelope cannot send another owners category text to translation service`()=runTest {
+        val row=categoryRecord().let {it.copy(payload=JsonObject(it.payload+("user_id" to JsonPrimitive(DEVICE))))}
+        val local=FakeLocalStore(row,task())
+        val translator=FakeTranslator(CategoryNameTranslations("x","x","x"))
+        coordinator(local,translator).translatePending(UserId(OWNER),TOKEN)
+        assertEquals(0,translator.calls)
+        assertEquals(row,local.record)
+    }
+    @Test fun `deleted category cannot be resurrected by a queued translation`()=runTest {
+        val row=categoryRecord().let {it.copy(deletedAt=NOW,payload=JsonObject(it.payload+("deleted_at" to JsonPrimitive(NOW))))}
+        val local=FakeLocalStore(row,task())
+        val translator=FakeTranslator(CategoryNameTranslations("x","x","x"))
+        coordinator(local,translator).translatePending(UserId(OWNER),TOKEN)
+        assertEquals(0,translator.calls)
+        assertEquals(row,local.record)
+    }
+    @Test fun `same clock FK replacement during HTTP cannot be overwritten by old translation`()=runTest {
+        val local=FakeLocalStore(categoryRecord(),task())
+        val changed=local.record.let {it.copy(payload=JsonObject(it.payload+("parent_category_id" to JsonPrimitive(DEVICE))))}
+        val translator=object:CategoryNameTranslator {
+            override suspend fun translate(inputName:String,sourceLanguage:CategoryNameLanguage,accessToken:String):CategoryNameTranslations {
+                local.record=changed
+                return CategoryNameTranslations("Ăn ngoài","Dining","外食")
+            }
+        }
+        assertEquals(1,coordinator(local,translator).translatePending(UserId(OWNER),TOKEN).staleResponses)
+        assertEquals(changed,local.record)
+        assertEquals(task(),local.task)
+    }
+    @Test fun `same clock changed source name discards stale task before HTTP`()=runTest {
+        val changed=categoryRecord().let {it.copy(payload=JsonObject(it.payload+("name" to JsonPrimitive("Nhà hàng mới"))))}
+        val local=FakeLocalStore(changed,task())
+        val translator=FakeTranslator(CategoryNameTranslations("Ăn ngoài","Dining","外食"))
+        assertEquals(1,coordinator(local,translator).translatePending(UserId(OWNER),TOKEN).staleResponses)
+        assertEquals(0,translator.calls)
+        assertNull(local.task)
+        assertEquals(changed,local.record)
+    }
+    @Test fun `explicit English edit can refresh existing complete translations`()=runTest {
+        val row=categoryRecord().let {it.copy(payload=JsonObject(it.payload+mapOf(
+            "name_english" to JsonPrimitive("New dining"),"name_japanese" to JsonPrimitive("古い名前"))))}
+        val english=task().let {it.copy(translation=it.translation.copy(inputName="New dining",sourceLanguage=CategoryNameLanguage.ENGLISH))}
+        val local=FakeLocalStore(row,english)
+        val translator=FakeTranslator(CategoryNameTranslations("Nhà hàng mới","New dining","新しい名前"))
+        assertEquals(1,coordinator(local,translator).translatePending(UserId(OWNER),TOKEN).translated)
+        assertEquals("Nhà hàng mới",local.record.payload.string("name"))
+        assertEquals(1,translator.calls)
+    }
     private fun coordinator(local: LocalStore, translator: CategoryNameTranslator) =
         CategoryTranslationCoordinator(
             localStore = local,
@@ -257,10 +316,11 @@ class CategoryTranslationCoordinatorTest {
         }
         override suspend fun applyCategoryTranslation(
             task: QueuedCategoryTranslation,
+            expectedRecord: CloudRecord,
             record: CloudRecord,
             mutation: PendingMutation,
         ): Boolean {
-            if (this.task != task || this.record.updatedAt != task.translation.savedUpdatedAt) return false
+            if (this.task != task || this.record != expectedRecord || this.record.updatedAt != task.translation.savedUpdatedAt) return false
             appliedExpectedUpdatedAt = task.translation.savedUpdatedAt
             this.task = null
             this.record = record

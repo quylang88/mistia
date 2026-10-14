@@ -75,7 +75,7 @@ class CategoryTranslationRoomTest {
             DEVICE,
         )
 
-        assertFalse(localStore.applyCategoryTranslation(staleTask, translated, mutation))
+        assertFalse(localStore.applyCategoryTranslation(staleTask, current.toCloudRecord(), translated, mutation))
         assertEquals("Nhà hàng", repository.observeCategories(UserId(OWNER_A)).first().single().name)
         assertEquals("Nhà hàng", localStore.pendingCategoryTranslations(UserId(OWNER_A), 0).single().translation.inputName)
     }
@@ -100,6 +100,34 @@ class CategoryTranslationRoomTest {
             "Ăn ngoài",
             localStore.pendingCategoryTranslations(UserId(OWNER_A), 0).single().translation.inputName,
         )
+    }
+
+    @Test
+    fun sameClockPayloadChangeRejectsTranslationAndPreservesTask() = runTest {
+        repository.saveCategory(UserId(OWNER_A),draft("Ăn ngoài"),DEVICE,NOW).getOrThrow()
+        val task=localStore.pendingCategoryTranslations(UserId(OWNER_A),0).single()
+        val expected=localStore.record(UserId(OWNER_A),CloudEntity.TRANSACTION_CATEGORY.table,CATEGORY_ID)!!
+        val current=expected.copy(payload=kotlinx.serialization.json.JsonObject(expected.payload+(
+            "parent_category_id" to kotlinx.serialization.json.JsonPrimitive(OWNER_B))))
+        localStore.commitMutation(current,PendingMutation(CloudEntity.TRANSACTION_CATEGORY,CATEGORY_ID,OWNER_A,
+            MutationKind.UPSERT,current.payload,NOW,current.syncVersion,DEVICE))
+        val translated=TransactionCategoryRecord.fromCloudRecord(expected).copy(nameEnglish="Dining",updatedAt=LAST).toCloudRecord()
+        val pending=PendingMutation(CloudEntity.TRANSACTION_CATEGORY,CATEGORY_ID,OWNER_A,MutationKind.UPSERT,translated.payload,LAST,translated.syncVersion,DEVICE)
+        assertFalse(localStore.applyCategoryTranslation(task,expected,translated,pending))
+        assertEquals(current,localStore.record(UserId(OWNER_A),CloudEntity.TRANSACTION_CATEGORY.table,CATEGORY_ID))
+        assertEquals(task,localStore.pendingCategoryTranslations(UserId(OWNER_A),0).single())
+    }
+
+    @Test
+    fun replacedTaskDeviceRejectsOldDiscardAndFailure() = runTest {
+        repository.saveCategory(UserId(OWNER_A),draft("Ăn ngoài"),DEVICE,NOW).getOrThrow()
+        val task=localStore.pendingCategoryTranslations(UserId(OWNER_A),0).single()
+        val row=localStore.record(UserId(OWNER_A),CloudEntity.TRANSACTION_CATEGORY.table,CATEGORY_ID)!!
+        val pending=PendingMutation(CloudEntity.TRANSACTION_CATEGORY,CATEGORY_ID,OWNER_A,MutationKind.UPSERT,row.payload,NOW,row.syncVersion,DEVICE)
+        localStore.commitCategoryMutation(row,pending,task.translation.copy(deviceId=OWNER_B))
+        assertFalse(localStore.discardCategoryTranslation(task))
+        assertFalse(localStore.recordCategoryTranslationFailure(task,Long.MAX_VALUE,"old_failure"))
+        assertEquals(OWNER_B,localStore.pendingCategoryTranslations(UserId(OWNER_A),0).single().translation.deviceId)
     }
 
     private fun draft(name: String) = CategoryDraft(

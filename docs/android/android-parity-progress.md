@@ -1583,3 +1583,12 @@ Evidence: `docs/android/evidence/2026-10-14-bill-undo-sync.md`.
 - [ ] Category atomic reconciliation/create409/startup next. No Android device/live cloud verification; full APK1–4 remains active.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-repayment.md`.
+
+## Category translation snapshot protection — 2026-10-14
+
+- [x] Full raw-record compare before atomic apply; exact task device/name/language/time/attempt checks protect replacement tasks from stale ACK/failure/discard.
+- [x] Owner/deletion/source-name validation before HTTP, unknown-field preservation, future-clock protection and explicit complete-translation refresh.
+- [x]6 new coordinator regressions;672 JVM/78 suites and full Android checks pass. SQLite actual predicates5 methods; two new Room tests compile only. Review P2 reproduced/fixed/rereview clean. Swift category/contracts/l10n pass. APK24; nine flagsfalse.
+- [ ] Atomic identity/reference reconciliation and create409/startup next; Android device/live cloud verification and full APK1–4 remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-category-translation-snapshot.md`.
