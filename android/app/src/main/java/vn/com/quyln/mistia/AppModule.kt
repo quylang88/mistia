@@ -104,8 +104,9 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideLocalStore(database: MistiaDatabase, json: Json,preferences:NotificationPreferencesStore): LocalStore =
-        RoomLocalStore(database,json,billRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.BILLS)})
+    fun provideLocalStore(database: MistiaDatabase, json: Json,preferences:NotificationPreferencesStore,auth:AuthRepository): LocalStore =
+        RoomLocalStore(database,json,billRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.BILLS)},
+            currentBillOwner={(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId})
 
     @Provides
     @Singleton
@@ -324,6 +325,11 @@ object AppModule {
                 context.getString(vn.com.quyln.mistia.core.designsystem.R.string.shared_notifications_mistiarecurringbillmaintenance_mistia_paid_value_for_value,
                     vn.com.quyln.mistia.core.designsystem.formatMinorUnits(amount,bill.currencyCode),bill.name))
         })
+
+    @Provides
+    @Singleton
+    fun provideBillMaintenanceCoordinator(auth:AuthRepository,finance:FinanceRepository,device:SecureDeviceIdStore)=
+        vn.com.quyln.mistia.core.sync.BillMaintenanceCoordinator(auth.state,finance,{device.getOrCreate()},{Instant.now().toString()})
 
     @Provides
     @Singleton

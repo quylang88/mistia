@@ -40,6 +40,30 @@ class BillPaymentRoomTest {
         store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
         return bill
     }
+    @Test fun accountChangeBeforeOrDuringMoneyCommitRollsBackAllFinancialAndNotificationWrites()=runTest {
+        for(changeAfterWrites in listOf(false,true)) {
+            val context=ApplicationProvider.getApplicationContext<Context>()
+            val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+            try {
+                val initial=RoomLocalStore(db);val bill=automaticBill(automaticRepo(initial),initial)
+                val before=CloudEntity.entries.associateWith {initial.recordsIncludingDeleted(owner,it.table)}
+                val outbox=CloudEntity.entries.associateWith {initial.pendingMutations(owner,it,Long.MAX_VALUE)}
+                var checks=0
+                val guarded=RoomLocalStore(db,currentBillOwner={
+                    checks++
+                    if(changeAfterWrites && checks==1) owner else UserId("33333333-3333-3333-3333-333333333333")
+                })
+                val error=runCatching {
+                    automaticRepo(guarded).payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,automatic=true),device,now)
+                }.exceptionOrNull()
+                assertTrue(error is kotlinx.coroutines.CancellationException)
+                assertEquals(if(changeAfterWrites) 2 else 1,checks)
+                assertEquals(before,CloudEntity.entries.associateWith {initial.recordsIncludingDeleted(owner,it.table)})
+                assertEquals(outbox,CloudEntity.entries.associateWith {initial.pendingMutations(owner,it,Long.MAX_VALUE)})
+                assertTrue(initial.localNotifications(owner).isEmpty())
+            } finally {db.close()}
+        }
+    }
     @Test fun automaticMoneyAndNotificationReopenTogetherAndRepeatedAttemptDoesNotDuplicate()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="auto-notification-${UUID.randomUUID()}.db"

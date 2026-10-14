@@ -1845,3 +1845,18 @@ Evidence: `docs/android/evidence/2026-10-14-notification-bill-actions.md`.
   Fluent visual/device QA and full APK1–4 parity remain incomplete.
 
 Evidence: `docs/android/evidence/2026-10-14-notification-preferences.md`.
+
+
+## Bill maintenance current-account guard — 2026-10-14
+
+- [x] Serial injectable coordinator captures current owner at execution, cancels on
+  account switch/sign-out, preserves same-owner refresh and cancellation semantics.
+- [x] Production Room money/reminder commits check active owner before/after writes;
+  stale owner cancellation rolls back the transaction.
+- [x] Runtime RED/GREEN;816 JVM/88 suites; full Android/SwiftPlanning53/contracts/
+  l10n/SQLite pass. New financial/reminder rollback Room tests compile only.
+  APK41; nine cloud flagsfalse; no device/live cloud.
+- [ ] Foreground/background hooks/cold-process restore, OS delivery, independent
+  review/device verification and full APK1–4 parity remain unfinished.
+
+Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-account-guard.md`.

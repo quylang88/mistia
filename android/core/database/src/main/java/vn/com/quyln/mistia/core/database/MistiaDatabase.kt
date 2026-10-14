@@ -572,19 +572,28 @@ class RoomLocalStore(
     private val database: MistiaDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val billRemindersEnabled:()->Boolean = {true},
+    private val currentBillOwner:(()->UserId?)? = null,
 ) : LocalStore {
+    private fun ensureCurrentBillOwner(owner:UserId) {
+        if(currentBillOwner!=null && currentBillOwner.invoke()!=owner)
+            throw kotlinx.coroutines.CancellationException("Bill operation account changed")
+    }
+
     override suspend fun billNotificationSnapshot(owner:UserId):BillNotificationSnapshot = database.withTransaction {
         BillNotificationSnapshot(owner,recordsIncludingDeleted(owner,CloudEntity.RECURRING_BILL_PLAN.table),
             recordsIncludingDeleted(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table),localNotifications(owner))
     }
 
     override suspend fun commitBillNotifications(expected:BillNotificationSnapshot,replacement:List<AppNotificationRecord>):Boolean = database.withTransaction {
+        ensureCurrentBillOwner(expected.owner)
         val current=billNotificationSnapshot(expected.owner)
         try {expected.requireUnchangedBillNotifications(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
         replacement.forEach {it.requireValidLocalNotification();require(it.ownerUserId==expected.owner.value)}
         require(replacement.map {it.key}.distinct().size==replacement.size)
-        commitLocalNotifications(expected.owner,expected.notifications,
+        val committed=commitLocalNotifications(expected.owner,expected.notifications,
             applyBillReminderPreference(expected.notifications,replacement,billRemindersEnabled()))
+        ensureCurrentBillOwner(expected.owner)
+        committed
     }
 
     override fun observeLocalNotifications(owner:UserId):Flow<List<AppNotificationRecord>> =
@@ -730,6 +739,7 @@ class RoomLocalStore(
     override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
         snapshot.requireValidMutations(mutations)
         database.withTransaction {
+            ensureCurrentBillOwner(snapshot.owner)
             snapshot.requireUnchanged(CloudEntity.entries.associateWith {
                 recordsIncludingDeleted(snapshot.owner, it.table)
             })
@@ -742,6 +752,7 @@ class RoomLocalStore(
                 database.localNotificationDao().upsert(listOf(LocalNotificationEntity(snapshot.owner.value,notification.key,
                     json.encodeToString(AppNotificationRecord.serializer(),notification))))
             }
+            ensureCurrentBillOwner(snapshot.owner)
         }
     }
 

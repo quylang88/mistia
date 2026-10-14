@@ -73,3 +73,12 @@ Next implement current-account guarded foreground/background bill maintenance, w
 cancellation, offline support, duplicate invocation and no notification-master gate on
 money. Then OS delivery and remaining notification domains. Independent review/device
 verification and full APK1–4 remain pending.
+
+
+Current-account guard milestone: injectable serial coordinator cancels suspended
+maintenance on auth-owner changes and checks immediate races; production Room
+money/reminder transactions check active owner before and after writes. Runtime
+coordinator tests pass; Room rollback tests compile only. Next wire foreground
+resume/day/preference triggers and a background worker with reliable cold-process
+auth restoration. Keep money independent of reminder master and preserve current
+owner guards through every hook. Then OS delivery and remaining APK domains.

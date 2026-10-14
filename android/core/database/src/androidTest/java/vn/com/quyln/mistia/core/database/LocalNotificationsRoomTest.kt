@@ -37,6 +37,25 @@ class LocalNotificationsRoomTest {
             assertEquals(listOf(row(other)),store.localNotifications(other))
         } finally {db.close();context.deleteDatabase(name)}
     }
+    @Test fun accountChangeBeforeOrDuringReminderCommitPreservesOriginalHistory()=runTest {
+        for(changeAfterWrites in listOf(false,true)) {
+            val context=ApplicationProvider.getApplicationContext<Context>()
+            val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+            try {
+                val initial=RoomLocalStore(db)
+                val original=row()
+                assertTrue(initial.commitLocalNotifications(owner,emptyList(),listOf(original)))
+                val snapshot=initial.billNotificationSnapshot(owner)
+                var checks=0
+                val guarded=RoomLocalStore(db,currentBillOwner={checks++;if(changeAfterWrites && checks==1) owner else other})
+                val error=runCatching {guarded.commitBillNotifications(snapshot,listOf(original.copy(title="Changed"),row(key="new")))}.exceptionOrNull()
+                assertTrue(error is kotlinx.coroutines.CancellationException)
+                assertEquals(if(changeAfterWrites) 2 else 1,checks)
+                assertEquals(listOf(original),initial.localNotifications(owner))
+                assertTrue(initial.localNotifications(other).isEmpty())
+            } finally {db.close()}
+        }
+    }
     @Test fun billBatchRejectsPaidCycleAndReadRacesBeforeChangingNotificationRows()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
