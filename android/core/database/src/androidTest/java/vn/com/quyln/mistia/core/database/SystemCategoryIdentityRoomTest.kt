@@ -76,6 +76,46 @@ class SystemCategoryIdentityRoomTest {
             assertTrue(store.categoryReferenceSnapshot(UserId(device)).pending.isEmpty())
         } finally {db.close();context.deleteDatabase(name)}
     }
+    @Test fun zeroVersionRemoteProvenanceSurvivesReopenAndSubsequentEdits()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="category-provenance-${UUID.randomUUID()}.db"
+        var db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build()
+        try {
+            var store:LocalStore=RoomLocalStore(db);seed(store,true)
+            val before=store.categoryReferenceSnapshot(owner)
+            val target=TransactionCategoryRecord.fromCloudRecord(remote()).copy(syncVersion=0).toCloudRecord()
+            assertTrue(store.commitSystemCategoryIdentityMigration(before,source(before),listOf(target),catalog,device,now))
+            db.close();db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build();store=RoomLocalStore(db)
+            val queued=store.pendingMutations(owner,CloudEntity.TRANSACTION_CATEGORY,Long.MAX_VALUE).single {it.mutation.recordId==legacy}
+            assertTrue(queued.remoteIdentityObserved)
+            assertEquals(0L,queued.mutation.baseVersion)
+            val installed=store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,legacy)!!
+            assertFalse(store.acknowledgeMutation(queued.copy(remoteIdentityObserved=false),installed))
+            assertFalse(store.recordMutationFailure(queued.copy(remoteIdentityObserved=false),Long.MAX_VALUE,"old_unknown_provenance"))
+            val edited=TransactionCategoryRecord.fromCloudRecord(store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,legacy)!!).copy(name="After reopen")
+            store.commitMutation(edited.toCloudRecord(),edited.bootstrapMutation())
+            assertTrue(store.pendingMutations(owner,CloudEntity.TRANSACTION_CATEGORY,Long.MAX_VALUE).single {it.mutation.recordId==legacy}.remoteIdentityObserved)
+            assertFalse(store.acknowledgeMutation(queued.copy(remoteIdentityObserved=false),edited.toCloudRecord()))
+            assertFalse(store.recordMutationFailure(queued.copy(remoteIdentityObserved=false),Long.MAX_VALUE,"old_unknown_provenance"))
+        } finally {db.close();context.deleteDatabase(name)}
+    }
+
+    @Test fun editOfCleanPulledZeroVersionRowRecordsObservedProvenance()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+        try {
+            val store=RoomLocalStore(db)
+            val pulled=TransactionCategoryRecord.fromCloudRecord(remote()).copy(syncVersion=0)
+            store.replacePullSnapshot(owner,CloudEntity.TRANSACTION_CATEGORY.table,listOf(pulled.toCloudRecord()))
+            val edited=pulled.copy(name="User edit")
+            store.commitMutation(edited.toCloudRecord(),edited.bootstrapMutation())
+            val queued=store.pendingMutations(owner,CloudEntity.TRANSACTION_CATEGORY,Long.MAX_VALUE).single()
+            assertTrue(queued.remoteIdentityObserved)
+            assertEquals(0L,queued.mutation.baseVersion)
+            assertFalse(queued.mutation.payload!!.containsKey("remote_identity_observed"))
+        } finally {db.close()}
+    }
+
     @Test fun failureAfterIdentityRemovalRollsBackSourceTargetOutboxReferencesAndTasks()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()

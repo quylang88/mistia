@@ -1628,3 +1628,12 @@ Evidence: `docs/android/evidence/2026-10-14-category-identity-room.md`.
 - [ ] Multiple remote identities remain explicit conflicts. Duplicate/tombstone cleanup must honor the SQL active-key unique index before startup. Full APK1–4 continues.
 
 Evidence: `docs/android/evidence/2026-10-14-category-key-reconciliation.md`.
+
+## Observed category identity provenance — 2026-10-14
+
+- [x] Runtime reproduced version0 reconciliation loop; persisted local-only provenance prevents reseeding observed identities and preserves ordinary exact-version CAS/default-reset intent.
+- [x] Room schema4/migration3→4, positive-base backfill, propagation across edits/repairs/retries, exact flag-aware ACK/failure; no wire payload change.
+- [x]3 new JVM regressions;707 total/80 suites and full checks pass. Actual SQLite/schema7 methods; three new Room tests compile only. Independent review noP1/P2. APK26 / nine flagsfalse.
+- [ ] Retained tombstone duplicates / active-key cleanup before startup; no device/live cloud verification; full APK1–4 continues.
+
+Evidence: `docs/android/evidence/2026-10-14-observed-category-identity.md`.

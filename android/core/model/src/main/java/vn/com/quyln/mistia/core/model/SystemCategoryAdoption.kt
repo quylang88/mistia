@@ -15,6 +15,7 @@ data class SystemCategoryAdoption(
 fun prepareSystemCategoryAdoption(snapshot:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):SystemCategoryAdoption {
     snapshot.requireUnchanged(snapshot)
     UUID.fromString(deviceId); Instant.parse(now)
+    require(!queued.remoteIdentityObserved) {"Observed remote identity is not a bootstrap seed"}
     val pending=queued.mutation
     require(pending.entity==CloudEntity.TRANSACTION_CATEGORY && pending.subjectUserId==snapshot.owner.value && pending.kind==MutationKind.UPSERT && pending.baseVersion==0L)
     require(snapshot.pending.singleOrNull {it.mutation.entity==pending.entity && it.mutation.recordId==pending.recordId}==queued) {"Stale queued seed"}

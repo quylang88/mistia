@@ -82,6 +82,7 @@ data class SyncOutboxEntity(
     @ColumnInfo(name = "attempt_count") val attemptCount: Int = 0,
     @ColumnInfo(name = "next_attempt_at_epoch_millis") val nextAttemptAtEpochMillis: Long = 0,
     @ColumnInfo(name = "last_error") val lastError: String? = null,
+    @ColumnInfo(name = "remote_identity_observed", defaultValue = "0") val remoteIdentityObserved: Boolean = false,
 )
 
 @Entity(
@@ -201,6 +202,9 @@ interface CloudRecordDao {
 
 @Dao
 interface SyncOutboxDao {
+    @Query("SELECT * FROM sync_outbox WHERE owner_user_id = :ownerUserId AND entity = :entity AND record_id = :recordId")
+    suspend fun record(ownerUserId:String,entity:String,recordId:String):SyncOutboxEntity?
+
     @Query("SELECT record_id FROM sync_outbox WHERE owner_user_id = :ownerUserId AND entity = :entity")
     suspend fun recordIds(ownerUserId: String, entity: String): List<String>
 
@@ -245,6 +249,7 @@ interface SyncOutboxDao {
           AND attempt_count = :attemptCount
           AND kind = :kind
           AND payload_json IS :payloadJson
+          AND remote_identity_observed = :remoteIdentityObserved
         """
     )
     suspend fun deleteExact(
@@ -257,6 +262,7 @@ interface SyncOutboxDao {
         attemptCount: Int,
         kind: String,
         payloadJson: String?,
+        remoteIdentityObserved: Boolean,
     ): Int
 
     @Query(
@@ -274,6 +280,7 @@ interface SyncOutboxDao {
           AND attempt_count = :attemptCount
           AND kind = :kind
           AND payload_json IS :payloadJson
+          AND remote_identity_observed = :remoteIdentityObserved
         """
     )
     suspend fun markFailureExact(
@@ -286,6 +293,7 @@ interface SyncOutboxDao {
         attemptCount: Int,
         kind: String,
         payloadJson: String?,
+        remoteIdentityObserved: Boolean,
         nextAttemptAtEpochMillis: Long,
         errorCode: String,
     ): Int
@@ -417,7 +425,7 @@ interface TransactionReceiptImageDao {
         CategoryTranslationOutboxEntity::class,
         TransactionReceiptImageEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class MistiaDatabase : RoomDatabase() {
@@ -430,8 +438,15 @@ abstract class MistiaDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): MistiaDatabase =
             Room.databaseBuilder(context, MistiaDatabase::class.java, "mistia-android.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sync_outbox ADD COLUMN remote_identity_observed INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE sync_outbox SET remote_identity_observed = 1 WHERE base_version > 0")
+            }
+        }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -546,12 +561,12 @@ class RoomLocalStore(
         val adoption=plan.adoption
         val pending=queued.mutation
         check(database.syncOutboxDao().deleteExact(pending.subjectUserId,pending.entity.table,pending.recordId,pending.modifiedAt,
-            pending.baseVersion,pending.deviceId,queued.attemptCount,pending.kind.name.lowercase(),pending.payload?.toString())==1)
+            pending.baseVersion,pending.deviceId,queued.attemptCount,pending.kind.name.lowercase(),pending.payload?.toString(),queued.remoteIdentityObserved)==1)
         database.categoryTranslationOutboxDao().deleteCategory(expected.owner.value,adoption.source.id)
         if(plan.removesSourceIdentity) check(database.cloudRecordDao().deleteRecord(expected.owner.value,CloudEntity.TRANSACTION_CATEGORY.table,adoption.source.id)==1)
         val targetMutation=adoption.mutation
         if(targetMutation==null) database.cloudRecordDao().upsert(adoption.target.toEntity(false,System.currentTimeMillis()))
-        else commitMutationRows(adoption.target,targetMutation)
+        else commitMutationRows(adoption.target,targetMutation,remoteIdentityObserved=true)
         plan.references.mutations.forEach {commitMutationRows(it.record,it.mutation)}
         (plan.references.translations+listOfNotNull(adoption.translation)).forEach {database.categoryTranslationOutboxDao().upsert(it.toEntity())}
         true
@@ -738,6 +753,7 @@ class RoomLocalStore(
                 attemptCount = mutation.attemptCount,
                 kind = pending.kind.name.lowercase(),
                 payloadJson = pending.payload?.toString(),
+                remoteIdentityObserved = mutation.remoteIdentityObserved,
             ) == 1
             if (removed) {
                 database.cloudRecordDao().upsert(
@@ -770,6 +786,7 @@ class RoomLocalStore(
             attemptCount = mutation.attemptCount,
             kind = pending.kind.name.lowercase(),
             payloadJson = pending.payload?.toString(),
+            remoteIdentityObserved = mutation.remoteIdentityObserved,
             nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
             errorCode = safeErrorCode,
         ) == 1
@@ -927,11 +944,14 @@ class RoomLocalStore(
         }
     }
 
-    private suspend fun commitMutationRows(record: CloudRecord, mutation: PendingMutation) {
+    private suspend fun commitMutationRows(record: CloudRecord, mutation: PendingMutation, remoteIdentityObserved:Boolean=false) {
         require(record.ownerUserId == mutation.subjectUserId) { "Mutation owner does not match record owner" }
         require(record.entity == mutation.entity.table) { "Mutation entity does not match record entity" }
         require(record.id == mutation.recordId) { "Mutation record ID does not match record" }
         require(record.payload == mutation.payload) { "Mutation payload does not match local record" }
+        val previousRecord=database.cloudRecordDao().record(record.ownerUserId,record.entity,record.id)
+        val previousQueue=database.syncOutboxDao().record(record.ownerUserId,record.entity,record.id)
+        val observed=remoteIdentityObserved || mutation.baseVersion>0 || record.syncVersion>0 || previousQueue?.remoteIdentityObserved==true || previousRecord?.hasPendingMutation==false
         database.cloudRecordDao().upsert(
             record.toEntity(
                 hasPendingMutation = true,
@@ -948,6 +968,7 @@ class RoomLocalStore(
                 modifiedAt = mutation.modifiedAt,
                 baseVersion = mutation.baseVersion,
                 deviceId = mutation.deviceId,
+                remoteIdentityObserved = observed,
             )
         )
     }
@@ -993,6 +1014,7 @@ class RoomLocalStore(
             attemptCount = attemptCount,
             nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
             lastError = lastError,
+            remoteIdentityObserved = remoteIdentityObserved,
         )
     }
 

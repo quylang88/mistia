@@ -216,6 +216,26 @@ class SystemCategorySeedPushTest {
         assertEquals(deleted,local.records[CATEGORY_ID]);assertTrue(local.queued.isEmpty())
         assertEquals(0,remote.writeCalls)
     }
+    @Test fun `observed zero version identity pushes merged edit instead of reconciling forever`()=runTest {
+        val local=local(row("User edit",LATER))
+        val remote=FakeRemoteStore().apply {fetchedResults.add(row("Cloud custom","2026-09-22T00:00:00Z",0))}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).reconciled)
+        val merged=local.records[CATEGORY_ID]!!
+        remote.updatedResults.add(merged.copy(syncVersion=1,payload=JsonObject(merged.payload+("sync_version" to JsonPrimitive(1)))))
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
+        assertEquals(1,remote.writeCalls)
+        assertTrue(local.queued.isEmpty())
+        assertEquals(1,remote.keyCalls)
+    }
+    @Test fun `observed zero version edit returning to defaults cannot use untouched seed preference`()=runTest {
+        val local=local().apply {queued[0]=queued[0].copy(remoteIdentityObserved=true)}
+        val cloud=row(time="2026-09-22T00:00:00Z").let {it.copy(payload=JsonObject(it.payload+("is_favorite" to JsonPrimitive(true))))}
+        val remote=FakeRemoteStore().apply {fetchedResults.add(cloud);updatedResults.add(row(version=1))}
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
+        assertEquals(0,remote.keyCalls)
+        assertEquals(JsonPrimitive(false),local.records[CATEGORY_ID]!!.payload["is_favorite"])
+        assertTrue(local.queued.isEmpty())
+    }
     private class FakeLocalStore(
         records: Map<String, CloudRecord>,
         val queued: MutableList<QueuedMutation>,
@@ -237,7 +257,7 @@ class SystemCategorySeedPushTest {
             this.queued.remove(queued)
             if(plan.removesSourceIdentity) records.remove(plan.adoption.source.id)
             records[plan.adoption.target.id]=plan.adoption.target
-            plan.adoption.mutation?.let {this.queued.add(QueuedMutation(it,0,0,null))}
+            plan.adoption.mutation?.let {this.queued.add(QueuedMutation(it,0,0,null,remoteIdentityObserved=true))}
             plan.references.mutations.forEach {change ->
                 records[change.record.id]=change.record
                 this.queued.removeAll {it.mutation.entity==change.mutation.entity && it.mutation.recordId==change.record.id}

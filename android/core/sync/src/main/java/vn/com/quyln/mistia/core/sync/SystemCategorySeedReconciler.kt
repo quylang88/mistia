@@ -19,7 +19,7 @@ internal class SystemCategorySeedReconciler(
         require(parentID!=local.id) {"Category cannot parent itself"}
         if(parentID!=null && parentID in localStore.pendingMutationRecordIds(owner,CloudEntity.TRANSACTION_CATEGORY.table))
             return MutationPreflight.Deferred
-        if(catalog==null || !category.isSystem || category.systemKey==null || queued.mutation.baseVersion!=0L ||
+        if(queued.remoteIdentityObserved || catalog==null || !category.isSystem || category.systemKey==null || queued.mutation.baseVersion!=0L ||
             local.syncVersion!=0L || queued.mutation.kind!=MutationKind.UPSERT || local.deletedAt!=null) return MutationPreflight.Continue
         val key=requireNotNull(category.systemKey)
         selectSystemCategoryRemote(owner,key,listOf(local))

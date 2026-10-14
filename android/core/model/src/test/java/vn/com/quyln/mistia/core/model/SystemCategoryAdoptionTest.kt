@@ -136,6 +136,11 @@ class SystemCategoryAdoptionTest {
         assertTrue(plan.references.mutations.isEmpty())
         assertEquals(seed.id,plan.adoption.target.id)
     }
+    @Test fun `observed zero version queue is never mistaken for an unuploaded default seed`() {
+        val source=snapshot()
+        val known=source.pending.single().copy(remoteIdentityObserved=true)
+        assertThrows(IllegalArgumentException::class.java) {prepareSystemCategoryAdoption(source.copy(pending=listOf(known)),known,listOf(remote()),catalog,device,now)}
+    }
     @Test fun `pending source translation moves to the adopted wire identity preserving explicit language`() {
         val local=seed.copy(nameEnglish="User English").toCloudRecord()
         val task=QueuedCategoryTranslation(PendingCategoryTranslation(owner.value,seed.id,"User English",CategoryNameLanguage.ENGLISH,now,device),3,Long.MAX_VALUE,"old_failure")

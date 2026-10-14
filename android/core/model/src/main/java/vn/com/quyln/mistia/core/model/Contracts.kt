@@ -118,6 +118,8 @@ data class QueuedMutation(
     val attemptCount: Int,
     val nextAttemptAtEpochMillis: Long,
     val lastError: String?,
+    /** Local provenance only; zero is a valid observed remote version. */
+    val remoteIdentityObserved: Boolean = false,
 )
 
 data class PendingCategoryTranslation(
