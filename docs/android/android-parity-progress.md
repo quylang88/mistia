@@ -1964,3 +1964,20 @@ Evidence: `docs/android/evidence/2026-10-14-native-wallet-reminders.md`.
   independent review/device/visual QA and full APK1–4 remain unfinished.
 
 Evidence: `docs/android/evidence/2026-10-14-immediate-bill-preferences.md`.
+
+
+## Shared credit-card statement model and paid guards — 2026-10-14
+
+- [x] Next-month local close/due calculation, exact Long charge/current credit,
+  linked/covering paired-FX payment resolution, canonical/legacy occurrence precedence,
+  statement states, due-month projection and due-through+5-day automatic decision.
+- [x]27 common JSON vectors run against actual Swift and Kotlin, including Japan/
+  Vietnam boundaries; guard/repository fixes prevent false freezes and reopening an
+  already-paid statement by adding a larger charge. Operation clock/calendar captured.
+- [x]36 added cases;934 JVM/99 suites; full Android/Swift602/contracts/l10n/SQLite pass.
+  Room/planning AndroidTests compile only; APK49; nine write flagsfalse; no device/cloud.
+- [ ] Native statement/payment/history UI, actual card payment/maintenance/undo and
+  outbox dependencies, installments, pending cross-currency card product decision,
+  independent review/device/visual QA and full APK1–4 remain unfinished.
+
+Evidence: `docs/android/evidence/2026-10-14-credit-card-statement-model.md`.

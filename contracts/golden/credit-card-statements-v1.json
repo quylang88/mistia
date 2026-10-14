@@ -1,0 +1,997 @@
+{
+  "version": 1,
+  "owner": "11111111-1111-1111-1111-111111111111",
+  "card": "22222222-2222-2222-2222-222222222222",
+  "cash": "33333333-3333-3333-3333-333333333333",
+  "cases": [
+    {
+      "name": "next-month-before-close",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-08T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "unclosed",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "next-month-on-close",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "due-day-exact-balance",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-25T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 32456,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "payable",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "overdue-five-day-window",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-30T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "overdue",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "payable",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "overdue-after-retry-window",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-31T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "overdue",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "insufficient-funds",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-25T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 32455,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "insufficientFunds",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "missing-linked-wallet",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-25T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": null,
+      "sourceBalance": null,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "missingLinkedWallet",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "pre-close-payment-does-not-settle",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-02-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "covering-payment-settles",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "paid",
+        "status": "paid",
+        "linked": "40000000-0000-0000-0000-000000000002",
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "fx-uses-destination-amount",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 3245600,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222",
+          "destinationAmount": 32456
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "paid",
+        "status": "paid",
+        "linked": "40000000-0000-0000-0000-000000000002",
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "partial-payments-are-not-summed",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 16000,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000003",
+          "kind": "transfer",
+          "amount": 16456,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "stale-paid-snapshot-is-ignored",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 1000,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [
+        {
+          "month": "2026-02",
+          "amount": 1000,
+          "status": "paid",
+          "linked": "40000000-0000-0000-0000-000000000002"
+        }
+      ],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 68544
+      }
+    },
+    {
+      "name": "legacy-due-month-link-is-preferred",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-03-10T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000003",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [
+        {
+          "month": "2026-03",
+          "amount": 32456,
+          "status": "paid",
+          "linked": "40000000-0000-0000-0000-000000000003"
+        }
+      ],
+      "expected": {
+        "amount": 32456,
+        "state": "paid",
+        "status": "paid",
+        "linked": "40000000-0000-0000-0000-000000000003",
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "canonical-stale-snapshot-wins-over-legacy-then-payment-fallback",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-03-10T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000003",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-03-25T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "internalTransfer",
+          "destination": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [
+        {
+          "month": "2026-02",
+          "amount": 1000,
+          "status": "paid",
+          "linked": "40000000-0000-0000-0000-000000000003"
+        },
+        {
+          "month": "2026-03",
+          "amount": 32456,
+          "status": "paid",
+          "linked": "40000000-0000-0000-0000-000000000003"
+        }
+      ],
+      "expected": {
+        "amount": 32456,
+        "state": "paid",
+        "status": "paid",
+        "linked": "40000000-0000-0000-0000-000000000002",
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "backdated-charge-before-wallet-open",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2026-03-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "empty-month-before-wallet-open",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2026-03-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [],
+      "occurrences": [],
+      "expected": null
+    },
+    {
+      "name": "zero-amount-before-close",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-08T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [],
+      "occurrences": [],
+      "expected": {
+        "amount": 0,
+        "state": "unclosed",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "zero-amount-after-close",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [],
+      "occurrences": [],
+      "expected": {
+        "amount": 0,
+        "state": "paid",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 100000
+      }
+    },
+    {
+      "name": "short-month-clamps-close-and-due",
+      "month": "2026-01",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-02-27T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 30,
+      "dueDay": 31,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-01-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-02-27T15:00:00Z",
+        "due": "2026-02-27T15:00:00Z",
+        "decision": "payable",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "legacy-due-day-before-close-rolls-another-month",
+      "month": "2026-01",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-02-27T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 30,
+      "dueDay": 5,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-01-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-02-27T15:00:00Z",
+        "due": "2026-03-04T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "minor-unit-above-double-precision",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 9007199254740993,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 9007199254740993,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 0
+      }
+    },
+    {
+      "name": "ignore-foreign-draft-archived-deleted",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "expense",
+          "amount": 9000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "status": "draft"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000003",
+          "kind": "expense",
+          "amount": 9000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "archived": true
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000004",
+          "kind": "expense",
+          "amount": 9000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "deleted": true
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000005",
+          "kind": "expense",
+          "amount": 9000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "owner": "99999999-9999-9999-9999-999999999999"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "card-debt-lending-still-charged-after-cash-collection",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "subtype": "debt",
+          "intent": "lend"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "transfer",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "33333333-3333-3333-3333-333333333333",
+          "subtype": "debt",
+          "intent": "collect"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "adjustment-and-installment-payments-excluded",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000002",
+          "kind": "expense",
+          "amount": 1000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "category": "5da63bda-4125-58d5-a91f-2e20539169cf"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000003",
+          "kind": "expense",
+          "amount": 1000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "category": "d872b8af-d28a-5b90-8822-839dfa097b23"
+        },
+        {
+          "id": "40000000-0000-0000-0000-000000000004",
+          "kind": "expense",
+          "amount": 1000,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222",
+          "title": " Balance adjustment "
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 64544
+      }
+    },
+    {
+      "name": "vietnam-before-closing-midnight",
+      "month": "2026-02",
+      "zone": "Asia/Ho_Chi_Minh",
+      "reference": "2026-03-09T16:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-02-11T15:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "unclosed",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T17:00:00Z",
+        "due": "2026-03-25T17:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "tokyo-boundary-charge-counts-in-february",
+      "month": "2026-02",
+      "zone": "Asia/Tokyo",
+      "reference": "2026-03-09T15:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-01-31T16:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 32456,
+        "state": "payable",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T15:00:00Z",
+        "due": "2026-03-25T15:00:00Z",
+        "decision": "notDue",
+        "availableCredit": 67544
+      }
+    },
+    {
+      "name": "vietnam-same-instant-charge-belongs-to-january",
+      "month": "2026-02",
+      "zone": "Asia/Ho_Chi_Minh",
+      "reference": "2026-03-09T17:00:00Z",
+      "openedAt": "2025-12-31T15:00:00Z",
+      "closingDay": 10,
+      "dueDay": 26,
+      "paymentSource": "33333333-3333-3333-3333-333333333333",
+      "sourceBalance": 40000,
+      "transactions": [
+        {
+          "id": "40000000-0000-0000-0000-000000000001",
+          "kind": "expense",
+          "amount": 32456,
+          "at": "2026-01-31T16:00:00Z",
+          "source": "22222222-2222-2222-2222-222222222222"
+        }
+      ],
+      "occurrences": [],
+      "expected": {
+        "amount": 0,
+        "state": "paid",
+        "status": "pending",
+        "linked": null,
+        "closing": "2026-03-09T17:00:00Z",
+        "due": "2026-03-25T17:00:00Z",
+        "decision": "alreadyPaid",
+        "availableCredit": 67544
+      }
+    }
+  ]
+}

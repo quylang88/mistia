@@ -301,6 +301,17 @@ class TransactionRepositoryTest {
         )
     }
 
+    @Test fun `new charge cannot reopen paid statement by making total exceed existing payment`()=runTest {
+        val store=TransactionMemoryStore();val repository=OfflineFirstFinanceRepository(store)
+        seedCreditCardExpenseDependencies(repository)
+        repository.saveTransaction(UserId(OWNER),expenseDraft(amountMinor=6000,occurredAt="2026-02-12T03:00:00Z"),DEVICE,NOW).getOrThrow()
+        repository.saveTransaction(UserId(OWNER),cardPaymentDraft(6000).copy(title="Transfer"),DEVICE,NOW).getOrThrow()
+        val before=store.outbox.toMap()
+        val result=repository.saveTransaction(UserId(OWNER),expenseDraft(id=SECOND_TRANSACTION_ID,amountMinor=1000,occurredAt="2026-02-15T03:00:00Z"),DEVICE,LATER)
+        assertEquals(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT,(result.exceptionOrNull() as? TransactionValidationException)?.reason)
+        assertEquals(before,store.outbox)
+    }
+
     @Test
     fun `new expense cannot be added when existing payment still covers closed statement`() = runTest {
         val store = TransactionMemoryStore()
@@ -479,7 +490,7 @@ class TransactionRepositoryTest {
         transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
         title = "Card payment 02/2026",
         amountMinor = amountMinor,
-        occurredAt = "2026-02-26T03:00:00Z",
+        occurredAt = "2026-03-26T03:00:00Z",
         sourceWalletId = DESTINATION_WALLET_ID,
         destinationWalletId = SOURCE_WALLET_ID,
     )

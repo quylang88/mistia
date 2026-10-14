@@ -103,10 +103,10 @@ internal class OfflineBillPaymentRepository(
         val transactions = owned(snapshot, CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord).filter { it.deletedAt==null }
         val profiles = owned(snapshot, CloudEntity.CREDIT_CARD_PROFILE).map(CreditCardProfileRecord::fromCloudRecord).filter { it.deletedAt==null }
         if (previous?.isLockedByPaidCreditCardStatement(wallets, profiles, categories, transactions,
-                owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone)==true)
+                owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone,Instant.parse(now))==true)
             throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
-        if (mutation.record.isLockedByPaidCreditCardStatement(wallets, profiles, categories, transactions+mutation.record,
-                owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone))
+        if (mutation.record.isLockedByPaidCreditCardStatement(wallets, profiles, categories, transactions.filterNot {it.id==mutation.record.id},
+                owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone,Instant.parse(now)))
             throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
         mutation.record.requireAffordable(wallets, transactions, profiles, null)
         val paymentOccurrences = cycle+undone
@@ -146,7 +146,7 @@ internal class OfflineBillPaymentRepository(
                 owned(snapshot, CloudEntity.INVESTMENT_POSTING).any { it.deletedAt==null && (it.payload["ledger_transaction_id"] as? JsonPrimitive)?.content==tx.id })
                 fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
             if (tx.isLockedByPaidCreditCardStatement(wallets, profiles, categories, allTransactions.filter { it.deletedAt==null },
-                    owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone))
+                    owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).filter { it.deletedAt==null }, zone,Instant.parse(now)))
                 throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
         }
         val timestamp = Instant.parse(now).toString()

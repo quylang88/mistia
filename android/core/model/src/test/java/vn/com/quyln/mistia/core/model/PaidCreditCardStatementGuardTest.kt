@@ -22,7 +22,7 @@ class PaidCreditCardStatementGuardTest {
             kind = TransactionPrimaryKind.TRANSFER,
             transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
             amountMinor = 7_000,
-            occurredAt = "2026-02-26T03:00:00Z",
+            occurredAt = "2026-03-26T03:00:00Z",
             sourceWalletId = CASH_ID,
             destinationWalletId = CARD_ID,
             title = "Transfer",
@@ -52,7 +52,7 @@ class PaidCreditCardStatementGuardTest {
             kind = TransactionPrimaryKind.TRANSFER,
             transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
             amountMinor = 6_999,
-            occurredAt = "2026-02-26T03:00:00Z",
+            occurredAt = "2026-03-26T03:00:00Z",
             sourceWalletId = CASH_ID,
             destinationWalletId = CARD_ID,
             title = "Transfer",
@@ -135,7 +135,7 @@ class PaidCreditCardStatementGuardTest {
             kind = TransactionPrimaryKind.TRANSFER,
             transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
             amountMinor = 7_000,
-            occurredAt = "2026-02-26T03:00:00Z",
+            occurredAt = "2026-03-26T03:00:00Z",
             sourceWalletId = CASH_ID,
             destinationWalletId = CARD_ID,
             title = "Transfer",
@@ -175,7 +175,7 @@ class PaidCreditCardStatementGuardTest {
             kind = TransactionPrimaryKind.TRANSFER,
             transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
             amountMinor = 6_500,
-            occurredAt = "2026-02-26T03:00:00Z",
+            occurredAt = "2026-03-26T03:00:00Z",
             sourceWalletId = CASH_ID,
             destinationWalletId = CARD_ID,
             title = "Transfer",
@@ -199,6 +199,36 @@ class PaidCreditCardStatementGuardTest {
                 dueOccurrences = emptyList(),
             )
         )
+    }
+
+    @Test fun `same spending month payment cannot cover next month closing date`() {
+        val expense=transaction(EXPENSE_ID,TransactionPrimaryKind.EXPENSE,7000,"2026-02-12T03:00:00Z",CARD_ID)
+        val payment=transaction(PAYMENT_ID,TransactionPrimaryKind.TRANSFER,7000,"2026-02-26T03:00:00Z",CASH_ID,CARD_ID,
+            transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,title="Transfer")
+        assertFalse(expense.isLockedByPaidCreditCardStatement(listOf(cardWallet()),listOf(cardProfile()),transactions=listOf(expense,payment),dueOccurrences=emptyList()))
+    }
+    @Test fun `known pending statement occurrence overrides legacy payment title fallback`() {
+        val expense=transaction(EXPENSE_ID,TransactionPrimaryKind.EXPENSE,7000,"2026-02-12T03:00:00Z",CARD_ID)
+        val payment=transaction(PAYMENT_ID,TransactionPrimaryKind.TRANSFER,7000,"2026-02-26T03:00:00Z",CASH_ID,CARD_ID,
+            transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,title="Card payment month 2/2026")
+        val old=paidOccurrence(PAYMENT_ID)
+        val pending=old.copy(payload=JsonObject(old.payload+("status_raw_value" to JsonPrimitive("pending"))+("linked_transaction_id" to JsonNull)+("paid_at" to JsonNull)))
+        assertFalse(expense.isLockedByPaidCreditCardStatement(listOf(cardWallet()),listOf(cardProfile()),transactions=listOf(expense,payment),dueOccurrences=listOf(pending)))
+    }
+    @Test fun `credit card lending never falls back to legacy title when actual statement remains unpaid`() {
+        val lending=transaction(LENDING_ID,TransactionPrimaryKind.TRANSFER,7000,"2026-02-12T03:00:00Z",CARD_ID,
+            transferSubtype=TransactionTransferSubtype.DEBT,debtIntent=TransactionDebtIntent.LEND)
+        val payment=transaction(PAYMENT_ID,TransactionPrimaryKind.TRANSFER,1,"2026-02-26T03:00:00Z",CASH_ID,CARD_ID,
+            transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,title="Card payment month 2/2026")
+        assertFalse(lending.isLockedByPaidCreditCardStatement(listOf(cardWallet()),listOf(cardProfile()),transactions=listOf(lending,payment),dueOccurrences=emptyList()))
+    }
+
+    @Test fun `foreign payload owner cannot freeze a payment in current owner cache`() {
+        val payment=transaction(PAYMENT_ID,TransactionPrimaryKind.TRANSFER,7000,"2026-03-26T03:00:00Z",CASH_ID,CARD_ID,
+            transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,title="Transfer")
+        val own=paidOccurrence(PAYMENT_ID)
+        val foreign=own.copy(payload=JsonObject(own.payload+("user_id" to JsonPrimitive(OTHER_OWNER))))
+        assertFalse(payment.isLockedByPaidCreditCardStatement(listOf(cardWallet()),listOf(cardProfile()),transactions=listOf(payment),dueOccurrences=listOf(foreign)))
     }
 
     private fun transaction(

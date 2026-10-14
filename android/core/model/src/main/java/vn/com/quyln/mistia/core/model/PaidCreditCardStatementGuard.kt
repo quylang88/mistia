@@ -16,6 +16,7 @@ fun LedgerTransactionRecord.isLockedByPaidCreditCardStatement(
     transactions: List<LedgerTransactionRecord>,
     dueOccurrences: List<CloudRecord>,
     zoneId: ZoneId = ZoneId.systemDefault(),
+    referenceDate:Instant = Instant.now(),
 ): Boolean {
     val kind = primaryKind ?: return false
     if (kind != TransactionPrimaryKind.EXPENSE && kind != TransactionPrimaryKind.TRANSFER) {
@@ -47,13 +48,22 @@ fun LedgerTransactionRecord.isLockedByPaidCreditCardStatement(
     if (isStatementCharge &&
         isPaidStatementExpense(
             cardWalletId = creditCardWalletId,
+            wallets = wallets,
             creditCardProfiles = creditCardProfiles,
             categories = categories,
             transactions = transactions,
+            dueOccurrences = dueOccurrences,
             zoneId = zoneId,
+            referenceDate = referenceDate,
         )
     ) {
         return true
+    }
+
+    if(isStatementCharge) {
+        if(dueOccurrences.any {it.isOwnedCreditOccurrence(ownerUserId) && it.payload.stringValue("source_id")==creditCardWalletId}) return false
+        // Swift's legacy title heuristic deliberately excludes debt lending.
+        if(transferSubtype==TransactionTransferSubtype.DEBT) return false
     }
 
     return transactions.asSequence()
@@ -69,66 +79,25 @@ fun LedgerTransactionRecord.isLockedByPaidCreditCardStatement(
         }
 }
 
-private fun LedgerTransactionRecord.isLinkedToPaidCreditCardOccurrence(
-    dueOccurrences: List<CloudRecord>,
-): Boolean = dueOccurrences.any { occurrence ->
-    occurrence.entity == CloudEntity.DUE_OCCURRENCE_RECORD.table &&
-        occurrence.ownerUserId == ownerUserId &&
-        occurrence.deletedAt == null &&
-        occurrence.payload.stringValue("source_kind_raw_value") == "creditCard" &&
-        occurrence.payload.stringValue("status_raw_value") == "paid" &&
-        occurrence.payload.stringValue("linked_transaction_id") == id
+private fun CloudRecord.isOwnedCreditOccurrence(owner:String):Boolean =
+    entity==CloudEntity.DUE_OCCURRENCE_RECORD.table && ownerUserId==owner && deletedAt==null &&
+        payload.stringValue("user_id")==owner && payload.stringValue("deleted_at")==null &&
+        payload.stringValue("source_kind_raw_value")=="creditCard"
+
+private fun LedgerTransactionRecord.isLinkedToPaidCreditCardOccurrence(dueOccurrences:List<CloudRecord>):Boolean = dueOccurrences.any {
+    it.isOwnedCreditOccurrence(ownerUserId) && it.payload.stringValue("status_raw_value")=="paid" && it.payload.stringValue("linked_transaction_id")==id
 }
 
 private fun LedgerTransactionRecord.isPaidStatementExpense(
-    cardWalletId: String,
-    creditCardProfiles: List<CreditCardProfileRecord>,
-    categories: List<TransactionCategoryRecord>,
-    transactions: List<LedgerTransactionRecord>,
-    zoneId: ZoneId,
-): Boolean {
-    val profile = creditCardProfiles.firstOrNull {
-        it.ownerUserId == ownerUserId && it.walletId == cardWalletId && it.deletedAt == null
-    } ?: return false
-    val statementMonth = occurredYearMonth(zoneId) ?: return false
-    val excludedExpenseCategoryIds = categories.asSequence()
-        .filter { it.ownerUserId == ownerUserId && it.deletedAt == null }
-        .filter { it.isBalanceAdjustmentSystemCategory || it.systemKey == LOAN_REPAYMENT_CATEGORY_KEY }
-        .mapTo(mutableSetOf(), TransactionCategoryRecord::id)
-    val amount = transactions.asSequence()
-        .filter { it.ownerUserId == ownerUserId && it.isActivePostedTransaction() }
-        .filter {
-            it.isCreditCardStatementCharge(cardWalletId, excludedExpenseCategoryIds) &&
-                it.occurredYearMonth(zoneId) == statementMonth
-        }
-        .fold(0L) { total, charge -> saturatingStatementAdd(total, charge.amountMinor) }
-    if (amount <= 0) return false
-
-    val closingDay = minOf(profile.statementClosingDay, statementMonth.lengthOfMonth())
-    val closingInstant = statementMonth.atDay(closingDay).atStartOfDay(zoneId).toInstant()
-    return transactions.asSequence()
-        .filter { it.ownerUserId == ownerUserId && it.isActivePostedTransaction() }
-        .filter {
-            it.primaryKind == TransactionPrimaryKind.TRANSFER &&
-                it.transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER &&
-                it.destinationWalletId == cardWalletId
-        }
-        .any { payment ->
-            val paymentInstant = runCatching { Instant.parse(payment.occurredAt) }.getOrNull()
-                ?: return@any false
-            val paidAmount = payment.destinationAmountMinor ?: payment.amountMinor
-            !paymentInstant.isBefore(closingInstant) && paidAmount >= amount
-        }
-}
-
-private fun LedgerTransactionRecord.isCreditCardStatementCharge(
-    cardWalletId: String,
-    excludedExpenseCategoryIds: Set<String>,
-): Boolean = sourceWalletId == cardWalletId && when (primaryKind) {
-    TransactionPrimaryKind.EXPENSE -> categoryId !in excludedExpenseCategoryIds
-    TransactionPrimaryKind.TRANSFER ->
-        transferSubtype == TransactionTransferSubtype.DEBT && debtIntent == TransactionDebtIntent.LEND
-    TransactionPrimaryKind.INCOME, null -> false
+    cardWalletId:String, wallets:List<LedgerWalletRecord>, creditCardProfiles:List<CreditCardProfileRecord>,
+    categories:List<TransactionCategoryRecord>, transactions:List<LedgerTransactionRecord>, dueOccurrences:List<CloudRecord>,zoneId:ZoneId,referenceDate:Instant,
+):Boolean {
+    val wallet=wallets.firstOrNull {it.ownerUserId==ownerUserId && it.id==cardWalletId && it.deletedAt==null} ?: return false
+    val profile=creditCardProfiles.firstOrNull {it.ownerUserId==ownerUserId && it.walletId==cardWalletId && it.deletedAt==null} ?: return false
+    val month=occurredYearMonth(zoneId) ?: return false
+    val occurrences=dueOccurrences.filter {it.isOwnedCreditOccurrence(ownerUserId)}.mapNotNull {runCatching {DueOccurrenceRecord.fromCloudRecord(it)}.getOrNull()}
+    return creditCardStatementItems(UserId(ownerUserId),listOf(CreditCardAccount(wallet,profile)),transactions,occurrences,listOf(month),referenceDate,zoneId,categories)
+        .firstOrNull()?.state==CreditCardStatementState.PAID
 }
 
 private fun LedgerTransactionRecord.isActivePostedTransaction(): Boolean =
@@ -184,10 +153,6 @@ private fun isCreditCardPaymentTitle(title: String): Boolean {
 private fun JsonObject.stringValue(key: String): String? =
     (get(key) as? JsonPrimitive)?.contentOrNull
 
-private fun saturatingStatementAdd(left: Long, right: Long): Long = runCatching {
-    Math.addExact(left, right)
-}.getOrElse { Long.MAX_VALUE }
-
 private val ENGLISH_MONTHS = mapOf(
     "january" to 1, "jan" to 1,
     "february" to 2, "feb" to 2,
@@ -202,5 +167,3 @@ private val ENGLISH_MONTHS = mapOf(
     "november" to 11, "nov" to 11,
     "december" to 12, "dec" to 12,
 )
-
-private const val LOAN_REPAYMENT_CATEGORY_KEY = "loan_repayment"

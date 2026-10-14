@@ -173,6 +173,7 @@ class OfflineFirstFinanceRepository(
         deviceId: String,
         now: String,
     ): Result<LedgerTransactionRecord> = runCatching {
+        val statementZone=ZoneId.systemDefault()
         val transactions = transactionSnapshot(ownerUserId)
         val wallets = walletSnapshot(ownerUserId)
         val categories = categorySnapshot(ownerUserId)
@@ -185,6 +186,8 @@ class OfflineFirstFinanceRepository(
                 categories = categories,
                 transactions = transactions,
                 dueOccurrences = dueOccurrences,
+                zoneId = statementZone,
+                referenceDate = Instant.parse(now),
             ) == true
         ) {
             throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
@@ -207,13 +210,15 @@ class OfflineFirstFinanceRepository(
             (mutation.record.transferSubtype == TransactionTransferSubtype.DEBT &&
                 mutation.record.debtIntent == TransactionDebtIntent.LEND)
         if (canChangeCreditCardStatement) {
-            val proposedTransactions = transactions.filterNot { it.id == mutation.record.id } + mutation.record
+            val validationTransactions = transactions.filterNot { it.id == mutation.record.id }
             if (mutation.record.isLockedByPaidCreditCardStatement(
                     wallets = wallets,
                     creditCardProfiles = creditCardProfiles,
                     categories = categories,
-                    transactions = proposedTransactions,
+                    transactions = validationTransactions,
                     dueOccurrences = dueOccurrences,
+                    zoneId = statementZone,
+                    referenceDate = Instant.parse(now),
                 )
             ) {
                 throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
