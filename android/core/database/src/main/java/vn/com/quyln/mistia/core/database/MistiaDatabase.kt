@@ -18,6 +18,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.com.quyln.mistia.core.model.SystemCategoryIdentityMigration
+import vn.com.quyln.mistia.core.model.planObservedSystemCategoryMaintenance
 import vn.com.quyln.mistia.core.model.SystemCategoryCatalog
 import vn.com.quyln.mistia.core.model.planSystemCategoryIdentityMigration
 import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
@@ -564,13 +566,27 @@ class RoomLocalStore(
             pending.baseVersion,pending.deviceId,queued.attemptCount,pending.kind.name.lowercase(),pending.payload?.toString(),queued.remoteIdentityObserved)==1)
         database.categoryTranslationOutboxDao().deleteCategory(expected.owner.value,adoption.source.id)
         if(plan.removesSourceIdentity) check(database.cloudRecordDao().deleteRecord(expected.owner.value,CloudEntity.TRANSACTION_CATEGORY.table,adoption.source.id)==1)
+        installCategoryIdentityPlan(plan)
+        true
+    }
+
+    override suspend fun commitObservedSystemCategoryMaintenance(expected:CategoryReferenceSnapshot,key:String,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean = database.withTransaction {
+        val current=readCategoryReferenceSnapshot(expected.owner)
+        try {expected.requireUnchanged(current)} catch (_:IllegalArgumentException) {return@withTransaction false}
+        val plan=planObservedSystemCategoryMaintenance(current,key,remote,catalog,deviceId,now) ?: return@withTransaction true
+        check(!plan.removesSourceIdentity)
+        installCategoryIdentityPlan(plan)
+        true
+    }
+
+    private suspend fun installCategoryIdentityPlan(plan:SystemCategoryIdentityMigration) {
+        val adoption=plan.adoption
         plan.retainedCategories.forEach {database.cloudRecordDao().upsert(it.toEntity(false,System.currentTimeMillis()))}
         val targetMutation=adoption.mutation
         if(targetMutation==null) database.cloudRecordDao().upsert(adoption.target.toEntity(false,System.currentTimeMillis()))
         else commitMutationRows(adoption.target,targetMutation,remoteIdentityObserved=true)
         plan.references.mutations.forEach {commitMutationRows(it.record,it.mutation)}
         (plan.references.translations+listOfNotNull(adoption.translation)).forEach {database.categoryTranslationOutboxDao().upsert(it.toEntity())}
-        true
     }
 
     override suspend fun categoryReferenceSnapshot(owner: UserId): CategoryReferenceSnapshot = database.withTransaction {

@@ -131,3 +131,21 @@ native bill form/lifecycle/payment and due maintenance; full APK1–4 goal remai
   bootstrap queue. Reuse lossless atomic reference/alias repairs, protect pending
   edits/tasks and full snapshot CAS; process parent groups before children.
   Startup pull/bootstrap remains disabled until these paths are verified.
+
+
+## Observed group maintenance API — 2026-10-14
+
+- [x] Extract common raw value/parent merging and identity/reference repair from
+  SystemCategoryAdoption.kt; run existing adoption tests before behavior changes.
+- [x] Add planObservedSystemCategoryMaintenance(snapshot,key,remote,catalog,deviceId,now)
+  in SystemCategoryMaintenance.kt, returning an optional real-identity migration.
+  Tests require actual IDs/no synthetic source, exact legacy cleanup/canonical
+  base, all-deleted preservation with financial alias repair, pending edit/task
+  deferral and stale remote rejection. Five runtime REDs before implementation.
+- [x] Add LocalStore.commitObservedSystemCategoryMaintenance with full snapshot
+  CAS and shared Room installation transaction. Compile Room reopen, rollback
+  and stale-edit regressions; report runtime execution separately.
+- [x] Verify complete Android/Swift/contracts/l10n/SQLite, review and evidence; commit this bounded API.
+- [ ] Next wire maintenance using complete real owner-key snapshots, parent groups
+  before children, retry/defer/cancellation and bootstrap integration. Do not
+  use locally merged pending records as if they were authoritative remote rows.

@@ -76,6 +76,56 @@ class SystemCategoryIdentityRoomTest {
             assertTrue(store.categoryReferenceSnapshot(UserId(device)).pending.isEmpty())
         } finally {db.close();context.deleteDatabase(name)}
     }
+    @Test fun observedGroupWithoutSeedAtomicallyRepairsHistoryAndReopensPendingCleanup()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="observed-category-${UUID.randomUUID()}.db"
+        var db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build()
+        try {
+            var store:LocalStore=RoomLocalStore(db)
+            val rows=listOf(TransactionCategoryRecord.fromCloudRecord(remote(seed.id)).copy(deletedAt=now,syncVersion=0).toCloudRecord(),remote())
+            store.replacePullSnapshot(owner,CloudEntity.TRANSACTION_CATEGORY.table,rows)
+            val ledger=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,child,owner.value,buildJsonObject {
+                put("id",child);put("user_id",owner.value);put("category_id",legacy);put("amount_minor",9007199254740995L)
+                put("category_name_snapshot","Frozen");put("updated_at",now);put("deleted_at",JsonNull);put("sync_version",7)
+            },now,null,7)
+            store.replacePullSnapshot(owner,CloudEntity.LEDGER_TRANSACTION.table,listOf(ledger))
+            val before=store.categoryReferenceSnapshot(owner)
+            assertTrue(before.pending.isEmpty())
+            assertTrue(store.commitObservedSystemCategoryMaintenance(before,"home",rows,catalog,device,now))
+            db.close();db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build();store=RoomLocalStore(db)
+            val after=store.categoryReferenceSnapshot(owner)
+            assertEquals(3,after.pending.size)
+            val canonical=after.pending.single {it.mutation.recordId==seed.id}
+            assertTrue(canonical.remoteIdentityObserved);assertEquals(0L,canonical.mutation.baseVersion)
+            val cleanup=after.pending.single {it.mutation.recordId==legacy}
+            assertTrue(cleanup.remoteIdentityObserved);assertEquals(9007199254740993L,cleanup.mutation.baseVersion)
+            assertNotNull(store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,legacy)!!.deletedAt)
+            val repaired=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,child)!!
+            assertEquals(seed.id,repaired.payload["category_id"]!!.jsonPrimitive.content)
+            assertEquals(JsonPrimitive(9007199254740995L),repaired.payload["amount_minor"])
+            assertEquals(JsonPrimitive("Frozen"),repaired.payload["category_name_snapshot"])
+        } finally {db.close();context.deleteDatabase(name)}
+    }
+    @Test fun observedMaintenanceSnapshotRejectsNewEditAndRollsBackAnyFailedOutboxWrite()=runTest {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).build()
+        try {
+            val store:LocalStore=RoomLocalStore(db)
+            val rows=listOf(TransactionCategoryRecord.fromCloudRecord(remote(seed.id)).copy(deletedAt=now).toCloudRecord(),remote())
+            store.replacePullSnapshot(owner,CloudEntity.TRANSACTION_CATEGORY.table,rows)
+            val before=store.categoryReferenceSnapshot(owner)
+            db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_observed_cleanup BEFORE INSERT ON sync_outbox
+                WHEN NEW.record_id='$legacy' BEGIN SELECT RAISE(ABORT,'simulated cleanup failure'); END""")
+            assertTrue(runCatching {store.commitObservedSystemCategoryMaintenance(before,"home",rows,catalog,device,now)}.isFailure)
+            assertEquals(before,store.categoryReferenceSnapshot(owner))
+            db.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_observed_cleanup")
+            val changed=TransactionCategoryRecord.fromCloudRecord(rows.last()).copy(name="Local edit")
+            store.commitMutation(changed.toCloudRecord(),changed.bootstrapMutation())
+            val edited=store.categoryReferenceSnapshot(owner)
+            assertFalse(store.commitObservedSystemCategoryMaintenance(before,"home",rows,catalog,device,now))
+            assertEquals(edited,store.categoryReferenceSnapshot(owner))
+        } finally {db.close()}
+    }
     @Test fun activeLegacyCleanupAndCanonicalRestoreSurviveReopenTogether()=runTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="category-cleanup-${UUID.randomUUID()}.db"

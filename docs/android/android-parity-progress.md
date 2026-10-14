@@ -1662,3 +1662,18 @@ Evidence: `docs/android/evidence/2026-10-14-retained-category-aliases.md`.
   and full APK1–4 remain open.
 
 Evidence: `docs/android/evidence/2026-10-14-category-active-alias-cleanup.md`.
+
+
+## Observed category group maintenance API — 2026-10-14
+
+- [x] Actual observed group repair without a seed or fabricated wire ID; common
+  raw identity/value/reference path, tombstone preservation, pending group/task
+  deferral, stale metadata and owner/kind/role validation.
+- [x] Full snapshot CAS and shared Room install transaction; no source deletion.
+  Reopen/stale/rollback tests compile only.
+- [x]5 new runtime regressions RED/GREEN;728 JVM/80 suites and full Android,
+  Swift23/contracts/l10n/SQLite checks pass; independent review noP1/P2. APK29.
+- [ ] Maintenance coordinator/startup, physical/live cloud and full APK1–4 parity
+  remain open; all nine write flags remain false.
+
+Evidence: `docs/android/evidence/2026-10-14-observed-category-maintenance-api.md`.

@@ -22,6 +22,56 @@ class SystemCategoryAdoptionTest {
     }
     private fun prepare(snapshot:CategoryReferenceSnapshot,remote:List<CloudRecord> = listOf(remote()))=
         prepareSystemCategoryAdoption(snapshot,snapshot.pending.first(),remote,catalog,device,now)
+    private fun cleanSnapshot(rows:List<CloudRecord>)=snapshot().copy(
+        records=categoryReferenceEntities.associateWith {if(it==CloudEntity.TRANSACTION_CATEGORY) rows else emptyList()},pending=emptyList())
+    private fun maintenance(source:CategoryReferenceSnapshot,rows:List<CloudRecord>)=
+        planObservedSystemCategoryMaintenance(source,"home",rows,catalog,device,now)
+    @Test fun `clean observed group queues active legacy cleanup and canonical activation without a seed`() {
+        val canonical=TransactionCategoryRecord.fromCloudRecord(remote(seed.id)).copy(deletedAt=now,syncVersion=42).toCloudRecord()
+        val rows=listOf(canonical,remote())
+        val source=cleanSnapshot(rows)
+        val plan=maintenance(source,rows)!!
+        assertFalse(plan.removesSourceIdentity)
+        assertEquals(canonical,plan.adoption.source)
+        assertNull(plan.adoption.target.deletedAt)
+        assertEquals(42L,plan.adoption.mutation!!.baseVersion)
+        assertEquals(9007199254740993L,plan.references.mutations.single().mutation.baseVersion)
+        assertNotNull(plan.references.mutations.single().record.deletedAt)
+        assertTrue(source.pending.isEmpty())
+    }
+    @Test fun `observed single legacy identity never fabricates an absent cloud ID or write`() {
+        val row=remote();val plan=maintenance(cleanSnapshot(listOf(row)),listOf(row))!!
+        assertEquals(legacy,plan.adoption.target.id)
+        assertEquals(row,plan.adoption.target)
+        assertNull(plan.adoption.mutation)
+        assertTrue(plan.references.mutations.isEmpty())
+        assertFalse(plan.removesSourceIdentity)
+    }
+    @Test fun `observed all deleted group remains deleted while financial aliases converge`() {
+        val rows=listOf(remote(seed.id),remote()).map {TransactionCategoryRecord.fromCloudRecord(it).copy(deletedAt=now).toCloudRecord()}
+        val initial=referencedSnapshot()
+        val ledger=initial.records.getValue(CloudEntity.LEDGER_TRANSACTION).single().let {it.copy(payload=JsonObject(it.payload+("category_id" to JsonPrimitive(legacy))))}
+        val source=cleanSnapshot(rows).copy(records=cleanSnapshot(rows).records+mapOf(CloudEntity.LEDGER_TRANSACTION to listOf(ledger)))
+        val plan=maintenance(source,rows)!!
+        assertNotNull(plan.adoption.target.deletedAt)
+        assertNull(plan.adoption.mutation)
+        assertEquals(seed.id,plan.references.mutations.single().record.payload["category_id"]!!.jsonPrimitive.content)
+        assertEquals(9007199254740995L,plan.references.mutations.single().record.payload["amount_minor"]!!.jsonPrimitive.long)
+    }
+    @Test fun `observed pending category edits and translations defer without losing retry or input`() {
+        val rows=listOf(remote(seed.id),TransactionCategoryRecord.fromCloudRecord(remote()).copy(deletedAt=now).toCloudRecord())
+        val source=cleanSnapshot(rows)
+        val queue=QueuedMutation(PendingMutation(CloudEntity.TRANSACTION_CATEGORY,legacy,owner.value,MutationKind.UPSERT,rows.last().payload,rows.last().updatedAt!!,rows.last().syncVersion,device),3,Long.MAX_VALUE,"retry",true)
+        assertThrows(CategoryGroupEditsPending::class.java) {maintenance(source.copy(pending=listOf(queue)),rows)}
+        val task=QueuedCategoryTranslation(PendingCategoryTranslation(owner.value,seed.id,"Home",CategoryNameLanguage.ENGLISH,now,device),2,Long.MAX_VALUE,"retry")
+        assertThrows(CategoryGroupEditsPending::class.java) {maintenance(source.copy(translations=listOf(task)),rows)}
+        assertEquals("Home",task.translation.inputName)
+    }
+    @Test fun `observed stale remote group cannot replace a newer local clean alias`() {
+        val row=remote()
+        val newer=TransactionCategoryRecord.fromCloudRecord(row).copy(syncVersion=9007199254740994L).toCloudRecord()
+        assertThrows(IllegalArgumentException::class.java) {maintenance(cleanSnapshot(listOf(newer)),listOf(row))}
+    }
     @Test fun `untouched seed adopts the exact real legacy wire row without a fabricated ACK`() {
         val snapshot=snapshot();val remote=remote()
         val plan=prepare(snapshot,listOf(remote))

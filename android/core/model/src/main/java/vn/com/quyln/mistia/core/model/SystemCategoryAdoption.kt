@@ -58,6 +58,16 @@ fun prepareSystemCategoryAdoption(snapshot:CategoryReferenceSnapshot,queued:Queu
     }
     sourceTask?.let {changes[it.sourceLanguage.categoryNameField()]=requireNotNull(source.payload[it.sourceLanguage.categoryNameField()])}
     require(selection.values.deletedAt==null || changes.isEmpty()) {"Edited seed conflicts with authoritative tombstone"}
+    val (target,mutation)=mergeSystemCategoryValues(snapshot,source,selection,changes,deviceId,now)
+    val translation=sourceTask?.takeIf {target.deletedAt==null && (target.payload[it.sourceLanguage.categoryNameField()] as? JsonPrimitive)?.contentOrNull?.trim()==it.inputName.trim()}
+        ?.copy(categoryId=target.id,savedUpdatedAt=requireNotNull(target.updatedAt),deviceId=deviceId)
+    return SystemCategoryAdoption(source,selection,target,mutation,translation)
+}
+
+internal fun mergeSystemCategoryValues(snapshot:CategoryReferenceSnapshot,source:CloudRecord,selection:SystemCategoryRemoteSelection,
+    changes:Map<String,JsonElement>,deviceId:String,now:String):Pair<CloudRecord,PendingMutation?> {
+    val identity=selection.identity
+    val categories=snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY)
     val fields=(identity.payload+selection.values.payload+changes+mapOf(
         "id" to JsonPrimitive(identity.id),"user_id" to JsonPrimitive(snapshot.owner.value),
         "sync_version" to JsonPrimitive(identity.syncVersion),"created_at" to requireNotNull(identity.payload["created_at"]),
@@ -97,9 +107,7 @@ fun prepareSystemCategoryAdoption(snapshot:CategoryReferenceSnapshot,queued:Queu
     }
     val mutation=if(!changed) null else PendingMutation(CloudEntity.TRANSACTION_CATEGORY,target.id,snapshot.owner.value,
         MutationKind.UPSERT,target.payload,requireNotNull(target.updatedAt),identity.syncVersion,deviceId)
-    val translation=sourceTask?.takeIf {target.deletedAt==null && (target.payload[it.sourceLanguage.categoryNameField()] as? JsonPrimitive)?.contentOrNull?.trim()==it.inputName.trim()}
-        ?.copy(categoryId=target.id,savedUpdatedAt=requireNotNull(target.updatedAt),deviceId=deviceId)
-    return SystemCategoryAdoption(source,selection,target,mutation,translation)
+    return target to mutation
 }
 
 private fun CategoryNameLanguage.categoryNameField()=when(this) {
@@ -113,6 +121,11 @@ data class SystemCategoryIdentityMigration(val adoption:SystemCategoryAdoption,v
 /** Retains aliases and queues active legacy cleanup before canonical activation. */
 fun planSystemCategoryIdentityMigration(snapshot:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):SystemCategoryIdentityMigration {
     val adoption=prepareSystemCategoryAdoption(snapshot,queued,remote,catalog,deviceId,now)
+    return planSystemCategoryIdentityChanges(snapshot,adoption,deviceId,now)
+}
+
+internal fun planSystemCategoryIdentityChanges(snapshot:CategoryReferenceSnapshot,adoption:SystemCategoryAdoption,deviceId:String,now:String):SystemCategoryIdentityMigration {
+    val remote=adoption.selection.candidates
     val retained=remote.filter {it.id!=adoption.target.id}
     require(remote.count {it.deletedAt==null}<=1) {"Multiple active remote identities violate the system-key contract"}
     val storedCategories=snapshot.records.getValue(CloudEntity.TRANSACTION_CATEGORY)

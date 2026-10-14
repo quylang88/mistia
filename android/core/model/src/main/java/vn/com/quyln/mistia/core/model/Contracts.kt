@@ -242,6 +242,9 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun commitObservedSystemCategoryMaintenance(expected:CategoryReferenceSnapshot,key:String,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean =
+        throw UnsupportedOperationException("Atomic observed category maintenance unavailable")
+
     suspend fun commitSystemCategoryIdentityMigration(expected:CategoryReferenceSnapshot,queued:QueuedMutation,remote:List<CloudRecord>,catalog:SystemCategoryCatalog,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category identity migration unavailable")
 
