@@ -1601,3 +1601,12 @@ Evidence: `docs/android/evidence/2026-10-14-category-translation-snapshot.md`.
 - [ ] Identity merge/reassignment/deletion and seed edits are not yet combined with this primitive; create409/startup, device verification and full APK1–4 remain open. Nine write flagsfalse.
 
 Evidence: `docs/android/evidence/2026-10-14-category-reference-room.md`.
+
+## Lossless system category adoption preparation — 2026-10-14
+
+- [x] Exact queued base0 seed validation and field deltas against registry defaults; real remote ID/version/audit retained, unknown JSON and unrelated remote edits preserved.
+- [x] Untouched exact remote adoption; changed target gets pending UPSERT, duplicate candidates retained, active/tombstone distinction and explicit edited-source conflict, occupied target protection and translation input/language retargeting.
+- [x]9 new tests RED/GREEN;690 JVM/80 suites plus full Android/Swift23/contracts/l10n checks pass; independent component review noP1/P2.
+- [ ] Atomic target/source identity installation/removal with FK/outbox/tasks and create409/startup remain pending. No device/live cloud writes; full APK1–4 continues.
+
+Evidence: `docs/android/evidence/2026-10-14-system-category-adoption-model.md`.
