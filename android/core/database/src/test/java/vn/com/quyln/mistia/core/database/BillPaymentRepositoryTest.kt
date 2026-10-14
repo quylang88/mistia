@@ -36,6 +36,56 @@ class BillPaymentRepositoryTest {
     private fun request(bill: RecurringBillPlanRecord) = BillPaymentRequest(RecordId(bill.id), month)
     private fun reason(result: Result<*>) = (result.exceptionOrNull() as? BillPaymentException)?.reason
 
+    private suspend fun autoBill(enabled:Boolean=true,day:Int=13):RecurringBillPlanRecord {
+        val bill=prepare()
+        val updated=bill.copy(autoPayEnabled=enabled,autoPayDay=day,dueDay=20,paymentStartDay=10,hasExplicitDueDate=true)
+        store.commitMutation(updated.toCloudRecord(),updated.pendingMutation())
+        return updated
+    }
+    @Test fun `automatic payment rechecks enabled date and pause before any money writes`()=runTest {
+        val initial=autoBill()
+        for(bill in listOf(initial.copy(autoPayEnabled=false),initial.copy(autoPayDay=14),initial.copy(isPaused=true))) {
+            store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
+            val before=store.outboxRows(owner.value)
+            val result=repo.payRecurringBill(owner,request(bill).copy(automatic=true),device,now)
+            assertTrue(result.isFailure)
+            assertEquals(before,store.outboxRows(owner.value))
+            assertTrue(repo.observeTransactions(owner).first().isEmpty())
+        }
+    }
+    @Test fun `automatic request cannot override configured amount or wallet`()=runTest {
+        val bill=autoBill()
+        for(request in listOf(request(bill).copy(automatic=true,amountMinorOverride=1),request(bill).copy(automatic=true,walletId=RecordId(bill.paymentWalletId!!)))) {
+            val before=store.outboxRows(owner.value)
+            assertEquals(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE,reason(repo.payRecurringBill(owner,request,device,now)))
+            assertEquals(before,store.outboxRows(owner.value))
+        }
+    }
+    @Test fun `automatic payment only runs today and a repeated attempt creates no second expense`()=runTest {
+        val bill=autoBill()
+        val before=store.outboxRows(owner.value)
+        assertEquals(BillPaymentError.AUTO_PAY_NOT_DUE,reason(repo.payRecurringBill(owner,request(bill).copy(automatic=true),device,"2026-10-14T00:00:00Z")))
+        assertEquals(before,store.outboxRows(owner.value))
+        val paid=repo.payRecurringBill(owner,request(bill).copy(automatic=true),device,now).getOrThrow()
+        assertEquals(5000L,paid.transaction.amountMinor)
+        assertEquals(BillPaymentError.CYCLE_NOT_PENDING,reason(repo.payRecurringBill(owner,request(bill).copy(automatic=true),device,now)))
+        assertEquals(1,repo.observeTransactions(owner).first().size)
+    }
+    @Test fun `auto pay disabled during commit invalidates entire atomic money batch`()=runTest {
+        val bill=autoBill()
+        val racing=object:LocalStore by store {
+            override suspend fun commitBillMoneyMutations(snapshot:BillMoneySnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>) {
+                val disabled=bill.copy(autoPayEnabled=false)
+                store.commitMutation(disabled.toCloudRecord(),disabled.pendingMutation())
+                store.commitBillMoneyMutations(snapshot,mutations)
+            }
+        }
+        val racedRepo=OfflineFirstFinanceRepository(racing,zone,catalog)
+        assertTrue(racedRepo.payRecurringBill(owner,request(bill).copy(automatic=true),device,now).isFailure)
+        assertTrue(repo.observeTransactions(owner).first().isEmpty())
+        assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
+        assertEquals(false,repo.observeRecurringBills(owner).first().single().autoPayEnabled)
+    }
     @Test fun `payment atomically creates posted expense and linked paid cycle with exact amounts`() = runTest {
         val exact = 9007199254740993L
         val bill = prepare(exact, exact)

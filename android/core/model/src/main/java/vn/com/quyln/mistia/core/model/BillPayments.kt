@@ -8,6 +8,7 @@ data class BillPaymentRequest(
     val month: YearMonth,
     val walletId: RecordId? = null,
     val amountMinorOverride: Long? = null,
+    val automatic: Boolean = false,
 )
 
 data class SavedBillPayment(
@@ -16,6 +17,7 @@ data class SavedBillPayment(
 )
 
 enum class BillPaymentError {
+    AUTO_PAY_NOT_DUE, INVALID_AUTO_PAY_OVERRIDE,
     NOT_FOUND, NOT_SCHEDULED, CYCLE_NOT_PENDING, WALLET_CURRENCY_MISMATCH,
     INVALID_WALLET, INVALID_CATEGORY, MISSING_AMOUNT, INVESTMENT_USAGE_UNAVAILABLE,
     UNSUPPORTED_LINKED_STATE,

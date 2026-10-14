@@ -17,6 +17,10 @@ internal class OfflineBillPaymentRepository(
     override suspend fun payRecurringBill(owner: UserId, request: BillPaymentRequest, deviceId: String, now: String): Result<SavedBillPayment> = result {
         val snapshot = snapshot(owner, request.billId, request.month)
         val bill = RecurringBillPlanRecord.fromCloudRecord(snapshot.bill)
+        if(request.automatic) {
+            if(request.walletId!=null || request.amountMinorOverride!=null) fail(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE)
+            if(bill.autoPayEnabled!=true || bill.isPaused) fail(BillPaymentError.AUTO_PAY_NOT_DUE)
+        }
         val occurrences = owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
         val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue=="recurringBill" && it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() }
         if (cycle.any { it.status!=DueStatus.PENDING || it.linkedTransactionId!=null }) fail(BillPaymentError.CYCLE_NOT_PENDING)
@@ -41,6 +45,8 @@ internal class OfflineBillPaymentRepository(
         }
         val due = recurringBillDueRows(owner, listOf(bill), occurrences.filter { it.deletedAt==null }, request.month, zone).singleOrNull()
             ?: fail(BillPaymentError.NOT_SCHEDULED)
+        if(request.automatic && due.autoPayDate?.atZone(zone)?.toLocalDate()!=Instant.parse(now).atZone(zone).toLocalDate())
+            fail(BillPaymentError.AUTO_PAY_NOT_DUE)
         val wallets = owned(snapshot, CloudEntity.LEDGER_WALLET).map(LedgerWalletRecord::fromCloudRecord).filter { it.deletedAt==null }
         val walletID = request.walletId?.value ?: bill.paymentWalletId
         val wallet = wallets.singleOrNull { it.id==walletID && !it.isArchived && it.kind!=null }

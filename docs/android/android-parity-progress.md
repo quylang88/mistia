@@ -1722,3 +1722,17 @@ Evidence: `docs/android/evidence/2026-10-14-category-startup-offline-recovery.md
   (usage limit) and device verification remain incomplete; full APK1–4 continues.
 
 Evidence: `docs/android/evidence/2026-10-14-bill-maintenance-events.md`.
+
+
+## Automatic bill payment repository guards — 2026-10-14
+
+- [x] Automatic mode rechecks enabled/pause/resolved local date and disallows
+  amount/wallet overrides, preserving current money/dependency validation.
+- [x] Repeat attempt cannot create another expense; concurrent auto-pay disable
+  invalidates complete transaction through full money snapshot CAS.
+- [x]4 new tests (3 runtimeRED/GREEN);756 JVM/81 suites plus full Android/Swift53/
+  contracts/l10n/SQLite checks pass. APK33; nine flagsfalse; no device/live cloud.
+- [ ] Maintenance executor, localized auto-payment title, persistent notifications/
+  native hooks, independent review and full APK1–4 remain incomplete.
+
+Evidence: `docs/android/evidence/2026-10-14-auto-payment-repository-guards.md`.
