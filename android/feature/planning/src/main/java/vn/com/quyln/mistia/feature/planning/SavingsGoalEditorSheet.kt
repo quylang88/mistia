@@ -8,6 +8,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -20,6 +23,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.launch
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.model.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +36,8 @@ import vn.com.quyln.mistia.core.model.*
     val initial=remember(owner,goal?.id) { goal?.let { SavingsGoalEditorState.from(it,zone) } ?: SavingsGoalEditorState.fresh(LocalDate.now(zone),"JPY") }
     var state by rememberSaveable(owner,goal?.id,stateSaver=SavingsGoalEditorState.saver(owner)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
+    var calculatorField by rememberSaveable(owner,goal?.id) { mutableStateOf<String?>(null) }
+    val focus=LocalFocusManager.current
     var discard by remember { mutableStateOf(false) }
     var delete by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<String?>(null) }
@@ -52,8 +58,14 @@ import vn.com.quyln.mistia.core.model.*
                 SavingsGoalIcon(state.iconSymbolName);Spacer(Modifier.width(12.dp));Text(stringResource(R.string.planning_planning_icon_m_c_ti_u))
             }
             OutlinedTextField(state.name,onValueChange={state=state.copy(name=it);error=null},label={Text(stringResource(R.string.planning_planning_goal_name))},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.name"))
-            OutlinedTextField(state.targetText,onValueChange={state=state.withTarget(it);error=null},label={Text(stringResource(R.string.planning_planning_target_amount))},suffix={Text(state.currencyCode)},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.target"))
-            OutlinedTextField(state.currentText,onValueChange={state=state.withCurrent(it);error=null},label={Text(stringResource(R.string.planning_planning_current_amount))},suffix={Text(state.currencyCode)},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.current"))
+            OutlinedTextField(state.targetText,onValueChange={state=state.withTarget(it);error=null},label={Text(stringResource(R.string.planning_planning_target_amount))},suffix={Text(state.currencyCode)},
+                trailingIcon={if(state.currencyCode in setOf("JPY","VND")) IconButton(enabled=!busy,onClick={focus.clearFocus();calculatorField="target"},modifier=Modifier.testTag("goal.target.calculator")) {
+                    Icon(Icons.Filled.Calculate,contentDescription=stringResource(R.string.shared_amount_calculator_open_calculator))
+                }},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.target"))
+            OutlinedTextField(state.currentText,onValueChange={state=state.withCurrent(it);error=null},label={Text(stringResource(R.string.planning_planning_current_amount))},suffix={Text(state.currencyCode)},
+                trailingIcon={if(state.currencyCode in setOf("JPY","VND")) IconButton(enabled=!busy,onClick={focus.clearFocus();calculatorField="current"},modifier=Modifier.testTag("goal.current.calculator")) {
+                    Icon(Icons.Filled.Calculate,contentDescription=stringResource(R.string.shared_amount_calculator_open_calculator))
+                }},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.current"))
             TextButton(onClick={picker="date"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.date")) {
                 Text(stringResource(R.string.planning_planning_target_date),Modifier.weight(1f));Text(LocalDate.parse(state.targetDate).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)))
             }
@@ -81,6 +93,10 @@ import vn.com.quyln.mistia.core.model.*
             }
             Spacer(Modifier.height(16.dp))
         }
+    }
+    calculatorField?.takeIf {it=="target" || it=="current"}?.let {field ->
+        AmountCalculatorDialog(if(field=="target") state.targetText else state.currentText,"$owner:${goal?.id.orEmpty()}:${state.currencyCode}:$field",
+            onCommit={state=if(field=="target") state.withTarget(it) else state.withCurrent(it);error=null},onDismiss={calculatorField=null})
     }
     if(discard) AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.planning_budget_editor_discard_title))},text={Text(stringResource(R.string.planning_goal_editor_discard_message))},
         confirmButton={TextButton(onClick={discard=false;onDismiss()},modifier=Modifier.testTag("goal.discard")) { Text(stringResource(R.string.planning_budget_editor_discard)) }},

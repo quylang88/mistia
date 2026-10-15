@@ -401,6 +401,568 @@
         "÷",
         "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
       ]
+    },
+    {
+      "expectedDecimal" : null,
+      "expectedError" : "divisionByZero",
+      "expectedInteger" : null,
+      "name" : "overflow_then_divide_zero",
+      "tokens" : [
+        "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "×",
+        "10",
+        "÷",
+        "0"
+      ]
+    },
+    {
+      "expectedDecimal" : null,
+      "expectedError" : "divisionByZero",
+      "expectedInteger" : null,
+      "name" : "underflow_then_divide_zero",
+      "tokens" : [
+        "1",
+        "÷",
+        "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "÷",
+        "0"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.14285714285714285714285714285714285714",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_7",
+      "tokens" : [
+        "1",
+        "÷",
+        "7"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.09090909090909090909090909090909090909",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_11",
+      "tokens" : [
+        "1",
+        "÷",
+        "11"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.07692307692307692307692307692307692307",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_13",
+      "tokens" : [
+        "1",
+        "÷",
+        "13"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.05882352941176470588235294117647058823",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_17",
+      "tokens" : [
+        "1",
+        "÷",
+        "17"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.05263157894736842105263157894736842105",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_19",
+      "tokens" : [
+        "1",
+        "÷",
+        "19"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.03448275862068965517241379310344827586",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_29",
+      "tokens" : [
+        "1",
+        "÷",
+        "29"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.01030927835051546391752577319587628865",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_1_97",
+      "tokens" : [
+        "1",
+        "÷",
+        "97"
+      ]
+    },
+    {
+      "expectedDecimal" : "1",
+      "expectedError" : null,
+      "expectedInteger" : "1",
+      "name" : "div_7_7",
+      "tokens" : [
+        "7",
+        "÷",
+        "7"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.63636363636363636363636363636363636363",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_7_11",
+      "tokens" : [
+        "7",
+        "÷",
+        "11"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.53846153846153846153846153846153846153",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_7_13",
+      "tokens" : [
+        "7",
+        "÷",
+        "13"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.41176470588235294117647058823529411764",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_7_17",
+      "tokens" : [
+        "7",
+        "÷",
+        "17"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.36842105263157894736842105263157894736",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_7_19",
+      "tokens" : [
+        "7",
+        "÷",
+        "19"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.24137931034482758620689655172413793103",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_7_29",
+      "tokens" : [
+        "7",
+        "÷",
+        "29"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.07216494845360824742268041237113402061",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_7_97",
+      "tokens" : [
+        "7",
+        "÷",
+        "97"
+      ]
+    },
+    {
+      "expectedDecimal" : "14.1428571428571428571428571428571428571",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_99_7",
+      "tokens" : [
+        "99",
+        "÷",
+        "7"
+      ]
+    },
+    {
+      "expectedDecimal" : "9",
+      "expectedError" : null,
+      "expectedInteger" : "9",
+      "name" : "div_99_11",
+      "tokens" : [
+        "99",
+        "÷",
+        "11"
+      ]
+    },
+    {
+      "expectedDecimal" : "7.6153846153846153846153846153846153846",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_99_13",
+      "tokens" : [
+        "99",
+        "÷",
+        "13"
+      ]
+    },
+    {
+      "expectedDecimal" : "5.8235294117647058823529411764705882352",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_99_17",
+      "tokens" : [
+        "99",
+        "÷",
+        "17"
+      ]
+    },
+    {
+      "expectedDecimal" : "5.2105263157894736842105263157894736842",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_99_19",
+      "tokens" : [
+        "99",
+        "÷",
+        "19"
+      ]
+    },
+    {
+      "expectedDecimal" : "3.4137931034482758620689655172413793103",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_99_29",
+      "tokens" : [
+        "99",
+        "÷",
+        "29"
+      ]
+    },
+    {
+      "expectedDecimal" : "1.02061855670103092783505154639175257731",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_99_97",
+      "tokens" : [
+        "99",
+        "÷",
+        "97"
+      ]
+    },
+    {
+      "expectedDecimal" : "1286742750677284.71428571428571428571428",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_7",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "7"
+      ]
+    },
+    {
+      "expectedDecimal" : "818836295885544.81818181818181818181818",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_11",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "11"
+      ]
+    },
+    {
+      "expectedDecimal" : "692861481133922.53846153846153846153846",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_13",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "13"
+      ]
+    },
+    {
+      "expectedDecimal" : "529835250278881.94117647058823529411764",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_17",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "17"
+      ]
+    },
+    {
+      "expectedDecimal" : "474063118670578.57894736842105263157894",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_19",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "19"
+      ]
+    },
+    {
+      "expectedDecimal" : "310593077749689.413793103448275862068965",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_29",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "29"
+      ]
+    },
+    {
+      "expectedDecimal" : "92857724275680.34020618556701030927835",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9007199254740993_97",
+      "tokens" : [
+        "9007199254740993",
+        "÷",
+        "97"
+      ]
+    },
+    {
+      "expectedDecimal" : "1317624576693539401",
+      "expectedError" : null,
+      "expectedInteger" : "1317624576693539401",
+      "name" : "div_9223372036854775807_7",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "7"
+      ]
+    },
+    {
+      "expectedDecimal" : "838488366986797800.63636363636363636363",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9223372036854775807_11",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "11"
+      ]
+    },
+    {
+      "expectedDecimal" : "709490156681136600.53846153846153846153",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9223372036854775807_13",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "13"
+      ]
+    },
+    {
+      "expectedDecimal" : "542551296285575047.47058823529411764705",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9223372036854775807_17",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "17"
+      ]
+    },
+    {
+      "expectedDecimal" : "485440633518672410.89473684210526315789",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9223372036854775807_19",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "19"
+      ]
+    },
+    {
+      "expectedDecimal" : "318047311615681924.379310344827586206896",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9223372036854775807_29",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "29"
+      ]
+    },
+    {
+      "expectedDecimal" : "95086309658296657.804123711340206185567",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "div_9223372036854775807_97",
+      "tokens" : [
+        "9223372036854775807",
+        "÷",
+        "97"
+      ]
+    },
+    {
+      "expectedDecimal" : "33333333333333333333.3333333333333333333",
+      "expectedError" : "overflow",
+      "expectedInteger" : null,
+      "name" : "normalization_pow20_by_three",
+      "tokens" : [
+        "100000000000000000000",
+        "÷",
+        "3"
+      ]
+    },
+    {
+      "expectedDecimal" : "10869565217391304347826086956521.7391304",
+      "expectedError" : "overflow",
+      "expectedInteger" : null,
+      "name" : "normalization_pow50_by_int64max",
+      "tokens" : [
+        "100000000000000000000000000000000000000000000000000",
+        "÷",
+        "9223372036854775807"
+      ]
+    },
+    {
+      "expectedDecimal" : "1084202172485504434100000000000000000000000000000000000000000000000000000000000000",
+      "expectedError" : "overflow",
+      "expectedInteger" : null,
+      "name" : "normalization_pow100_by_int64max",
+      "tokens" : [
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "÷",
+        "9223372036854775807"
+      ]
+    },
+    {
+      "expectedDecimal" : "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "expectedError" : "fractionalResult",
+      "expectedInteger" : null,
+      "name" : "normalization_reciprocal_pow90",
+      "tokens" : [
+        "1",
+        "÷",
+        "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "NaN",
+      "expectedError" : "nonPositiveResult",
+      "expectedInteger" : null,
+      "name" : "normalization_reciprocal_pow91",
+      "tokens" : [
+        "1",
+        "÷",
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "NaN",
+      "expectedError" : "nonPositiveResult",
+      "expectedInteger" : null,
+      "name" : "normalization_reciprocal_pow127",
+      "tokens" : [
+        "1",
+        "÷",
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "9223372036854775807",
+      "expectedError" : null,
+      "expectedInteger" : "9223372036854775807",
+      "name" : "additive_max_minus_tiny",
+      "tokens" : [
+        "9223372036854775807",
+        "-",
+        "1",
+        "÷",
+        "100000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "9223372036854775807",
+      "expectedError" : null,
+      "expectedInteger" : "9223372036854775807",
+      "name" : "additive_max_plus_tiny",
+      "tokens" : [
+        "9223372036854775807",
+        "+",
+        "1",
+        "÷",
+        "100000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "2",
+      "expectedError" : null,
+      "expectedInteger" : "2",
+      "name" : "additive_negative_then_restore",
+      "tokens" : [
+        "1",
+        "-",
+        "2",
+        "+",
+        "3"
+      ]
+    },
+    {
+      "expectedDecimal" : "0",
+      "expectedError" : "nonPositiveResult",
+      "expectedInteger" : null,
+      "name" : "additive_cancel_large_then_tiny",
+      "tokens" : [
+        "100000000000000000000000000000000000000000000000000",
+        "+",
+        "1",
+        "-",
+        "100000000000000000000000000000000000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "NaN",
+      "expectedError" : "nonPositiveResult",
+      "expectedInteger" : null,
+      "name" : "product_exponent_combined_overflow",
+      "tokens" : [
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "×",
+        "1000000000000000000000000000000"
+      ]
+    },
+    {
+      "expectedDecimal" : "NaN",
+      "expectedError" : "nonPositiveResult",
+      "expectedInteger" : null,
+      "name" : "product_exponent_max_overflow",
+      "tokens" : [
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "×",
+        "10"
+      ]
+    },
+    {
+      "expectedDecimal" : "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "expectedError" : "overflow",
+      "expectedInteger" : null,
+      "name" : "product_exponent_max_preserved",
+      "tokens" : [
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "×",
+        "1"
+      ]
     }
   ],
   "version" : 1

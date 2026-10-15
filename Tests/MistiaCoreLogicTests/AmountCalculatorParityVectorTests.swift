@@ -10,7 +10,7 @@ final class AmountCalculatorParityVectorTests: XCTestCase {
     func testSameAndroidCalculatorVectorsAgainstActualSwiftEngine() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let doc = try JSONDecoder().decode(Document.self, from: Data(contentsOf: root.appendingPathComponent("contracts/golden/amount-calculator-v1.json")))
-        XCTAssertEqual(doc.version, 1); XCTAssertEqual(doc.cases.count, 36)
+        XCTAssertEqual(doc.version, 1); XCTAssertEqual(doc.cases.count, 86)
         for vector in doc.cases {
             let result = MistiaAmountCalculatorLogic.evaluation(for: vector.tokens)
             XCTAssertEqual(result.integerResult.map(String.init), vector.expectedInteger, vector.name)

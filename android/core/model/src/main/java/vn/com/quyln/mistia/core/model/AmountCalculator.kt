@@ -14,7 +14,6 @@ data class AmountCalculation(val decimalResult: BigDecimal? = null, val integerR
 }
 object AmountCalculator {
     private val operators = setOf("+", "-", "×", "÷")
-    private val divisionContext = MathContext(38, RoundingMode.DOWN)
     private val maximumMantissa = BigInteger.ONE.shiftLeft(128).subtract(BigInteger.ONE)
     fun evaluate(tokens: List<String>): AmountCalculation {
         val normalized = tokens.filter { it.isNotEmpty() }
@@ -32,22 +31,25 @@ object AmountCalculator {
                 operations += token
             }
         }
+        // Swift keeps evaluating a NaN term after Decimal range failure. A later
+        // zero divisor still wins; validate divisors after parsing every operand.
+        if (operations.withIndex().any { (index, operation) -> operation == "÷" && values[index + 1].signum() == 0 })
+            return failure(AmountCalculatorError.DIVISION_BY_ZERO)
         return try {
             var term = values.first(); val additive = mutableListOf<BigDecimal>(); val signs = mutableListOf<String>()
             operations.forEachIndexed { index, operation ->
                 val next = values[index + 1]
                 when (operation) {
-                    "×" -> term = decimal(term.multiply(next))
+                    "×" -> term = multiply(term, next)
                     "÷" -> {
-                        if (next.signum() == 0) return failure(AmountCalculatorError.DIVISION_BY_ZERO)
-                        term = decimal(term.divide(next, divisionContext))
+                        term = divide(term, next)
                     }
                     else -> { additive += term; signs += operation; term = next }
                 }
             }
             additive += term
             var result = additive.first()
-            signs.forEachIndexed { index, sign -> result = decimal(if (sign == "+") result.add(additive[index + 1]) else result.subtract(additive[index + 1])) }
+            signs.forEachIndexed { index, sign -> result = add(result, if (sign == "+") additive[index + 1] else additive[index + 1].negate()) }
             when {
                 result.signum() <= 0 -> AmountCalculation(result, error = AmountCalculatorError.NON_POSITIVE_RESULT)
                 result > BigDecimal.valueOf(Long.MAX_VALUE) -> AmountCalculation(result, error = AmountCalculatorError.OVERFLOW)
@@ -56,6 +58,55 @@ object AmountCalculator {
             }
         } catch (_: DecimalRangeException) { AmountCalculation(error = AmountCalculatorError.NON_POSITIVE_RESULT, decimalIsNaN = true) }
         catch (_: ArithmeticException) { failure(AmountCalculatorError.OVERFLOW) }
+    }
+    private fun multiply(lhs: BigDecimal, rhs: BigDecimal): BigDecimal {
+        if (lhs.signum() == 0 || rhs.signum() == 0) return BigDecimal.ZERO
+        var coefficient = lhs.unscaledValue().multiply(rhs.unscaledValue())
+        var exponent = -lhs.scale() - rhs.scale()
+        while (coefficient.abs() > maximumMantissa) { coefficient = coefficient.divide(BigInteger.TEN); exponent++ }
+        // Foundation validates the operation's exponent before compacting zeros.
+        if (exponent !in -128..127) throw DecimalRangeException()
+        return decimal(BigDecimal(coefficient, -exponent))
+    }
+    // Foundation divides its integer coefficients after scaling the dividend by
+    // 10^38, then fits the quotient to 128 bits. A fixed significant-digit
+    // MathContext changes recurring fractions and subsequent calculations.
+    private fun divide(dividend: BigDecimal, divisor: BigDecimal): BigDecimal {
+        if (dividend.signum() == 0) return BigDecimal.ZERO
+        val operands = if (divisor.scale() - dividend.scale() >= 19) normalizedOperands(dividend, divisor) else dividend to divisor
+        // Swift restores both original operands when normalization loses either.
+        val (a, b) = if (operands.first.signum() == 0 || operands.second.signum() == 0) dividend to divisor else operands
+        var quotient = a.unscaledValue().multiply(BigInteger.TEN.pow(38)).divide(b.unscaledValue())
+        var exponent = b.scale() - a.scale() - 38
+        while (quotient > maximumMantissa) { quotient = quotient.divide(BigInteger.TEN); exponent++ }
+        if (exponent !in -128..127) throw DecimalRangeException()
+        return decimal(BigDecimal(quotient, -exponent))
+    }
+    private fun add(lhs: BigDecimal, rhs: BigDecimal): BigDecimal {
+        if (lhs.signum() == 0) return rhs
+        if (rhs.signum() == 0) return lhs
+        val (a, b) = normalizedOperands(lhs, rhs)
+        return decimal(a.add(b))
+    }
+    private fun normalizedOperands(lhs: BigDecimal, rhs: BigDecimal): Pair<BigDecimal, BigDecimal> {
+        if (lhs.scale() == rhs.scale()) return lhs to rhs
+        val firstIsHigher = lhs.scale() < rhs.scale()
+        val high = if (firstIsHigher) lhs else rhs
+        val low = if (firstIsHigher) rhs else lhs
+        val difference = low.scale() - high.scale()
+        val expanded = high.unscaledValue().multiply(BigInteger.TEN.pow(difference))
+        val pair = if (expanded.abs() <= maximumMantissa) BigDecimal(expanded, low.scale()) to low else {
+            // Foundation's conservative headroom estimate uses whole 16-bit
+            // limbs, not all available coefficient bits. Keep its truncation.
+            val limbs = (high.unscaledValue().abs().bitLength() + 15) / 16
+            val shift = intArrayOf(0, 4, 9, 14, 19, 24, 28, 33)[8 - limbs]
+            val lower = low.unscaledValue().divide(BigInteger.TEN.pow(difference - shift))
+            if (lower.signum() == 0) high to BigDecimal.ZERO else {
+                val scale = high.scale() + shift
+                BigDecimal(high.unscaledValue().multiply(BigInteger.TEN.pow(shift)), scale) to BigDecimal(lower, scale)
+            }
+        }
+        return if (firstIsHigher) pair else pair.second to pair.first
     }
     // Foundation Decimal's bounded mantissa; retain exact integers when their 128-bit coefficient fits.
     private fun decimal(number: BigDecimal): BigDecimal {
