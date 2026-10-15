@@ -105,6 +105,7 @@ fun BillMoneySnapshot.requireValidMutations(mutations: List<Pair<CloudRecord, Pe
         require(mutation.baseVersion==(existing?.syncVersion ?: 0L) && record.syncVersion==mutation.baseVersion)
         require(existing==null || (existing.payload["user_id"] as? JsonPrimitive)?.content==owner.value) { "Money identity occupied by another owner" }
     }
+    if (sourceKind == DueSourceKind.INSTALLMENT) requireInstallmentMoneyCoherence(mutations)
 }
 
 fun BillMoneySnapshot.requireUnchanged(current: Map<CloudEntity, List<CloudRecord>>) {

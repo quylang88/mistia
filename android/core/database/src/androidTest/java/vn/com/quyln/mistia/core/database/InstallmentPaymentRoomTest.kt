@@ -10,6 +10,7 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,4 +96,59 @@ class InstallmentPaymentRoomTest {
             assertTrue(initial.recordsIncludingDeleted(owner, CloudEntity.TRANSACTION_CATEGORY.table).isEmpty())
         } finally { db.close() }
     }
+    @Test fun mismatchedPaidSnapshotAtAtomicBoundaryRejectsEntireExpenseCategoryAndCycleBatch() = runTest {
+        val db = Room.inMemoryDatabaseBuilder(context, MistiaDatabase::class.java).build()
+        try {
+            val initial = RoomLocalStore(db); val plan = prepare(OfflineFirstFinanceRepository(initial, zone, catalog))
+            val before = CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) }
+            val queues = CloudEntity.entries.associateWith { initial.pendingMutations(owner, it, Long.MAX_VALUE) }
+            val corrupting = object : LocalStore by initial {
+                override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
+                    val changed = mutations.map { (row, q) -> if (q.entity == CloudEntity.DUE_OCCURRENCE_RECORD) {
+                        val payload = JsonObject(row.payload + ("amount_minor_snapshot" to JsonPrimitive(1375)))
+                        row.copy(payload = payload) to q.copy(payload = payload)
+                    } else row to q }
+                    initial.commitBillMoneyMutations(snapshot, changed)
+                }
+            }
+            assertTrue(OfflineFirstFinanceRepository(corrupting, zone, catalog).payInstallment(owner, InstallmentPaymentRequest(plan, month), device, now).isFailure)
+            assertEquals(before, CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) })
+            assertEquals(queues, CloudEntity.entries.associateWith { initial.pendingMutations(owner, it, Long.MAX_VALUE) })
+        } finally { db.close() }
+    }
+    @Test fun undoCannotTombstonePaidMarkerWithoutItsLiveExpenseAtAtomicBoundary() = runTest {
+        val db = Room.inMemoryDatabaseBuilder(context, MistiaDatabase::class.java).build()
+        try {
+            val initial = RoomLocalStore(db); val real = OfflineFirstFinanceRepository(initial, zone, catalog); val plan = prepare(real)
+            real.payInstallment(owner, InstallmentPaymentRequest(plan, month), device, now).getOrThrow()
+            val before = CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) }
+            val queues = CloudEntity.entries.associateWith { initial.pendingMutations(owner, it, Long.MAX_VALUE) }
+            val incomplete = object : LocalStore by initial {
+                override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
+                    initial.commitBillMoneyMutations(snapshot, mutations.filterNot { it.second.entity == CloudEntity.LEDGER_TRANSACTION })
+                }
+            }
+            assertTrue(OfflineFirstFinanceRepository(incomplete, zone, catalog).undoInstallmentPayment(owner, plan, month, device, later).isFailure)
+            assertEquals(before, CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) })
+            assertEquals(queues, CloudEntity.entries.associateWith { initial.pendingMutations(owner, it, Long.MAX_VALUE) })
+        } finally { db.close() }
+    }
+    @Test fun undoCannotLeaveAnotherLivePaidDuplicateWhileDeletingSharedExpense() = runTest {
+        val db = Room.inMemoryDatabaseBuilder(context, MistiaDatabase::class.java).build()
+        try {
+            val initial = RoomLocalStore(db); val real = OfflineFirstFinanceRepository(initial, zone, catalog); val plan = prepare(real)
+            val saved = real.payInstallment(owner, InstallmentPaymentRequest(plan, month), device, now).getOrThrow()
+            val duplicate = saved.occurrences.single().copy(id = device)
+            initial.commitMutation(duplicate.toCloudRecord(), duplicate.pendingMutation())
+            val before = CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) }
+            val incomplete = object : LocalStore by initial {
+                override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
+                    initial.commitBillMoneyMutations(snapshot, mutations.filterNot { it.second.entity == CloudEntity.DUE_OCCURRENCE_RECORD && it.first.id == duplicate.id })
+                }
+            }
+            assertTrue(OfflineFirstFinanceRepository(incomplete, zone, catalog).undoInstallmentPayment(owner, plan, month, device, later).isFailure)
+            assertEquals(before, CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) })
+        } finally { db.close() }
+    }
+
 }

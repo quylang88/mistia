@@ -89,6 +89,14 @@ Paid occurrence and payment-undo synchronization remain held. PostgREST per-reco
 is not a parent/month atomic transaction; cross-record races and duplicate recovery still
 require completion before enabling writes. All10 flags remain false.
 
+Installment financial mutation coherence is enforced at the actual Room boundary (APK66):
+`evidence/2026-10-15-installment-money-contract.md`. Exact paid expense/marker amounts,
+links and clocks, complete duplicate/expense undo, preserved financial tombstones and
+consistent actor/version metadata are validated.10 new JVM cases execute; three added
+Room fixtures compile/package only. Paid cloud ACK remains a separate next feature.
+Generic transaction push also needs a pending wallet/category dependency guard before
+continuing that pipeline: domain order alone does not handle failed/retrying parents.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
