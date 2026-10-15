@@ -1064,6 +1064,19 @@ class RoomLocalStore(
         }
     }
 
+    private suspend fun requireCurrentCardPaymentSource(profile: CloudRecord, cardWalletId: String) {
+        val raw = profile.payload["payment_source_wallet_id"]
+        if (raw == null || raw == kotlinx.serialization.json.JsonNull) return
+        fun invalid(): Nothing = throw vn.com.quyln.mistia.core.model.CreditCardValidationException(vn.com.quyln.mistia.core.model.CreditCardValidationError.INVALID_PAYMENT_SOURCE)
+        val id = (raw as? JsonPrimitive)?.takeIf { it.isString }?.content ?: invalid()
+        if (id == cardWalletId || runCatching { java.util.UUID.fromString(id).toString() }.getOrNull() != id) invalid()
+        val owner = UserId(profile.ownerUserId)
+        val source = record(owner, CloudEntity.LEDGER_WALLET.table, id) ?: invalid()
+        if (!source.matchesFinanceReadScope(owner, CloudEntity.LEDGER_WALLET) || source.payload["is_archived"] != JsonPrimitive(false)) invalid()
+        val kind = vn.com.quyln.mistia.core.model.LedgerWalletRecord.fromCloudRecord(source).kind
+        if (kind == null || kind == vn.com.quyln.mistia.core.model.WalletKind.CREDIT_CARD) invalid()
+    }
+
     override suspend fun commitCreditCardMutation(
         walletRecord: CloudRecord,
         walletMutation: PendingMutation,
@@ -1094,6 +1107,7 @@ class RoomLocalStore(
             }
             if (claimed || linkedProfile)
                 throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+            requireCurrentCardPaymentSource(profileRecord, walletRecord.id)
             commitMutationRows(walletRecord, walletMutation)
             commitMutationRows(profileRecord, profileMutation)
             ensureCurrentFinanceOwner(owner)
@@ -1127,6 +1141,7 @@ class RoomLocalStore(
                 throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
             if (oldCurrency != newCurrency && vn.com.quyln.mistia.core.model.walletHasLiveLedgerHistory(owner, walletRecord.id, recordsIncludingDeleted(owner, CloudEntity.LEDGER_TRANSACTION.table)))
                 throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
+            requireCurrentCardPaymentSource(profileRecord, walletRecord.id)
             commitMutationRows(walletRecord, walletMutation)
             commitMutationRows(profileRecord, profileMutation)
             ensureCurrentFinanceOwner(owner)
