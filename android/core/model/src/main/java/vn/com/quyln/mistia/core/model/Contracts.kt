@@ -271,6 +271,15 @@ interface LocalStore {
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
 
+    suspend fun recordInstallmentSourceFailure(queued: QueuedMutation, requestBatchId: String?, nextAttemptAtEpochMillis: Long, errorCode: String): Boolean =
+        throw UnsupportedOperationException("Installment source failure fencing is unavailable")
+
+    suspend fun installmentAcknowledgementSnapshot(owner: UserId, planId: String): InstallmentAcknowledgementSnapshot =
+        throw UnsupportedOperationException("Complete installment acknowledgement snapshot unavailable")
+    suspend fun commitInstallmentSourceAcknowledgement(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation, requestBatchId: String?,
+        remote: CloudRecord, remoteCycles: Map<String, CloudRecord?>, remoteLedger: Map<String, CloudRecord?>, now: String): Boolean =
+        throw UnsupportedOperationException("Atomic installment source acknowledgement unavailable")
+
     suspend fun installmentDeletionBatch(owner: UserId, planId: String): InstallmentDeletionBatch? =
         throw UnsupportedOperationException("Durable installment deletion intent unavailable")
 

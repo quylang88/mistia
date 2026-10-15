@@ -2,6 +2,11 @@ package vn.com.quyln.mistia.core.sync
 
 import java.io.IOException
 import kotlin.math.min
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -38,6 +43,14 @@ internal sealed interface MutationPreflight {
     data class Conflict(val reason: String) : MutationPreflight
 }
 
+internal sealed interface MutationAcknowledgement {
+    data object Default : MutationAcknowledgement
+    data object Committed : MutationAcknowledgement
+    data object Stale : MutationAcknowledgement
+    data object Deferred : MutationAcknowledgement
+    data class Conflict(val reason: String) : MutationAcknowledgement
+}
+
 internal class OutboxPushCoordinator(
     override val entity: CloudEntity,
     private val localStore: LocalStore,
@@ -50,6 +63,9 @@ internal class OutboxPushCoordinator(
     private val preferRemoteRecord: suspend (QueuedMutation, CloudRecord, CloudRecord) -> Boolean = { _, _, _ -> false },
     private val orderMutations: suspend (List<QueuedMutation>, UserId) -> List<QueuedMutation> = { rows, _ -> rows },
     private val preflight: suspend (QueuedMutation, CloudRecord, UserId, String) -> MutationPreflight = { _, _, _, _ -> MutationPreflight.Continue },
+    private val acknowledgementContext: suspend (QueuedMutation, CloudRecord, UserId, String) -> CoroutineContext = { _, _, _, _ -> EmptyCoroutineContext },
+    private val recordFailureOverride: suspend (QueuedMutation, Long, String) -> Boolean? = { _, _, _ -> null },
+    private val acknowledgeOverride: suspend (QueuedMutation, CloudRecord) -> MutationAcknowledgement = { _, _ -> MutationAcknowledgement.Default },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
         ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
@@ -63,19 +79,22 @@ internal class OutboxPushCoordinator(
         val pending = localStore.pendingMutations(ownerUserId, entity, now)
         for (queued in orderMutations(pending, ownerUserId)) {
             summary = try {
-                when (pushOne(queued, ownerUserId, accessToken)) {
+                when (pushOne(queued, ownerUserId, accessToken, now)) {
                     PushOutcome.PUSHED -> summary.copy(pushed = summary.pushed + 1)
                     PushOutcome.RECONCILED -> summary.copy(reconciled = summary.reconciled + 1)
                     PushOutcome.DEFERRED -> summary
                     PushOutcome.ACKNOWLEDGED -> summary.copy(acknowledged = summary.acknowledged + 1)
                     PushOutcome.CONFLICT -> summary.copy(conflicts = summary.conflicts + 1)
                     PushOutcome.STALE -> summary.copy(staleResponses = summary.staleResponses + 1)
+                    PushOutcome.RETRYABLE_FAILURE -> summary.copy(retryableFailures = summary.retryableFailures + 1)
+                    PushOutcome.PERMANENT_FAILURE -> summary.copy(permanentFailures = summary.permanentFailures + 1)
                 }
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
+                if (error is MutationFailurePersistenceException) throw requireNotNull(error.cause)
                 val retryable = error.isRetryable()
                 val retryAt = if (retryable) now + retryDelayMillis(queued.attemptCount) else Long.MAX_VALUE
-                val recorded = localStore.recordMutationFailure(queued, retryAt, error.safeCode())
+                val recorded = recordFailure(queued, retryAt, error.safeCode())
                 if (!recorded) summary.copy(staleResponses = summary.staleResponses + 1)
                 else if (retryable) summary.copy(retryableFailures = summary.retryableFailures + 1)
                 else summary.copy(permanentFailures = summary.permanentFailures + 1)
@@ -88,6 +107,7 @@ internal class OutboxPushCoordinator(
         queued: QueuedMutation,
         ownerUserId: UserId,
         accessToken: String,
+        now: Long,
     ): PushOutcome {
         val mutation = queued.mutation
         require(mutation.subjectUserId == ownerUserId.value) { "Outbox owner does not match session" }
@@ -103,6 +123,22 @@ internal class OutboxPushCoordinator(
         }
         validateRecord(local)
 
+        return withContext(acknowledgementContext(queued, local, ownerUserId, accessToken)) {
+            try {
+                pushValidated(queued, local, ownerUserId, accessToken)
+            } catch (error: Exception) {
+                currentCoroutineContext().ensureActive()
+                if (error is CancellationException || error is MutationFailurePersistenceException) throw error
+                val retryable = error.isRetryable()
+                val retryAt = if (retryable) now + retryDelayMillis(queued.attemptCount) else Long.MAX_VALUE
+                if (!recordFailure(queued, retryAt, error.safeCode())) PushOutcome.STALE
+                else if (retryable) PushOutcome.RETRYABLE_FAILURE else PushOutcome.PERMANENT_FAILURE
+            }
+        }
+    }
+
+    private suspend fun pushValidated(queued: QueuedMutation, local: CloudRecord, ownerUserId: UserId, accessToken: String): PushOutcome {
+        val mutation = queued.mutation
         preflightOutcome(queued, local, ownerUserId, accessToken)?.let {return it}
 
         if (mutation.kind == MutationKind.DELETE) return pushDelete(queued, local, ownerUserId, accessToken)
@@ -272,19 +308,34 @@ internal class OutboxPushCoordinator(
     }
 
     private suspend fun retainConflict(queued: QueuedMutation, reason: String): PushOutcome =
-        if (localStore.recordMutationFailure(queued, Long.MAX_VALUE, "conflict_$reason")) {
+        if (recordFailure(queued, Long.MAX_VALUE, "conflict_$reason")) {
             PushOutcome.CONFLICT
         } else {
             PushOutcome.STALE
         }
+
+    private suspend fun recordFailure(queued: QueuedMutation, next: Long, code: String): Boolean = try {
+        recordFailureOverride(queued, next, code) ?: localStore.recordMutationFailure(queued, next, code)
+    } catch (error: Exception) {
+        if (error is CancellationException) throw error
+        // A scoped storage failure must never fall back to an unfenced generic write.
+        throw MutationFailurePersistenceException(error)
+    }
 
     private suspend fun acknowledge(
         queued: QueuedMutation,
         remote: CloudRecord,
         outcome: PushOutcome,
     ): PushOutcome {
+        currentCoroutineContext().ensureActive()
         remote.requireMutationIdentity(queued)
-        return if (localStore.acknowledgeMutation(queued, remote)) outcome else PushOutcome.STALE
+        return when (val decision = acknowledgeOverride(queued, remote)) {
+            MutationAcknowledgement.Default -> if (localStore.acknowledgeMutation(queued, remote)) outcome else PushOutcome.STALE
+            MutationAcknowledgement.Committed -> outcome
+            MutationAcknowledgement.Stale -> PushOutcome.STALE
+            MutationAcknowledgement.Deferred -> PushOutcome.DEFERRED
+            is MutationAcknowledgement.Conflict -> retainConflict(queued, decision.reason)
+        }
     }
 
     private fun CloudRecord.preparedPayload(nextVersion: Long, deviceId: String): JsonObject = JsonObject(
@@ -313,5 +364,7 @@ internal class OutboxPushCoordinator(
         return min(30_000L * (1L shl exponent), 6L * 60L * 60L * 1_000L)
     }
 
-    private enum class PushOutcome { PUSHED, ACKNOWLEDGED, CONFLICT, STALE, RECONCILED, DEFERRED }
+    private enum class PushOutcome { PUSHED, ACKNOWLEDGED, CONFLICT, STALE, RECONCILED, DEFERRED, RETRYABLE_FAILURE, PERMANENT_FAILURE }
 }
+
+private class MutationFailurePersistenceException(cause: Exception) : Exception(cause)

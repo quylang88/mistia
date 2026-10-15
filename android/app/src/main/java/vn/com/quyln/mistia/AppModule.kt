@@ -311,7 +311,8 @@ object AppModule {
     @Singleton
     fun provideInstallmentPushCoordinator(localStore: LocalStore, remoteStore: RemoteMutationStore): InstallmentPushCoordinator =
         InstallmentPushCoordinator(localStore, remoteStore,
-            writesEnabled = BuildConfig.ALLOW_INSTALLMENT_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES)
+            writesEnabled = BuildConfig.ALLOW_INSTALLMENT_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES,
+            dependentDeletionReady = true)
 
     @Provides
     @Singleton

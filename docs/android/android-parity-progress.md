@@ -2130,3 +2130,11 @@ Evidence: `docs/android/evidence/2026-10-15-installment-plan-push.md`.
   card policy/settings/forms/full APK1–4/RC and independent/device/visual QA remain open.
 
 Evidence: `docs/android/evidence/2026-10-15-installment-delete-batch.md`.
+
+## 2026-10-15 — installment source ACK/history restoration (APK59)
+
+Completed the gated source-delete reconciliation path with immutable per-request causal batch identity, active remote winner restoration of only matching child deletes, preservation of newer child intent/prior retry metadata and paid financial history, and atomic Room source/child/queue/exact batch cleanup. Successful source deletion retains children/batch/expense for dedicated cleanup. Stale failures are batch-fenced too; cancellation and persistence failures cannot bypass the guard. Legacy unproven dependencies remain held. Shared conflict policy preserves existing sync API behavior.
+
+Runtime23 model +14 sync cases pass; full1190 JVM/118 suites, Swift603, lint/build, AndroidTest compilation/package, contract15, localization and existing SQLite checks pass. Ten new disk-Room fixtures are compile/package only; ADB empty. VersionCode59 APK/test APK and checksums are in `evidence/2026-10-15-installment-source-ack.md`. All10 flagsfalse; no cloud writes/deploy/migration or device proof.
+
+Next: dedicated installment child deletion/push/completion, resurrection and legacy recovery; actual payment/undo/currency handling and maintenance; remaining full APK1–4/RC and independent/Samsung/visual checks. Full goal remains active.

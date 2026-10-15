@@ -33,6 +33,13 @@ Sixteen model and seven actual SQLite cases execute; ten Room +one migration fix
 package only. Test APK schemas1–6 now bundle correctly. Source ACK/reconciliation,
 batch cleanup and legacy unproven-delete recovery are still unfinished; guards stay closed.
 
+Atomic source ACK/history restoration is completed locally (APK59):
+`evidence/2026-10-15-installment-source-ack.md`. Per-request batch fencing, owned
+source/cycle/ledger reconciliation, raw-snapshot CAS, exact prior queues and newer-child
+preservation are implemented. Runtime23 model +14 sync cases pass; ten new Room
+fixtures compile/package only. Successful source deletion still retains its children
+and batch for dedicated completion. Legacy unproven dependencies remain held.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
@@ -44,9 +51,9 @@ Next coherent slices:
    scoped frozen-history checks and deterministic currency policy. Do not copy raw minor
    values between currencies. Bill same-currency choice is accepted; card product question
    remains pending. Current installment read work does not decide settlement behavior.
-3. Dedicated installment occurrence push and causal source-delete reconciliation.
-   Current bill-only child gate and source-delete dependency guard deliberately hold
-   the unsafe paths. A source-delete remote winner must reconcile exact dependent child
+3. Dedicated installment occurrence push, successful-source-delete child completion,
+   remote resurrection and legacy recovery. Current bill-only child gate and legacy
+   unproven-source dependency guard deliberately hold the unsafe paths. A source-delete remote winner must reconcile exact dependent child
    deletion intents without losing newer edits or hiding paid history under an active
    plan. Use the persisted causal batch and exact current queue comparisons; timestamp/
    device coincidence is insufficient. Restore only matching delete intents, preserve

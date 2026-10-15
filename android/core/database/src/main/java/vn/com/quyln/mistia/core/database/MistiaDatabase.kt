@@ -35,6 +35,9 @@ import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
 import vn.com.quyln.mistia.core.model.categoryReferenceEntities
 import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
 import vn.com.quyln.mistia.core.model.billCycleRecords
+import vn.com.quyln.mistia.core.model.InstallmentAcknowledgementSnapshot
+import vn.com.quyln.mistia.core.model.InstallmentSourceAckDecision
+import vn.com.quyln.mistia.core.model.planInstallmentSourceAcknowledgement
 import vn.com.quyln.mistia.core.model.InstallmentDeletionStorage
 import vn.com.quyln.mistia.core.model.InstallmentDeletionBlob
 import vn.com.quyln.mistia.core.model.InstallmentDeletionChunk
@@ -769,6 +772,56 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun recordInstallmentSourceFailure(queued: QueuedMutation, requestBatchId: String?, nextAttemptAtEpochMillis: Long, errorCode: String): Boolean = database.withTransaction {
+        val owner = UserId(queued.mutation.subjectUserId)
+        ensureCurrentFinanceOwner(owner)
+        require(queued.mutation.entity == CloudEntity.INSTALLMENT_PLAN && queued.mutation.kind == MutationKind.DELETE)
+        if (installmentDeletionBatch(owner, queued.mutation.recordId)?.batchId != requestBatchId) return@withTransaction false
+        val current = database.syncOutboxDao().record(owner.value, CloudEntity.INSTALLMENT_PLAN.table, queued.mutation.recordId)?.toQueuedMutation()
+        if (current != queued) return@withTransaction false
+        val recorded = recordMutationFailure(queued, nextAttemptAtEpochMillis, errorCode)
+        ensureCurrentFinanceOwner(owner)
+        recorded
+    }
+
+    override suspend fun installmentAcknowledgementSnapshot(owner: UserId, planId: String): InstallmentAcknowledgementSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val snapshot = readInstallmentAcknowledgementSnapshot(owner, planId)
+        ensureCurrentFinanceOwner(owner)
+        snapshot
+    }
+
+    private suspend fun readInstallmentAcknowledgementSnapshot(owner: UserId, planId: String) = InstallmentAcknowledgementSnapshot(
+        owner, planId, installmentDeletionBatch(owner, planId), InstallmentAcknowledgementSnapshot.entities.associateWith { recordsIncludingDeleted(owner, it.table) },
+        database.syncOutboxDao().rows(owner.value).filter { CloudEntity.fromTable(it.entity) in InstallmentAcknowledgementSnapshot.entities }.map { it.toQueuedMutation() })
+
+    override suspend fun commitInstallmentSourceAcknowledgement(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation, requestBatchId: String?,
+        remote: CloudRecord, remoteCycles: Map<String, CloudRecord?>, remoteLedger: Map<String, CloudRecord?>, now: String): Boolean {
+        if (expected.batch?.batchId != requestBatchId) return false
+        val decision = planInstallmentSourceAcknowledgement(expected, queued, remote, remoteCycles, remoteLedger, now)
+        require(decision is InstallmentSourceAckDecision.Ready)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current = readInstallmentAcknowledgementSnapshot(expected.owner, expected.planId)
+            if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+            check(removeQueuedMutationExact(queued))
+            decision.cycles.forEach { action ->
+                val original = expected.queues.single { it.mutation.entity == CloudEntity.DUE_OCCURRENCE_RECORD && it.mutation.recordId == action.record.id }
+                check(removeQueuedMutationExact(original))
+                database.cloudRecordDao().upsert(action.record.toEntity(action.queue != null, System.currentTimeMillis()))
+                action.queue?.let { restored ->
+                    val q = restored.mutation
+                    database.syncOutboxDao().upsert(SyncOutboxEntity(q.subjectUserId, q.entity.table, q.recordId, q.kind.name.lowercase(), q.payload?.toString(),
+                        q.modifiedAt, q.baseVersion, q.deviceId, restored.attemptCount, restored.nextAttemptAtEpochMillis, restored.lastError, restored.remoteIdentityObserved))
+                }
+            }
+            database.cloudRecordDao().upsert(decision.source.toEntity(false, System.currentTimeMillis()))
+            if (decision.clearBatch) check(database.installmentDeletionDao().deleteExact(expected.owner.value, expected.planId, requireNotNull(expected.batch).batchId) == 1)
+            ensureCurrentFinanceOwner(expected.owner)
+            true
+        }
+    }
+
     override suspend fun installmentDeletionBatch(owner: UserId, planId: String): InstallmentDeletionBatch? = database.withTransaction {
         ensureCurrentFinanceOwner(owner)
         val row = database.installmentDeletionDao().record(owner.value, planId)
@@ -922,18 +975,7 @@ class RoomLocalStore(
         require(remoteRecord.entity == pending.entity.table) { "Remote entity does not match mutation" }
         require(remoteRecord.id == pending.recordId) { "Remote record ID does not match mutation" }
         return database.withTransaction {
-            val removed = database.syncOutboxDao().deleteExact(
-                ownerUserId = pending.subjectUserId,
-                entity = pending.entity.table,
-                recordId = pending.recordId,
-                modifiedAt = pending.modifiedAt,
-                baseVersion = pending.baseVersion,
-                deviceId = pending.deviceId,
-                attemptCount = mutation.attemptCount,
-                kind = pending.kind.name.lowercase(),
-                payloadJson = pending.payload?.toString(),
-                remoteIdentityObserved = mutation.remoteIdentityObserved,
-            ) == 1
+            val removed = removeQueuedMutationExact(mutation)
             if (removed) {
                 database.cloudRecordDao().upsert(
                     remoteRecord.toEntity(
@@ -944,6 +986,12 @@ class RoomLocalStore(
             }
             removed
         }
+    }
+
+    private suspend fun removeQueuedMutationExact(queued: QueuedMutation): Boolean {
+        val q = queued.mutation
+        return database.syncOutboxDao().deleteExact(q.subjectUserId, q.entity.table, q.recordId, q.modifiedAt, q.baseVersion, q.deviceId,
+            queued.attemptCount, q.kind.name.lowercase(), q.payload?.toString(), queued.remoteIdentityObserved) == 1
     }
 
     override suspend fun recordMutationFailure(
