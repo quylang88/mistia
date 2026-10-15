@@ -61,13 +61,15 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("budget.add").performScrollTo().performClick()
         compose.onNodeWithTag("budget.category").performClick()
         compose.onNodeWithTag("budget.category.$childId").performClick()
-        compose.onNodeWithTag("budget.amount").performTextReplacement("500")
+        compose.onNodeWithTag("budget.amount").performTextReplacement("9007199254740993")
+        compose.onNodeWithTag("budget.amount").assertTextContains("9,007,199,254,740,993")
         capture("budget.editor","budget-editor-light.png")
         compose.onNodeWithTag("budget.save").performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeBudgets(owner).first().size==1 } }
         val budget=runBlocking { repo.observeBudgets(owner).first().single() }
-        Assert.assertEquals(500,budget.limitMinor)
+        Assert.assertEquals(9007199254740993L,budget.limitMinor)
         compose.onNodeWithTag("budget.edit.${budget.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("budget.amount").assertTextContains("9,007,199,254,740,993")
         compose.onNodeWithTag("budget.amount").performTextReplacement("600")
         compose.onNodeWithTag("budget.save").performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeBudgets(owner).first().single().limitMinor==600L } }

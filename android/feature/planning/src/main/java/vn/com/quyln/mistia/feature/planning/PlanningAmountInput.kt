@@ -8,3 +8,6 @@ internal fun groupedMinorAmountInput(text: String): String {
     val digits = raw.removePrefix("-").replace(",", "")
     return (if (negative) "-" else "") + digits.reversed().chunked(3).joinToString(",").reversed()
 }
+
+internal fun planningAmountInput(text: String, currency: String): String =
+    if (currency.trim().uppercase(java.util.Locale.ROOT) in setOf("JPY", "VND")) groupedMinorAmountInput(text) else text

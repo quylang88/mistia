@@ -82,7 +82,7 @@ internal fun BudgetEditorSheet(
                 TextButton(onClick = { categoryPicker = true }, enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.category")) {
                     Text(label, modifier = Modifier.weight(1f))
                 }
-                OutlinedTextField(state.amountText, onValueChange = { state = state.copy(amountText = it); error = null; storageError = false },
+                OutlinedTextField(state.amountText, onValueChange = { state = state.withAmount(it); error = null; storageError = false },
                     label = { Text(stringResource(R.string.planning_planning_budget_amount)) }, suffix = { Text(state.currencyCode) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.amount"))
                 if (state.id == null) {

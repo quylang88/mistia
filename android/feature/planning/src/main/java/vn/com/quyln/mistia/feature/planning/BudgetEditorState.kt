@@ -19,6 +19,7 @@ data class BudgetEditorState(
     val currencyCode: String,
     val rolloverEnabled: Boolean,
 ) {
+    fun withAmount(text: String) = copy(amountText = planningAmountInput(text, currencyCode))
     fun selectCategory(category: String, branchCurrency: String?): BudgetEditorState = copy(
         categoryId = category,
         currencyCode = if (id == null) branchCurrency ?: currencyCode else currencyCode,
@@ -44,7 +45,7 @@ data class BudgetEditorState(
             if (plan == null) return fresh(month, currency)
             val digits = runCatching { Currency.getInstance(plan.currencyCode).defaultFractionDigits.coerceAtLeast(0) }.getOrDefault(0)
             return BudgetEditorState(plan.id, budgetMonth(plan.monthAnchor, zone).toString(), month.toString(), plan.categoryId,
-                BigDecimal.valueOf(plan.limitMinor, digits).stripTrailingZeros().toPlainString(), plan.currencyCode, plan.rolloverEnabled)
+                planningAmountInput(BigDecimal.valueOf(plan.limitMinor, digits).stripTrailingZeros().toPlainString(), plan.currencyCode), plan.currencyCode, plan.rolloverEnabled)
         }
         fun scopedSaver(ownerId: String): Saver<BudgetEditorState, Any> = Saver(
             save = { state -> with(Saver) { save(state) }?.let { listOf(ownerId, it) } },
