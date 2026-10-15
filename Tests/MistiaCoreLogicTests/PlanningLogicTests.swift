@@ -4,6 +4,24 @@ import XCTest
 final class PlanningLogicTests: XCTestCase {
     private let calendar = Calendar(identifier: .gregorian)
 
+    func testInstallmentPaymentAcceptsOnlySameValidCurrency() {
+        let vectors: [(String, String, Bool)] = [
+            ("JPY", "JPY", true), ("VND", "VND", true), ("USD", "usd", true), (" jpy ", "JPY", true),
+            ("VND", "JPY", false), ("USD", "JPY", false), ("JPY", "VND", false),
+            ("", "", false), (" ", "JPY", false), ("JPY", "", false), ("US", "US", false),
+            ("JP¥", "JP¥", false), ("123", "123", false), ("JPY1", "JPY1", false)
+        ]
+        for (source, wallet, expected) in vectors {
+            XCTAssertEqual(PlanningLogic.installmentPaymentWalletIsEligible(installmentCurrencyCode: source, walletCurrencyCode: wallet), expected, "\(source)/\(wallet)")
+        }
+    }
+
+    func testInstallmentAmountPreviewFormatsOnBothSharedCatalogLanguages() {
+        XCTAssertEqual(L10n.planning.installmentEditor.amountPreview("¥9,007,199,254,740,993", language: .english), "Per cycle: ¥9,007,199,254,740,993")
+        XCTAssertEqual(L10n.planning.installmentEditor.amountPreview("₫1.000.000", language: .vietnamese), "Mỗi kỳ: ₫1.000.000")
+        XCTAssertEqual(L10n.planning.installmentEditor.amountPreview("￥1,375", language: .japanese), "1回あたり：￥1,375")
+    }
+
     func testBillPaymentWalletRequiresSameNonemptyCurrency() {
         XCTAssertFalse(PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: "VND", walletCurrencyCode: "JPY"))
         XCTAssertTrue(PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: "jpy", walletCurrencyCode: " JPY "))

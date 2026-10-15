@@ -20,6 +20,19 @@ class InstallmentEditorStateTest {
     private fun fresh() = InstallmentEditorState.fresh(owner, id, "JPY").copy(name = " Loan ", amountText = "9,007,199,254,740,993", paymentWalletId = walletId)
     private fun reason(block: () -> Unit): InstallmentValidationError? = try { block(); null }
         catch (e: InstallmentValidationException) { e.reason }
+    @Test fun `picker excludes differently denominated preferred archived and ordinary wallets`() {
+        val cash = wallet(); val foreignMoney = cash.copy(id = other, currencyCode = "VND")
+        assertEquals(listOf(cash), eligibleInstallmentWallets(owner, other, listOf(cash, foreignMoney), "JPY"))
+        assertTrue(eligibleInstallmentWallets(owner, other, listOf(foreignMoney.copy(isArchived = true)), "JPY").isEmpty())
+        assertEquals(listOf(foreignMoney), eligibleInstallmentWallets(owner, null, listOf(cash, foreignMoney), "vnd"))
+    }
+    @Test fun `restored mixed currency wallet cannot be submitted even when it is the preferred ID`() {
+        val state = InstallmentEditorState.from(owner, plan("USD"))
+        assertEquals(InstallmentValidationError.WALLET_CURRENCY_MISMATCH, reason { state.toDraft(listOf(wallet())) })
+        val saved = with(InstallmentEditorState.saver(owner, id)) { SaverScope { true }.save(state) }!!
+        val restored = InstallmentEditorState.saver(owner, id).restore(saved)!!
+        assertEquals(InstallmentValidationError.WALLET_CURRENCY_MISMATCH, reason { restored.toDraft(listOf(wallet())) })
+    }
     @Test fun `fresh form keeps stable client ID and default schedule and no implicit wallet`() {
         val state = InstallmentEditorState.fresh(owner, id, "JPY")
         assertEquals(id, state.id); assertEquals(15, state.dueDay); assertEquals(1, state.frequencyMonths); assertNull(state.paymentWalletId)
@@ -29,13 +42,13 @@ class InstallmentEditorStateTest {
     @Test fun `edited form retains original owned baseline currency creation and Long version`() {
         val plan = plan("USD"); val state = InstallmentEditorState.from(owner, plan)
         assertEquals(plan, state.baseline()); assertEquals(plan.amountPerCycleMinor, state.amountMinor())
-        assertEquals(plan, state.copy(name = "Changed").toDraft(listOf(wallet())).expected)
-        assertEquals("USD", state.currencyCode); assertEquals(12, state.toDraft(listOf(wallet())).totalCycles)
+        assertEquals(plan, state.copy(name = "Changed").toDraft(listOf(wallet().copy(currencyCode = "USD"))).expected)
+        assertEquals("USD", state.currencyCode); assertEquals(12, state.toDraft(listOf(wallet().copy(currencyCode = "USD"))).totalCycles)
     }
     @Test fun `currency input follows Swift grouped minor values without Double or multiplying by fraction digits`() {
         listOf("JPY", "VND", "USD").forEach { currency ->
             val state = fresh().copy(currencyCode = currency, amountText = "1,375")
-            assertEquals(1375L, state.toDraft(listOf(wallet())).amountPerCycleMinor)
+            assertEquals(1375L, state.toDraft(listOf(wallet().copy(currencyCode = currency))).amountPerCycleMinor)
         }
         assertEquals("9,007,199,254,740,993", installmentAmountInput("9007199254740993"))
         assertEquals("1,234", installmentAmountInput("1,23,4"))
@@ -58,8 +71,8 @@ class InstallmentEditorStateTest {
         val cash = wallet(); val archived = cash.copy(id = other, isArchived = true)
         val records = listOf(cash, archived, cash.copy(id = id, ownerUserId = other), cash.copy(id = id, deletedAt = now),
             cash.copy(id = id, kindWireValue = "creditCard"), cash.copy(id = id, kindWireValue = "futureKind"))
-        assertEquals(listOf(cash), eligibleInstallmentWallets(owner, null, records))
-        assertEquals(listOf(cash, archived), eligibleInstallmentWallets(owner, other, records))
+        assertEquals(listOf(cash), eligibleInstallmentWallets(owner, null, records, "JPY"))
+        assertEquals(listOf(cash, archived), eligibleInstallmentWallets(owner, other, records, "JPY"))
         assertEquals(InstallmentValidationError.INVALID_WALLET, reason { fresh().toDraft(listOf(cash.copy(ownerUserId = other))) })
         assertEquals(InstallmentValidationError.INVALID_WALLET, reason { fresh().copy(paymentWalletId = null).toDraft(records) })
     }

@@ -1001,6 +1001,7 @@
     <string name="planning_goal_editor_discard_message">未保存の目標の変更は失われます。</string>
     <string name="planning_goal_editor_invalid_amount">対応範囲内の有効な金額を入力してください。</string>
     <string name="planning_installment_load_error">現在、分割払いを読み込めません。</string>
+    <string name="planning_installment_payment_currency_mismatch">分割払いと同じ通貨のウォレットで支払ってください。</string>
     <string name="planning_installment_retry">再試行</string>
     <string name="planning_installment_cycle_failed">この回を更新できませんでした。もう一度お試しください。</string>
     <string name="planning_installment_cycle_not_scheduled">この分割払いは選択した月には予定されていません。</string>

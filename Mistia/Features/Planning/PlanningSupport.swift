@@ -248,6 +248,9 @@ enum PlanningPersistenceSupport {
                 throw PlanningDuePaymentError.billCurrencyMismatch
             }
         }
+        if sourceKind == .installment {
+            try PlanningInstallmentPaymentSupport.validateWallet(sourceID: sourceID, wallet: sourceWallet, context: modelContext)
+        }
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
             forWalletID: sourceWallet.id,

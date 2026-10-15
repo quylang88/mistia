@@ -999,6 +999,7 @@
   "planning.goalEditor.discardMessage": "planning_goal_editor_discard_message",
   "planning.goalEditor.invalidAmount": "planning_goal_editor_invalid_amount",
   "planning.installment.loadError": "planning_installment_load_error",
+  "planning.installment.payment.currencyMismatch": "planning_installment_payment_currency_mismatch",
   "planning.installment.retry": "planning_installment_retry",
   "planning.installmentCycle.failed": "planning_installment_cycle_failed",
   "planning.installmentCycle.notScheduled": "planning_installment_cycle_not_scheduled",

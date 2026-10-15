@@ -1725,7 +1725,9 @@ struct PlanningInstallmentEditorSheet: View {
             preferredWalletIDs: preferredWalletIDs,
             ownerUserID: installmentOwnerUserID,
             excludesCreditCards: true
-        )
+        ).filter { PlanningLogic.installmentPaymentWalletIsEligible(
+            installmentCurrencyCode: activeCurrencyCode, walletCurrencyCode: $0.currencyCode
+        ) }
     }
 
     private var installmentOwnerUserID: UUID? {
@@ -1891,6 +1893,13 @@ struct PlanningInstallmentEditorSheet: View {
             return
         }
 
+        guard PlanningLogic.installmentPaymentWalletIsEligible(
+            installmentCurrencyCode: activeCurrencyCode, walletCurrencyCode: wallet.currencyCode
+        ) else {
+            alertMessage = L10n.planning.installment.payment.currencyMismatch
+            return
+        }
+
         let totalCycles = draft.totalCyclesText.nilIfBlank.flatMap(Int.init)
         let now = Date()
         let planForSync: InstallmentPlan
@@ -1939,9 +1948,13 @@ struct PlanningInstallmentEditorSheet: View {
         guard let dueItem = target.dueItem else { return }
 
         do {
+            guard let walletID = draft.paymentWalletID, availableWallets.contains(where: { $0.id == walletID }) else {
+                throw PlanningDuePaymentError.missingSourceWallet
+            }
             let draft = try PlanningLogic.makePaymentDraft(
                 for: dueItem,
-                overrideAmountMinor: paymentAmountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+                overrideAmountMinor: paymentAmountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode),
+                sourceWalletIDOverride: walletID
             )
             let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
                 draft: draft,

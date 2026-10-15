@@ -832,11 +832,17 @@ nonisolated enum PlanningDuePaymentError: Error, Equatable {
     case missingSourceWallet
     case missingDestinationWallet
     case billCurrencyMismatch
+    case installmentCurrencyMismatch
+    case missingInstallment
 }
 
 extension PlanningDuePaymentError: LocalizedError {
     var errorDescription: String? {
         switch self {
+        case .installmentCurrencyMismatch:
+            L10n.planning.installment.payment.currencyMismatch
+        case .missingInstallment:
+            L10n.planning.installmentEditor.notFound
         case .billCurrencyMismatch:
             L10n.planning.bill.payment.currencyMismatch
         case .missingAmount:
@@ -2157,6 +2163,12 @@ nonisolated enum PlanningLogic {
             referenceDate: referenceDate,
             calendar: calendar
         )
+    }
+
+    static func installmentPaymentWalletIsEligible(installmentCurrencyCode: String, walletCurrencyCode: String) -> Bool {
+        let source = installmentCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let wallet = walletCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return source.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil && source == wallet
     }
 
     static func billPaymentWalletIsEligible(billCurrencyCode: String, walletCurrencyCode: String) -> Bool {

@@ -9,9 +9,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
 import vn.com.quyln.mistia.core.model.*
 
-internal fun eligibleInstallmentWallets(owner: String, preferredId: String?, wallets: List<LedgerWalletRecord>): List<LedgerWalletRecord> =
+internal fun eligibleInstallmentWallets(owner: String, preferredId: String?, wallets: List<LedgerWalletRecord>, currencyCode: String): List<LedgerWalletRecord> =
     wallets.filter { it.ownerUserId == owner && it.deletedAt == null && it.kind != null && it.kind != WalletKind.CREDIT_CARD &&
-        (!it.isArchived || it.id == preferredId) }.sortedWith(compareBy(LedgerWalletRecord::sortOrder, LedgerWalletRecord::name, LedgerWalletRecord::id))
+        (!it.isArchived || it.id == preferredId) && installmentPaymentCurrenciesMatch(currencyCode, it.currencyCode) }.sortedWith(compareBy(LedgerWalletRecord::sortOrder, LedgerWalletRecord::name, LedgerWalletRecord::id))
 
 internal data class InstallmentEditorState(
     val owner: String, val id: String, val baselinePayload: String?, val name: String, val amountText: String,
@@ -35,7 +35,10 @@ internal data class InstallmentEditorState(
         if (frequencyMonths !in 1..12 && original?.frequencyMonths != frequencyMonths) inputFailure(InstallmentValidationError.INVALID_FREQUENCY)
         val countText = totalCyclesText.trim()
         val count = if (countText.isEmpty()) null else countText.toIntOrNull() ?: inputFailure(InstallmentValidationError.INVALID_TOTAL_CYCLES)
-        val wallet = eligibleInstallmentWallets(owner, original?.paymentWalletId, wallets).firstOrNull { it.id == paymentWalletId }
+        wallets.firstOrNull { it.id == paymentWalletId && it.ownerUserId == owner }?.let { selected ->
+            if (!installmentPaymentCurrenciesMatch(currency, selected.currencyCode)) inputFailure(InstallmentValidationError.WALLET_CURRENCY_MISMATCH)
+        }
+        val wallet = eligibleInstallmentWallets(owner, original?.paymentWalletId, wallets, currency).firstOrNull { it.id == paymentWalletId }
             ?: inputFailure(InstallmentValidationError.INVALID_WALLET)
         return InstallmentDraft(id, title, amount, dueDay, frequencyMonths, count, wallet.id, currency, iconSymbolName, original)
     }

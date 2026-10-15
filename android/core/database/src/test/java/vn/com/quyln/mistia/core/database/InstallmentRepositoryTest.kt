@@ -47,6 +47,26 @@ class InstallmentRepositoryTest {
     }
     private suspend fun ready(plan: CloudRecord? = null): Store = Store().also { it.put(wallet().toCloudRecord()); plan?.let { p -> it.put(p) } }
     private fun reason(result: Result<*>) = (result.exceptionOrNull() as? InstallmentValidationException)?.reason
+    @Test fun `preferred installment payment wallet must match source currency before any save`() = runTest {
+        for (existing in listOf(false, true)) {
+            val store = ready(if (existing) plan().toCloudRecord() else null)
+            store.put(wallet().copy(currencyCode = "VND").toCloudRecord())
+            val before = store.recordsIncludingDeleted(owner, CloudEntity.INSTALLMENT_PLAN.table)
+            val result = OfflineFirstFinanceRepository(store).saveInstallment(owner, draft(if (existing) plan() else null), device, now)
+            assertEquals(InstallmentValidationError.WALLET_CURRENCY_MISMATCH, reason(result))
+            assertEquals(0, store.successful); assertEquals(before, store.recordsIncludingDeleted(owner, CloudEntity.INSTALLMENT_PLAN.table)); assertTrue(store.memory.outboxRows(owner.value).isEmpty())
+        }
+    }
+    @Test fun `wallet currency changing at commit is revalidated before any installment write`() = runTest {
+        val store = ready(); store.beforeCommit = { store.put(wallet().copy(currencyCode = "USD").toCloudRecord()) }
+        assertEquals(InstallmentValidationError.WALLET_CURRENCY_MISMATCH, reason(OfflineFirstFinanceRepository(store).saveInstallment(owner, draft(), device, now)))
+        assertEquals(0, store.successful); assertTrue(store.memory.outboxRows(owner.value).isEmpty())
+    }
+    @Test fun `normalized matching currency preserves raw source metadata and exact minor units`() = runTest {
+        val store = ready(plan().toCloudRecord()); store.put(wallet().copy(currencyCode = " jpy ").toCloudRecord())
+        val saved = OfflineFirstFinanceRepository(store).saveInstallment(owner, draft(plan()), device, now).getOrThrow()
+        assertEquals(9007199254740993L, saved.amountPerCycleMinor); assertEquals("JPY", saved.currencyCode)
+    }
     @Test fun `create atomically stores exact amount full nulls and one owned outbox row`() = runTest {
         val store = ready(); val saved = OfflineFirstFinanceRepository(store).saveInstallment(owner, draft(), device, now).getOrThrow()
         assertEquals(id, saved.id); assertEquals("Updated", saved.name); assertEquals(9007199254740993L, saved.amountPerCycleMinor)

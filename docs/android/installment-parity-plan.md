@@ -59,6 +59,13 @@ User decision (2026-10-15): installment payment must use a same-currency wallet 
 BOTH Swift/iOS and Android. Enforce in selection, confirmation and persistence so a
 stale/restored selection cannot spend another currency. No raw-minor cross-currency debit.
 
+Same-currency installment wallet rule is completed on existing surfaces (APK62):
+`evidence/2026-10-15-installment-same-currency.md`. Swift due/early payment selection
+and current SwiftData preflight now enforce the user decision; Android picker, form,
+repository and atomic metadata save validator enforce the same rule. Actual Android
+payment/undo remains the next feature. Swift609 and unsigned iPhone app build pass;
+Android1244 JVM tests pass; two Room +one Compose fixtures compile only.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.

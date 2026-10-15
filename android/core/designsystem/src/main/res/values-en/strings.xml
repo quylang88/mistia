@@ -1001,6 +1001,7 @@
     <string name="planning_goal_editor_discard_message">Unsaved goal changes will be lost.</string>
     <string name="planning_goal_editor_invalid_amount">Enter valid amounts within the supported range.</string>
     <string name="planning_installment_load_error">Couldn\'t load installments right now.</string>
+    <string name="planning_installment_payment_currency_mismatch">Pay this installment using a wallet with the same currency.</string>
     <string name="planning_installment_retry">Retry</string>
     <string name="planning_installment_cycle_failed">Could not update this cycle. Try again.</string>
     <string name="planning_installment_cycle_not_scheduled">This installment is not scheduled for the selected month.</string>

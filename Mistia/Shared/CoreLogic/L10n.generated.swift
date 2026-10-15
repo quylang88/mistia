@@ -2540,6 +2540,11 @@ nonisolated enum L10n {
         nonisolated enum installment {
             static var loadError: String { L10n.tr("planning.installment.loadError", vi: "Không thể tải các khoản trả góp lúc này.", en: "Couldn't load installments right now.", ja: "現在、分割払いを読み込めません。") }
             static func loadError(language: MistiaAppLanguage) -> String { L10n.tr("planning.installment.loadError", vi: "Không thể tải các khoản trả góp lúc này.", en: "Couldn't load installments right now.", ja: "現在、分割払いを読み込めません。", language: language) }
+
+            nonisolated enum payment {
+                static var currencyMismatch: String { L10n.tr("planning.installment.payment.currencyMismatch", vi: "Chỉ có thể thanh toán trả góp bằng ví cùng tiền tệ.", en: "Pay this installment using a wallet with the same currency.", ja: "分割払いと同じ通貨のウォレットで支払ってください。") }
+                static func currencyMismatch(language: MistiaAppLanguage) -> String { L10n.tr("planning.installment.payment.currencyMismatch", vi: "Chỉ có thể thanh toán trả góp bằng ví cùng tiền tệ.", en: "Pay this installment using a wallet with the same currency.", ja: "分割払いと同じ通貨のウォレットで支払ってください。", language: language) }
+            }
             static var retry: String { L10n.tr("planning.installment.retry", vi: "Thử lại", en: "Retry", ja: "再試行") }
             static func retry(language: MistiaAppLanguage) -> String { L10n.tr("planning.installment.retry", vi: "Thử lại", en: "Retry", ja: "再試行", language: language) }
         }
@@ -2560,8 +2565,12 @@ nonisolated enum L10n {
         }
 
         nonisolated enum installmentEditor {
-            static var amountPreview: String { L10n.tr("planning.installmentEditor.amountPreview", vi: "Mỗi kỳ: %1$s", en: "Per cycle: %1$s", ja: "1回あたり：%1$s") }
-            static func amountPreview(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentEditor.amountPreview", vi: "Mỗi kỳ: %1$s", en: "Per cycle: %1$s", ja: "1回あたり：%1$s", language: language) }
+            static func amountPreview(_ value: String) -> String {
+                L10n.format("planning.installmentEditor.amountPreview", vi: "Mỗi kỳ: %@", en: "Per cycle: %@", ja: "1回あたり：%@", value)
+            }
+            static func amountPreview(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("planning.installmentEditor.amountPreview", vi: "Mỗi kỳ: %@", en: "Per cycle: %@", ja: "1回あたり：%@", language: language, value)
+            }
             static var deleteMessage: String { L10n.tr("planning.installmentEditor.deleteMessage", vi: "Khoản này và lịch trả liên quan sẽ được xóa. Các giao dịch đã ghi nhận vẫn được giữ lại.", en: "This item and its payment schedule will be removed. Recorded transactions are kept.", ja: "この項目と支払予定を削除します。記録済みの取引は保持されます。") }
             static func deleteMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentEditor.deleteMessage", vi: "Khoản này và lịch trả liên quan sẽ được xóa. Các giao dịch đã ghi nhận vẫn được giữ lại.", en: "This item and its payment schedule will be removed. Recorded transactions are kept.", ja: "この項目と支払予定を削除します。記録済みの取引は保持されます。", language: language) }
             static var discardMessage: String { L10n.tr("planning.installmentEditor.discardMessage", vi: "Những thay đổi của khoản trả góp này sẽ không được lưu.", en: "Your changes to this installment will not be saved.", ja: "この分割払いの変更は保存されません。") }

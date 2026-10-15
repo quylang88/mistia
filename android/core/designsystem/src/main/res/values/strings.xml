@@ -1001,6 +1001,7 @@
     <string name="planning_goal_editor_discard_message">Các thay đổi mục tiêu chưa lưu sẽ bị mất.</string>
     <string name="planning_goal_editor_invalid_amount">Nhập số tiền hợp lệ trong phạm vi được hỗ trợ.</string>
     <string name="planning_installment_load_error">Không thể tải các khoản trả góp lúc này.</string>
+    <string name="planning_installment_payment_currency_mismatch">Chỉ có thể thanh toán trả góp bằng ví cùng tiền tệ.</string>
     <string name="planning_installment_retry">Thử lại</string>
     <string name="planning_installment_cycle_failed">Không thể cập nhật kỳ trả này. Vui lòng thử lại.</string>
     <string name="planning_installment_cycle_not_scheduled">Khoản trả góp này không có lịch trả trong tháng đã chọn.</string>

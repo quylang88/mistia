@@ -163,7 +163,7 @@ private fun OwnedInstallmentEditorSheet(
             when (picker) {
                 "wallet" -> {
                     TextButton(onClick = { state = state.copy(paymentWalletId = null); picker = null; error = null }) { Text(stringResource(R.string.planning_planning_choose_wallet)) }
-                    eligibleInstallmentWallets(owner, original?.paymentWalletId, wallets).forEach { wallet ->
+                    eligibleInstallmentWallets(owner, original?.paymentWalletId, wallets, state.currencyCode).forEach { wallet ->
                         PickerRow(wallet.id == state.paymentWalletId, "${wallet.name} · ${wallet.currencyCode}", "installment.pickWallet.${wallet.id}") {
                             state = state.copy(paymentWalletId = wallet.id); picker = null; error = null
                         }
@@ -216,6 +216,7 @@ private fun installmentEditorError(error: Throwable, deleting: Boolean): Int = w
     InstallmentValidationError.INVALID_AMOUNT -> R.string.planning_installment_editor_invalid_amount
     InstallmentValidationError.INVALID_TOTAL_CYCLES -> R.string.planning_installment_editor_invalid_total_cycles
     InstallmentValidationError.INVALID_DAYS, InstallmentValidationError.INVALID_FREQUENCY -> R.string.planning_installment_editor_invalid_schedule
+    InstallmentValidationError.WALLET_CURRENCY_MISMATCH -> R.string.planning_installment_payment_currency_mismatch
     InstallmentValidationError.INVALID_CURRENCY -> R.string.planning_installment_editor_invalid_currency
     InstallmentValidationError.INVALID_WALLET -> R.string.planning_planning_choose_a_payment_wallet_for_this_item
     InstallmentValidationError.NOT_FOUND, InstallmentValidationError.INVALID_IDENTITY -> R.string.planning_installment_editor_not_found

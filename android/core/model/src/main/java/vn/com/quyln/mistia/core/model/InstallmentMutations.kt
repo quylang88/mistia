@@ -31,7 +31,7 @@ data class InstallmentDraft(
 
 enum class InstallmentValidationError {
     NAME_REQUIRED, INVALID_AMOUNT, INVALID_DAYS, INVALID_FREQUENCY, INVALID_CURRENCY, INVALID_TOTAL_CYCLES,
-    INVALID_WALLET, INVALID_IDENTITY, NOT_FOUND, STALE_RECORD, NOT_SCHEDULED, SETTLED_CYCLE,
+    WALLET_CURRENCY_MISMATCH, INVALID_WALLET, INVALID_IDENTITY, NOT_FOUND, STALE_RECORD, NOT_SCHEDULED, SETTLED_CYCLE,
 }
 class InstallmentValidationException(val reason: InstallmentValidationError) : IllegalArgumentException(reason.name)
 
@@ -82,6 +82,7 @@ data class InstallmentMutationSnapshot(val owner: UserId, val planId: String, va
                 ?: throw IllegalArgumentException("Missing installment wallet")
             require(ownedIdentity(walletRow, owner, CloudEntity.LEDGER_WALLET))
             val wallet = LedgerWalletRecord.fromCloudRecord(walletRow)
+            require(installmentPaymentCurrenciesMatch(candidate.currencyCode, wallet.currencyCode)) { "Installment wallet currency mismatch" }
             require(wallet.deletedAt == null && wallet.kind != null && wallet.kind != WalletKind.CREDIT_CARD &&
                 (!wallet.isArchived || previous?.paymentWalletId == wallet.id))
         }
@@ -119,3 +120,9 @@ private val mutationUuidPattern = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-
 private fun normalizedUuid(value: String?): String? = value?.takeIf { mutationUuidPattern.matches(it) }?.let { UUID.fromString(it).toString() }
 private fun ownedIdentity(row: CloudRecord, owner: UserId, entity: CloudEntity): Boolean = row.entity == entity.table && row.ownerUserId == owner.value &&
     normalizedUuid(row.id) != null && normalizedUuid(row.id) == normalizedUuid(row.payload.text("id")) && normalizedUuid(row.payload.text("user_id")) == normalizedUuid(owner.value)
+
+/** Installment settlement uses the source currency; raw minor values never cross currencies. */
+fun installmentPaymentCurrenciesMatch(installmentCurrency: String, walletCurrency: String): Boolean {
+    val source = installmentCurrency.trim().uppercase(java.util.Locale.ROOT)
+    return Regex("[A-Z]{3}").matches(source) && source == walletCurrency.trim().uppercase(java.util.Locale.ROOT)
+}

@@ -27,6 +27,18 @@ class InstallmentMutationSnapshotTest {
         val payload = JsonObject(pair.first.payload + (key to value))
         return pair.first.copy(payload = payload) to pair.second.copy(payload = payload)
     }
+    @Test fun `atomic mutation validator rejects a differently denominated payment wallet without touching frozen source`() {
+        val cash = WalletDraft(id = wallet, name = "Cash", kind = WalletKind.CASH, currencyCode = "JPY").toMutation(owner, null, device, before).record
+        val candidate = InstallmentPlanRecord.fromCloudRecord(source).copy(name = "Edited", updatedAt = now).toCloudRecord()
+        val mutation = PendingMutation(CloudEntity.INSTALLMENT_PLAN, id, owner.value, MutationKind.UPSERT, candidate.payload, now, source.syncVersion, device)
+        val base = snapshot().copy(recordsByEntity = snapshot().recordsByEntity + (CloudEntity.LEDGER_WALLET to listOf(cash)))
+        base.requireValidMutations(listOf(candidate to mutation))
+        val changed = LedgerWalletRecord.fromCloudRecord(cash).copy(currencyCode = "VND").toCloudRecord()
+        assertThrows(IllegalArgumentException::class.java) {
+            base.copy(recordsByEntity = base.recordsByEntity + (CloudEntity.LEDGER_WALLET to listOf(changed))).requireValidMutations(listOf(candidate to mutation))
+        }
+        assertEquals(source, base.recordsByEntity.getValue(CloudEntity.INSTALLMENT_PLAN).single())
+    }
     @Test fun `complete deletion permits only source and every owned live occurrence`() {
         snapshot().requireValidMutations(listOf(tombstone(source), tombstone(occurrence)))
         assertThrows(IllegalArgumentException::class.java) { snapshot().requireValidMutations(listOf(tombstone(source))) }

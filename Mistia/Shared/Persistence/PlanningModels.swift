@@ -376,3 +376,23 @@ nonisolated final class DueOccurrenceRecord {
         set { statusRawValue = newValue.rawValue }
     }
 }
+
+/// Reads the current persisted source before any payment side effect.
+@MainActor
+enum PlanningInstallmentPaymentSupport {
+    static func validateWallet(sourceID: UUID, wallet: LedgerWallet, context: ModelContext) throws {
+        guard let plan = try context.fetch(FetchDescriptor<InstallmentPlan>(
+            predicate: #Predicate<InstallmentPlan> { $0.id == sourceID }
+        )).first, plan.deletedAt == nil, !plan.isArchived else {
+            throw PlanningDuePaymentError.missingInstallment
+        }
+        guard wallet.deletedAt == nil, wallet.kind != .creditCard else {
+            throw PlanningDuePaymentError.missingSourceWallet
+        }
+        guard PlanningLogic.installmentPaymentWalletIsEligible(
+            installmentCurrencyCode: plan.currencyCode, walletCurrencyCode: wallet.currencyCode
+        ) else {
+            throw PlanningDuePaymentError.installmentCurrencyMismatch
+        }
+    }
+}

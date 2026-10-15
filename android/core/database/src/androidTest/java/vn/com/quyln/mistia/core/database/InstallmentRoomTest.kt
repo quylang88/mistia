@@ -90,4 +90,27 @@ class InstallmentRoomTest {
         try { repository.saveInstallment(owner, draft(), device, now); fail("Cancellation expected") }
         catch (_: CancellationException) { assertTrue(database.syncOutboxDao().rows(owner.value).isEmpty()) }
     }
+    @Test fun mixedCurrencyWalletCannotBeSavedOrRetainedAsInstallmentPaymentDefault() = runTest {
+        seedWallet(); val original = source()
+        database.cloudRecordDao().upsert(entity(original.toCloudRecord()))
+        val cash = store.record(owner, CloudEntity.LEDGER_WALLET.table, wallet)!!
+        val mismatched = LedgerWalletRecord.fromCloudRecord(cash).copy(currencyCode = "VND").toCloudRecord()
+        database.cloudRecordDao().upsert(entity(mismatched))
+        val result = repository.saveInstallment(owner, draft(original), device, now)
+        assertEquals(InstallmentValidationError.WALLET_CURRENCY_MISMATCH, (result.exceptionOrNull() as? InstallmentValidationException)?.reason)
+        assertEquals(original.toCloudRecord(), store.record(owner, original.toCloudRecord().entity, id)); assertTrue(database.syncOutboxDao().rows(owner.value).isEmpty())
+    }
+    @Test fun walletCurrencyChangeAfterSnapshotCannotPassAtomicInstallmentValidation() = runTest {
+        seedWallet(); val old = store.installmentMutationSnapshot(owner, id)
+        val saved = source().copy(createdAt = now, updatedAt = now, syncVersion = 0).toCloudRecord()
+        val q = PendingMutation(CloudEntity.INSTALLMENT_PLAN, id, owner.value, MutationKind.UPSERT, saved.payload, now, 0, device)
+        val cash = store.record(owner, CloudEntity.LEDGER_WALLET.table, wallet)!!
+        database.cloudRecordDao().upsert(entity(LedgerWalletRecord.fromCloudRecord(cash).copy(currencyCode = "USD").toCloudRecord()))
+        assertFalse(store.commitInstallmentMutations(old, listOf(saved to q)))
+        assertNull(store.record(owner, saved.entity, id)); assertTrue(database.syncOutboxDao().rows(owner.value).isEmpty())
+        val fresh = store.installmentMutationSnapshot(owner, id)
+        assertTrue(runCatching { store.commitInstallmentMutations(fresh, listOf(saved to q)) }.isFailure)
+        assertNull(store.record(owner, saved.entity, id))
+    }
+
 }

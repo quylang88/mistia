@@ -56,6 +56,7 @@ class InstallmentEditorWorkflowTest {
         compose.onNodeWithTag("installment.pickWallet.${wallet.id}").performClick()
     }
     private fun original() = runBlocking {
+        wallet = repo.saveWallet(owner, WalletDraft(id = wallet.id, name = "Cash", kind = WalletKind.CASH, currencyCode = "USD"), device, now.toString()).getOrThrow()
         repo.saveInstallment(owner, InstallmentDraft(id, "Original", 1375, 15, 1, 12, wallet.id, "USD"), device, now.toString()).getOrThrow()
     }
 
@@ -253,6 +254,22 @@ class InstallmentEditorWorkflowTest {
         compose.onNodeWithTag("installment.confirmCycle").assertExists().assertIsEnabled()
         compose.onNodeWithTag("installment.cancelCycle").performClick()
         Assert.assertTrue(runBlocking { repo.observeDueOccurrences(owner).first().isEmpty() })
+    }
+
+    @Test fun differentlyDenominatedPreferredWalletIsHiddenAndCannotSubmitRestoredEditor() {
+        val source = original(); val wrongCurrency = wallet.copy(currencyCode = "JPY")
+        var saves = 0
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MistiaTheme(darkTheme = false) {
+            InstallmentEditorSheet(owner.value, id, source, "USD", listOf(wrongCurrency), onSave = { saves++; Result.success(source) }, onDelete = { Result.success(Unit) }, onDismiss = {})
+        } }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("installment.wallet").performScrollTo().performClick()
+        compose.onNodeWithTag("installment.pickWallet.${wallet.id}").assertDoesNotExist()
+        compose.onNodeWithText(ApplicationProvider.getApplicationContext<Context>().getString(vn.com.quyln.mistia.core.designsystem.R.string.planning_planning_choose_wallet)).performClick()
+        compose.onNodeWithTag("installment.save").performScrollTo().performClick()
+        compose.runOnIdle { Assert.assertEquals(0, saves) }
+        compose.onNodeWithTag("installment.editorError").assertExists()
     }
 
 }

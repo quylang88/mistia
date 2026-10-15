@@ -72,6 +72,7 @@ internal class OfflineInstallmentRepository(private val store: LocalStore, priva
                 val walletRow = snapshot.recordsByEntity.getValue(CloudEntity.LEDGER_WALLET).singleOrNull { it.id == walletId }
                     ?.takeIf { it.matchesFinanceReadScope(owner, CloudEntity.LEDGER_WALLET) } ?: fail(InstallmentValidationError.INVALID_WALLET)
                 val wallet = runCatching { LedgerWalletRecord.fromCloudRecord(walletRow) }.getOrNull() ?: fail(InstallmentValidationError.INVALID_WALLET)
+                if (!installmentPaymentCurrenciesMatch(currency, wallet.currencyCode)) fail(InstallmentValidationError.WALLET_CURRENCY_MISMATCH)
                 if (wallet.kind == null || wallet.kind == WalletKind.CREDIT_CARD || (wallet.isArchived && previous?.paymentWalletId != walletId)) fail(InstallmentValidationError.INVALID_WALLET)
                 val saved = InstallmentPlanRecord(id, owner.value, name, draft.iconSymbolName, draft.amountPerCycleMinor, draft.dueDay,
                     draft.totalCycles, draft.frequencyMonths, walletId, previous?.currencyCode ?: currency, false, previous?.createdAt ?: timestamp,

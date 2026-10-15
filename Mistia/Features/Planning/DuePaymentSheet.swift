@@ -106,14 +106,11 @@ struct DuePaymentSheet: View {
         switch target.sourceKind {
         case .recurringBill, .installment:
             let id = dueItem?.paymentWalletID
-            if target.sourceKind == .recurringBill {
-                return id.flatMap { walletID in
-                    wallets.first { $0.id == walletID && PlanningLogic.billPaymentWalletIsEligible(
-                        billCurrencyCode: dueItem?.currencyCode ?? activeCurrencyCode, walletCurrencyCode: $0.currencyCode
-                    ) }?.id
-                }
+            return id.flatMap { walletID in
+                wallets.first { $0.id == walletID && paymentWalletCurrencyMatches(
+                    dueCurrencyCode: dueItem?.currencyCode ?? activeCurrencyCode, walletCurrencyCode: $0.currencyCode
+                ) }?.id
             }
-            return id
         case .creditCard:
             return nil
         }
@@ -126,10 +123,21 @@ struct DuePaymentSheet: View {
             targetOwnerUserID: target.ownerUserID ?? walletPickerAccess.currentSelfUserID,
             excludesCreditCards: target.sourceKind == .installment
         ).filter { wallet in
-            target.sourceKind != .recurringBill || PlanningLogic.billPaymentWalletIsEligible(
-                billCurrencyCode: dueItem?.currencyCode ?? activeCurrencyCode,
+            paymentWalletCurrencyMatches(
+                dueCurrencyCode: dueItem?.currencyCode ?? activeCurrencyCode,
                 walletCurrencyCode: wallet.currencyCode
             )
+        }
+    }
+
+    private func paymentWalletCurrencyMatches(dueCurrencyCode: String, walletCurrencyCode: String) -> Bool {
+        switch target.sourceKind {
+        case .installment:
+            PlanningLogic.installmentPaymentWalletIsEligible(installmentCurrencyCode: dueCurrencyCode, walletCurrencyCode: walletCurrencyCode)
+        case .recurringBill:
+            PlanningLogic.billPaymentWalletIsEligible(billCurrencyCode: dueCurrencyCode, walletCurrencyCode: walletCurrencyCode)
+        case .creditCard:
+            true
         }
     }
 
@@ -186,8 +194,7 @@ struct DuePaymentSheet: View {
             return true
         }
 
-        if target.sourceKind == .recurringBill,
-           !availableWallets(for: dueItem).contains(where: { $0.id == selectedWalletID }) {
+        if !availableWallets(for: dueItem).contains(where: { $0.id == selectedWalletID }) {
             return true
         }
         if target.requiresAmountInput {
@@ -400,6 +407,9 @@ struct DuePaymentSheet: View {
         }
 
         do {
+            guard let selectedWalletID, availableWallets(for: dueItem).contains(where: { $0.id == selectedWalletID }) else {
+                throw PlanningDuePaymentError.missingSourceWallet
+            }
             let overrideAmount: Int64? = target.requiresAmountInput
                 ? parsedAmountInput
                 : nil
