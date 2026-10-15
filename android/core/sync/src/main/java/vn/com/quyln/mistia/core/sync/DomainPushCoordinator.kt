@@ -66,6 +66,7 @@ internal class OutboxPushCoordinator(
     private val acknowledgementContext: suspend (QueuedMutation, CloudRecord, UserId, String) -> CoroutineContext = { _, _, _, _ -> EmptyCoroutineContext },
     private val recordFailureOverride: suspend (QueuedMutation, Long, String) -> Boolean? = { _, _, _ -> null },
     private val acknowledgeOverride: suspend (QueuedMutation, CloudRecord) -> MutationAcknowledgement = { _, _ -> MutationAcknowledgement.Default },
+    private val beforeRemoteWrite: suspend (QueuedMutation, CloudRecord, UserId, String) -> MutationPreflight = { _, _, _, _ -> MutationPreflight.Continue },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
         ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
@@ -154,6 +155,7 @@ internal class OutboxPushCoordinator(
         }
 
         if (remote == null) {
+            preflightOutcome(queued, local, ownerUserId, accessToken, beforeWriting = true)?.let { return it }
             val nextVersion = nextVersion(maxOf(mutation.baseVersion, local.syncVersion, 0))
             val created = try {
                 remoteStore.createRecord(
@@ -176,6 +178,7 @@ internal class OutboxPushCoordinator(
             remote.syncVersion == mutation.baseVersion &&
             remote.deletedAt == null
         ) {
+            preflightOutcome(queued, local, ownerUserId, accessToken, beforeWriting = true)?.let { return it }
             val updated = remoteStore.conditionalUpdate(
                 entity,
                 mutation.recordId,
@@ -193,15 +196,19 @@ internal class OutboxPushCoordinator(
         return resolveConflict(queued, local, remote, ownerUserId, accessToken)
     }
 
-    private suspend fun preflightOutcome(queued:QueuedMutation,local:CloudRecord,owner:UserId,token:String):PushOutcome? =
-        when(val decision=preflight(queued,local,owner,token)) {
+    private suspend fun preflightOutcome(queued: QueuedMutation, local: CloudRecord, owner: UserId, token: String, beforeWriting: Boolean = false): PushOutcome? {
+        currentCoroutineContext().ensureActive()
+        val decision = if (beforeWriting) beforeRemoteWrite(queued, local, owner, token) else preflight(queued, local, owner, token)
+        currentCoroutineContext().ensureActive()
+        return when (decision) {
             MutationPreflight.Continue -> null
             MutationPreflight.Reconciled -> PushOutcome.RECONCILED
             MutationPreflight.Stale -> PushOutcome.STALE
             MutationPreflight.Deferred -> PushOutcome.DEFERRED
-            is MutationPreflight.Acknowledge -> acknowledge(queued,decision.record,PushOutcome.ACKNOWLEDGED)
-            is MutationPreflight.Conflict -> retainConflict(queued,decision.reason)
+            is MutationPreflight.Acknowledge -> acknowledge(queued, decision.record, PushOutcome.ACKNOWLEDGED)
+            is MutationPreflight.Conflict -> retainConflict(queued, decision.reason)
         }
+    }
 
     private suspend fun pushDelete(
         queued: QueuedMutation,
@@ -218,6 +225,7 @@ internal class OutboxPushCoordinator(
         if (remote.syncVersion != queued.mutation.baseVersion) {
             return resolveDeleteConflict(queued, local, remote, owner, token)
         }
+        preflightOutcome(queued, local, owner, token, beforeWriting = true)?.let { return it }
         val next = nextVersion(remote.syncVersion)
         val deleted = remoteStore.conditionalUpdate(entity, queued.mutation.recordId, token, owner,
             remote.syncVersion, local.deletePatch(next, queued.mutation.deviceId))
@@ -242,6 +250,7 @@ internal class OutboxPushCoordinator(
             ConflictWinner.REMOTE -> acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
             ConflictWinner.UNRESOLVED -> retainConflict(queued, "delete_${decision.reason}")
             ConflictWinner.LOCAL -> {
+                preflightOutcome(queued, local, owner, token, beforeWriting = true)?.let { return it }
                 val next = nextVersion(maxOf(remote.syncVersion, local.syncVersion, 0))
                 val deleted = remoteStore.conditionalUpdate(entity, queued.mutation.recordId, token, owner,
                     remote.syncVersion, local.deletePatch(next, queued.mutation.deviceId))
@@ -293,6 +302,7 @@ internal class OutboxPushCoordinator(
             ConflictWinner.REMOTE -> acknowledge(queued, remote, PushOutcome.ACKNOWLEDGED)
             ConflictWinner.UNRESOLVED -> retainConflict(queued, decision.reason)
             ConflictWinner.LOCAL -> {
+                preflightOutcome(queued, local, ownerUserId, accessToken, beforeWriting = true)?.let { return it }
                 val nextVersion = nextVersion(maxOf(remote.syncVersion, local.syncVersion, 0))
                 val updated = remoteStore.conditionalUpdate(
                     entity,

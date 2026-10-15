@@ -94,8 +94,11 @@ Installment financial mutation coherence is enforced at the actual Room boundary
 links and clocks, complete duplicate/expense undo, preserved financial tombstones and
 consistent actor/version metadata are validated.10 new JVM cases execute; three added
 Room fixtures compile/package only. Paid cloud ACK remains a separate next feature.
-Generic transaction push also needs a pending wallet/category dependency guard before
-continuing that pipeline: domain order alone does not handle failed/retrying parents.
+The pending wallet/category transaction dependency guard is completed locally in APK67:
+`evidence/2026-10-15-transaction-dependency-guard.md`. UPSERT defers before fetch and
+before each write while owned direct dependencies remain pending; DELETE is independent.
+Nine added cases execute, including mid-fetch arrivals/create/base/forced update variants.
+Missing-remote-parent repair is separate open work. Paid occurrence ACK remains next.
 
 Next coherent slices:
 

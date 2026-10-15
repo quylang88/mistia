@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CloudRecord
@@ -280,6 +281,81 @@ class TransactionPushCoordinatorTest {
         lastError = null,
     )
 
+    @Test fun `source wallet dependency defers even while parent retry or conflict is not due`() = runTest {
+        val original = queued(0).copy(attemptCount = 7, lastError = "network_io")
+        val local = FakeLocalStore(localRecord(0), original).apply { dependencies[UserId(OWNER) to CloudEntity.LEDGER_WALLET.table] = setOf(SOURCE_WALLET_ID) }
+        val remote = FakeRemoteStore().apply { createdResult = remoteRecord(1) }
+        assertEquals(TransactionPushSummary(), coordinator(local, remote).pushPending(UserId(OWNER), TOKEN))
+        assertEquals(0, remote.fetchCalls); assertNull(remote.createdPayload); assertSame(original, local.queued)
+        local.dependencies.clear()
+        assertEquals(1, coordinator(local, remote).pushPending(UserId(OWNER), TOKEN).pushed)
+    }
+    @Test fun `destination wallet must finish before cross currency transfer upsert`() = runTest {
+        val destination = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        val row = localRecord(0).copy(payload = JsonObject(localRecord(0).payload + mapOf("primary_kind_raw_value" to JsonPrimitive("transfer"),
+            "transfer_subtype_raw_value" to JsonPrimitive("internalTransfer"), "destination_wallet_id" to JsonPrimitive(destination), "destination_amount_minor" to JsonPrimitive(9007199254740993L), "destination_currency_code" to JsonPrimitive("VND"), "category_id" to JsonNull)))
+        val q = queued(0).let { it.copy(mutation = it.mutation.copy(payload = row.payload)) }
+        val local = FakeLocalStore(row, q).apply { dependencies[UserId(OWNER) to CloudEntity.LEDGER_WALLET.table] = setOf(destination) }
+        val remote = FakeRemoteStore().apply { createdResult = row }
+        assertEquals(TransactionPushSummary(), coordinator(local, remote).pushPending(UserId(OWNER), TOKEN))
+        assertEquals(0, remote.fetchCalls); assertNull(remote.createdPayload); assertSame(q, local.queued)
+    }
+    @Test fun `category dependency defers expense before remote fetch or create`() = runTest {
+        val q = queued(0); val local = FakeLocalStore(localRecord(0), q).apply { dependencies[UserId(OWNER) to CloudEntity.TRANSACTION_CATEGORY.table] = setOf(CATEGORY_ID) }
+        val remote = FakeRemoteStore().apply { createdResult = remoteRecord(1) }
+        assertEquals(TransactionPushSummary(), coordinator(local, remote).pushPending(UserId(OWNER), TOKEN))
+        assertEquals(0, remote.fetchCalls); assertNull(remote.createdPayload); assertSame(q, local.queued)
+    }
+    @Test fun `foreign owner and unrelated dependency queues cannot block owned transaction`() = runTest {
+        val local = FakeLocalStore(localRecord(0), queued(0)).apply {
+            dependencies[UserId(DEVICE) to CloudEntity.LEDGER_WALLET.table] = setOf(SOURCE_WALLET_ID)
+            dependencies[UserId(OWNER) to CloudEntity.LEDGER_WALLET.table] = setOf(DEVICE)
+            dependencies[UserId(OWNER) to CloudEntity.TRANSACTION_CATEGORY.table] = setOf(DEVICE)
+        }
+        assertEquals(1, coordinator(local, FakeRemoteStore().apply { createdResult = remoteRecord(1) }).pushPending(UserId(OWNER), TOKEN).pushed)
+    }
+    @Test fun `explicitly cleared reference does not wait on its old category id`() = runTest {
+        val row = localRecord(0).copy(payload = JsonObject(localRecord(0).payload + ("category_id" to JsonNull)))
+        val local = FakeLocalStore(row, queued(0).let { it.copy(mutation = it.mutation.copy(payload = row.payload)) }).apply { dependencies[UserId(OWNER) to CloudEntity.TRANSACTION_CATEGORY.table] = setOf(CATEGORY_ID) }
+        val remote = FakeRemoteStore().apply { createdResult = row }
+        assertEquals(1, coordinator(local, remote).pushPending(UserId(OWNER), TOKEN).pushed)
+    }
+    @Test fun `UUID reference case cannot bypass canonical dependency identity`() = runTest {
+        val id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        val row = localRecord(0).copy(payload = JsonObject(localRecord(0).payload + ("source_wallet_id" to JsonPrimitive(id.uppercase()))))
+        val local = FakeLocalStore(row, queued(0).let { it.copy(mutation = it.mutation.copy(payload = row.payload)) }).apply { dependencies[UserId(OWNER) to CloudEntity.LEDGER_WALLET.table] = setOf(id) }
+        val remote = FakeRemoteStore().apply { createdResult = row }
+        assertEquals(TransactionPushSummary(), coordinator(local, remote).pushPending(UserId(OWNER), TOKEN))
+        assertEquals(0, remote.fetchCalls)
+    }
+    @Test fun `expense tombstone proceeds independently of pending wallet and category metadata`() = runTest {
+        val row = tombstone(7); val local = FakeLocalStore(row, deletion(row)).apply {
+            dependencies[UserId(OWNER) to CloudEntity.LEDGER_WALLET.table] = setOf(SOURCE_WALLET_ID)
+            dependencies[UserId(OWNER) to CloudEntity.TRANSACTION_CATEGORY.table] = setOf(CATEGORY_ID)
+        }
+        val remote = FakeRemoteStore()
+        assertEquals(1, coordinator(local, remote).pushPending(UserId(OWNER), TOKEN).acknowledged)
+        assertEquals(1, remote.fetchCalls); assertNull(local.queued); assertNull(remote.createdPayload)
+    }
+    @Test fun `disabled transaction writes do not inspect dependent queues`() = runTest {
+        val local = FakeLocalStore(localRecord(0), queued(0)); val remote = FakeRemoteStore()
+        assertEquals(TransactionPushSummary(), TransactionPushCoordinator(local, remote, false).pushPending(UserId(OWNER), TOKEN))
+        assertEquals(0, local.dependencyReads); assertEquals(0, remote.fetchCalls)
+    }
+
+    @Test fun `new dependency queued during remote fetch defers create and conditional update before wire write`() = runTest {
+        for (version in listOf(0L, 7L, 6L)) {
+            val q = queued(version); val local = FakeLocalStore(localRecord(version), q)
+            val remote = FakeRemoteStore().apply {
+                if (version > 0) fetched = record(if (version == 6L) 5L else version, "Server previous", "2026-09-23T11:59:00Z")
+                createdResult = remoteRecord(version + 1); updatedResult = remoteRecord(version + 1)
+                onFetch = { local.dependencies[UserId(OWNER) to CloudEntity.LEDGER_WALLET.table] = setOf(SOURCE_WALLET_ID) }
+            }
+            assertEquals(TransactionPushSummary(), coordinator(local, remote).pushPending(UserId(OWNER), TOKEN))
+            assertEquals(1, remote.fetchCalls); assertNull(remote.createdPayload); assertEquals(0, remote.updateCalls); assertSame(q, local.queued)
+        }
+    }
+
     private fun localRecord(version: Long) = record(version, "Local", NOW)
     private fun remoteRecord(version: Long, title: String = "Local") = record(version, title, NOW)
     private fun record(version: Long, title: String, updatedAt: String) = CloudRecord(
@@ -316,6 +392,8 @@ class TransactionPushCoordinatorTest {
     )
 
     private class FakeLocalStore(var record: CloudRecord?, var queued: QueuedMutation?) : LocalStore {
+        val dependencies = mutableMapOf<Pair<UserId, String>, Set<String>>()
+        var dependencyReads = 0
         override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
             MutableStateFlow(emptyList())
         override fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>> =
@@ -356,8 +434,10 @@ class TransactionPushCoordinatorTest {
             entity: String,
             records: List<CloudRecord>,
         ) = Unit
-        override suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String) =
-            listOfNotNull(queued).mapTo(mutableSetOf()) { it.mutation.recordId }
+        override suspend fun pendingMutationRecordIds(ownerUserId: UserId, entity: String): Set<String> {
+            dependencyReads++
+            return dependencies[ownerUserId to entity].orEmpty() + listOfNotNull(queued).filter { it.mutation.subjectUserId == ownerUserId.value && it.mutation.entity.table == entity }.map { it.mutation.recordId }
+        }
         override suspend fun clearAccount(ownerUserId: UserId) = Unit
     }
 
@@ -372,6 +452,7 @@ class TransactionPushCoordinatorTest {
         var fetchCalls = 0
         var updateCalls = 0
         var beforeUpdate: (() -> Unit)? = null
+        var onFetch: (() -> Unit)? = null
 
         override suspend fun fetchRecord(
             entity: CloudEntity,
@@ -380,6 +461,7 @@ class TransactionPushCoordinatorTest {
             ownerUserId: UserId,
         ): CloudRecord? {
             fetchCalls++
+            onFetch?.invoke()
             fetchFailure?.let { throw it }
             return fetched
         }
