@@ -6,6 +6,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Currency
 import java.util.Locale
+import vn.com.quyln.mistia.core.model.currencyAmountInput
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
 import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
 import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
@@ -38,6 +39,16 @@ data class TransactionEditorState(
     val exchangeRateProvider: String?,
     val exchangeRateDate: String?,
 ) {
+    fun withAmount(text: String, currency: String?): TransactionEditorState = copy(amountText = currencyAmountInput(text, currency.orEmpty()))
+
+    fun withAmountCurrency(previousCurrency: String?, currency: String?): TransactionEditorState {
+        val wasGrouped = previousCurrency?.trim()?.uppercase(Locale.ROOT) in setOf("JPY", "VND")
+        val input = if (wasGrouped && parseMinorInput(amountText, previousCurrency) != null) amountText.replace(",", "") else amountText
+        return withAmount(input, currency)
+    }
+
+    fun withDestinationAmount(text: String, currency: String?): TransactionEditorState = copy(destinationAmountText = currencyAmountInput(text, currency.orEmpty()))
+
     fun selectKind(selected: TransactionPrimaryKind): TransactionEditorState = when (selected) {
         TransactionPrimaryKind.TRANSFER -> copy(
             primaryKind = selected,
@@ -340,7 +351,7 @@ internal fun parseMinorInput(text: String, currencyCode: String?): Long? {
     val fractionDigits = runCatching { Currency.getInstance(code).defaultFractionDigits }.getOrNull()
         ?.takeIf { it >= 0 } ?: return null
     return runCatching {
-        BigDecimal(text.trim())
+        BigDecimal(if (code in setOf("JPY", "VND")) text.trim().replace(",", "") else text.trim())
             .movePointRight(fractionDigits)
             .setScale(0, RoundingMode.UNNECESSARY)
             .longValueExact()
@@ -351,7 +362,7 @@ internal fun formatMinorInput(minor: Long, currencyCode: String?): String {
     val fractionDigits = currencyCode?.let { code ->
         runCatching { Currency.getInstance(code.uppercase(Locale.ROOT)).defaultFractionDigits }.getOrNull()
     }?.takeIf { it >= 0 } ?: 0
-    return BigDecimal.valueOf(minor, fractionDigits).stripTrailingZeros().toPlainString()
+    return currencyAmountInput(BigDecimal.valueOf(minor, fractionDigits).stripTrailingZeros().toPlainString(), currencyCode.orEmpty())
 }
 
 internal fun ReceiptItemTransactionDraft.toTransactionEditorState(

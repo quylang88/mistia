@@ -15,6 +15,51 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test fun `currency switch removes supported grouping without changing imported major units`() {
+        val state = TransactionEditorState.new(NOW).copy(sourceWalletId = SOURCE_WALLET_ID, categoryId = CATEGORY_ID, amountText = "1,000")
+            .withAmountCurrency("JPY", "USD")
+        assertEquals("1000", state.amountText)
+        assertEquals(100000L, state.toDraft("USD", null).draft?.amountMinor)
+        assertEquals("1,000", state.withAmountCurrency("USD", "VND").amountText)
+        assertEquals("1,000", state.withAmountCurrency(null, "JPY").amountText)
+    }
+    @Test fun `currency switch preserves malformed input and imported decimal units`() {
+        val state = TransactionEditorState.new(NOW).copy(sourceWalletId = SOURCE_WALLET_ID, categoryId = CATEGORY_ID)
+        assertEquals("1,5.2", state.copy(amountText = "1,5.2").withAmountCurrency("JPY", "USD").amountText)
+        val imported = state.copy(amountText = "12.34").withAmountCurrency("USD", "USD")
+        assertEquals("12.34", imported.amountText)
+        assertEquals(1234L, imported.toDraft("USD", null).draft?.amountMinor)
+    }
+
+    @Test fun `opening an FX transaction groups both exact minor amounts`() {
+        val state = TransactionEditorState.edit(transaction().copy(amountMinor = 9007199254740993L, destinationAmountMinor = 18014398509481986L))
+        assertEquals("9,007,199,254,740,993", state.amountText)
+        assertEquals("18,014,398,509,481,986", state.destinationAmountText)
+        val draft = state.toDraft("JPY", "VND").draft
+        assertEquals(9007199254740993L, draft?.amountMinor)
+        assertEquals(18014398509481986L, draft?.destinationAmountMinor)
+    }
+    @Test fun `grouped manual FX inputs preserve both exact units`() {
+        val state = TransactionEditorState.edit(transaction()).copy(amountText = "1,375", destinationAmountText = "206,250", exchangeRateText = "150")
+        val result = state.toDraft("JPY", "VND")
+        assertNull(result.validation)
+        assertEquals(1375L, result.draft?.amountMinor)
+        assertEquals(206250L, result.draft?.destinationAmountMinor)
+    }
+    @Test fun `app FX derives grouped destination from grouped source without changing rate`() {
+        val state = TransactionEditorState.edit(transaction()).copy(amountText = "1,000").withFxPair("JPY", "VND", listOf(rate()))
+        assertEquals("165,500", state.destinationAmountText)
+        assertEquals("165.5", state.exchangeRateText)
+        assertEquals(165500L, state.toDraft("JPY", "VND", listOf(rate())).draft?.destinationAmountMinor)
+    }
+    @Test fun `fractional import and invalid minor validation remain exact`() {
+        val state = TransactionEditorState.new(NOW).copy(sourceWalletId = SOURCE_WALLET_ID, categoryId = CATEGORY_ID, amountText = "12.34")
+        assertEquals(1234L, state.toDraft("USD", null).draft?.amountMinor)
+        for (text in listOf("", "-1", "1.5", "bad", "9,223,372,036,854,775,808")) {
+            assertEquals(TransactionEditorValidation.INVALID_AMOUNT, state.copy(amountText = text).toDraft("JPY", null).validation)
+        }
+    }
+
     @Test fun `notification top up preselects only destination without inventing source or amounts`() {
         val id="22222222-2222-2222-2222-222222222222"
         val state=notificationTopUpState("2026-10-14T00:00:00Z",id)
@@ -45,7 +90,7 @@ class TransactionEditorStateTest {
         assertNull(state.transferSubtype)
         assertEquals(TransactionEntryStatus.POSTED, state.entryStatus)
         assertEquals("FamilyMart", state.title)
-        assertEquals("1570", state.amountText)
+        assertEquals("1,570", state.amountText)
         assertEquals(NOW, state.occurredAt)
         assertEquals(SOURCE_WALLET_ID, state.sourceWalletId)
         assertEquals(CATEGORY_ID, state.categoryId)
@@ -71,7 +116,7 @@ class TransactionEditorStateTest {
         assertEquals(TransactionTransferSubtype.DEBT, state.transferSubtype)
         assertEquals(TransactionDebtIntent.LEND, state.debtIntent)
         assertEquals("FamilyMart", state.title)
-        assertEquals("1570", state.amountText)
+        assertEquals("1,570", state.amountText)
         assertEquals(SOURCE_WALLET_ID, state.sourceWalletId)
         assertNull(state.destinationWalletId)
         assertNull(state.categoryId)
@@ -249,7 +294,7 @@ class TransactionEditorStateTest {
         val refreshed = stale.withCurrentAppRate("JPY", "VND", listOf(current))
 
         assertEquals(CurrencyConversionMode.APP_RATE, refreshed.conversionMode)
-        assertEquals("1647700", refreshed.destinationAmountText)
+        assertEquals("1,647,700", refreshed.destinationAmountText)
         assertEquals("164.77", refreshed.exchangeRateText)
         assertEquals("2026-09-23", refreshed.exchangeRateDate)
     }
@@ -261,7 +306,7 @@ class TransactionEditorStateTest {
         assertEquals(TransactionPrimaryKind.TRANSFER, state.primaryKind)
         assertEquals(SOURCE_WALLET_ID, state.sourceWalletId)
         assertEquals(DESTINATION_WALLET_ID, state.destinationWalletId)
-        assertEquals("1650000", state.destinationAmountText)
+        assertEquals("1,650,000", state.destinationAmountText)
         assertEquals(CurrencyConversionMode.MANUAL, state.conversionMode)
         assertEquals("165.000000", state.exchangeRateText)
     }

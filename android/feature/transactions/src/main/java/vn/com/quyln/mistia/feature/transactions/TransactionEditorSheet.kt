@@ -256,7 +256,7 @@ internal fun TransactionEditorSheet(
                     OutlinedTextField(
                         value = state.amountText,
                         onValueChange = { value ->
-                            val changed = state.copy(amountText = value)
+                            val changed = state.withAmount(value, sourceWallet?.currencyCode)
                             state = if (changed.conversionMode == CurrencyConversionMode.APP_RATE) {
                                 changed.withCurrentAppRate(
                                     sourceWallet?.currencyCode,
@@ -337,7 +337,7 @@ internal fun TransactionEditorSheet(
                                     onClick = {
                                         val selectedDestination = destinationWallet
                                             ?.takeIf { !isDebtLend && it.id != wallet.id }
-                                        state = state.copy(
+                                        state = state.withAmountCurrency(sourceWallet?.currencyCode, wallet.currencyCode).copy(
                                             sourceWalletId = wallet.id,
                                             destinationWalletId = selectedDestination?.id,
                                         ).withFxPair(
@@ -459,7 +459,7 @@ internal fun TransactionEditorSheet(
                         }
                         OutlinedTextField(
                             value = displayedFxState.destinationAmountText,
-                            onValueChange = { state = state.copy(destinationAmountText = it) },
+                            onValueChange = { state = state.withDestinationAmount(it, destinationWallet?.currencyCode) },
                             modifier = Modifier.fillMaxWidth(),
                             label = {
                                 Text(
