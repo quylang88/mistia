@@ -2204,3 +2204,9 @@ Full1365 JVM/130suites, Swift609, lint/build, AndroidTest compile/package, contr
 Actual emulator execution of all9 installment payment workflows exposed a caller-wiring product crash: form saver received localized month text rather than canonical YYYY-MM. Fixed the saver key, preserved localized presentation and retained assertions. Also fixed fixture/reconstructed repository to load the required shared category catalog. After runtime RED, **9/9 Compose/Room workflows pass on API36**, including actual payment/undo/repay, restored wallet/discard/owner/month and late noncooperative response. This supersedes compile-only status only for those exact9 cases, not all planning/device gates.
 
 Full1365 JVM/130suites, Swift609, lint/build, AndroidTest compile/package, contract15/localization/SQLite/schema checks pass. Evidence/APK70/executed planning test APK/checksums: `evidence/2026-10-15-native-payment-restoration.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue full planning workflows and remaining full APK1–4/RC; goal remains active.
+
+## 2026-10-15 — full planning Compose emulator evidence
+
+Executed the entire APK70 planning test package on API36 emulator: **33/33 Compose cases pass** across bill payment4, budget/savings/bill workflow7, installment read2/editor11/payment9. Saved seven synthetic fixture screenshots and inspected representative light/dark/font-large views. Full visual/iOS/accessibility/Samsung/process-kill/live-sync parity remains unproven. Screenshot review found a concrete JPY fractional-digit formatting mismatch (`¥600.00` under English locale); fix next with runtime regression. Evidence-only checkpoint uses unchanged APK70/build checks.
+
+Evidence: `evidence/2026-10-15-native-planning-suite.md`; screenshots under `evidence/2026-10-15-planning-emulator/`. All10 flagsfalse; full APK1–4/RC goal remains active.
