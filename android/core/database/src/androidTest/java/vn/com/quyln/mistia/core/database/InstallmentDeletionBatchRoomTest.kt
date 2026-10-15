@@ -316,4 +316,59 @@ class InstallmentDeletionBatchRoomTest {
         assertTrue(runCatching { store.installmentDeletionBatch(owner, id) }.isFailure)
     }
 
+    private fun completedChild(s: InstallmentAcknowledgementSnapshot): CloudRecord = s.recordsByEntity.getValue(CloudEntity.DUE_OCCURRENCE_RECORD).single { it.id == due(1).id }.let {
+        it.copy(syncVersion = it.syncVersion + 1, payload = JsonObject(it.payload + ("sync_version" to JsonPrimitive(it.syncVersion + 1))))
+    }
+    private suspend fun complete(s: InstallmentAcknowledgementSnapshot, requestBatchId: String = s.batch!!.batchId): Boolean =
+        store.commitInstallmentDeletionCompletion(s, requestBatchId, s.recordsByEntity.getValue(CloudEntity.INSTALLMENT_PLAN).single(),
+            mapOf(due(1).id to completedChild(s)), java.time.Instant.parse("2026-10-17T00:00:00Z").toEpochMilli())
+    @Test fun completedChildBatchClearsAllQueuesHeadersChunksAndRetainsExactExpenseAcrossReopen() = runTest {
+        val s = acknowledgedDeletion(); val batchId = s.batch!!.batchId
+        assertEquals(setOf(id), store.installmentDeletionPlanIds(owner)); assertTrue(complete(s))
+        assertTrue(store.installmentDeletionPlanIds(owner).isEmpty()); assertTrue(db.syncOutboxDao().rows(owner.value).isEmpty())
+        assertTrue(db.installmentDeletionDao().chunks(owner.value, id, batchId).isEmpty())
+        assertEquals(completedChild(s), store.record(owner, due(1).entity, due(1).id)); assertEquals(payment(), store.record(owner, CloudEntity.LEDGER_TRANSACTION.table, wallet))
+        db.close(); open(); assertTrue(store.installmentDeletionPlanIds(owner).isEmpty()); assertEquals(payment(), store.record(owner, CloudEntity.LEDGER_TRANSACTION.table, wallet))
+    }
+    @Test fun completionWriteFailureRollsBackChildACKQueueAndCascadingBatchDeletion() = runTest {
+        val s = acknowledgedDeletion()
+        db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_completion BEFORE INSERT ON cloud_records
+            WHEN NEW.entity='due_occurrence_records' BEGIN SELECT RAISE(ABORT, 'fixture'); END""")
+        assertTrue(runCatching { complete(s) }.isFailure); s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+    }
+    @Test fun completionOwnerFlipDuringChildQueueRemovalRollsBackEveryTable() = runTest {
+        val s = acknowledgedDeletion(); flipAck.set(true)
+        try { complete(s); fail("Cancellation expected") } catch (_: CancellationException) {
+            flipAck.set(false); active.set(owner); s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+        }
+    }
+    @Test fun completionRejectsStaleLedgerAndDifferentRequestBatchWithoutAnyACK() = runTest {
+        val s = acknowledgedDeletion(); assertFalse(complete(s, other.value)); s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+        db.cloudRecordDao().upsert(entity(payment(800))); val current = store.installmentAcknowledgementSnapshot(owner, id)
+        assertFalse(complete(s)); current.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+    }
+    @Test fun completionWithFreshSnapshotPreservesSupersedingChildMutationAndClearsOnlyOldBatch() = runTest {
+        val s = acknowledgedDeletion(); val newer = DueOccurrenceRecord.fromCloudRecord(due(1)).copy(updatedAt = "2026-10-16T00:00:00Z").toCloudRecord()
+        store.commitMutation(newer, PendingMutation(CloudEntity.DUE_OCCURRENCE_RECORD, newer.id, owner.value, MutationKind.UPSERT, newer.payload, newer.updatedAt!!, newer.syncVersion, device))
+        val fresh = store.installmentAcknowledgementSnapshot(owner, id); val q = fresh.queues.single()
+        assertTrue(store.commitInstallmentDeletionCompletion(fresh, s.batch!!.batchId, fresh.recordsByEntity.getValue(CloudEntity.INSTALLMENT_PLAN).single(), emptyMap(), java.time.Instant.parse("2026-10-17T00:00:00Z").toEpochMilli()))
+        assertEquals(newer, store.record(owner, newer.entity, newer.id)); assertEquals(listOf(q), store.pendingMutations(owner, CloudEntity.DUE_OCCURRENCE_RECORD, Long.MAX_VALUE)); assertNull(store.installmentDeletionBatch(owner, id))
+    }
+    @Test fun completionFailurePersistenceUsesFullSnapshotAndExactBatchWithoutWritingFinancialRows() = runTest {
+        val s = acknowledgedDeletion(); val q = s.queues.single()
+        assertFalse(store.recordInstallmentDeletionFailure(s, other.value, q, 99, "network_io"))
+        assertTrue(store.recordInstallmentDeletionFailure(s, s.batch!!.batchId, q, 99, "network_io"))
+        assertFalse(store.recordInstallmentDeletionFailure(s, s.batch!!.batchId, q, 199, "network_io"))
+        assertEquals(payment(), store.record(owner, CloudEntity.LEDGER_TRANSACTION.table, wallet))
+        val retry = store.pendingMutations(owner, CloudEntity.DUE_OCCURRENCE_RECORD, Long.MAX_VALUE).single()
+        assertEquals(1, retry.attemptCount); assertEquals(99L, retry.nextAttemptAtEpochMillis)
+    }
+    @Test fun activeSourceCannotCompleteDeletedChildBatchAndForeignOwnerCannotListIt() = runTest {
+        val s = acknowledgedDeletion()
+        assertTrue(runCatching { store.commitInstallmentDeletionCompletion(s, s.batch!!.batchId, serverSource(), emptyMap(), 0) }.isFailure)
+        s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+        active.set(other); assertTrue(store.installmentDeletionPlanIds(other).isEmpty())
+        try { store.installmentDeletionPlanIds(owner); fail("Cancellation expected") } catch (_: CancellationException) { }
+    }
+
 }

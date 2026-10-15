@@ -35,6 +35,8 @@ import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
 import vn.com.quyln.mistia.core.model.categoryReferenceEntities
 import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
 import vn.com.quyln.mistia.core.model.billCycleRecords
+import vn.com.quyln.mistia.core.model.InstallmentDeletionCompletion
+import vn.com.quyln.mistia.core.model.planInstallmentDeletionCompletion
 import vn.com.quyln.mistia.core.model.InstallmentAcknowledgementSnapshot
 import vn.com.quyln.mistia.core.model.InstallmentSourceAckDecision
 import vn.com.quyln.mistia.core.model.planInstallmentSourceAcknowledgement
@@ -775,6 +777,47 @@ class RoomLocalStore(
             ensureCurrentFinanceOwner(expected.base.owner)
             true
         }
+    }
+
+    override suspend fun installmentDeletionPlanIds(owner: UserId): Set<String> = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val ids = database.installmentDeletionDao().rows(owner.value).map { it.planId }.toSet()
+        ensureCurrentFinanceOwner(owner)
+        ids
+    }
+
+    override suspend fun commitInstallmentDeletionCompletion(expected: InstallmentAcknowledgementSnapshot, requestBatchId: String,
+        remoteSource: CloudRecord?, remoteCycles: Map<String, CloudRecord?>, nowEpochMillis: Long): Boolean {
+        if (expected.batch?.batchId != requestBatchId) return false
+        val decision = planInstallmentDeletionCompletion(expected, remoteSource, remoteCycles, nowEpochMillis)
+        require(decision is InstallmentDeletionCompletion.Ready)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current = readInstallmentAcknowledgementSnapshot(expected.owner, expected.planId)
+            if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+            decision.cycles.forEach { record ->
+                val queued = expected.queues.single { it.mutation.entity == CloudEntity.DUE_OCCURRENCE_RECORD && it.mutation.recordId == record.id }
+                check(removeQueuedMutationExact(queued))
+                database.cloudRecordDao().upsert(record.toEntity(false, System.currentTimeMillis()))
+            }
+            database.cloudRecordDao().upsert(decision.source.toEntity(false, System.currentTimeMillis()))
+            check(database.installmentDeletionDao().deleteExact(expected.owner.value, expected.planId, requestBatchId) == 1)
+            ensureCurrentFinanceOwner(expected.owner)
+            true
+        }
+    }
+
+    override suspend fun recordInstallmentDeletionFailure(expected: InstallmentAcknowledgementSnapshot, requestBatchId: String,
+        queued: QueuedMutation, nextAttemptAtEpochMillis: Long, errorCode: String): Boolean = database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        if (expected.batch?.batchId != requestBatchId) return@withTransaction false
+        require(queued in expected.queues && queued.mutation.subjectUserId == expected.owner.value && queued.mutation.entity == CloudEntity.DUE_OCCURRENCE_RECORD)
+        require(requireNotNull(expected.batch).cycles.any { it.deletion == queued.mutation })
+        val current = readInstallmentAcknowledgementSnapshot(expected.owner, expected.planId)
+        if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+        val recorded = recordMutationFailure(queued, nextAttemptAtEpochMillis, errorCode)
+        ensureCurrentFinanceOwner(expected.owner)
+        recorded
     }
 
     override suspend fun recordInstallmentSourceFailure(queued: QueuedMutation, requestBatchId: String?, nextAttemptAtEpochMillis: Long, errorCode: String): Boolean = database.withTransaction {

@@ -135,11 +135,11 @@ private fun ackIdentity(row: CloudRecord, entity: CloudEntity, owner: UserId, id
     val version = row.payload["sync_version"] as? JsonPrimitive
     require(version != null && !version.isString && version.longOrNull == row.syncVersion && row.syncVersion >= 0)
 }
-private fun ackPlan(row: CloudRecord, owner: UserId, id: String): InstallmentPlanRecord {
+internal fun ackPlan(row: CloudRecord, owner: UserId, id: String): InstallmentPlanRecord {
     ackIdentity(row, CloudEntity.INSTALLMENT_PLAN, owner, id)
     return InstallmentPlanRecord.fromCloudRecord(row).also { require(it.deletedAt == row.deletedAt && Instant.parse(it.updatedAt) == Instant.parse(requireNotNull(row.updatedAt))) }
 }
-private fun ackCycle(row: CloudRecord, owner: UserId, source: String, month: String, id: String): DueOccurrenceRecord {
+internal fun ackCycle(row: CloudRecord, owner: UserId, source: String, month: String, id: String): DueOccurrenceRecord {
     ackIdentity(row, CloudEntity.DUE_OCCURRENCE_RECORD, owner, id)
     return DueOccurrenceRecord.fromCloudRecord(row).also {
         require(it.sourceKindWireValue == "installment" && it.sourceId == source && it.selectedMonthKey == month)
@@ -162,7 +162,7 @@ private fun LedgerTransactionRecord.financialAckPayload(): JsonObject {
     listOf("source_currency_code", "destination_currency_code", "reporting_currency_code").forEach { key -> (fields[key] as? JsonPrimitive)?.contentOrNull?.let { fields[key] = JsonPrimitive(it.uppercase(Locale.ROOT)) } }
     return JsonObject(fields)
 }
-private fun canonicalAckCycle(row: CloudRecord): CloudRecord {
+internal fun canonicalAckCycle(row: CloudRecord): CloudRecord {
     val fields = DueOccurrenceRecord.fromCloudRecord(row).toPayload().toMutableMap()
     listOf("scheduled_date", "paid_at").forEach { key -> (fields[key] as? JsonPrimitive)?.contentOrNull?.let { fields[key] = JsonPrimitive(Instant.parse(it).toString()) } }
     return row.copy(payload = JsonObject(fields), deletedAt = row.deletedAt?.let { Instant.parse(it).toString() })

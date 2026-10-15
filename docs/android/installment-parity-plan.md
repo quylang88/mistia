@@ -47,6 +47,18 @@ normal pull resumes when the exact batch is cleared. Four new actual SQL cases p
 six Room fixtures compile/package only. The future batch worker must use authoritative
 fetches and explicit reconciliation rather than relying on generic pull to clear a batch.
 
+Proven source-delete child completion is completed locally (APK61):
+`evidence/2026-10-15-installment-delete-completion.md`. Sparse exact-version child
+DELETE, retry/race/cancellation/lost-response handling and whole-batch Room ACK/cleanup
+are composed inside the single due coordinator.16 model +23 worker +8 HTTPS cases
+execute; seven Room fixtures compile/package only. All write flags remain false.
+Active-source resurrection and legacy/corrupt-batch recovery still hold for explicit
+resolution. Ordinary installment occurrence creation/edits remain disabled.
+
+User decision (2026-10-15): installment payment must use a same-currency wallet on
+BOTH Swift/iOS and Android. Enforce in selection, confirmation and persistence so a
+stale/restored selection cannot spend another currency. No raw-minor cross-currency debit.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
@@ -57,7 +69,7 @@ Next coherent slices:
    atomic CAS, current affordability, paid card/receipt/investment/settlement guards,
    scoped frozen-history checks and deterministic currency policy. Do not copy raw minor
    values between currencies. Bill same-currency choice is accepted; card product question
-   remains pending. Current installment read work does not decide settlement behavior.
+   remains pending. Installment same-currency decision is accepted for both platforms.
 3. Dedicated installment occurrence push, successful-source-delete child completion,
    remote resurrection and legacy recovery. Current bill-only child gate and legacy
    unproven-source dependency guard deliberately hold the unsafe paths. A source-delete remote winner must reconcile exact dependent child

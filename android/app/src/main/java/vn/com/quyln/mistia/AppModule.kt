@@ -49,6 +49,8 @@ import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
 import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
 import vn.com.quyln.mistia.core.sync.DueOccurrencePushCoordinator
+import vn.com.quyln.mistia.core.sync.InstallmentDeletionPushCoordinator
+import vn.com.quyln.mistia.core.model.DueSourceKind
 import vn.com.quyln.mistia.core.sync.InstallmentPushCoordinator
 import vn.com.quyln.mistia.core.sync.RecurringBillPushCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
@@ -66,6 +68,12 @@ import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    private fun billOccurrenceWritesEnabled() = BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES &&
+        BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES &&
+        BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES
+    private fun installmentOccurrenceDeleteWritesEnabled() = BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES &&
+        BuildConfig.ALLOW_INSTALLMENT_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES
+
     @Provides
     @Singleton
     fun provideJson(): Json = MistiaWireFormat.json
@@ -162,7 +170,7 @@ object AppModule {
         client = client,
         json = json,
         writableEntities = buildSet {
-            if (BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES && BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) add(CloudEntity.DUE_OCCURRENCE_RECORD)
+            if (billOccurrenceWritesEnabled() || installmentOccurrenceDeleteWritesEnabled()) add(CloudEntity.DUE_OCCURRENCE_RECORD)
             if (BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) {
                 add(CloudEntity.RECURRING_BILL_PLAN)
             }
@@ -183,6 +191,8 @@ object AppModule {
                 add(CloudEntity.LEDGER_TRANSACTION)
             }
         },
+        writableDueSources = if (billOccurrenceWritesEnabled()) setOf(DueSourceKind.RECURRING_BILL) else emptySet(),
+        allowInstallmentOccurrenceDeletes = installmentOccurrenceDeleteWritesEnabled(),
     )
 
     @Provides
@@ -304,8 +314,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore):DueOccurrencePushCoordinator =
-        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES && BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES)
+    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator):DueOccurrencePushCoordinator =
+        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion)
+
+    @Provides
+    @Singleton
+    fun provideInstallmentDeletionPushCoordinator(localStore: LocalStore, remoteStore: RemoteMutationStore): InstallmentDeletionPushCoordinator =
+        InstallmentDeletionPushCoordinator(localStore, remoteStore, writesEnabled=installmentOccurrenceDeleteWritesEnabled())
 
     @Provides
     @Singleton

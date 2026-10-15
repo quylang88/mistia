@@ -2,6 +2,7 @@ package vn.com.quyln.mistia.core.network
 
 import java.io.IOException
 import java.util.UUID
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -50,6 +51,7 @@ class SupabasePostgrestRemoteStore(
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val writableEntities: Set<CloudEntity> = emptySet(),
     private val writableDueSources: Set<DueSourceKind> = setOf(DueSourceKind.RECURRING_BILL),
+    private val allowInstallmentOccurrenceDeletes: Boolean = false,
 ) : RemoteStore, RemoteMutationStore {
     override suspend fun pullPage(
         table: String,
@@ -171,7 +173,7 @@ class SupabasePostgrestRemoteStore(
         ownerUserId: UserId,
         payload: JsonObject,
     ): CloudRecord = withContext(Dispatchers.IO) {
-        requireWriteEnabled(entity, payload)
+        requireWriteEnabled(entity, payload, creating = true)
         val recordId = payload.string("id") ?: error("Mutation payload is missing id")
         requirePayloadIdentity(payload, recordId, ownerUserId)
         val url = tableUrl(entity)
@@ -198,6 +200,8 @@ class SupabasePostgrestRemoteStore(
     ): CloudRecord? = withContext(Dispatchers.IO) {
         requireWriteEnabled(entity, payload)
         require(expectedVersion >= 0) { "Expected version cannot be negative" }
+        if (entity == CloudEntity.DUE_OCCURRENCE_RECORD && payload.string("source_kind_raw_value") == "installment")
+            require(requireNotNull((payload["sync_version"] as? JsonPrimitive)?.longOrNull) > expectedVersion)
         requirePayloadIdentity(payload, recordId, ownerUserId)
         val url = tableUrl(entity)
             .addQueryParameter("id", "eq.$recordId")
@@ -213,7 +217,10 @@ class SupabasePostgrestRemoteStore(
             .patch(json.encodeToString(payload).toRequestBody(POSTGREST_JSON_MEDIA_TYPE))
             .build()
         client.newCall(request).execute().use { response ->
-            response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)
+            response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)?.also { record ->
+                if (entity == CloudEntity.DUE_OCCURRENCE_RECORD && payload.string("source_kind_raw_value") == "installment")
+                    require(record.id == recordId) { "Supabase occurrence response identity does not match request" }
+            }
         }
     }
 
@@ -230,10 +237,20 @@ class SupabasePostgrestRemoteStore(
             .header("Accept", "application/json")
     }
 
-    private fun requireWriteEnabled(entity: CloudEntity, payload: JsonObject) {
+    private fun requireWriteEnabled(entity: CloudEntity, payload: JsonObject, creating: Boolean = false) {
         check(entity in writableEntities) { "Cloud writes are disabled for ${entity.table}" }
         if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) {
-            check(payload.string("source_kind_raw_value") in writableDueSources.map { it.wireValue }) { "Cloud due source writes are disabled" }
+            if (payload.string("source_kind_raw_value") == "installment") {
+                check(allowInstallmentOccurrenceDeletes && !creating) { "Installment occurrence creation/edits are disabled" }
+                require(payload.keys == setOf("id", "user_id", "source_kind_raw_value", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"))
+                for (key in listOf("id", "user_id", "last_modified_by_device_id")) {
+                    val value = requireNotNull(payload.string(key))
+                    require(value.length == 36 && UUID.fromString(value).toString() == value)
+                }
+                for (key in listOf("updated_at", "deleted_at")) Instant.parse(requireNotNull(payload.string(key)))
+                val version = requireNotNull(payload["sync_version"] as? JsonPrimitive)
+                require(!version.isString && version.longOrNull != null && requireNotNull(version.longOrNull) >= 0)
+            } else check(payload.string("source_kind_raw_value") in writableDueSources.map { it.wireValue }) { "Cloud due source writes are disabled" }
         }
     }
 
