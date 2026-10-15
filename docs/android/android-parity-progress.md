@@ -2216,3 +2216,9 @@ Evidence: `evidence/2026-10-15-native-planning-suite.md`; screenshots under `evi
 Fixed shared formatter's locale-inherited fraction digits observed on actual budget screenshot: JPY/VND render without fractions; existing imported USD2/KWD3 precision and exact BigDecimal/Long amounts remain intact. Currency presentation locale follows the Swift map independently of app/device language. Five runtime formatter cases pass after4 intended REDs. A native budget CRUD regression verifies rendered JPY600 while storage stays600 minor; updated screenshot inspected. Imported non-JPY/VND Swift parity remains an explicit monetary-audit gap.
 
 Full1370 JVM/131suites, Swift609, lint/build, contract/localization/schema/SQLite checks pass. Full planning rerun exposed one Room fixture teardown race; corrected RuleChain ordering to dispose Compose before database close, then **33/33 actual API36 Compose cases pass**. Evidence/APK71/final executed test APK/checksums: `evidence/2026-10-15-currency-presentation.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue native management and remaining full APK1–4/RC; goal stays active.
+
+## 2026-10-15 — actual management Compose evidence
+
+Executed full unchanged APK71 management test package on API36 emulator: **5/5 cases pass** (statement read/navigation3, title localization2). Exact paid total/charge locks, bounded/cancelable month navigation, card-row/edit routing and language/foreign-category scoping assertions now execute natively. This is evidence for those fixtures only; card payment/undo/currency choice and Samsung/visual/live-sync/background gates remain open. No new app version/code change for this checkpoint.
+
+Evidence/executed test APK/checksum: `evidence/2026-10-15-native-management-suite.md`. All10 flagsfalse; full APK1–4/RC goal remains active.
