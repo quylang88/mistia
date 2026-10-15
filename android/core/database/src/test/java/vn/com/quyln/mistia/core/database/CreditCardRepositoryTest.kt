@@ -23,6 +23,15 @@ import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class CreditCardRepositoryTest {
+    @Test fun `store without atomic card creation capability fails before either write`() = runTest {
+        val store = CardMemoryStore(useDefaultCardCommit = true)
+        val repository = OfflineFirstFinanceRepository(store)
+        assertTrue(repository.saveCreditCard(UserId(OWNER), draft(), DEVICE, NOW).isFailure)
+        assertTrue(repository.observeWallets(UserId(OWNER)).first().isEmpty())
+        assertTrue(repository.observeCreditCardProfiles(UserId(OWNER)).first().isEmpty())
+        assertTrue(store.outbox.isEmpty())
+    }
+
     @Test
     fun `save atomically creates owner scoped card wallet and profile outbox rows`() = runTest {
         val store = CardMemoryStore()
@@ -130,7 +139,7 @@ class CreditCardRepositoryTest {
         investmentLinkedWalletId = null,
     )
 
-    private class CardMemoryStore : LocalStore {
+    private class CardMemoryStore(val useDefaultCardCommit: Boolean = false) : LocalStore {
         private val records = MutableStateFlow<Map<Triple<String, String, String>, CloudRecord>>(emptyMap())
         val outbox = linkedMapOf<Triple<String, String, String>, PendingMutation>()
         var cardCommitCount = 0
@@ -151,6 +160,10 @@ class CreditCardRepositoryTest {
             profileRecord: CloudRecord,
             profileMutation: PendingMutation,
         ) {
+            if (useDefaultCardCommit) {
+                super<LocalStore>.commitCreditCardMutation(walletRecord, walletMutation, profileRecord, profileMutation)
+                return
+            }
             cardCommitCount += 2
             commitMutation(walletRecord, walletMutation)
             commitMutation(profileRecord, profileMutation)

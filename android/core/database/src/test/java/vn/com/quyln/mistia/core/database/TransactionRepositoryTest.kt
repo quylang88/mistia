@@ -542,6 +542,20 @@ class TransactionRepositoryTest {
         override fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>> = MutableStateFlow(emptyList())
         override suspend fun record(ownerUserId: UserId, entity: String, recordId: String) =
             records.value[Triple(ownerUserId.value, entity, recordId)]
+        override suspend fun commitCreditCardMutation(
+            walletRecord: CloudRecord, walletMutation: PendingMutation,
+            profileRecord: CloudRecord, profileMutation: PendingMutation,
+        ) {
+            val batch = listOf(walletRecord to walletMutation, profileRecord to profileMutation)
+            val rows = batch.associate { (row, pending) ->
+                val key = Triple(row.ownerUserId, row.entity, row.id)
+                require(key == Triple(pending.subjectUserId, pending.entity.table, pending.recordId))
+                require(row.payload == pending.payload && key !in records.value && key !in outbox)
+                key to row
+            }
+            outbox.putAll(batch.associate { (row, pending) -> Triple(row.ownerUserId, row.entity, row.id) to pending })
+            records.value = records.value + rows
+        }
         override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
             seed(record)
             outbox[key(mutation.subjectUserId, mutation.entity, mutation.recordId)] = mutation

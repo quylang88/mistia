@@ -1070,13 +1070,33 @@ class RoomLocalStore(
         profileRecord: CloudRecord,
         profileMutation: PendingMutation,
     ) {
-        require(walletRecord.entity == CloudEntity.LEDGER_WALLET.table)
-        require(profileRecord.entity == CloudEntity.CREDIT_CARD_PROFILE.table)
-        require(walletRecord.ownerUserId == profileRecord.ownerUserId)
-        require((profileRecord.payload["wallet_id"] as? JsonPrimitive)?.contentOrNull == walletRecord.id)
+        val owner = UserId(walletRecord.ownerUserId)
+        require(java.util.UUID.fromString(owner.value).toString() == owner.value)
+        for ((record, mutation, entity) in listOf(
+            Triple(walletRecord, walletMutation, CloudEntity.LEDGER_WALLET),
+            Triple(profileRecord, profileMutation, CloudEntity.CREDIT_CARD_PROFILE),
+        )) {
+            require(record.matchesFinanceReadScope(owner, entity))
+            require(java.util.UUID.fromString(record.id).toString() == record.id)
+            require(record.payload["id"] == JsonPrimitive(record.id) && record.payload["user_id"] == JsonPrimitive(owner.value))
+            require(record.syncVersion == 0L && record.payload["sync_version"] == JsonPrimitive(0) &&
+                mutation.baseVersion == 0L && mutation.kind == MutationKind.UPSERT) { "New card must start at version zero" }
+        }
+        require(profileRecord.payload["wallet_id"] == JsonPrimitive(walletRecord.id))
         database.withTransaction {
+            ensureCurrentFinanceOwner(owner)
+            val claimed = listOf(walletRecord, profileRecord).any { record ->
+                database.cloudRecordDao().record(owner.value, record.entity, record.id) != null ||
+                    database.syncOutboxDao().record(owner.value, record.entity, record.id) != null
+            }
+            val linkedProfile = recordsIncludingDeleted(owner, CloudEntity.CREDIT_CARD_PROFILE.table).any {
+                (it.payload["wallet_id"] as? JsonPrimitive)?.takeIf { value -> value.isString }?.content?.trim()?.equals(walletRecord.id, ignoreCase = true) == true
+            }
+            if (claimed || linkedProfile)
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
             commitMutationRows(walletRecord, walletMutation)
             commitMutationRows(profileRecord, profileMutation)
+            ensureCurrentFinanceOwner(owner)
         }
     }
 

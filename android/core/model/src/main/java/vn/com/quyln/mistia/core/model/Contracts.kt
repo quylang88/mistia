@@ -346,14 +346,14 @@ interface LocalStore {
         require(mutations.size == 1) { "Atomic batch mutations are unsupported by this store" }
         commitMutation(mutations.single().first, mutations.single().second)
     }
+    /** Create only: both identities and queues must be absent; commit the aggregate atomically or fail without writing. */
     suspend fun commitCreditCardMutation(
         walletRecord: CloudRecord,
         walletMutation: PendingMutation,
         profileRecord: CloudRecord,
         profileMutation: PendingMutation,
     ) {
-        commitMutation(walletRecord, walletMutation)
-        commitMutation(profileRecord, profileMutation)
+        throw UnsupportedOperationException("Atomic guarded credit card creation unavailable")
     }
     /** Compare both existing card baselines and current dependencies in the same transaction as both outbox writes. */
     suspend fun commitCreditCardEdit(

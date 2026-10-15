@@ -425,6 +425,20 @@ class BudgetRepositoryTest {
         val batches = mutableListOf<List<Pair<CloudRecord, PendingMutation>>>()
         var failBatch = false
 
+        override suspend fun commitCreditCardMutation(
+            walletRecord: CloudRecord, walletMutation: PendingMutation,
+            profileRecord: CloudRecord, profileMutation: PendingMutation,
+        ) {
+            val batch = listOf(walletRecord to walletMutation, profileRecord to profileMutation)
+            val rows = batch.associate { (row, pending) ->
+                val key = Triple(row.ownerUserId, row.entity, row.id)
+                require(key == Triple(pending.subjectUserId, pending.entity.table, pending.recordId))
+                require(row.payload == pending.payload && key !in records.value && key !in outbox)
+                key to row
+            }
+            outbox.putAll(batch.associate { (row, pending) -> Triple(row.ownerUserId, row.entity, row.id) to pending })
+            records.value = records.value + rows
+        }
         override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
             val key = Triple(record.ownerUserId, record.entity, record.id)
             require(key == Triple(mutation.subjectUserId, mutation.entity.table, mutation.recordId))

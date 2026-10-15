@@ -1,0 +1,21 @@
+# Atomic native credit-card creation guards — 2026-10-15
+
+Branch `codex/android-apk2-4-parity`; baseline `09b5f0b8`; APK85.
+
+The create-only Room capability now validates canonical owner/IDs, matching raw scope and zero cloud version, then checks both record IDs, both outbox slots and existing profile references inside the transaction that writes wallet/profile/outboxes. Existing rows including tombstones, orphan queues and orphan profiles hold safely without replacing data. Current-owner fences before and after writes roll back the aggregate when the signed-in owner changes. Production `AppModule` already supplies the actual auth-state callback. Existing card edits continue through the separate snapshot-guarded edit capability. The LocalStore default now fails before any write when atomic create support is absent.
+
+Direct Swift review: `ManagementEditors.swift`458–542 inserts wallet plus linked profile before `modelContext.save()` and queues both entities;690–718 builds/updates that relationship. This patch preserves the same aggregate/business behavior while adding Android storage fences. No schema/network/payment-currency rule change.
+
+Runtime TDD:10 new actual Room cases first produce8 intended assertion failures (owner change before/after writes, wallet/profile ID races, tombstone, orphan queue, orphan profile, nonzero create version); exact >2^53 happy path and other-owner partition already pass. Final full Room **155/155 pass in2.771seconds** after adding other-owner queue preservation assertions. Two signed-in-owner checks and unchanged both records/both queues are asserted after rollback. A new JVM capability case first fails with sequential default writes; final4 card repository cases pass with fail-closed default. Full JVM initially exposed9 old bill-payment/transaction fixture failures relying on that default; the2 test-only stores now explicitly validate both pairs then update their record maps together, without restoring production fallback or weakening domain assertions.
+
+Full **1412 JVM/134suites**, zero failures/errors; Swift610 (4+137+469), app lint/build, database/management/planning AndroidTest compile, database/management test APK assembly, contract15, both localization checks, SQLite7/3/11, packaged Room schemas1–6/bootstrap and whitespace pass. Full native management **23/23 pass in81.642seconds** on the final guard artifact. App installed using `adb install -r` preserving data; installed package versionCode85/versionName0.2.0-apk2-debug confirmed; cold MainActivity launch returned `Status: ok`, TotalTime979ms. This is update/launch smoke, not manual authenticated CRUD proof.
+
+Independent reviewer `review_card_create85` checked production guard, default capability, actual AppModule auth callback, RED logs/test validity and final fixture changes: no Critical/Important finding. Optional malformed-envelope coverage remains a minor test expansion opportunity; other-owner queues now explicitly compared. Separate payment-source revalidation race, editor-open baseline tokens and statement payment/currency choice remain open.
+
+Logs `/tmp/mistia-card-create-{red-build,native-red-build,native-red,focused,database-full,full,full-final,swift,database-final,management-final}.log`. `full` has the9 fixture-capability failures; `full-final` is final green.
+
+App `android/build/outputs/apk2/2026-10-15/mistia-0.2.0-apk2-card-create-guard-v85.apk`, versionCode85, SHA256 `e57ac5fe82b8d76af456222d0fae25fbb2fb066f7f546fdbee83efb86b4613e5`.
+Executed Room test APK `android/build/outputs/apk2/2026-10-15/mistia-room-card-create-guard-test-v85.apk`, SHA256 `f9be8598ff64253302042572b199213aff5de7605cec95167e0d0c529dbfa3fd`.
+Executed management test APK `android/build/outputs/apk2/2026-10-15/mistia-management-card-create-guard-test-v85.apk`, SHA256 `27276aea0c34f35cf11bce6392b72fd2178888a4f3db7db59c78ec2a7dd32901`. Metadata/manifest/version/DEX verified.
+
+Only API36 emulator connected; no Samsung/full visual/process-kill/live sync verification. The intermittent startup row-delivery concern recorded in APK84 remains unproven, even if rerun succeeds. All10 cloud flagsfalse; no production writes/deploy/migration. Remaining APK1–4 and RC gates remain open. Goal stays active; continue next slice.
