@@ -2222,3 +2222,9 @@ Full1370 JVM/131suites, Swift609, lint/build, contract/localization/schema/SQLit
 Executed full unchanged APK71 management test package on API36 emulator: **5/5 cases pass** (statement read/navigation3, title localization2). Exact paid total/charge locks, bounded/cancelable month navigation, card-row/edit routing and language/foreign-category scoping assertions now execute natively. This is evidence for those fixtures only; card payment/undo/currency choice and Samsung/visual/live-sync/background gates remain open. No new app version/code change for this checkpoint.
 
 Evidence/executed test APK/checksum: `evidence/2026-10-15-native-management-suite.md`. All10 flagsfalse; full APK1–4/RC goal remains active.
+
+## 2026-10-15 — bill grouped amount input (APK72)
+
+Matched Swift's JPY/VND bill editor grouping during typing and existing-record presentation while preserving exact minor/null and invalid-input validation. Imported fractional currencies keep existing Android decimal semantics; full cross-platform import audit remains open. Extracted the existing installment grouping implementation into a reusable planning helper without changing its behavior. Five new runtime cases pass after4 intended REDs; actual API36 bill workflow verifies grouped input and exact >2^53 stored amount; screenshot inspected.
+
+Full1375 JVM/131suites, Swift609, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK72/executed focused test APK/checksums: `evidence/2026-10-15-bill-grouped-input.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue budget/savings monetary forms and remaining full APK1–4/RC; goal stays active.

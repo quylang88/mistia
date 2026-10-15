@@ -119,6 +119,38 @@ class RecurringBillEditorStateTest {
         assertEquals(1375L,state.copy(amountText="13.75").toDraft(zone).amountMinor)
     }
 
+    @Test fun `supported bill amount groups while typing without changing exact minor units`() {
+        for (currency in listOf("JPY", "VND")) {
+            val state = ready().copy(currencyCode = currency).withAmount("9007199254740993")
+            assertEquals("9,007,199,254,740,993", state.amountText)
+            assertEquals(9007199254740993L, state.toDraft(zone).amountMinor)
+        }
+    }
+    @Test fun `existing supported bill opens with grouped amount and unchanged payload amount`() {
+        val state = RecurringBillEditorState.from(bill(), today, zone)
+        assertEquals("9,007,199,254,740,993", state.amountText)
+        assertEquals(bill().amountMinor, state.toDraft(zone).amountMinor)
+    }
+    @Test fun `optional blank sign zero malformed and overflow remain visible for explicit validation`() {
+        assertEquals("", ready().withAmount("").amountText); assertNull(ready().withAmount("").toDraft(zone).amountMinor)
+        assertEquals("-1,234", ready().withAmount("-1234").amountText)
+        assertEquals(-1234L, ready().withAmount("-1234").toDraft(zone).amountMinor)
+        assertEquals("-", ready().withAmount("-").amountText)
+        for (text in listOf("1.5", "1x23", "9223372036854775808")) assertThrows(IllegalArgumentException::class.java) { ready().withAmount(text).toDraft(zone) }
+        assertEquals("1x23", ready().withAmount("1x23").amountText)
+    }
+    @Test fun `imported fractional currencies keep their existing decimal input semantics`() {
+        val usd = ready().copy(currencyCode = "USD").withAmount("13.75")
+        assertEquals("13.75", usd.amountText); assertEquals(1375L, usd.toDraft(zone).amountMinor)
+    }
+    @Test fun `grouped draft survives owner scoped saver and preserves optional clearing`() {
+        val state = ready().withAmount("123456"); val saver = RecurringBillEditorState.saver(owner)
+        val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals("123,456", saver.restore(saved)!!.amountText)
+        assertEquals(123456L, saver.restore(saved)!!.toDraft(zone).amountMinor)
+        assertNull(saver.restore(saved)!!.withAmount("").toDraft(zone).amountMinor)
+    }
+
     private fun bill()=RecurringBillPlanRecord(id,owner,"Rent","house.fill",category,9007199254740993L,3,"recurring",28,
         null,"2026-09-30T15:00:00Z",true,null,true,2,null,2,wallet,"VND",false,true,"2026-10-10T00:00:00Z",null,
         "2026-10-01T00:00:00Z","2026-10-13T00:00:00Z",null,99,wallet)

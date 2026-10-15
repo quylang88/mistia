@@ -57,7 +57,7 @@ import vn.com.quyln.mistia.core.model.*
                 Spacer(Modifier.width(12.dp));Text(selected?.localizedBudgetName(language) ?: stringResource(R.string.planning_planning_payment_category))
             }
             OutlinedTextField(state.name,onValueChange={state=state.copy(name=it);error=null},label={Text(stringResource(R.string.planning_planning_bill_name))},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.name"))
-            OutlinedTextField(state.amountText,onValueChange={state=state.copy(amountText=it);error=null},label={Text(stringResource(R.string.planning_planning_amount_optional))},suffix={Text(state.currencyCode)},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.amount"))
+            OutlinedTextField(state.amountText,onValueChange={state=state.withAmount(it);error=null},label={Text(stringResource(R.string.planning_planning_amount_optional))},suffix={Text(state.currencyCode)},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.amount"))
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 BillScheduleKind.entries.forEach {kind -> FilterChip(selected=state.scheduleKind==kind,onClick={update(state.copy(scheduleKind=kind))},enabled=!busy,
                     label={Text(stringResource(if(kind==BillScheduleKind.RECURRING) R.string.planning_planning_recurring else R.string.planning_planning_one_time))})}

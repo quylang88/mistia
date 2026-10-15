@@ -125,6 +125,7 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
         compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
         compose.onNodeWithTag("bill.amount").performScrollTo().performTextReplacement("9007199254740993")
+        compose.onNodeWithTag("bill.amount").assertTextContains("9,007,199,254,740,993")
         compose.onNodeWithTag("bill.save").performScrollTo().performClick()
         compose.waitUntil(5000) {runBlocking {repo.observeRecurringBills(owner).first().size==1}}
         Assert.assertEquals(9007199254740993L,runBlocking {repo.observeRecurringBills(owner).first().single().amountMinor})

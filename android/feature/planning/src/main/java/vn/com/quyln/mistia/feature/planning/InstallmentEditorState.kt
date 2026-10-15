@@ -89,13 +89,7 @@ internal data class InstallmentEditorNavigation(val owner: String, val editorId:
 }
 
 /** Swift uses grouped minor integers. Keep invalid punctuation visible for explicit validation. */
-internal fun installmentAmountInput(text: String): String {
-    val raw = text.trim()
-    if (!Regex("-?[0-9,]*").matches(raw)) return text
-    val negative = raw.startsWith("-")
-    val digits = raw.removePrefix("-").replace(",", "")
-    return (if (negative) "-" else "") + digits.reversed().chunked(3).joinToString(",").reversed()
-}
+internal fun installmentAmountInput(text: String): String = groupedMinorAmountInput(text)
 
 internal suspend fun <T> guardedInstallmentMutation(block: suspend () -> Result<T>): Result<T> {
     currentCoroutineContext().ensureActive()

@@ -15,6 +15,7 @@ data class RecurringBillEditorState(
     val paymentStartDate:String,val dueDate:String,val autoPayEnabled:Boolean,val autoPayDay:Int,val autoPayDate:String,
     val frequencyMonths:Int,val startsNextMonth:Boolean,
 ) {
+    fun withAmount(text: String) = copy(amountText = billAmountInput(text, currencyCode))
     val autoPayDayOptions:List<Int> get()=when {
         !hasDeadline || dueDay==paymentStartDay -> listOf(paymentStartDay)
         dueDay>paymentStartDay -> (paymentStartDay..dueDay).toList()
@@ -75,7 +76,7 @@ data class RecurringBillEditorState(
             val digits=Currency.getInstance(bill.currencyCode).defaultFractionDigits.coerceAtLeast(0)
             val start=day(bill.paymentStartDate)
             return RecurringBillEditorState(bill.id,bill.name,bill.categoryId,
-                bill.amountMinor?.let {BigDecimal.valueOf(it,digits).stripTrailingZeros().toPlainString()}.orEmpty(),
+                billAmountInput(bill.amountMinor?.let {BigDecimal.valueOf(it,digits).stripTrailingZeros().toPlainString()}.orEmpty(), bill.currencyCode),
                 bill.paymentWalletId,bill.currencyCode,bill.scheduleKind,bill.resolvedPaymentStartDay,bill.dueDay,
                 bill.resolvedHasExplicitDueDate(zone),start,bill.dueDate?.let(::day) ?: start,
                 bill.autoPayEnabled==true,bill.autoPayDay ?: bill.resolvedPaymentStartDay,
@@ -110,3 +111,6 @@ data class RecurringBillNavigationState(val owner:String,val open:Boolean,val pa
         )
     }
 }
+
+private fun billAmountInput(text: String, currency: String): String =
+    if (currency.trim().uppercase(java.util.Locale.ROOT) in setOf("JPY", "VND")) groupedMinorAmountInput(text) else text
