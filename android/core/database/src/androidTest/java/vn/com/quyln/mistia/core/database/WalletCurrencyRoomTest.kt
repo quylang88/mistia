@@ -124,4 +124,22 @@ class WalletCurrencyRoomTest {
             Assert.assertEquals(mode, queue, store.pendingMutations(owner, CloudEntity.LEDGER_WALLET, Long.MAX_VALUE))
         }
     }
+    @Test fun identifierWhitespaceCannotBypassTheExistingWalletHistoryGuard() = runTest {
+        repo.saveWallet(owner, draft(), device, now).getOrThrow()
+        store.replacePullSnapshot(owner, CloudEntity.LEDGER_TRANSACTION.table, listOf(ledger()))
+        val before = store.record(owner, CloudEntity.LEDGER_WALLET.table, walletId)
+        val queue = store.pendingMutations(owner, CloudEntity.LEDGER_WALLET, Long.MAX_VALUE)
+        Assert.assertTrue(repo.saveWallet(owner, draft("VND").copy(id = "  $walletId  "), device, later).isFailure)
+        Assert.assertEquals(before, store.record(owner, CloudEntity.LEDGER_WALLET.table, walletId))
+        Assert.assertEquals(queue, store.pendingMutations(owner, CloudEntity.LEDGER_WALLET, Long.MAX_VALUE))
+    }
+    @Test fun noncanonicalOwnerCannotMissTheOldWalletAndOverwriteItsCurrency() = runTest {
+        repo.saveWallet(owner, draft(), device, now).getOrThrow()
+        store.replacePullSnapshot(owner, CloudEntity.LEDGER_TRANSACTION.table, listOf(ledger()))
+        val before = store.record(owner, CloudEntity.LEDGER_WALLET.table, walletId)
+        val queue = store.pendingMutations(owner, CloudEntity.LEDGER_WALLET, Long.MAX_VALUE)
+        Assert.assertTrue(repo.saveWallet(UserId(" ${owner.value} "), draft("VND"), device, later).isFailure)
+        Assert.assertEquals(before, store.record(owner, CloudEntity.LEDGER_WALLET.table, walletId))
+        Assert.assertEquals(queue, store.pendingMutations(owner, CloudEntity.LEDGER_WALLET, Long.MAX_VALUE))
+    }
 }

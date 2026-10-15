@@ -36,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -212,6 +213,7 @@ fun CreditCardEditorSheet(
     nextSortOrder: Int,
     onDismiss: () -> Unit,
     onSave: suspend (CreditCardDraft) -> Result<CreditCardAccount>,
+    currencyEditable: Boolean = wallet == null,
 ) {
     var state by rememberSaveable(wallet?.id, stateSaver = CreditCardEditorState.Saver) {
         mutableStateOf(
@@ -221,6 +223,7 @@ fun CreditCardEditorSheet(
     }
     var validation by remember { mutableStateOf<CreditCardEditorValidation?>(null) }
     var saveFailed by remember { mutableStateOf(false) }
+    var saveFailureMessage by remember { mutableStateOf(R.string.planning_planning_couldn_t_save_this_card_right_now) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -246,6 +249,7 @@ fun CreditCardEditorSheet(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Button(
+                    modifier = Modifier.testTag("card.save"),
                     enabled = !isSaving,
                     onClick = {
                         val result = state.toDraft()
@@ -259,6 +263,8 @@ fun CreditCardEditorSheet(
                                 onFailure = {
                                     isSaving = false
                                     saveFailed = true
+                                    saveFailureMessage = if ((it as? vn.com.quyln.mistia.core.model.WalletValidationException)?.reason == vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
+                                        R.string.management_wallet_editor_currency_in_use else R.string.planning_planning_couldn_t_save_this_card_right_now
                                 },
                             )
                         }
@@ -312,7 +318,7 @@ fun CreditCardEditorSheet(
                     OutlinedTextField(
                         value = state.name,
                         onValueChange = { state = state.copy(name = it) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("card.name"),
                         label = { Text(stringResource(R.string.management_management_wallet_name)) },
                         singleLine = true,
                     )
@@ -357,6 +363,7 @@ fun CreditCardEditorSheet(
                         listOf("JPY", "VND").forEach { code ->
                             FilterChip(
                                 selected = state.currencyCode == code,
+                                enabled = !isSaving && currencyEditable,
                                 onClick = { state = state.copy(currencyCode = code) },
                                 label = { Text(code) },
                             )
@@ -428,7 +435,7 @@ fun CreditCardEditorSheet(
             }
             if (saveFailed) {
                 Text(
-                    stringResource(R.string.planning_planning_couldn_t_save_this_card_right_now),
+                    stringResource(saveFailureMessage),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium,
                 )

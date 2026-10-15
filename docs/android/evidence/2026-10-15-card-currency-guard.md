@@ -1,0 +1,25 @@
+# Guarded credit-card currency edits — 2026-10-15
+
+Branch `codex/android-apk2-4-parity`; baseline `19755b3b`.
+
+Credit-card currency edits now follow the same actual Swift live/unarchived ledger source-or-destination rule as regular wallets. Same-currency limit/metadata changes stay allowed. Management uses the loaded owner-stamped ledger for both editor selectors and displays the existing localized currencyInUse rejection when a stale enabled form tries saving. This does not choose a cross-currency card-payment policy.
+
+Existing-card saves now use a dedicated guarded aggregate LocalStore capability, default closed for stores that cannot guarantee it. Room compares both exact raw baselines, validates wallet/profile linkage, raw opening money and independent version envelopes, rejects malformed limits or missing/deleted profiles and duplicate active profile identities, then checks current ledger references and writes both records/outboxes in one transaction. Current-owner checks before/after roll back the whole aggregate. The old create path is retained separately. Same-currency existing-card edits also get the two-baseline CAS and malformed/identity safeguards.
+
+Review of lookup versus mutation normalization exposed a bypass: whitespace IDs or noncanonical owner partition strings could miss an existing row, then mutation UUID normalization could overwrite its canonical identity through the create route. Canonical ID lookup and canonical write-owner validation now cover both saveWallet and saveCreditCard. Four actual Room RED regressions prove wallet/card ID and owner cases; normalization no longer bypasses ledger-history guards.
+
+Runtime TDD: original4 card Room cases produced2 intended source/destination failures; missing/deleted/corrupt aggregate case added another RED. Final13 card cases cover both ledger links, normal metadata/limit changes, excluded history, profile corruption/tombstones, history arrival, independent stale wallet/profile snapshots, post-write owner rollback, >2^53 independent versions, late duplicate profile and ID/owner bypass. Two additional regular-wallet regressions cover its normalization bypass. UI2 first failed for enabled currency and generic error, then both pass for lock→history removal→unlock→save and stale localized rejection with neither partial write. JVM card memory fixture now implements the new guarded capability with exact baselines for its existing clear/null/version regression; actual atomicity proof comes from Room.
+
+Current verification: full **1405 JVM /134 suites**, zero failures/errors; Swift610/86calculatorvectors, app lint/build, database/management/planning AndroidTest compile, database/management test APK assembly, contract15, both localization checks, SQLite7/3/11, packaged Room schemas1–6/bootstrap and whitespace pass. **145/145 actual Room cases pass in3.48seconds**, **15/15 actual management cases pass in60.015seconds**, on isolated API36 emulator. Logs `/tmp/mistia-card-currency-{native-red,legacy-red,identity-red,owner-red,ui-red,final-focused,full,swift,database-full,management-full}.log`. Emulator later exited; its process absence was confirmed before restarting the isolated AVD. No Samsung was connected.
+
+Direct self review compares Swift ManagementEditors.canEditWalletCurrency and current-query filter, raw record/queue fencing, both independent versions, lookup normalization and current ledger checks. Fresh read-only reviewer reports no Critical/Important/Minor findings in this slice. No independent whole-branch/Samsung/full visual/process-kill/live sync claim.
+
+APK `android/build/outputs/apk2/2026-10-15/mistia-0.2.0-apk2-card-currency-guard-v82.apk`, debug versionCode82: SHA256 `3e0bc0cc70aeb899563914cd78a3a1048cea4a839a95323f4aa42967f5db9073`.
+
+Executed Room test APK `android/build/outputs/apk2/2026-10-15/mistia-room-card-currency-guard-test-v82.apk`: SHA256 `c58178bddc556fa67ea6c3dc9e823402daad7828aba8fcbf8be22f416964fb42`.
+
+Executed management test APK `android/build/outputs/apk2/2026-10-15/mistia-management-card-currency-guard-test-v82.apk`: SHA256 `52f963a36fb67892ce21dc9580ba693159fd41280a0e47494cf65a0369c60e65`. Manifest/version/DEX verified.
+
+Review scope rulings: creation identity/owner fencing and payment-source races remain separate required follow-ups; they are existing paths and are not claimed fixed here. Editor-opening version tokens are separate stale-editor UX work: this commit fences the repository-captured baselines. Automatic repair of corrupt/noncanonical stored identities remains held to avoid rewriting unproven history. These are explicit remaining work, not waived full-goal requirements.
+
+All10 cloud flagsfalse; no production write/deploy/migration. Card create-race/payment-source concurrency, stale transaction wallet snapshots, investment-cash protection, card editor ownership/calculator/current-balance UI, monetary/import/settings audit, coupled installment writes/recovery/fund usage/maintenance, pending card-payment policy, APK3/4/RC and full device gates remain open. Full goal stays active.

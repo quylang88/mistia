@@ -355,6 +355,14 @@ interface LocalStore {
         commitMutation(walletRecord, walletMutation)
         commitMutation(profileRecord, profileMutation)
     }
+    /** Compare both existing card baselines and current dependencies in the same transaction as both outbox writes. */
+    suspend fun commitCreditCardEdit(
+        expectedWallet: CloudRecord, expectedProfile: CloudRecord,
+        walletRecord: CloudRecord, walletMutation: PendingMutation,
+        profileRecord: CloudRecord, profileMutation: PendingMutation,
+    ) {
+        throw UnsupportedOperationException("Atomic guarded credit card edits unavailable")
+    }
     suspend fun commitCategoryMutation(
         record: CloudRecord,
         mutation: PendingMutation,

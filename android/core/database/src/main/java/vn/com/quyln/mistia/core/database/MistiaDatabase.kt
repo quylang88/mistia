@@ -60,6 +60,7 @@ import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.MutationKind
+import vn.com.quyln.mistia.core.model.isConsistentlyDeleted
 import vn.com.quyln.mistia.core.model.CategoryNameLanguage
 import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
 import vn.com.quyln.mistia.core.model.PendingMutation
@@ -72,6 +73,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
 
 @Entity(
     tableName = "cloud_records",
@@ -756,13 +758,7 @@ class RoomLocalStore(
     }
 
     override suspend fun commitWalletCurrencyMutation(expectedWallet: CloudRecord, record: CloudRecord, mutation: PendingMutation) {
-        require(expectedWallet.entity == CloudEntity.LEDGER_WALLET.table && record.entity == expectedWallet.entity)
-        require(expectedWallet.ownerUserId == record.ownerUserId && expectedWallet.id == record.id)
-        require(expectedWallet.deletedAt == null && record.deletedAt == null && mutation.kind == MutationKind.UPSERT)
-        require(record.payload["user_id"] == JsonPrimitive(record.ownerUserId) && record.payload["id"] == JsonPrimitive(record.id))
-        require(record.payload["opening_balance_minor"] == expectedWallet.payload["opening_balance_minor"]) { "Currency edit cannot rewrite opening money" }
-        require(mutation.baseVersion == expectedWallet.syncVersion && record.syncVersion == expectedWallet.syncVersion &&
-            record.payload["sync_version"] == JsonPrimitive(expectedWallet.syncVersion)) { "Wallet version envelope disagrees" }
+        requireWalletMetadataMutation(expectedWallet, record, mutation)
         val owner = UserId(record.ownerUserId)
         database.withTransaction {
             ensureCurrentFinanceOwner(owner)
@@ -773,6 +769,16 @@ class RoomLocalStore(
             commitMutationRows(record, mutation)
             ensureCurrentFinanceOwner(owner)
         }
+    }
+
+    private fun requireWalletMetadataMutation(expectedWallet: CloudRecord, record: CloudRecord, mutation: PendingMutation) {
+        require(expectedWallet.entity == CloudEntity.LEDGER_WALLET.table && record.entity == expectedWallet.entity)
+        require(expectedWallet.ownerUserId == record.ownerUserId && expectedWallet.id == record.id)
+        require(expectedWallet.deletedAt == null && record.deletedAt == null && mutation.kind == MutationKind.UPSERT)
+        require(record.payload["user_id"] == JsonPrimitive(record.ownerUserId) && record.payload["id"] == JsonPrimitive(record.id))
+        require(record.payload["opening_balance_minor"] == expectedWallet.payload["opening_balance_minor"]) { "Currency edit cannot rewrite opening money" }
+        require(mutation.baseVersion == expectedWallet.syncVersion && record.syncVersion == expectedWallet.syncVersion &&
+            record.payload["sync_version"] == JsonPrimitive(expectedWallet.syncVersion)) { "Wallet version envelope disagrees" }
     }
 
     override suspend fun commitMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
@@ -1071,6 +1077,39 @@ class RoomLocalStore(
         database.withTransaction {
             commitMutationRows(walletRecord, walletMutation)
             commitMutationRows(profileRecord, profileMutation)
+        }
+    }
+
+    override suspend fun commitCreditCardEdit(
+        expectedWallet: CloudRecord, expectedProfile: CloudRecord,
+        walletRecord: CloudRecord, walletMutation: PendingMutation,
+        profileRecord: CloudRecord, profileMutation: PendingMutation,
+    ) {
+        requireWalletMetadataMutation(expectedWallet, walletRecord, walletMutation)
+        val owner = UserId(walletRecord.ownerUserId)
+        require(expectedWallet.matchesFinanceReadScope(owner, CloudEntity.LEDGER_WALLET) && expectedProfile.matchesFinanceReadScope(owner, CloudEntity.CREDIT_CARD_PROFILE))
+        require(profileRecord.entity == expectedProfile.entity && profileRecord.id == expectedProfile.id && profileRecord.ownerUserId == owner.value && profileRecord.deletedAt == null)
+        require(profileRecord.payload["id"] == JsonPrimitive(profileRecord.id) && profileRecord.payload["user_id"] == JsonPrimitive(owner.value))
+        require(expectedProfile.payload["wallet_id"] == JsonPrimitive(walletRecord.id) && profileRecord.payload["wallet_id"] == JsonPrimitive(walletRecord.id))
+        require(profileMutation.kind == MutationKind.UPSERT && profileMutation.baseVersion == expectedProfile.syncVersion && profileRecord.syncVersion == expectedProfile.syncVersion &&
+            profileRecord.payload["sync_version"] == JsonPrimitive(expectedProfile.syncVersion)) { "Card profile version envelope disagrees" }
+        val oldLimit = expectedProfile.payload["credit_limit_minor"] as? JsonPrimitive
+        require(oldLimit?.isString == false && oldLimit.longOrNull?.let { it >= 0 } == true) { "Card profile limit is malformed" }
+        val oldCurrency = vn.com.quyln.mistia.core.model.LedgerWalletRecord.fromCloudRecord(expectedWallet).currencyCode.trim().uppercase(java.util.Locale.ROOT)
+        val newCurrency = vn.com.quyln.mistia.core.model.LedgerWalletRecord.fromCloudRecord(walletRecord).currencyCode.trim().uppercase(java.util.Locale.ROOT)
+        database.withTransaction {
+            ensureCurrentFinanceOwner(owner)
+            val profiles = recordsIncludingDeleted(owner, CloudEntity.CREDIT_CARD_PROFILE.table).filter {
+                (it.payload["wallet_id"] as? JsonPrimitive)?.takeIf { value -> value.isString }?.content?.trim()?.equals(walletRecord.id, ignoreCase = true) == true && !it.isConsistentlyDeleted()
+            }
+            if (record(owner, expectedWallet.entity, expectedWallet.id) != expectedWallet || record(owner, expectedProfile.entity, expectedProfile.id) != expectedProfile ||
+                profiles.map { it.id } != listOf(expectedProfile.id))
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+            if (oldCurrency != newCurrency && vn.com.quyln.mistia.core.model.walletHasLiveLedgerHistory(owner, walletRecord.id, recordsIncludingDeleted(owner, CloudEntity.LEDGER_TRANSACTION.table)))
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
+            commitMutationRows(walletRecord, walletMutation)
+            commitMutationRows(profileRecord, profileMutation)
+            ensureCurrentFinanceOwner(owner)
         }
     }
 

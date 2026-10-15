@@ -155,6 +155,15 @@ class CreditCardRepositoryTest {
             commitMutation(walletRecord, walletMutation)
             commitMutation(profileRecord, profileMutation)
         }
+        override suspend fun commitCreditCardEdit(
+            expectedWallet: CloudRecord, expectedProfile: CloudRecord,
+            walletRecord: CloudRecord, walletMutation: PendingMutation,
+            profileRecord: CloudRecord, profileMutation: PendingMutation,
+        ) {
+            check(record(UserId(expectedWallet.ownerUserId), expectedWallet.entity, expectedWallet.id) == expectedWallet)
+            check(record(UserId(expectedProfile.ownerUserId), expectedProfile.entity, expectedProfile.id) == expectedProfile)
+            commitCreditCardMutation(walletRecord, walletMutation, profileRecord, profileMutation)
+        }
         override suspend fun pendingMutations(
             ownerUserId: UserId,
             entity: CloudEntity,

@@ -58,6 +58,10 @@ class OfflineFirstFinanceRepository(
     vn.com.quyln.mistia.core.model.SavingsGoalRepository by OfflineSavingsGoalRepository(localStore),
     vn.com.quyln.mistia.core.model.RecurringBillRepository by OfflineRecurringBillRepository(localStore, {budgetZoneId ?: ZoneId.systemDefault()}),
     vn.com.quyln.mistia.core.model.SystemCategoryBootstrapRepository by OfflineSystemCategoryBootstrapRepository(localStore) {
+    private fun canonicalFinanceId(value: String): String = java.util.UUID.fromString(value.trim()).toString()
+    private fun requireCanonicalWriteOwner(owner: UserId) {
+        require(owner.value == canonicalFinanceId(owner.value)) { "Finance write owner must be canonical" }
+    }
     override fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>> =
         localStore.observeOwnedFinanceRows(entity, ownerUserId)
 
@@ -113,8 +117,9 @@ class OfflineFirstFinanceRepository(
         deviceId: String,
         now: String,
     ): Result<LedgerWalletRecord> = runCatching {
+        requireCanonicalWriteOwner(ownerUserId)
         val existingRecord = draft.id?.let { recordId ->
-            localStore.record(ownerUserId, CloudEntity.LEDGER_WALLET.table, recordId.lowercase())
+            localStore.record(ownerUserId, CloudEntity.LEDGER_WALLET.table, canonicalFinanceId(recordId))
         }
         val existing = existingRecord?.let(LedgerWalletRecord::fromCloudRecord)
         val mutation = draft.toMutation(ownerUserId, existing, deviceId, now)
@@ -146,14 +151,24 @@ class OfflineFirstFinanceRepository(
         deviceId: String,
         now: String,
     ): Result<CreditCardAccount> = runCatching {
+        requireCanonicalWriteOwner(ownerUserId)
         val wallets = walletSnapshot(ownerUserId)
         val profiles = creditCardProfileSnapshot(ownerUserId)
-        val existingWallet = draft.walletId?.lowercase()?.let { id -> wallets.firstOrNull { it.id == id } }
-        val requestedProfileId = draft.profileId?.lowercase()
-        val existingProfile = requestedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
-            ?: existingWallet?.let { wallet -> profiles.firstOrNull { it.walletId == wallet.id } }
-        val paymentSource = draft.paymentSourceWalletId?.lowercase()?.let { id ->
-            wallets.firstOrNull { it.id == id }
+        val requestedWalletId = draft.walletId?.let(::canonicalFinanceId)
+        val walletRow = requestedWalletId?.let { localStore.record(ownerUserId, CloudEntity.LEDGER_WALLET.table, it) }
+        if ((walletRow != null && !walletRow.matchesFinanceReadScope(ownerUserId, CloudEntity.LEDGER_WALLET)) ||
+            (walletRow == null && wallets.any { canonicalFinanceId(it.id) == requestedWalletId }))
+            throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+        val existingWallet = walletRow?.let(LedgerWalletRecord::fromCloudRecord)
+        val requestedProfileId = (draft.profileId
+            ?: existingWallet?.let { wallet -> profiles.firstOrNull { it.walletId.equals(wallet.id, ignoreCase = true) }?.id })?.let(::canonicalFinanceId)
+        val profileRow = requestedProfileId?.let { localStore.record(ownerUserId, CloudEntity.CREDIT_CARD_PROFILE.table, it) }
+        if ((profileRow != null && !profileRow.matchesFinanceReadScope(ownerUserId, CloudEntity.CREDIT_CARD_PROFILE)) ||
+            (profileRow == null && profiles.any { canonicalFinanceId(it.id) == requestedProfileId }) || (walletRow != null && profileRow == null))
+            throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+        val existingProfile = profileRow?.let(CreditCardProfileRecord::fromCloudRecord)
+        val paymentSource = draft.paymentSourceWalletId?.let(::canonicalFinanceId)?.let { id ->
+            wallets.firstOrNull { canonicalFinanceId(it.id) == id }
         }
         val nextSortOrder = draft.sortOrder ?: existingWallet?.sortOrder
             ?: ((wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1)
@@ -165,7 +180,11 @@ class OfflineFirstFinanceRepository(
             deviceId = deviceId,
             now = now,
         )
-        localStore.commitCreditCardMutation(
+        if (walletRow != null) localStore.commitCreditCardEdit(
+            expectedWallet = walletRow, expectedProfile = requireNotNull(profileRow),
+            walletRecord = mutation.wallet.record.toCloudRecord(), walletMutation = mutation.wallet.pending,
+            profileRecord = mutation.profile.record.toCloudRecord(), profileMutation = mutation.profile.pending,
+        ) else localStore.commitCreditCardMutation(
             walletRecord = mutation.wallet.record.toCloudRecord(),
             walletMutation = mutation.wallet.pending,
             profileRecord = mutation.profile.record.toCloudRecord(),

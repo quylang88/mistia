@@ -58,7 +58,6 @@ import vn.com.quyln.mistia.core.model.CreditCardDraft
 import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
-import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
@@ -94,6 +93,10 @@ fun ManagementScreen(
     var selectedCategoryKind by remember { mutableStateOf(TransactionCategoryKind.EXPENSE) }
     val categoryLanguage = currentCategoryLanguage(LocalConfiguration.current.locales[0])
     val screenScope = rememberCoroutineScope()
+    fun currencyEditable(wallet: LedgerWalletRecord?): Boolean = wallet==null || (wallet.ownerUserId==ownerUserId.value &&
+        ledger?.takeIf {it.first==ownerUserId.value}?.second?.none {
+            it.ownerUserId==ownerUserId.value && (it.sourceWalletId==wallet.id || it.destinationWalletId==wallet.id)
+        }==true)
     androidx.compose.runtime.LaunchedEffect(ownerUserId.value) {
         onTranslatePendingCategories()
     }
@@ -198,9 +201,7 @@ fun ManagementScreen(
         val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
         WalletEditorSheet(
             ownerId = ownerUserId.value,
-            currencyEditable = wallet==null || ledger?.takeIf {it.first==ownerUserId.value}?.second?.none {
-                it.ownerUserId==ownerUserId.value && (it.sourceWalletId==wallet.id || it.destinationWalletId==wallet.id)
-            }==true,
+            currencyEditable = currencyEditable(wallet),
             wallet = wallet,
             nextSortOrder = (wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1,
             onDismiss = { walletEditorTarget = null },
@@ -229,6 +230,7 @@ fun ManagementScreen(
         val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
         val profile = wallet?.let { card -> creditCardProfiles.firstOrNull { it.walletId == card.id } }
         CreditCardEditorSheet(
+            currencyEditable = currencyEditable(wallet),
             wallet = wallet,
             profile = profile,
             paymentSourceWallets = wallets.filter { candidate ->

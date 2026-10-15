@@ -10,9 +10,13 @@ fun walletHasLiveLedgerHistory(owner: UserId, walletId: String, records: List<Cl
     val archived = row.payload["is_archived"] as? JsonPrimitive
     if (archived?.isString == false && archived.booleanOrNull == true) return@any false
     // Inconsistent legacy envelopes must not silently remove a live dependency.
-    val outerDeleted = row.deletedAt?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-    val wireDeleted = (row.payload["deleted_at"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.let {
+    !row.isConsistentlyDeleted()
+}
+
+fun CloudRecord.isConsistentlyDeleted(): Boolean {
+    val outerDeleted = deletedAt?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+    val wireDeleted = (payload["deleted_at"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.let {
         runCatching { java.time.Instant.parse(it) }.getOrNull()
     }
-    !(outerDeleted != null && outerDeleted == wireDeleted)
+    return outerDeleted != null && outerDeleted == wireDeleted
 }
