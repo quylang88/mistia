@@ -61,6 +61,9 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
         }
     }
     val zone = ZoneId.systemDefault()
+    var paymentNavigation by rememberSaveable(owner.value, month, zone.id, stateSaver = InstallmentPaymentNavigation.saver(owner.value, month)) {
+        mutableStateOf(InstallmentPaymentNavigation.closed(owner.value, month))
+    }
     var retry by remember { mutableIntStateOf(0) }
     val load by key(repository, retry, lifecycle) {
         produceState<InstallmentLoad>(InstallmentLoad.Loading) {
@@ -89,7 +92,17 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
         }
         rows?.isSuccess == true -> InstallmentDueWorkflow(owner, repository, rows.getOrThrow(), month, reference, zone, deviceIdProvider, currentTime,
             onAdd = { navigation = InstallmentEditorNavigation.create(owner.value, defaultCurrency, UUID.randomUUID().toString()) },
-            onEdit = { navigation = InstallmentEditorNavigation.edit(owner.value, it) })
+            onEdit = { navigation = InstallmentEditorNavigation.edit(owner.value, it) },
+            onPayment = { paymentNavigation = InstallmentPaymentNavigation.open(owner.value, it) })
+    }
+    val paymentRow = remember(paymentNavigation) { paymentNavigation.row() }
+    if (paymentRow != null && paymentRow.month == month) key(owner.value, month, zone.id, paymentRow.plan.id) {
+        InstallmentPaymentSheet(owner.value, paymentRow, records?.wallets.orEmpty(), dataReady = records != null,
+            loadFailed = load == InstallmentLoad.Failed, targetCurrent = installmentPaymentTargetIsCurrent(paymentRow,
+                rows?.getOrNull()?.firstOrNull { it.plan.id == paymentRow.plan.id }), onRetryLoad = { retry++ },
+            onPay = { request -> repository.payInstallment(owner, request, deviceIdProvider(), currentTime().toString()) },
+            onUndo = { repository.undoInstallmentPayment(owner, paymentRow.plan, paymentRow.month, deviceIdProvider(), currentTime().toString()) },
+            onDismiss = { paymentNavigation = InstallmentPaymentNavigation.closed(owner.value, month) })
     }
     // Keep the editor composed across month/zone/loading changes so drafts and operations survive.
     val editorId = navigation.editorId
@@ -102,7 +115,7 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
 
 @Composable
 internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Instant, zone: ZoneId,
-    onAdd: (() -> Unit)? = null, onEdit: ((InstallmentPlanRecord) -> Unit)? = null, onCycle: ((InstallmentDueRow) -> Unit)? = null) {
+    onAdd: (() -> Unit)? = null, onEdit: ((InstallmentPlanRecord) -> Unit)? = null, onCycle: ((InstallmentDueRow) -> Unit)? = null, onPayment: ((InstallmentDueRow) -> Unit)? = null) {
     val locale = LocalConfiguration.current.locales[0]
     val dates = remember(locale, zone) { DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale).withZone(zone) }
     MistiaGlassCard(contentPadding = PaddingValues(0.dp)) { _ ->
@@ -134,6 +147,10 @@ internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Ins
                         if (row.status != DueStatus.PENDING) Text(stringResource(if (row.status == DueStatus.PAID) R.string.planning_planning_paid else R.string.planning_duepayment_bill_skipped),
                             Modifier.testTag("installment.status.${row.plan.id}").background(color.copy(alpha = 0.12f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 6.dp),
                             color = color, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                    if (onPayment != null && row.status != DueStatus.SKIPPED) TextButton(onClick = { onPayment(row) },
+                        modifier = Modifier.align(Alignment.End).testTag("installment.pay.${row.plan.id}")) {
+                        Text(stringResource(if (row.status == DueStatus.PAID) R.string.planning_duepayment_undo_payment else R.string.planning_duepayment_pay_now))
                     }
                     if (onCycle != null && row.status != DueStatus.PAID) TextButton(
                         onClick = { onCycle(row) }, modifier = Modifier.align(Alignment.End).testTag("installment.skip.${row.plan.id}")) {

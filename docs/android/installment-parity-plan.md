@@ -71,8 +71,14 @@ Installment payment/undo repository is completed locally (APK63):
 source baseline/schedule, same-currency/current affordability, loan-repayment category,
 atomic financial snapshots, receipt/statement/settlement/investment guards and stable
 undo/repay IDs are implemented.22 new cases execute with49 bill regression cases;
-four Room fixtures compile/package only. Native payment sheet/actions are next;
-ordinary occurrence/undo push and investment fund confirmation remain unfinished.
+four Room fixtures compile/package only. Ordinary occurrence/undo push and investment
+fund confirmation remain unfinished.
+
+Native payment/undo flow is completed locally (APK64):
+`evidence/2026-10-15-installment-payment-ui.md`. Owned navigation, fixed exact amount
+matching Swift, same-currency picker, frozen confirmation and actual repository callbacks,
+wallet draft/discard, busy/cancellation and changed-cycle guards are wired.10 JVM cases
+execute; nine new Compose/Room fixtures compile/package only. No device/visual proof.
 
 Next coherent slices:
 
@@ -80,13 +86,12 @@ Next coherent slices:
    The actual Swift installment currency field groups raw minor integers for all
    currencies; the new editor matches valid input with a formatted preview, rejecting
    ambiguous punctuation and overflow instead of silently changing the amount.
-2. Actual selected-month payment/undo with transaction/category/occurrence
-   atomic CAS, current affordability, paid card/receipt/investment/settlement guards,
-   scoped frozen-history checks and deterministic currency policy. Do not copy raw minor
-   values between currencies. Bill same-currency choice is accepted; card product question
-   remains pending. Installment same-currency decision is accepted for both platforms.
-3. Dedicated installment occurrence push, successful-source-delete child completion,
-   remote resurrection and legacy recovery. Current bill-only child gate and legacy
+2. Integrate investment fund confirmation with installment payment and continue
+   maintenance/notification audit. Bill/installment same-currency choices are accepted;
+   card product question remains pending. Native installment payment/undo is wired locally;
+   device/process-death/visual verification and coupled cloud completion remain open.
+3. Dedicated ordinary installment occurrence/undo push, remote resurrection and legacy
+   recovery. Successful proven source-delete child completion is implemented in APK61. Current bill-only child gate and legacy
    unproven-source dependency guard deliberately hold the unsafe paths. A source-delete remote winner must reconcile exact dependent child
    deletion intents without losing newer edits or hiding paid history under an active
    plan. Use the persisted causal batch and exact current queue comparisons; timestamp/

@@ -20,15 +20,15 @@ import vn.com.quyln.mistia.core.model.*
 @Composable
 internal fun InstallmentDueWorkflow(owner: UserId, repository: FinanceRepository, rows: List<InstallmentDueRow>, month: YearMonth,
     reference: Instant, zone: ZoneId, deviceIdProvider: () -> String, now: () -> Instant,
-    onAdd: () -> Unit, onEdit: (InstallmentPlanRecord) -> Unit) {
+    onAdd: () -> Unit, onEdit: (InstallmentPlanRecord) -> Unit, onPayment: ((InstallmentDueRow) -> Unit)? = null) {
     // Replacing a month/zone/owner cancels its dialog callback, without discarding the separate metadata editor.
-    key(owner.value, month, zone) { OwnedInstallmentDueWorkflow(owner, repository, rows, month, reference, zone, deviceIdProvider, now, onAdd, onEdit) }
+    key(owner.value, month, zone) { OwnedInstallmentDueWorkflow(owner, repository, rows, month, reference, zone, deviceIdProvider, now, onAdd, onEdit, onPayment) }
 }
 
 @Composable
 private fun OwnedInstallmentDueWorkflow(owner: UserId, repository: FinanceRepository, rows: List<InstallmentDueRow>, month: YearMonth,
     reference: Instant, zone: ZoneId, deviceIdProvider: () -> String, now: () -> Instant,
-    onAdd: () -> Unit, onEdit: (InstallmentPlanRecord) -> Unit) {
+    onAdd: () -> Unit, onEdit: (InstallmentPlanRecord) -> Unit, onPayment: ((InstallmentDueRow) -> Unit)? = null) {
     var target by remember { mutableStateOf<InstallmentDueRow?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Int?>(null) }
@@ -36,7 +36,7 @@ private fun OwnedInstallmentDueWorkflow(owner: UserId, repository: FinanceReposi
     val currentRepository by rememberUpdatedState(repository)
     val currentDevice by rememberUpdatedState(deviceIdProvider)
     val currentTime by rememberUpdatedState(now)
-    InstallmentDueContent(rows, reference, zone, onAdd, onEdit, onCycle = { target = it; error = null })
+    InstallmentDueContent(rows, reference, zone, onAdd, onEdit, onCycle = { target = it; error = null }, onPayment = onPayment)
     target?.let { selected ->
         val undo = selected.status == DueStatus.SKIPPED
         val title = if (undo) R.string.planning_duepayment_undo_skip else R.string.planning_duepayment_skip_this_month
