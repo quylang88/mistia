@@ -15,6 +15,23 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test fun `saved transaction draft cannot restore under another owner or record`() {
+        val state = TransactionEditorState.edit(transaction())
+        val saver = TransactionEditorState.scopedSaver(OWNER, TRANSACTION_ID)
+        val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals(state, saver.restore(saved))
+        assertNull(TransactionEditorState.scopedSaver("other", TRANSACTION_ID).restore(saved))
+        assertNull(TransactionEditorState.scopedSaver(OWNER, SOURCE_WALLET_ID).restore(saved))
+        assertNull(TransactionEditorState.scopedSaver(OWNER, null).restore(saved))
+    }
+    @Test fun `malformed and legacy transaction drafts fail owned restoration safely`() {
+        val saver = TransactionEditorState.scopedSaver(OWNER, null)
+        assertNull(saver.restore(listOf("bad")))
+        assertNull(saver.restore(listOf(OWNER, "", listOf("bad"))))
+        val legacy = with(TransactionEditorState.Saver) { SaverScope { true }.save(TransactionEditorState.new(NOW)) }!!
+        assertNull(saver.restore(legacy))
+    }
+
     @Test fun `currency switch removes supported grouping without changing imported major units`() {
         val state = TransactionEditorState.new(NOW).copy(sourceWalletId = SOURCE_WALLET_ID, categoryId = CATEGORY_ID, amountText = "1,000")
             .withAmountCurrency("JPY", "USD")

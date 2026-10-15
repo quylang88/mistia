@@ -42,7 +42,7 @@ class TransactionAmountInputTest {
     private fun save() = compose.onNodeWithText(context.getString(R.string.common_save)).performScrollTo().performClick()
     @Test fun manualFxGroupsBothAmountsAndReopensExactSavedMinorUnits() {
         val visible = mutableStateOf(true); val record = mutableStateOf<LedgerTransactionRecord?>(null)
-        compose.setContent { MistiaTheme(darkTheme = false) { if (visible.value) TransactionEditorSheet(record.value, wallets, emptyList(), emptyList(), now,
+        compose.setContent { MistiaTheme(darkTheme = false) { if (visible.value) TransactionEditorSheet(owner.value, record.value, wallets, emptyList(), emptyList(), now,
             initialState = initial(), onDismiss = { visible.value = false }, onSave = { draft -> repo.saveTransaction(owner, draft, device, now).onSuccess { record.value = it } }) } }
         sourceField().performScrollTo().performTextReplacement("9007199254740993")
         sourceField().assertTextContains("9,007,199,254,740,993")
@@ -61,10 +61,10 @@ class TransactionAmountInputTest {
         val edited = runBlocking { repo.observeTransactions(owner).first().single() }
         Assert.assertEquals(created.id, edited.id); Assert.assertEquals(1000L, edited.amountMinor); Assert.assertEquals(2000L, edited.destinationAmountMinor)
         Assert.assertEquals(1, runBlocking { store.pendingMutations(owner, CloudEntity.LEDGER_TRANSACTION, Long.MAX_VALUE).size })
-        Assert.assertEquals(wallets, runBlocking { repo.observeWallets(owner).first() }.sortedBy { if (it.currencyCode == "JPY") 0 else 1 })
+        Assert.assertEquals(wallets.associateBy { it.id }, runBlocking { repo.observeWallets(owner).first() }.associateBy { it.id })
     }
     @Test fun switchingGroupedJpyAmountToImportedUsdPreservesMajorUnitsAndCanSave() {
-        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(null, wallets, emptyList(), emptyList(), now,
+        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(owner.value, null, wallets, emptyList(), emptyList(), now,
             initialState = initial(), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
         sourceField().performScrollTo().performTextReplacement("1000"); sourceField().assertTextContains("1,000")
         compose.onAllNodesWithText("USD · USD")[0].performScrollTo().performClick()
@@ -78,7 +78,7 @@ class TransactionAmountInputTest {
         Assert.assertEquals(2000L, saved.destinationAmountMinor)
     }
     @Test fun enteringAmountBeforeChoosingWalletGroupsWhenJpyIsSelected() {
-        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(null, wallets, emptyList(), emptyList(), now,
+        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(owner.value, null, wallets, emptyList(), emptyList(), now,
             initialState = initial().copy(sourceWalletId = null), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
         compose.onNode(hasText(context.getString(R.string.transactions_transactioneditor_amount)) and hasSetTextAction()).performScrollTo().performTextReplacement("1000")
         compose.onAllNodesWithText("JPY · JPY")[0].performScrollTo().performClick()
@@ -87,7 +87,7 @@ class TransactionAmountInputTest {
     }
     @Test fun appRateGroupsDerivedReadOnlyAmountAndPersistsExactPair() {
         val rates = listOf(ExchangeRateSnapshot("JPY", "VND", "165.5", "fixture", 1L, "2026-10-15"))
-        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(null, wallets, emptyList(), rates, now,
+        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(owner.value, null, wallets, emptyList(), rates, now,
             initialState = initial(CurrencyConversionMode.APP_RATE), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
         sourceField().performScrollTo().performTextReplacement("1000")
         sourceField().assertTextContains("1,000"); destinationField().performScrollTo().assertTextContains("165,500")

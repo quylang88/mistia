@@ -24,7 +24,7 @@ fun NotificationTopUpSheet(owner:UserId,destinationWalletId:String,repository:Fi
         else if(snapshot.first.none {it.id==destinationWalletId && it.ownerUserId==owner.value && !it.isArchived && it.deletedAt==null}) {
             AlertDialog(onDismissRequest=onDismiss,text={Text(stringResource(R.string.planning_planning_a_matching_payment_wallet_could_not_be))},
                 confirmButton={TextButton(onClick=onDismiss) {Text(stringResource(R.string.common_ok))}})
-        } else TransactionEditorSheet(null,snapshot.first,snapshot.second,rates,initial.occurredAt,initialState=initial,onDismiss=onDismiss,
+        } else TransactionEditorSheet(owner.value,null,snapshot.first,snapshot.second,rates,initial.occurredAt,initialState=initial,onDismiss=onDismiss,
             onSave={draft -> repository.saveTransaction(owner,draft,deviceIdProvider(),Instant.now().toString())})
     }
 }

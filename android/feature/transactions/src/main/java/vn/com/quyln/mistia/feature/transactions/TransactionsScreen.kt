@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,23 @@ import vn.com.quyln.mistia.core.model.transactionDisplayMoney
 
 @Composable
 fun TransactionsScreen(
+    ownerUserId: UserId,
+    repository: FinanceRepository,
+    exchangeRateRepository: ExchangeRateRepository,
+    receiptAnalysisClient: ReceiptAnalysisClient,
+    receiptImageRepository: TransactionReceiptImageRepository,
+    accessTokenProvider: suspend () -> String?,
+    deviceIdProvider: suspend () -> String,
+    modifier: Modifier = Modifier,
+) {
+    key(ownerUserId.value) {
+        OwnedTransactionsScreen(ownerUserId, repository, exchangeRateRepository, receiptAnalysisClient, receiptImageRepository,
+            accessTokenProvider, deviceIdProvider, modifier)
+    }
+}
+
+@Composable
+private fun OwnedTransactionsScreen(
     ownerUserId: UserId,
     repository: FinanceRepository,
     exchangeRateRepository: ExchangeRateRepository,
@@ -229,6 +247,7 @@ fun TransactionsScreen(
         val transaction = editorTransactionId?.let { id -> records.firstOrNull { it.id == id } }
         if (editorTransactionId == null || transaction != null) {
             TransactionEditorSheet(
+                ownerId = ownerUserId.value,
                 transaction = transaction,
                 wallets = wallets,
                 categories = categories,

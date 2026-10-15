@@ -34,6 +34,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -61,6 +62,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
@@ -83,6 +86,7 @@ import vn.com.quyln.mistia.core.model.matchingExchangeRateSnapshot
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun TransactionEditorSheet(
+    ownerId: String,
     transaction: LedgerTransactionRecord?,
     wallets: List<LedgerWalletRecord>,
     categories: List<TransactionCategoryRecord>,
@@ -97,7 +101,32 @@ internal fun TransactionEditorSheet(
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
 ) {
-    var state by rememberSaveable(transaction?.id, initialState, stateSaver = TransactionEditorState.Saver) {
+    if (transaction != null && transaction.ownerUserId != ownerId) return
+    key(ownerId, transaction?.id, initialState) {
+        OwnedTransactionEditorSheet(ownerId, transaction, wallets.filter { it.ownerUserId == ownerId }, categories.filter { it.ownerUserId == ownerId },
+            exchangeRates, now, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun OwnedTransactionEditorSheet(
+    ownerId: String,
+    transaction: LedgerTransactionRecord?,
+    wallets: List<LedgerWalletRecord>,
+    categories: List<TransactionCategoryRecord>,
+    exchangeRates: List<ExchangeRateSnapshot>,
+    now: String,
+    initialState: TransactionEditorState? = null,
+    receiptState: TransactionReceiptEditorState = TransactionReceiptEditorState.none(),
+    receiptLoading: Boolean = false,
+    receiptLoadFailed: Boolean = false,
+    onRemoveReceipt: () -> Unit = {},
+    onSaveSuccess: () -> Unit = {},
+    onDismiss: () -> Unit,
+    onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
+) {
+    var state by rememberSaveable(ownerId, transaction?.id, initialState, stateSaver = TransactionEditorState.scopedSaver(ownerId, transaction?.id)) {
         mutableStateOf(
             transaction?.let(TransactionEditorState::edit)
                 ?: initialState
@@ -185,7 +214,9 @@ internal fun TransactionEditorSheet(
                         val draft = result.draft ?: return@Button
                         isSaving = true
                         scope.launch {
-                            onSave(draft).fold(
+                            val saved = onSave(draft)
+                            currentCoroutineContext().ensureActive()
+                            saved.fold(
                                 onSuccess = {
                                     onSaveSuccess()
                                     onDismiss()

@@ -231,6 +231,16 @@ data class TransactionEditorState(
     }
 
     companion object {
+        fun scopedSaver(owner: String, recordId: String?): Saver<TransactionEditorState, Any> = Saver(
+            save = { state -> with(Saver) { save(state) }?.let { listOf(owner, recordId.orEmpty(), it) } },
+            restore = { value ->
+                val items = value as? List<*>
+                if (items?.size != 3 || items[0] != owner || items[1] != recordId.orEmpty()) null
+                else items[2]?.let { runCatching { Saver.restore(it) }.getOrNull() }?.takeIf { it.id == recordId }
+            },
+        )
+
+
         fun new(now: String): TransactionEditorState = TransactionEditorState(
             id = null,
             primaryKind = TransactionPrimaryKind.EXPENSE,
