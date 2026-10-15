@@ -8,6 +8,41 @@ import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class WalletEditorStateTest {
+    @Test fun `supported wallet balances group exact signed minor input`() {
+        for (currency in listOf("JPY", "VND")) {
+            val state = WalletEditorState.new().copy(currencyCode = currency).withOpeningBalance("9007199254740993")
+            assertEquals("9,007,199,254,740,993", state.openingBalanceText)
+            assertEquals(9007199254740993L, state.toDraft("Cash").draft?.openingBalanceMinor)
+            val negative = state.withOpeningBalance(Long.MIN_VALUE.toString())
+            assertEquals("-9,223,372,036,854,775,808", negative.openingBalanceText)
+            assertEquals(Long.MIN_VALUE, negative.toDraft("Cash").draft?.openingBalanceMinor)
+        }
+    }
+
+    @Test fun `blank malformed and overflow balances retain existing validation`() {
+        val state = WalletEditorState.new()
+        assertEquals(0L, state.withOpeningBalance("").toDraft("Cash").draft?.openingBalanceMinor)
+        assertEquals("-", state.withOpeningBalance("-").openingBalanceText)
+        assertEquals(WalletEditorValidation.INVALID_OPENING_BALANCE, state.withOpeningBalance("-").toDraft("Cash").validation)
+        assertEquals("1.5", state.withOpeningBalance("1.5").openingBalanceText)
+        assertEquals(WalletEditorValidation.INVALID_OPENING_BALANCE, state.withOpeningBalance("1.5").toDraft("Cash").validation)
+        val overflow = state.withOpeningBalance("9223372036854775808")
+        assertEquals("9,223,372,036,854,775,808", overflow.openingBalanceText)
+        assertEquals(WalletEditorValidation.INVALID_OPENING_BALANCE, overflow.toDraft("Cash").validation)
+    }
+
+    @Test fun `imported fractional wallet input preserves decimal units`() {
+        val state = WalletEditorState.new().copy(currencyCode = "USD").withOpeningBalance("12.34")
+        assertEquals("12.34", state.openingBalanceText)
+        assertEquals(1234L, state.toDraft("Cash").draft?.openingBalanceMinor)
+    }
+
+    @Test fun `existing wallet groups display text while original balance stays immutable`() {
+        val state = WalletEditorState.edit(wallet(9007199254740993L))
+        assertEquals("9,007,199,254,740,993", state.openingBalanceText)
+        assertEquals(9007199254740993L, state.withOpeningBalance("0").toDraft("Cash").draft?.openingBalanceMinor)
+    }
+
     @Test
     fun `selecting a kind applies its default icon until customized`() {
         val changed = WalletEditorState.new().selectKind(WalletKind.BANK)

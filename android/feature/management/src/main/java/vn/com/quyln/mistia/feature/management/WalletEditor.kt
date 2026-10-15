@@ -71,6 +71,8 @@ import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
+import vn.com.quyln.mistia.core.model.currencyAmountInput
+import androidx.compose.ui.platform.testTag
 
 data class WalletEditorState(
     val id: String?,
@@ -86,6 +88,8 @@ data class WalletEditorState(
     val institutionPresetKey: String?,
     val sortOrder: Int,
 ) {
+    fun withOpeningBalance(text: String): WalletEditorState = copy(openingBalanceText = currencyAmountInput(text, currencyCode))
+
     fun selectKind(selected: WalletKind): WalletEditorState = copy(
         kind = selected,
         iconSymbolName = if (iconWasCustomized) iconSymbolName else selected.defaultIcon,
@@ -168,7 +172,7 @@ data class WalletEditorState(
                 iconWasCustomized = wallet.iconSymbolName != kind.defaultIcon ||
                     !wallet.iconColorHex.equals(kind.defaultColorHex, ignoreCase = true),
                 currencyCode = wallet.currencyCode,
-                openingBalanceText = formatMinorInput(wallet.openingBalanceMinor, wallet.currencyCode),
+                openingBalanceText = currencyAmountInput(formatMinorInput(wallet.openingBalanceMinor, wallet.currencyCode), wallet.currencyCode),
                 originalOpeningBalanceMinor = wallet.openingBalanceMinor,
                 institutionDisplayName = wallet.institutionDisplayName.orEmpty(),
                 institutionPresetKey = wallet.institutionPresetKey,
@@ -268,6 +272,7 @@ fun WalletEditorSheet(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Button(
+                    modifier = Modifier.testTag("wallet.save"),
                     enabled = !isSaving,
                     onClick = {
                         val result = state.toDraft(fallbackName)
@@ -369,7 +374,7 @@ fun WalletEditorSheet(
                     OutlinedTextField(
                         value = state.name,
                         onValueChange = { state = state.copy(name = it) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("wallet.name"),
                         label = { Text(stringResource(R.string.management_management_wallet_name)) },
                         singleLine = true,
                     )
@@ -392,8 +397,8 @@ fun WalletEditorSheet(
                     if (state.originalOpeningBalanceMinor == null) {
                         OutlinedTextField(
                             value = state.openingBalanceText,
-                            onValueChange = { state = state.copy(openingBalanceText = it) },
-                            modifier = Modifier.fillMaxWidth(),
+                            onValueChange = { state = state.withOpeningBalance(it) },
+                            modifier = Modifier.fillMaxWidth().testTag("wallet.openingBalance"),
                             label = { Text(stringResource(R.string.shared_corelogic_financeenums_opening_balance)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,

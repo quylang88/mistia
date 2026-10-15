@@ -2264,3 +2264,9 @@ Review expanded actual Swift/Kotlin calculator goldens36→86 and fixed later di
 Wired raw-minor amount-per-cycle to shared calculator with draft-only OK/cancel, busy/focus and owner/id/currency expression restore. Four native RED/GREEN cases prove exact >2^53 metadata save, USD raw-minor preservation/preview, unchanged queue before Save and unchanged ledger/wallet, invalid/cancel and id/owner isolation. Calculator4 plus existing editor11: **15/15 API36 cases pass**. Imported non-JPY/VND full Swift formatting parity remains open.
 
 Full1390 JVM/133suites, Swift610/86calculatorvectors, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK78/executed test APK/checksums: `evidence/2026-10-15-installment-calculator.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue monetary management/transaction forms/settings audit and remaining full APK1–4/RC; goal stays active.
+
+## 2026-10-15 — wallet opening-balance grouping (APK79)
+
+Matched supported JPY/VND wallet opening-balance grouping without changing signed/exact Long, blank/invalid/overflow, imported decimal or immutable existing opening balance. Existing planning helper moved unchanged to core model for shared form presentation. Four new state cases pass after3 intended REDs; actual API36 management6/6 includes exact >2^53 wallet save/outbox with no ledger entry.
+
+Full1394 JVM/133suites, Swift610, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK79/executed test APK/checksums: `evidence/2026-10-15-wallet-grouped-input.md`. Wallet calculator/current-balance adjustment and imported-currency full parity remain open. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue next monetary form slice and full APK1–4/RC; goal stays active.
