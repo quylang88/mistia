@@ -191,6 +191,7 @@ fun ManagementScreen(
     walletEditorTarget?.let { target ->
         val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
         WalletEditorSheet(
+            ownerId = ownerUserId.value,
             wallet = wallet,
             nextSortOrder = (wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1,
             onDismiss = { walletEditorTarget = null },

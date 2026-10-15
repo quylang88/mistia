@@ -4,10 +4,22 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Assert.assertNull
+import androidx.compose.runtime.saveable.SaverScope
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class WalletEditorStateTest {
+    @Test fun `wallet draft restoration rejects a different owner`() {
+        val state = WalletEditorState.new().copy(name = "Private").withOpeningBalance("9007199254740993")
+        val saver = WalletEditorState.scopedSaver("owner-A")
+        val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals(state, saver.restore(saved))
+        assertNull(WalletEditorState.scopedSaver("owner-B").restore(saved))
+    }
+    @Test fun `malformed owned wallet draft fails restoration safely`() {
+        assertNull(WalletEditorState.scopedSaver("owner-A").restore(listOf("owner-A", listOf("bad"))))
+    }
     @Test fun `supported wallet balances group exact signed minor input`() {
         for (currency in listOf("JPY", "VND")) {
             val state = WalletEditorState.new().copy(currencyCode = currency).withOpeningBalance("9007199254740993")

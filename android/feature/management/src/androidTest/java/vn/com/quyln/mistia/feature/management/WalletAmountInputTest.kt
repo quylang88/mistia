@@ -27,7 +27,7 @@ class WalletAmountInputTest {
         val store = RoomLocalStore(db); val repo = OfflineFirstFinanceRepository(store)
         val owner = UserId("11111111-1111-1111-1111-111111111111")
         val device = "22222222-2222-2222-2222-222222222222"
-        compose.setContent { MistiaTheme(darkTheme = false) { WalletEditorSheet(null, 0, onDismiss = {},
+        compose.setContent { MistiaTheme(darkTheme = false) { WalletEditorSheet(owner.value, null, 0, onDismiss = {},
             onSave = { repo.saveWallet(owner, it, device, Instant.now().toString()) }, onArchive = { Result.success(Unit) }) } }
         compose.onNodeWithTag("wallet.name").performScrollTo().performTextReplacement("Cash")
         compose.onNodeWithTag("wallet.openingBalance").performScrollTo().performTextReplacement("9007199254740993")

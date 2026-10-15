@@ -30,12 +30,14 @@ import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -43,6 +45,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +76,10 @@ import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
 import vn.com.quyln.mistia.core.model.currencyAmountInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 data class WalletEditorState(
     val id: String?,
@@ -135,6 +142,15 @@ data class WalletEditorState(
     }
 
     companion object {
+        fun scopedSaver(owner: String): Saver<WalletEditorState, Any> = Saver(
+            save = { state -> with(Saver) { save(state) }?.let { listOf(owner, it) } },
+            restore = { value ->
+                val items = value as? List<*>
+                if (items?.size != 2 || items[0] != owner) null
+                else items[1]?.let { runCatching { Saver.restore(it) }.getOrNull() }
+            },
+        )
+
         val supportedKinds = listOf(
             WalletKind.CASH,
             WalletKind.PAY_PAY,
@@ -231,15 +247,28 @@ enum class WalletEditorValidation {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WalletEditorSheet(
+    ownerId: String,
     wallet: LedgerWalletRecord?,
     nextSortOrder: Int,
     onDismiss: () -> Unit,
     onSave: suspend (WalletDraft) -> Result<LedgerWalletRecord>,
     onArchive: suspend () -> Result<Unit>,
 ) {
-    var state by rememberSaveable(wallet?.id, stateSaver = WalletEditorState.Saver) {
+    if (wallet != null && wallet.ownerUserId != ownerId) return
+    key(ownerId, wallet?.id) { OwnedWalletEditorSheet(ownerId, wallet, nextSortOrder, onDismiss, onSave, onArchive) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun OwnedWalletEditorSheet(
+    ownerId: String, wallet: LedgerWalletRecord?, nextSortOrder: Int, onDismiss: () -> Unit,
+    onSave: suspend (WalletDraft) -> Result<LedgerWalletRecord>, onArchive: suspend () -> Result<Unit>,
+) {
+    var state by rememberSaveable(ownerId, wallet?.id, stateSaver = WalletEditorState.scopedSaver(ownerId)) {
         mutableStateOf(wallet?.let(WalletEditorState::edit) ?: WalletEditorState.new(nextSortOrder))
     }
+    var calculator by rememberSaveable(ownerId, wallet?.id) { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     var validation by remember { mutableStateOf<WalletEditorValidation?>(null) }
     var saveFailed by remember { mutableStateOf(false) }
     var archiveConfirmation by remember { mutableStateOf(false) }
@@ -281,7 +310,9 @@ fun WalletEditorSheet(
                         val draft = result.draft ?: return@Button
                         isSaving = true
                         scope.launch {
-                            onSave(draft).fold(
+                            val result = onSave(draft)
+                            currentCoroutineContext().ensureActive()
+                            result.fold(
                                 onSuccess = { onDismiss() },
                                 onFailure = {
                                     isSaving = false
@@ -400,6 +431,10 @@ fun WalletEditorSheet(
                             onValueChange = { state = state.withOpeningBalance(it) },
                             modifier = Modifier.fillMaxWidth().testTag("wallet.openingBalance"),
                             label = { Text(stringResource(R.string.shared_corelogic_financeenums_opening_balance)) },
+                            trailingIcon = { if (state.currencyCode in setOf("JPY", "VND")) IconButton(enabled = !isSaving,
+                                onClick = { focus.clearFocus(); calculator = true }, modifier = Modifier.testTag("wallet.openingBalance.calculator")) {
+                                Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                            } },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                         )
@@ -492,6 +527,10 @@ fun WalletEditorSheet(
         }
     }
 
+    if (calculator && state.originalOpeningBalanceMinor == null && state.currencyCode in setOf("JPY", "VND"))
+        AmountCalculatorDialog(state.openingBalanceText, "$ownerId:${wallet?.id.orEmpty()}:${state.currencyCode}",
+            onCommit = { state = state.withOpeningBalance(it); validation = null; saveFailed = false }, onDismiss = { calculator = false })
+
     if (archiveConfirmation) {
         AlertDialog(
             onDismissRequest = { archiveConfirmation = false },
@@ -508,7 +547,9 @@ fun WalletEditorSheet(
                         archiveConfirmation = false
                         isSaving = true
                         scope.launch {
-                            onArchive().fold(
+                            val result = onArchive()
+                            currentCoroutineContext().ensureActive()
+                            result.fold(
                                 onSuccess = { onDismiss() },
                                 onFailure = {
                                     isSaving = false
