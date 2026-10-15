@@ -3,6 +3,8 @@ package vn.com.quyln.mistia.core.network
 import java.io.IOException
 import java.util.UUID
 import java.time.Instant
+import java.time.YearMonth
+import vn.com.quyln.mistia.core.model.DueOccurrenceRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -52,6 +54,7 @@ class SupabasePostgrestRemoteStore(
     private val writableEntities: Set<CloudEntity> = emptySet(),
     private val writableDueSources: Set<DueSourceKind> = setOf(DueSourceKind.RECURRING_BILL),
     private val allowInstallmentOccurrenceDeletes: Boolean = false,
+    private val allowInstallmentOccurrenceSkips: Boolean = false,
 ) : RemoteStore, RemoteMutationStore {
     override suspend fun pullPage(
         table: String,
@@ -92,6 +95,37 @@ class SupabasePostgrestRemoteStore(
                 ?.mapNotNull { it as? JsonObject }
                 .orEmpty()
             RemotePage(records = records, nextOffset = if (records.size == limit) offset + limit else null)
+        }
+    }
+
+    override suspend fun fetchInstallmentCyclePage(planId: String, month: String, accessToken: String, ownerUserId: UserId,
+        offset: Int, limit: Int): vn.com.quyln.mistia.core.model.DueOccurrencePage = withContext(Dispatchers.IO) {
+        for (id in listOf(planId, ownerUserId.value)) require(id.length == 36 && UUID.fromString(id).toString() == id)
+        require(YearMonth.parse(month).toString() == month && accessToken.isNotBlank())
+        require(offset >= 0 && limit in 1..1000 && offset <= Int.MAX_VALUE - limit)
+        val url = tableUrl(CloudEntity.DUE_OCCURRENCE_RECORD).addQueryParameter("select", "*")
+            .addQueryParameter("user_id", "eq.${ownerUserId.value}").addQueryParameter("source_kind_raw_value", "eq.installment")
+            .addQueryParameter("source_id", "eq.$planId").addQueryParameter("selected_month_key", "eq.$month")
+            .addQueryParameter("order", "id.asc").build()
+        val request = authorizedRequest(url.toString(), accessToken).header("Prefer", "count=exact").header("Range-Unit", "items")
+            .header("Range", "$offset-${offset + limit - 1}").get().build()
+        client.newCall(request).execute().use { response ->
+            val rows = response.requireObjectRows(strict = true)
+            require(rows.size <= limit)
+            val records = rows.map { payload -> payload.toCloudRecord(CloudEntity.DUE_OCCURRENCE_RECORD, ownerUserId).also { record ->
+                val cycle = DueOccurrenceRecord.fromCloudRecord(record)
+                val version = requireNotNull(payload["sync_version"] as? JsonPrimitive)
+                require(!version.isString && version.longOrNull == record.syncVersion && record.syncVersion >= 0)
+                require(cycle.id == record.id && cycle.ownerUserId == ownerUserId.value && cycle.sourceKindWireValue == "installment" && cycle.sourceId == planId && cycle.selectedMonthKey == month)
+            } }
+            require(records.map { it.id }.distinct().size == records.size)
+            val parts = requireNotNull(response.header("Content-Range")).split('/')
+            require(parts.size == 2)
+            val total = requireNotNull(parts[1].toIntOrNull()); require(total >= 0)
+            val consumed = offset + records.size
+            if (records.isEmpty()) require(parts[0] == "*" && offset >= total)
+            else require(parts[0] == "$offset-${consumed - 1}" && consumed <= total)
+            vn.com.quyln.mistia.core.model.DueOccurrencePage(records, if (consumed < total) consumed else null)
         }
     }
 
@@ -185,8 +219,11 @@ class SupabasePostgrestRemoteStore(
             .post(json.encodeToString(JsonArray(listOf(payload))).toRequestBody(POSTGREST_JSON_MEDIA_TYPE))
             .build()
         client.newCall(request).execute().use { response ->
-            response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)
+            val record = response.requireObjectRows().firstOrNull()?.toCloudRecord(entity, ownerUserId)
                 ?: error("Supabase create returned no ${entity.table} row")
+            if (entity == CloudEntity.DUE_OCCURRENCE_RECORD && payload.string("source_kind_raw_value") == "installment")
+                require(record.id == recordId) { "Supabase occurrence response identity does not match request" }
+            record
         }
     }
 
@@ -208,7 +245,15 @@ class SupabasePostgrestRemoteStore(
             .addQueryParameter("user_id", "eq.${ownerUserId.value}")
             .addQueryParameter("sync_version", "eq.$expectedVersion")
             .apply {
-                if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) addQueryParameter("source_kind_raw_value", "eq.${payload.string("source_kind_raw_value")}")
+                if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) {
+                    addQueryParameter("source_kind_raw_value", "eq.${payload.string("source_kind_raw_value")}")
+                    if (payload.string("source_kind_raw_value") == "installment" && payload.string("status_raw_value") == "skipped") {
+                        val undo = payload.string("deleted_at") != null
+                        addQueryParameter("status_raw_value", if (undo) "eq.skipped" else "in.(pending,skipped)")
+                        addQueryParameter("paid_at", "is.null"); addQueryParameter("linked_transaction_id", "is.null")
+                        if (undo) addQueryParameter("amount_minor_snapshot", "is.null")
+                    }
+                }
             }
             .build()
         val request = authorizedRequest(url.toString(), accessToken)
@@ -241,13 +286,33 @@ class SupabasePostgrestRemoteStore(
         check(entity in writableEntities) { "Cloud writes are disabled for ${entity.table}" }
         if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) {
             if (payload.string("source_kind_raw_value") == "installment") {
-                check(allowInstallmentOccurrenceDeletes && !creating) { "Installment occurrence creation/edits are disabled" }
-                require(payload.keys == setOf("id", "user_id", "source_kind_raw_value", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"))
+                val skip = payload.string("status_raw_value") == "skipped"
+                if (skip) {
+                    check(allowInstallmentOccurrenceSkips) { "Installment skip writes are disabled" }
+                    val financial = setOf("paid_at", "linked_transaction_id", "amount_minor_snapshot")
+                    require(financial.all { payload[it] == kotlinx.serialization.json.JsonNull })
+                    val undoFields = setOf("id", "user_id", "source_kind_raw_value", "status_raw_value", "amount_minor_snapshot", "paid_at", "linked_transaction_id", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id")
+                    if (payload.string("deleted_at") != null) {
+                        require(!creating && payload.keys == undoFields)
+                        Instant.parse(requireNotNull(payload.string("deleted_at")))
+                    } else {
+                        require(payload["deleted_at"] == kotlinx.serialization.json.JsonNull)
+                        val typed = DueOccurrenceRecord.fromCloudRecord(CloudRecord(entity.table, requireNotNull(payload.string("id")), requireNotNull(payload.string("user_id")), payload,
+                            payload.string("updated_at"), null, requireNotNull((payload["sync_version"] as? JsonPrimitive)?.longOrNull)))
+                        require(payload.keys == typed.toPayload().keys)
+                        require(YearMonth.parse(typed.selectedMonthKey).toString() == typed.selectedMonthKey)
+                        val source = requireNotNull(payload.string("source_id")); require(source.length == 36 && UUID.fromString(source).toString() == source)
+                    }
+                } else {
+                    check(allowInstallmentOccurrenceDeletes && !creating) { "Installment occurrence creation/edits are disabled" }
+                    require(payload.keys == setOf("id", "user_id", "source_kind_raw_value", "updated_at", "deleted_at", "sync_version", "last_modified_by_device_id"))
+                    Instant.parse(requireNotNull(payload.string("deleted_at")))
+                }
                 for (key in listOf("id", "user_id", "last_modified_by_device_id")) {
                     val value = requireNotNull(payload.string(key))
                     require(value.length == 36 && UUID.fromString(value).toString() == value)
                 }
-                for (key in listOf("updated_at", "deleted_at")) Instant.parse(requireNotNull(payload.string(key)))
+                Instant.parse(requireNotNull(payload.string("updated_at")))
                 val version = requireNotNull(payload["sync_version"] as? JsonPrimitive)
                 require(!version.isString && version.longOrNull != null && requireNotNull(version.longOrNull) >= 0)
             } else check(payload.string("source_kind_raw_value") in writableDueSources.map { it.wireValue }) { "Cloud due source writes are disabled" }

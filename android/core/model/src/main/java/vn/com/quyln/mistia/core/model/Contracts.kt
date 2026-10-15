@@ -271,6 +271,13 @@ interface LocalStore {
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
 
+    suspend fun commitInstallmentSkipAcknowledgement(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation,
+        remotePlan: CloudRecord, remoteCycle: CloudRecord, zone: java.time.ZoneId): Boolean =
+        throw UnsupportedOperationException("Atomic installment skip acknowledgement unavailable")
+    suspend fun recordInstallmentSkipFailure(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation,
+        nextAttemptAtEpochMillis: Long, errorCode: String): Boolean =
+        throw UnsupportedOperationException("Scoped installment skip failure persistence unavailable")
+
     suspend fun installmentDeletionPlanIds(owner: UserId): Set<String> =
         throw UnsupportedOperationException("Owned installment deletion batches unavailable")
     suspend fun commitInstallmentDeletionCompletion(expected: InstallmentAcknowledgementSnapshot, requestBatchId: String,
@@ -392,8 +399,12 @@ interface RemoteStore {
 }
 
 data class SystemCategoryPage(val records: List<CloudRecord>, val nextOffset: Int?)
+data class DueOccurrencePage(val records: List<CloudRecord>, val nextOffset: Int?)
 
 interface RemoteMutationStore {
+    suspend fun fetchInstallmentCyclePage(planId: String, month: String, accessToken: String, ownerUserId: UserId,
+        offset: Int, limit: Int): DueOccurrencePage = throw UnsupportedOperationException("Complete installment cycle lookup unavailable")
+
     /** Includes legacy IDs and tombstones; consume nextOffset until null before reconciling. */
     suspend fun fetchSystemCategoryPage(
         systemKey: String,

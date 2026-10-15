@@ -80,6 +80,15 @@ matching Swift, same-currency picker, frozen confirmation and actual repository 
 wallet draft/discard, busy/cancellation and changed-cycle guards are wired.10 JVM cases
 execute; nine new Compose/Room fixtures compile/package only. No device/visual proof.
 
+Gated ordinary skip/undo metadata synchronization is implemented locally (APK65):
+`evidence/2026-10-15-installment-skip-sync.md`. Dedicated worker and network capability,
+complete owner/source/month paging, observed sibling holds, source/snapshot/CAS fences and
+atomic Room ACK/retry are wired inside the one due coordinator.13 model +21 worker
++10 HTTPS +one broad-delegate regression execute; six Room fixtures compile/package only.
+Paid occurrence and payment-undo synchronization remain held. PostgREST per-record CAS
+is not a parent/month atomic transaction; cross-record races and duplicate recovery still
+require completion before enabling writes. All10 flags remain false.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
@@ -90,7 +99,7 @@ Next coherent slices:
    maintenance/notification audit. Bill/installment same-currency choices are accepted;
    card product question remains pending. Native installment payment/undo is wired locally;
    device/process-death/visual verification and coupled cloud completion remain open.
-3. Dedicated ordinary installment occurrence/undo push, remote resurrection and legacy
+3. Coupled paid installment occurrence/payment-undo push, remote resurrection and legacy
    recovery. Successful proven source-delete child completion is implemented in APK61. Current bill-only child gate and legacy
    unproven-source dependency guard deliberately hold the unsafe paths. A source-delete remote winner must reconcile exact dependent child
    deletion intents without losing newer edits or hiding paid history under an active

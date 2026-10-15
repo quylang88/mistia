@@ -50,6 +50,7 @@ import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
 import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
 import vn.com.quyln.mistia.core.sync.DueOccurrencePushCoordinator
 import vn.com.quyln.mistia.core.sync.InstallmentDeletionPushCoordinator
+import vn.com.quyln.mistia.core.sync.InstallmentSkipPushCoordinator
 import vn.com.quyln.mistia.core.model.DueSourceKind
 import vn.com.quyln.mistia.core.sync.InstallmentPushCoordinator
 import vn.com.quyln.mistia.core.sync.RecurringBillPushCoordinator
@@ -193,6 +194,7 @@ object AppModule {
         },
         writableDueSources = if (billOccurrenceWritesEnabled()) setOf(DueSourceKind.RECURRING_BILL) else emptySet(),
         allowInstallmentOccurrenceDeletes = installmentOccurrenceDeleteWritesEnabled(),
+        allowInstallmentOccurrenceSkips = installmentOccurrenceDeleteWritesEnabled(),
     )
 
     @Provides
@@ -314,8 +316,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator):DueOccurrencePushCoordinator =
-        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion)
+    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator, installmentSkip: InstallmentSkipPushCoordinator):DueOccurrencePushCoordinator =
+        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion, installmentSkipCoordinator=installmentSkip)
+
+    @Provides
+    @Singleton
+    fun provideInstallmentSkipPushCoordinator(localStore: LocalStore, remoteStore: RemoteMutationStore): InstallmentSkipPushCoordinator =
+        InstallmentSkipPushCoordinator(localStore, remoteStore, writesEnabled=installmentOccurrenceDeleteWritesEnabled())
 
     @Provides
     @Singleton

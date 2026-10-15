@@ -1,5 +1,8 @@
 package vn.com.quyln.mistia.core.database
 
+import vn.com.quyln.mistia.core.model.planInstallmentSkipSync
+import vn.com.quyln.mistia.core.model.InstallmentSkipSyncDecision
+
 import android.content.Context
 import androidx.room.ColumnInfo
 import androidx.room.Dao
@@ -777,6 +780,33 @@ class RoomLocalStore(
             ensureCurrentFinanceOwner(expected.base.owner)
             true
         }
+    }
+
+    override suspend fun commitInstallmentSkipAcknowledgement(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation,
+        remotePlan: CloudRecord, remoteCycle: CloudRecord, zone: java.time.ZoneId): Boolean {
+        val decision = planInstallmentSkipSync(expected, queued, remotePlan, remoteCycle, zone)
+        require(decision is InstallmentSkipSyncDecision.Acknowledge && decision.record == remoteCycle)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current = readInstallmentAcknowledgementSnapshot(expected.owner, expected.planId)
+            if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+            check(removeQueuedMutationExact(queued))
+            database.cloudRecordDao().upsert(remoteCycle.toEntity(false, System.currentTimeMillis()))
+            ensureCurrentFinanceOwner(expected.owner)
+            true
+        }
+    }
+
+    override suspend fun recordInstallmentSkipFailure(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation,
+        nextAttemptAtEpochMillis: Long, errorCode: String): Boolean = database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        require(expected.batch == null && queued in expected.queues && queued.mutation.entity == CloudEntity.DUE_OCCURRENCE_RECORD &&
+            queued.mutation.subjectUserId == expected.owner.value)
+        val current = readInstallmentAcknowledgementSnapshot(expected.owner, expected.planId)
+        if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+        val recorded = recordMutationFailure(queued, nextAttemptAtEpochMillis, errorCode)
+        ensureCurrentFinanceOwner(expected.owner)
+        recorded
     }
 
     override suspend fun installmentDeletionPlanIds(owner: UserId): Set<String> = database.withTransaction {

@@ -1,0 +1,35 @@
+# Gated installment skip/undo synchronization — 2026-10-15
+
+Branch `codex/android-apk2-4-parity`; baseline `19a06cd1`.
+
+## Implemented
+
+A dedicated InstallmentSkipPushCoordinator handles only owned installment skipped metadata with null amount snapshot, paid time and linked transaction. It is composed inside the single due-domain coordinator, after causal source-delete completion, so SyncEngine entity deduplication cannot discard it. Bill writes use the existing delegate; even an overly broad source allowlist cannot send installment mutations through that generic path. Paid installment create/payment-undo intents remain held.
+
+The worker waits for pending source writes and leaves durable source-delete batches to their own worker, including after the root queue is acknowledged. It captures complete owner plan/due/ledger records, all corresponding queue retry/observed metadata and the exact causal batch. Owner/source/month/actor/base/payload checks distinguish a current skip intent from stale/corrupt data. Authoritative plan reads reject missing/deleted/archived sources, defer business changes until normal pull and accept metadata-only ACKs with the existing creation-time precision tolerance. Native selected-month scheduling is revalidated.
+
+Direct schema review found only an occurrence ID primary key, without a unique source/month constraint. Added an owner/plan/month scoped paged read, including tombstones, deterministic ID order and exact Content-Range validation. The worker consumes capped pages fully, rejects overlapping IDs/inconsistent offsets and validates every envelope/source/month. A different-ID financial sibling, including tombstoned paid history needing ledger reconciliation, holds the operation. A different live unlinked sibling defers for explicit duplicate reconciliation. Complete local sibling snapshots apply the same guard. No ledger requests or mutations are issued by this worker.
+
+Create, semantic ACK, conditional update and skip tombstone undo use exact Long versions/explicit nulls, Swift's shared conflict policy and normalized schedule/paid instants. Create409 and conditional races refetch, with a bounded retry count. Lost-response retry acknowledges the existing equivalent record. Undo of an already-pending server cycle preserves that active pending record rather than deleting it. Financial/paid/linked state never becomes an ordinary skip ACK or overwrite. Sparse undo patches explicitly identify skipped/nonfinancial state; network predicates require the server row to remain skipped with null financial fields. Skip updates also predicate pending/skipped status and null paid/link fields. Causal seven-field source-delete patches retain their separate capability.
+
+Room ACK atomically validates the pure decision, rechecks the complete raw snapshot/current owner, removes the exact queue and saves only the authoritative occurrence. Scoped retries/conflicts use the same complete snapshot fence; newer source/child/queue/batch changes cannot be cleared or assigned an old response's error. Cancellation propagates before ACK/failure writes. Failure persistence errors propagate without a generic fallback. No schema migration, source update or money write is added.
+
+App DI and the PostgREST client use the existing global+due+installment+wallet condition for the separate skip capability; its constructor defaults false. Broad source lists, delete-only capability and other entity gates cannot enable paid/card/bill/ledger creation. All10 generated flags remain false.
+
+## Verification
+
+Runtime TDD:11 initial model failures against the stub;14 initial worker cases produced12 feature failures (disabled/negative-only cases already passed);8 initial HTTPS cases produced4 expected positive-path failures. Review added one broad-delegate bypass RED, one undo-to-pending RED and two later-page sibling REDs plus the paged-read positive RED. Fixed fixture-only missing abstract methods/wrong due-day parameter and a later missing wallet-map entry before accepting results; these setup errors are not feature RED evidence. Final13 model +21 worker +10 HTTPS cases and one generic-delegate regression execute. Direct self review compared Swift saveDueSkip/undoDueSkip, occurrence serialization and preferred-occurrence/conflict behavior with the actual SQL schema. Independent review remains pending availability; the available review tool reads PR CI diagnostics only.
+
+Full **1321 JVM tests /127 suites**, zero failures/errors; app lintDebug/assembleDebug and database/management/planning AndroidTest compilation/database test APK assembly pass. Six new Room fixtures compile/package only: disk reopen/exact ACK/other-table preservation; newer queue/source CAS; ACK failure rollback; current-owner rollback before/after writes; paid or changed-source ACK rejection; scoped retry. No Room instrumentation/device execution is claimed. Room remains6, SwiftData V11 and remote contract15 unchanged.
+
+Swift609 (4contract+137data+468core), contract15, both strict localization checks and whitespace checks pass. Actual SQLite outbox7/notification3/installment-deletion11 checks pass; these do not run the new Kotlin Room orchestration. Database APK schemas1–6/bootstrap catalog match source. Logs `/tmp/mistia-installment-skip-sync-{model-red,model-green,worker-red,worker-green,network-red,focused,review-red,review-green,pending-red,siblings-red,siblings-green,full,swift}.log` (some earlier implementation logs contain corrected compile/setup errors; final full log is successful).
+
+APK `android/build/outputs/apk2/2026-10-15/mistia-0.2.0-apk2-installment-skip-sync-v65.apk`: SHA256 `a4c1206df77bab3d207546e4c15b91134322d268432d9e319e2de2d89d16e8a8`. Debug versionCode65 and actual worker DEX checked.
+
+Database test APK `android/build/outputs/apk2/2026-10-15/mistia-room-installment-skip-sync-test-v65.apk`: SHA256 `64f0d38f7a9a2717e47b7dc928b1df36ccd698c8ae0725cca0e610fe7badf4da`; actual new Room fixture DEX checked.
+
+## Limits and next work
+
+All remote behavior above is synthetic JVM/HTTPS verification. ADB empty; no emulator/Samsung/production writes, deployment or migrations. Individual PostgREST reads/CAS are not an atomic parent plus complete month transaction: another ID/source can change after the final read. Observed conflicting siblings are held; this slice does not claim a cross-record concurrency guarantee or readiness to enable production writes. Complete duplicate/financial reconciliation and an atomic backend strategy remain required before opening the gate. Live Supabase/RLS/device/visual/background evidence is still absent.
+
+Next: installment paid occurrence/payment undo reconciliation with exact linked-ledger dependencies; active-source resurrection/legacy/corrupt-batch and duplicate recovery; actual maintenance/notifications and investment fund confirmation. Card currency choice, app currency/settings/forms, remaining APK1–4/RC and independent/device checks remain unfinished. Full goal stays active.

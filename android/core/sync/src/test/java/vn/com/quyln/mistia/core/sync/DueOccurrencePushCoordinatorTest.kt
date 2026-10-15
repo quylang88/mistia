@@ -47,6 +47,13 @@ class DueOccurrencePushCoordinatorTest {
         assertEquals(DomainPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
         assertEquals(0,remote.fetchCalls);assertEquals(0,remote.writeCalls);assertSame(pending,local.queued)
     }
+    @Test fun `broad source list cannot bypass dedicated installment skip coordinator`() = runTest {
+        val row = record(0).let { it.copy(payload = JsonObject(it.payload + ("source_kind_raw_value" to JsonPrimitive("installment")))) }
+        val local = FakeLocalStore(row, queued(0).let { it.copy(mutation = it.mutation.copy(payload = row.payload)) })
+        val remote = FakeRemoteStore().apply { createdResult = row.copy(syncVersion = 1, payload = JsonObject(row.payload + ("sync_version" to JsonPrimitive(1)))) }
+        assertEquals(DomainPushSummary(), DueOccurrencePushCoordinator(local, remote, true, allowedSourceKinds = setOf(vn.com.quyln.mistia.core.model.DueSourceKind.INSTALLMENT)).pushPending(UserId(OWNER), TOKEN))
+        assertEquals(0, remote.fetchCalls + remote.writeCalls); assertNotNull(local.queued)
+    }
     @Test fun `new skipped occurrence creates at version one with nullable clears`()=runTest {
         val local=FakeLocalStore(record(0),queued(0));val remote=FakeRemoteStore().apply {createdResult=record(1)}
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
