@@ -9,6 +9,34 @@ import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class CreditCardEditorStateTest {
+    @Test fun `opening a supported currency card groups an exact large limit`() {
+        for (currency in listOf("JPY", "VND")) {
+            val state = CreditCardEditorState.edit(wallet().copy(currencyCode = currency), profile().copy(creditLimitMinor = 9007199254740993L))
+            assertEquals("9,007,199,254,740,993", state.creditLimitText)
+            assertEquals(9007199254740993L, state.toDraft().draft?.creditLimitMinor)
+        }
+    }
+
+    @Test fun `opening the maximum credit limit keeps every digit`() {
+        val state = CreditCardEditorState.edit(wallet(), profile().copy(creditLimitMinor = Long.MAX_VALUE))
+        assertEquals("9,223,372,036,854,775,807", state.creditLimitText)
+        assertEquals(Long.MAX_VALUE, state.toDraft().draft?.creditLimitMinor)
+    }
+
+    @Test fun `zero blank negative malformed and overflowing credit limits retain validation`() {
+        val state = CreditCardEditorState.new().copy(name = "Card")
+        for (text in listOf("", "0")) assertEquals(0L, state.copy(creditLimitText = text).toDraft().draft?.creditLimitMinor)
+        for (text in listOf("-1", "1.5", "bad", "9,223,372,036,854,775,808")) {
+            assertEquals(CreditCardEditorValidation.INVALID_CREDIT_LIMIT, state.copy(creditLimitText = text).toDraft().validation)
+        }
+    }
+
+    @Test fun `imported fractional card limit preserves existing decimal semantics`() {
+        val state = CreditCardEditorState.edit(wallet().copy(currencyCode = "USD"), profile().copy(creditLimitMinor = 1234))
+        assertEquals("12.34", state.creditLimitText)
+        assertEquals(1234L, state.toDraft().draft?.creditLimitMinor)
+    }
+
     @Test
     fun `new card uses iOS billing defaults and card appearance`() {
         val state = CreditCardEditorState.new(nextSortOrder = 3)

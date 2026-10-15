@@ -51,6 +51,7 @@ import vn.com.quyln.mistia.core.model.CreditCardNetwork
 import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletKind
+import vn.com.quyln.mistia.core.model.currencyAmountInput
 
 data class CreditCardEditorState(
     val walletId: String?,
@@ -69,6 +70,10 @@ data class CreditCardEditorState(
     val iconColorHex: String,
     val sortOrder: Int,
 ) {
+    fun withCreditLimit(raw: String): CreditCardEditorState = copy(
+        creditLimitText = currencyAmountInput(raw, currencyCode),
+    )
+
     fun withLast4(raw: String): CreditCardEditorState = copy(
         last4 = raw.filter(Char::isDigit).take(4),
     )
@@ -138,7 +143,7 @@ data class CreditCardEditorState(
                 issuerName = profile.issuerName,
                 network = profile.network ?: CreditCardNetwork.OTHER,
                 last4 = profile.last4,
-                creditLimitText = formatMinorInput(profile.creditLimitMinor, wallet.currencyCode),
+                creditLimitText = currencyAmountInput(formatMinorInput(profile.creditLimitMinor, wallet.currencyCode), wallet.currencyCode),
                 statementClosingDay = profile.statementClosingDay,
                 paymentDueDay = profile.paymentDueDay,
                 notes = profile.notes.orEmpty(),
@@ -352,8 +357,8 @@ fun CreditCardEditorSheet(
                     )
                     OutlinedTextField(
                         value = state.creditLimitText,
-                        onValueChange = { state = state.copy(creditLimitText = it) },
-                        modifier = Modifier.fillMaxWidth(),
+                        onValueChange = { state = state.withCreditLimit(it) },
+                        modifier = Modifier.fillMaxWidth().testTag("card.creditLimit"),
                         label = { Text(stringResource(R.string.management_management_credit_limit)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
