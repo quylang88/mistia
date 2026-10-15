@@ -338,8 +338,10 @@ data class TransactionDraft(
                             val mode = conversionMode
                                 ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
                             val rate = exchangeRateDecimalString.transactionOptional()
-                                ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                            if (runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1) {
+                            if (mode == CurrencyConversionMode.APP_RATE && rate == null) {
+                                transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                            }
+                            if (rate != null && runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1) {
                                 transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE)
                             }
                             val rateDate = exchangeRateDate.transactionOptional()

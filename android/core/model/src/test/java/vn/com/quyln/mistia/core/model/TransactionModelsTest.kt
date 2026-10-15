@@ -6,6 +6,23 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TransactionModelsTest {
+    @Test fun `manual cross currency pair does not require an invented rate`() {
+        val draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+            destinationWalletId = DESTINATION_WALLET_ID, destinationAmountMinor = 16500, conversionMode = CurrencyConversionMode.MANUAL)
+        val mutation = draft.toMutation(UserId(OWNER), null, wallet(SOURCE_WALLET_ID, WalletKind.CASH, "JPY"),
+            wallet(DESTINATION_WALLET_ID, WalletKind.CASH, "VND"), null, DEVICE, NOW)
+        assertEquals(100L, mutation.record.amountMinor); assertEquals(16500L, mutation.record.destinationAmountMinor)
+        assertNull(mutation.record.exchangeRateDecimalString)
+        assertEquals(JsonNull, mutation.pending.payload?.get("exchange_rate_decimal_string"))
+    }
+    @Test fun `app rate still requires a positive actual rate`() {
+        val draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
+            destinationWalletId = DESTINATION_WALLET_ID, destinationAmountMinor = 16500, conversionMode = CurrencyConversionMode.APP_RATE)
+        val source = wallet(SOURCE_WALLET_ID, WalletKind.CASH, "JPY"); val destination = wallet(DESTINATION_WALLET_ID, WalletKind.CASH, "VND")
+        assertEquals(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED, failureReason(draft, source, destination))
+        assertEquals(TransactionValidationError.INVALID_EXCHANGE_RATE, failureReason(draft.copy(exchangeRateDecimalString = "0"), source, destination))
+    }
+
     @Test
     fun `counterparty normalization matches Foundation folding vectors`() {
         assertEquals("đang", normalizeCounterpartyName("  Đặng  "))

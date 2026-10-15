@@ -124,13 +124,6 @@ data class TransactionEditorState(
                     validation = TransactionEditorValidation.INVALID_DESTINATION_AMOUNT,
                 )
         }
-        val manualRate = if (isCrossCurrency && conversionMode == CurrencyConversionMode.MANUAL) {
-            exchangeRateText.trim().takeIf(String::isNotEmpty)?.takeIf {
-                runCatching { BigDecimal(it) }.getOrNull()?.signum() == 1
-            } ?: return TransactionEditorDraftResult(
-                validation = TransactionEditorValidation.INVALID_EXCHANGE_RATE,
-            )
-        } else null
         if (isCrossCurrency && conversionMode == null) {
             return TransactionEditorDraftResult(validation = TransactionEditorValidation.INVALID_EXCHANGE_RATE)
         }
@@ -151,14 +144,13 @@ data class TransactionEditorState(
                 categoryId = categoryId,
                 destinationAmountMinor = destinationAmount,
                 conversionMode = if (isCrossCurrency) conversionMode else null,
-                exchangeRateDecimalString = appRate?.rateDecimalString ?: manualRate,
+                exchangeRateDecimalString = appRate?.rateDecimalString,
                 exchangeRateProvider = when {
                     appRate != null -> appRate.provider
-                    isCrossCurrency -> exchangeRateProvider
+                    isCrossCurrency -> "manual"
                     else -> null
                 },
-                exchangeRateDate = appRate?.rateDate
-                    ?: exchangeRateDate.takeIf { isCrossCurrency },
+                exchangeRateDate = appRate?.rateDate,
             ),
         )
     }

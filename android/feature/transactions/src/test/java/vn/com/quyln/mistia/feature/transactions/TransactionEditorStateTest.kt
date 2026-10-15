@@ -15,6 +15,19 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test fun `manual FX saves an explicit pair without rate entry`() {
+        val state = TransactionEditorState.edit(transaction()).copy(exchangeRateText = "")
+        val result = state.toDraft("JPY", "VND")
+        assertNull(result.validation); assertEquals(10000L, result.draft?.amountMinor); assertEquals(1650000L, result.draft?.destinationAmountMinor)
+        assertNull(result.draft?.exchangeRateDecimalString); assertEquals("manual", result.draft?.exchangeRateProvider); assertNull(result.draft?.exchangeRateDate)
+    }
+    @Test fun `editing manual FX discards stale provider rate and date like Swift`() {
+        val state = TransactionEditorState.edit(transaction()).copy(exchangeRateProvider = "old-app-provider")
+        val result = state.toDraft("JPY", "VND")
+        assertNull(result.validation); assertNull(result.draft?.exchangeRateDecimalString)
+        assertEquals("manual", result.draft?.exchangeRateProvider); assertNull(result.draft?.exchangeRateDate)
+    }
+
     @Test fun `saved transaction draft cannot restore under another owner or record`() {
         val state = TransactionEditorState.edit(transaction())
         val saver = TransactionEditorState.scopedSaver(OWNER, TRANSACTION_ID)
@@ -210,9 +223,9 @@ class TransactionEditorStateTest {
         assertNull(result.validation)
         assertEquals(10_000L, result.draft?.amountMinor)
         assertEquals(1_650_000L, result.draft?.destinationAmountMinor)
-        assertEquals("165.000000", result.draft?.exchangeRateDecimalString)
+        assertNull(result.draft?.exchangeRateDecimalString)
         assertEquals("manual", result.draft?.exchangeRateProvider)
-        assertEquals("2026-09-23", result.draft?.exchangeRateDate)
+        assertNull(result.draft?.exchangeRateDate)
     }
 
     @Test

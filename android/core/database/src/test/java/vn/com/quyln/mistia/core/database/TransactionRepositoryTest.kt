@@ -33,6 +33,17 @@ import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class TransactionRepositoryTest {
+    @Test fun `manual FX queues exact amounts and explicit null rate`() = runTest {
+        val store = TransactionMemoryStore(); val repo = OfflineFirstFinanceRepository(store)
+        repo.saveWallet(UserId(OWNER), walletDraft(SOURCE_WALLET_ID, "JPY"), DEVICE, NOW).getOrThrow()
+        repo.saveWallet(UserId(OWNER), walletDraft(DESTINATION_WALLET_ID, "VND"), DEVICE, NOW).getOrThrow()
+        val result = repo.saveTransaction(UserId(OWNER), transferDraft(1650000, "165").copy(exchangeRateDecimalString = null, exchangeRateProvider = "manual"), DEVICE, NOW).getOrThrow()
+        assertEquals(10000L, result.amountMinor); assertEquals(1650000L, result.destinationAmountMinor)
+        val payload = store.outbox.getValue(key(OWNER, CloudEntity.LEDGER_TRANSACTION, TRANSACTION_ID)).payload!!
+        assertEquals(JsonNull, payload["exchange_rate_decimal_string"]); assertEquals(JsonPrimitive("manual"), payload["exchange_rate_provider"])
+        assertTrue(repo.observeTransactions(UserId(OTHER_OWNER)).first().isEmpty())
+    }
+
     @Test
     fun `save creates owner scoped transaction and coalesced outbox`() = runTest {
         val store = TransactionMemoryStore()

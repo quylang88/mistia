@@ -502,15 +502,17 @@ private fun OwnedTransactionEditorSheet(
                             readOnly = state.conversionMode == CurrencyConversionMode.APP_RATE,
                             singleLine = true,
                         )
-                        OutlinedTextField(
-                            value = displayedFxState.exchangeRateText,
-                            onValueChange = { state = state.copy(exchangeRateText = it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(stringResource(R.string.settings_currency_rate_value)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            readOnly = state.conversionMode == CurrencyConversionMode.APP_RATE,
-                            singleLine = true,
-                        )
+                        if (state.conversionMode == CurrencyConversionMode.APP_RATE) {
+                            OutlinedTextField(
+                                value = displayedFxState.exchangeRateText,
+                                onValueChange = {},
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text(stringResource(R.string.settings_currency_rate_value)) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                readOnly = true,
+                                singleLine = true,
+                            )
+                        }
                     }
                 }
             }

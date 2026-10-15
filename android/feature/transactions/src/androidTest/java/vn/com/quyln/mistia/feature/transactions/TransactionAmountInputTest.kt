@@ -9,6 +9,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.*
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
@@ -71,7 +73,6 @@ class TransactionAmountInputTest {
         val usd = compose.onNode(hasText(context.getString(R.string.transactions_transactioneditor_amount) + " (USD)") and hasSetTextAction())
         usd.performScrollTo().assertTextContains("1000")
         destinationField().performScrollTo().performTextReplacement("2000")
-        compose.onNode(hasText(context.getString(R.string.settings_currency_rate_value)) and hasSetTextAction()).performScrollTo().performTextReplacement("2")
         save(); compose.waitUntil(5000) { runBlocking { repo.observeTransactions(owner).first().size == 1 } }
         val saved = runBlocking { repo.observeTransactions(owner).first().single() }
         Assert.assertEquals(100000L, saved.amountMinor); Assert.assertEquals("USD", saved.sourceCurrencyCode)
@@ -84,6 +85,23 @@ class TransactionAmountInputTest {
         compose.onAllNodesWithText("JPY · JPY")[0].performScrollTo().performClick()
         sourceField().performScrollTo().assertTextContains("1,000")
         Assert.assertTrue(runBlocking { repo.observeTransactions(owner).first().isEmpty() })
+    }
+    @Test fun manualFxCanSaveWithoutEnteringAnyRate() {
+        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(owner.value, null, wallets, emptyList(), emptyList(), now,
+            initialState = initial().copy(exchangeRateText = ""), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
+        sourceField().performScrollTo().performTextReplacement("1000"); destinationField().performScrollTo().performTextReplacement("2000")
+        save(); compose.waitUntil(5000) { runBlocking { repo.observeTransactions(owner).first().size == 1 } }
+        val saved = runBlocking { repo.observeTransactions(owner).first().single() }
+        Assert.assertEquals(1000L, saved.amountMinor); Assert.assertEquals(2000L, saved.destinationAmountMinor)
+        Assert.assertNull(saved.exchangeRateDecimalString); Assert.assertNull(saved.exchangeRateDate); Assert.assertEquals("manual", saved.exchangeRateProvider)
+        val payload = runBlocking { store.pendingMutations(owner, CloudEntity.LEDGER_TRANSACTION, Long.MAX_VALUE).single().mutation.payload!! }
+        Assert.assertEquals(JsonNull, payload["exchange_rate_decimal_string"]); Assert.assertEquals(JsonNull, payload["exchange_rate_date"])
+        Assert.assertEquals(JsonPrimitive("manual"), payload["exchange_rate_provider"])
+    }
+    @Test fun manualFxDoesNotShowAnExtraRateInput() {
+        compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(owner.value, null, wallets, emptyList(), emptyList(), now,
+            initialState = initial(), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
+        compose.onNodeWithText(context.getString(R.string.settings_currency_rate_value)).assertDoesNotExist()
     }
     @Test fun appRateGroupsDerivedReadOnlyAmountAndPersistsExactPair() {
         val rates = listOf(ExchangeRateSnapshot("JPY", "VND", "165.5", "fixture", 1L, "2026-10-15"))
