@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,6 +54,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -65,6 +72,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.CategoryHierarchyRole
@@ -174,6 +182,22 @@ private fun OwnedTransactionEditorSheet(
         )
     } else {
         state
+    }
+
+    val sourceCalculatorAvailable = sourceWallet?.currencyCode in setOf("JPY", "VND")
+    val destinationCalculatorAvailable = isCrossCurrency && state.conversionMode == CurrencyConversionMode.MANUAL &&
+        destinationWallet?.currencyCode in setOf("JPY", "VND")
+    val calculatorScope = listOf(ownerId, transaction?.id.orEmpty(), state.primaryKind.name, state.transferSubtype?.name.orEmpty(),
+        state.sourceWalletId.orEmpty(), sourceWallet?.currencyCode.orEmpty(), state.destinationWalletId.orEmpty(),
+        destinationWallet?.currencyCode.orEmpty(), state.conversionMode?.name.orEmpty()).joinToString(":")
+    var calculatorField by rememberSaveable(calculatorScope, stateSaver = listSaver<String?, String>(
+        save = { listOf(calculatorScope, it.orEmpty()) },
+        restore = { values -> values.takeIf { it.size == 2 && it[0] == calculatorScope }?.get(1)?.takeIf { it == "source" || it == "destination" } },
+    )) { mutableStateOf<String?>(null) }
+    val focus = LocalFocusManager.current
+    fun changeAmount(value: String) {
+        state = state.withAmount(value, sourceWallet?.currencyCode)
+            .withCurrentAppRate(sourceWallet?.currencyCode, destinationWallet?.currencyCode, exchangeRates)
     }
 
     ModalBottomSheet(onDismissRequest = { if (!isSaving) onDismiss() }) {
@@ -286,19 +310,12 @@ private fun OwnedTransactionEditorSheet(
                     )
                     OutlinedTextField(
                         value = state.amountText,
-                        onValueChange = { value ->
-                            val changed = state.withAmount(value, sourceWallet?.currencyCode)
-                            state = if (changed.conversionMode == CurrencyConversionMode.APP_RATE) {
-                                changed.withCurrentAppRate(
-                                    sourceWallet?.currencyCode,
-                                    destinationWallet?.currencyCode,
-                                    exchangeRates,
-                                )
-                            } else {
-                                changed
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
+                        onValueChange = { changeAmount(it) },
+                        modifier = Modifier.fillMaxWidth().testTag("transaction.amount"),
+                        trailingIcon = { if (sourceCalculatorAvailable) IconButton(enabled = !isSaving,
+                            onClick = { focus.clearFocus(); calculatorField = "source" }, modifier = Modifier.testTag("transaction.amount.calculator")) {
+                            Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                        } },
                         label = {
                             Text(
                                 sourceWallet?.currencyCode?.let {
@@ -491,7 +508,11 @@ private fun OwnedTransactionEditorSheet(
                         OutlinedTextField(
                             value = displayedFxState.destinationAmountText,
                             onValueChange = { state = state.withDestinationAmount(it, destinationWallet?.currencyCode) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().testTag("transaction.destinationAmount"),
+                            trailingIcon = { if (destinationCalculatorAvailable) IconButton(enabled = !isSaving,
+                                onClick = { focus.clearFocus(); calculatorField = "destination" }, modifier = Modifier.testTag("transaction.destinationAmount.calculator")) {
+                                Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                            } },
                             label = {
                                 Text(
                                     "${stringResource(R.string.transactions_transactioneditor_destination_amount)} " +
@@ -553,6 +574,17 @@ private fun OwnedTransactionEditorSheet(
                 modifier = Modifier.padding(bottom = 24.dp),
             )
         }
+    }
+
+    val calculatesSource = calculatorField == "source" && sourceCalculatorAvailable
+    val calculatesDestination = calculatorField == "destination" && destinationCalculatorAvailable
+    if (!isSaving && (calculatesSource || calculatesDestination)) {
+        AmountCalculatorDialog(if (calculatesSource) state.amountText else state.destinationAmountText, "$calculatorScope:$calculatorField",
+            onCommit = {
+                if (calculatesSource) changeAmount(it)
+                else state = state.withDestinationAmount(it, destinationWallet?.currencyCode)
+                validation = null; operationError = null; genericFailure = false
+            }, onDismiss = { calculatorField = null })
     }
 
     if (showsDatePicker) {
