@@ -16,6 +16,8 @@ internal class OfflineBillPaymentRepository(
     private val currentZone: ()->ZoneId,
     private val catalog: SystemCategoryCatalog?,
     private val automaticText: ((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)? = null,
+    private val sourceKind: DueSourceKind = DueSourceKind.RECURRING_BILL,
+    private val expectedInstallment: InstallmentPlanRecord? = null,
 ) : BillPaymentRepository {
     constructor(store:LocalStore,zone:ZoneId,catalog:SystemCategoryCatalog?,automaticText:((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)?=null):
         this(store,{zone},catalog,automaticText)
@@ -23,17 +25,17 @@ internal class OfflineBillPaymentRepository(
     override suspend fun payRecurringBill(owner: UserId, request: BillPaymentRequest, deviceId: String, now: String): Result<SavedBillPayment> = result {
         val zone=currentZone()
         val snapshot = snapshot(owner, request.billId, request.month)
-        val bill = RecurringBillPlanRecord.fromCloudRecord(snapshot.bill)
+        val bill = ScheduledExpenseSource(snapshot.bill, sourceKind)
         if(request.automatic) {
             if(request.walletId!=null || request.amountMinorOverride!=null) fail(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE)
             if(bill.autoPayEnabled!=true || bill.isPaused) fail(BillPaymentError.AUTO_PAY_NOT_DUE)
         }
         val occurrences = owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
-        val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue=="recurringBill" && it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() }
+        val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue==sourceKind.wireValue && it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() }
         if (cycle.any { it.status!=DueStatus.PENDING || it.linkedTransactionId!=null }) fail(BillPaymentError.CYCLE_NOT_PENDING)
         // Reuse the prior payment identity when undo is followed by repayment.
         // An in-flight DELETE can then conflict with one UPSERT, never a second expense ID.
-        val undone = occurrences.filter { it.deletedAt!=null && it.sourceKindWireValue=="recurringBill" &&
+        val undone = occurrences.filter { it.deletedAt!=null && it.sourceKindWireValue==sourceKind.wireValue &&
             it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() && it.status==DueStatus.PAID && it.linkedTransactionId!=null }
         val oldLinked = undone.mapNotNull { it.linkedTransactionId }.toSet()
         if (oldLinked.size>1) fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
@@ -50,7 +52,7 @@ internal class OfflineBillPaymentRepository(
                 fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
             tx
         }
-        val due = recurringBillDueRows(owner, listOf(bill), occurrences.filter { it.deletedAt==null }, request.month, zone).singleOrNull()
+        val due = bill.due(owner, occurrences.filter { it.deletedAt == null }, request.month, zone)
             ?: fail(BillPaymentError.NOT_SCHEDULED)
         if(request.automatic && due.autoPayDate?.atZone(zone)?.toLocalDate()!=Instant.parse(now).atZone(zone).toLocalDate())
             fail(BillPaymentError.AUTO_PAY_NOT_DUE)
@@ -58,7 +60,9 @@ internal class OfflineBillPaymentRepository(
         val walletID = request.walletId?.value ?: bill.paymentWalletId
         val wallet = wallets.singleOrNull { it.id==walletID && !it.isArchived && it.kind!=null }
             ?: fail(BillPaymentError.INVALID_WALLET)
-        if (!billPaymentCurrenciesMatch(bill.currencyCode, wallet.currencyCode)) fail(BillPaymentError.WALLET_CURRENCY_MISMATCH)
+        if (sourceKind == DueSourceKind.INSTALLMENT && wallet.kind == WalletKind.CREDIT_CARD) fail(BillPaymentError.INVALID_WALLET)
+        if (!(if (sourceKind == DueSourceKind.INSTALLMENT) installmentPaymentCurrenciesMatch(bill.currencyCode, wallet.currencyCode)
+            else billPaymentCurrenciesMatch(bill.currencyCode, wallet.currencyCode))) fail(BillPaymentError.WALLET_CURRENCY_MISMATCH)
         val amount = (request.amountMinorOverride ?: due.amountMinor)?.takeIf { it>0 } ?: fail(BillPaymentError.MISSING_AMOUNT)
         val activePostings = owned(snapshot, CloudEntity.INVESTMENT_POSTING).filter { it.deletedAt==null }
         if (wallet.kind==WalletKind.INVESTMENT || activePostings.any { (it.payload["wallet_id"] as? JsonPrimitive)?.content==wallet.id })
@@ -66,7 +70,7 @@ internal class OfflineBillPaymentRepository(
         val categories = owned(snapshot, CloudEntity.TRANSACTION_CATEGORY).map(TransactionCategoryRecord::fromCloudRecord).filter { it.deletedAt==null }
         val definitions = requireNotNull(catalog) { "System category catalog unavailable" }.definitions
         val selected = categories.firstOrNull { it.id==bill.categoryId }
-        val key = selected?.systemKey?.takeIf { candidate -> definitions.any { it.key==candidate } }
+        val key = if (sourceKind == DueSourceKind.INSTALLMENT) "loan_repayment" else selected?.systemKey?.takeIf { candidate -> definitions.any { it.key==candidate } }
             ?: definitions.firstOrNull { it.isActive && it.iconSymbolName==bill.iconSymbolName }?.key ?: "billing"
         val categoryWrites = mutableListOf<TransactionCategoryRecord>()
         val allCategories = owned(snapshot, CloudEntity.TRANSACTION_CATEGORY).map(TransactionCategoryRecord::fromCloudRecord)
@@ -95,7 +99,7 @@ internal class OfflineBillPaymentRepository(
         val timestamp = if (priorClock!=null && !occurredAt.isAfter(priorClock)) priorClock.plusMillis(1).toString() else occurredAt.toString()
         val device = UUID.fromString(deviceId).toString()
         // Swift's ensureSystemCategory also permits retained archived system categories.
-        val presentation=if(request.automatic) automaticText?.invoke(bill,amount) else null
+        val presentation=if(request.automatic) automaticText?.invoke(requireNotNull(bill.bill),amount) else null
         presentation?.let {require(it.transactionTitle.isNotBlank() && it.successTitle.isNotBlank())}
         val mutation = TransactionDraft(primaryKind=TransactionPrimaryKind.EXPENSE, title=presentation?.transactionTitle ?: bill.name,
             amountMinor=amount, occurredAt=occurredAt.toString(), sourceWalletId=wallet.id, categoryId=category.id)
@@ -111,7 +115,7 @@ internal class OfflineBillPaymentRepository(
         mutation.record.requireAffordable(wallets, transactions, profiles, null)
         val paymentOccurrences = cycle+undone
         val paid = if (paymentOccurrences.isEmpty()) listOf(DueOccurrenceRecord(UUID.randomUUID().toString(), owner.value,
-            "recurringBill", bill.id, request.month.toString(), due.dueDate.toString(), amount, "paid", timestamp,
+            sourceKind.wireValue, bill.id, request.month.toString(), due.dueDate.toString(), amount, "paid", timestamp,
             mutation.record.id, timestamp, timestamp, null, 0, device)) else paymentOccurrences.map {
             it.copy(scheduledDate=due.dueDate.toString(), amountMinorSnapshot=amount, statusWireValue="paid", paidAt=timestamp,
                 linkedTransactionId=mutation.record.id, updatedAt=timestamp, deletedAt=null, lastModifiedByDeviceId=device)
@@ -120,7 +124,7 @@ internal class OfflineBillPaymentRepository(
         val notification=presentation?.takeIf {it.emitNotification}?.let {text -> AppNotificationRecord(owner.value,
             "mistia.bill.autopay.success.${bill.id.lowercase()}.${request.month}",text.successTitle,text.successBody,"billAutoPaymentSucceeded",
             resourceType="bill",resourceId=bill.id,createdAt=occurredAt.toString(),updatedAt=occurredAt.toString(),metadata=buildJsonObject {
-                put("sourceKind","recurringBill");put("sourceId",bill.id);put("dueMonthKey",request.month.toString());put("dueDate",due.dueDate.toString())
+                put("sourceKind",sourceKind.wireValue);put("sourceId",bill.id);put("dueMonthKey",request.month.toString());put("dueDate",due.dueDate.toString())
                 put("requiresAmountInput",false);put("currencyCode",bill.currencyCode);put("billName",bill.name);put("linkedPaymentWalletId",wallet.id)
             })}
         store.commitBillMoneyMutations(snapshot.copy(automaticPaymentNotification=notification), writes.map { preservePayloadExtensions(snapshot, it) })
@@ -131,7 +135,7 @@ internal class OfflineBillPaymentRepository(
         val zone=currentZone()
         val snapshot = snapshot(owner, billId, month)
         val occurrences = owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
-        val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue=="recurringBill" && it.sourceId==billId.value && it.selectedMonthKey==month.toString() && it.status==DueStatus.PAID }
+        val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue==sourceKind.wireValue && it.sourceId==billId.value && it.selectedMonthKey==month.toString() && it.status==DueStatus.PAID }
         if (cycle.isEmpty()) return@result
         val linked = cycle.mapNotNull { it.linkedTransactionId }.toSet()
         val allTransactions = owned(snapshot, CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord)
@@ -170,12 +174,14 @@ internal class OfflineBillPaymentRepository(
 
     private suspend fun snapshot(owner: UserId, billId: RecordId, month: YearMonth): BillMoneySnapshot {
         val records = CloudEntity.entries.associateWith { store.recordsIncludingDeleted(owner, it.table) }
-        val billRow = records.getValue(CloudEntity.RECURRING_BILL_PLAN).firstOrNull {
+        val sourceEntity = if (sourceKind == DueSourceKind.INSTALLMENT) CloudEntity.INSTALLMENT_PLAN else CloudEntity.RECURRING_BILL_PLAN
+        val billRow = records.getValue(sourceEntity).firstOrNull {
             it.id==billId.value && it.ownerUserId==owner.value && (it.payload["user_id"] as? JsonPrimitive)?.content==owner.value && it.deletedAt==null
         } ?: fail(BillPaymentError.NOT_FOUND)
-        val bill = RecurringBillPlanRecord.fromCloudRecord(billRow)
+        val bill = ScheduledExpenseSource(billRow, sourceKind)
         if (bill.id!=billRow.id || bill.ownerUserId!=owner.value || bill.deletedAt!=null || bill.isArchived) fail(BillPaymentError.NOT_FOUND)
-        return BillMoneySnapshot(owner, billRow, month, records, store.billMoneyReceiptTransactionIds(owner))
+        if (sourceKind == DueSourceKind.INSTALLMENT && (expectedInstallment == null || !bill.matchesExpected(expectedInstallment))) fail(BillPaymentError.SOURCE_CHANGED)
+        return BillMoneySnapshot(owner, billRow, month, records, store.billMoneyReceiptTransactionIds(owner), sourceKind = sourceKind)
     }
     private fun owned(snapshot: BillMoneySnapshot, entity: CloudEntity) = snapshot.recordsByEntity.getValue(entity).filter { row ->
         require(row.ownerUserId==snapshot.owner.value && row.entity==entity.table)

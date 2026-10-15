@@ -66,6 +66,14 @@ repository and atomic metadata save validator enforce the same rule. Actual Andr
 payment/undo remains the next feature. Swift609 and unsigned iPhone app build pass;
 Android1244 JVM tests pass; two Room +one Compose fixtures compile only.
 
+Installment payment/undo repository is completed locally (APK63):
+`evidence/2026-10-15-installment-payment-repository.md`. Actual FinanceRepository API,
+source baseline/schedule, same-currency/current affordability, loan-repayment category,
+atomic financial snapshots, receipt/statement/settlement/investment guards and stable
+undo/repay IDs are implemented.22 new cases execute with49 bill regression cases;
+four Room fixtures compile/package only. Native payment sheet/actions are next;
+ordinary occurrence/undo push and investment fund confirmation remain unfinished.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.

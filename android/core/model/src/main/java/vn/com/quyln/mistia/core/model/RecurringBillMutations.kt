@@ -87,9 +87,9 @@ fun DueOccurrenceRecord.pendingMutation(kind:MutationKind=MutationKind.UPSERT)=P
     CloudEntity.DUE_OCCURRENCE_RECORD,id,ownerUserId,kind,toPayload(),updatedAt,syncVersion,requireNotNull(lastModifiedByDeviceId))
 
 /** Includes viewer-envelope rows for snapshot guards, but never grants mutation ownership. */
-fun billCycleRecords(rows:List<CloudRecord>,bill:CloudRecord,monthKey:String):List<CloudRecord> = rows.filter {row ->
+fun billCycleRecords(rows:List<CloudRecord>,bill:CloudRecord,monthKey:String,sourceKind:DueSourceKind=DueSourceKind.RECURRING_BILL):List<CloudRecord> = rows.filter {row ->
     row.entity==CloudEntity.DUE_OCCURRENCE_RECORD.table && row.ownerUserId==bill.ownerUserId &&
-        (row.payload["source_kind_raw_value"] as? kotlinx.serialization.json.JsonPrimitive)?.content=="recurringBill" &&
+        (row.payload["source_kind_raw_value"] as? kotlinx.serialization.json.JsonPrimitive)?.content==sourceKind.wireValue &&
         (row.payload["source_id"] as? kotlinx.serialization.json.JsonPrimitive)?.content==bill.id &&
         (row.payload["selected_month_key"] as? kotlinx.serialization.json.JsonPrimitive)?.content==monthKey
 }.sortedBy {it.id}

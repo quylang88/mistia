@@ -937,7 +937,8 @@ class RoomLocalStore(
             })
             require(snapshot.receiptTransactionIds==billMoneyReceiptTransactionIds(snapshot.owner)) { "Receipt dependencies changed during bill payment" }
             commitMutations(mutations)
-            resolveBillNotificationsInTransaction(snapshot.bill,snapshot.month.toString(),mutations.map {it.first})
+            if (snapshot.sourceKind == vn.com.quyln.mistia.core.model.DueSourceKind.RECURRING_BILL)
+                resolveBillNotificationsInTransaction(snapshot.bill,snapshot.month.toString(),mutations.map {it.first})
             snapshot.automaticPaymentNotification?.takeIf {billRemindersEnabled()}?.let {incoming ->
                 val existing=localNotifications(snapshot.owner).singleOrNull {it.key==incoming.key}
                 val notification=upsertLocalNotification(existing,incoming)
