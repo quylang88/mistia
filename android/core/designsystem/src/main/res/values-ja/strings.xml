@@ -1403,6 +1403,8 @@
     <string name="settings_shortcut_personal_utilities_section">個人ユーティリティ</string>
     <string name="settings_shortcut_title">ショートカット</string>
     <string name="settings_title">設定</string>
+    <string name="shared_amount_calculator_clear">計算をクリア</string>
+    <string name="shared_amount_calculator_delete_digit">最後の文字を削除</string>
     <string name="shared_amount_calculator_division_by_zero">0で割ることはできません</string>
     <string name="shared_amount_calculator_expression">計算式</string>
     <string name="shared_amount_calculator_integer_positive_required">結果は正の整数にしてください</string>

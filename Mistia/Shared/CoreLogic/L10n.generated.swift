@@ -3612,6 +3612,10 @@ nonisolated enum L10n {
     nonisolated enum shared {
 
         nonisolated enum amountCalculator {
+            static var clear: String { L10n.tr("shared.amountCalculator.clear", vi: "Xóa phép tính", en: "Clear calculation", ja: "計算をクリア") }
+            static func clear(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.clear", vi: "Xóa phép tính", en: "Clear calculation", ja: "計算をクリア", language: language) }
+            static var deleteDigit: String { L10n.tr("shared.amountCalculator.deleteDigit", vi: "Xóa ký tự cuối", en: "Delete last character", ja: "最後の文字を削除") }
+            static func deleteDigit(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.deleteDigit", vi: "Xóa ký tự cuối", en: "Delete last character", ja: "最後の文字を削除", language: language) }
             static var divisionByZero: String { L10n.tr("shared.amountCalculator.divisionByZero", vi: "Không thể chia cho 0", en: "Cannot divide by 0", ja: "0で割ることはできません") }
             static func divisionByZero(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.divisionByZero", vi: "Không thể chia cho 0", en: "Cannot divide by 0", ja: "0で割ることはできません", language: language) }
             static var expression: String { L10n.tr("shared.amountCalculator.expression", vi: "Phép tính", en: "Expression", ja: "計算式") }

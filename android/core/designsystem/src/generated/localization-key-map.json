@@ -1401,6 +1401,8 @@
   "settings.shortcut.personalUtilitiesSection": "settings_shortcut_personal_utilities_section",
   "settings.shortcut.title": "settings_shortcut_title",
   "settings.title": "settings_title",
+  "shared.amountCalculator.clear": "shared_amount_calculator_clear",
+  "shared.amountCalculator.deleteDigit": "shared_amount_calculator_delete_digit",
   "shared.amountCalculator.divisionByZero": "shared_amount_calculator_division_by_zero",
   "shared.amountCalculator.expression": "shared_amount_calculator_expression",
   "shared.amountCalculator.integerPositiveRequired": "shared_amount_calculator_integer_positive_required",

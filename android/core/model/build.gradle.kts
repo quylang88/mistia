@@ -9,6 +9,7 @@ val syncCategoryTestResources by tasks.registering(org.gradle.api.tasks.Sync::cl
     from(rootProject.file("../Mistia/Shared/CoreLogic/MistiaSystemCategories.json"))
     from(rootProject.file("../contracts/golden/credit-card-statements-v1.json"))
     from(rootProject.file("../contracts/golden/installment-due-v1.json"))
+    from(rootProject.file("../contracts/golden/amount-calculator-v1.json"))
     from(rootProject.file("../Mistia/Localizable.xcstrings"))
     into(generatedCategoryTestResources)
 }

@@ -32201,6 +32201,50 @@
         }
       }
     },
+    "shared.amountCalculator.deleteDigit" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa ký tự cuối"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete last character"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最後の文字を削除"
+          }
+        }
+      }
+    },
+    "shared.amountCalculator.clear" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa phép tính"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear calculation"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "計算をクリア"
+          }
+        }
+      }
+    },
     "shared.amountCalculator.divisionByZero" : {
       "extractionState" : "stale",
       "localizations" : {

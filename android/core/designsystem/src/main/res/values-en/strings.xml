@@ -1403,6 +1403,8 @@
     <string name="settings_shortcut_personal_utilities_section">Personal utilities</string>
     <string name="settings_shortcut_title">Mistia shortcut</string>
     <string name="settings_title">Settings</string>
+    <string name="shared_amount_calculator_clear">Clear calculation</string>
+    <string name="shared_amount_calculator_delete_digit">Delete last character</string>
     <string name="shared_amount_calculator_division_by_zero">Cannot divide by 0</string>
     <string name="shared_amount_calculator_expression">Expression</string>
     <string name="shared_amount_calculator_integer_positive_required">Result must be a positive integer</string>

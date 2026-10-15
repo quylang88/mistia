@@ -1403,6 +1403,8 @@
     <string name="settings_shortcut_personal_utilities_section">Tiện ích cá nhân</string>
     <string name="settings_shortcut_title">Lối tắt Mistia</string>
     <string name="settings_title">Cài đặt</string>
+    <string name="shared_amount_calculator_clear">Xóa phép tính</string>
+    <string name="shared_amount_calculator_delete_digit">Xóa ký tự cuối</string>
     <string name="shared_amount_calculator_division_by_zero">Không thể chia cho 0</string>
     <string name="shared_amount_calculator_expression">Phép tính</string>
     <string name="shared_amount_calculator_integer_positive_required">Kết quả phải là số nguyên dương</string>

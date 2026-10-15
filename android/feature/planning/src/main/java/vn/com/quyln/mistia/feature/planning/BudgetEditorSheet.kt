@@ -8,6 +8,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.ui.platform.LocalFocusManager
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -49,6 +53,8 @@ internal fun BudgetEditorSheet(
     val initial = remember(ownerId, plan?.id, selectedMonth) { BudgetEditorState.from(plan, selectedMonth, zone) }
     var state by rememberSaveable(ownerId, plan?.id, selectedMonth.toString(), stateSaver = BudgetEditorState.scopedSaver(ownerId)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
+    var calculator by rememberSaveable(ownerId, plan?.id, selectedMonth) { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     var discard by remember { mutableStateOf(false) }
     var destructive by remember { mutableStateOf<String?>(null) }
     var pickerMode by remember { mutableStateOf(0) }
@@ -84,6 +90,10 @@ internal fun BudgetEditorSheet(
                 }
                 OutlinedTextField(state.amountText, onValueChange = { state = state.withAmount(it); error = null; storageError = false },
                     label = { Text(stringResource(R.string.planning_planning_budget_amount)) }, suffix = { Text(state.currencyCode) },
+                    trailingIcon = { if (state.currencyCode in setOf("JPY", "VND")) IconButton(enabled = !readOnly && !busy,
+                        onClick = { focus.clearFocus(); calculator = true }, modifier = Modifier.testTag("budget.amount.calculator")) {
+                        Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                    } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.amount"))
                 if (state.id == null) {
                     val branchCurrency = branchCurrency(category)
@@ -167,6 +177,8 @@ internal fun BudgetEditorSheet(
                 }
             }
         }, confirmButton = { TextButton(onClick = { categoryPicker = false }) { Text(stringResource(R.string.common_close)) } })
+    if (calculator && !readOnly) AmountCalculatorDialog(state.amountText, "$ownerId:${plan?.id.orEmpty()}:$selectedMonth:${state.currencyCode}",
+        onCommit = { state = state.withAmount(it); error = null; storageError = false }, onDismiss = { calculator = false })
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text(stringResource(R.string.planning_budget_editor_discard_title)) },
         text = { Text(stringResource(R.string.planning_budget_editor_discard_message)) },
         confirmButton = { TextButton(onClick = { discard = false; onDismiss() },modifier=Modifier.testTag("budget.discard")) { Text(stringResource(R.string.planning_budget_editor_discard)) } },
