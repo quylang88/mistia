@@ -8,6 +8,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -20,6 +23,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.launch
 import vn.com.quyln.mistia.core.designsystem.CategoryIcon
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.*
 
@@ -34,6 +38,8 @@ import vn.com.quyln.mistia.core.model.*
     val initial=remember(owner,bill?.id) {bill?.let {RecurringBillEditorState.from(it,LocalDate.now(zone),zone)} ?: RecurringBillEditorState.fresh(LocalDate.now(zone),"JPY")}
     var state by rememberSaveable(owner,bill?.id,stateSaver=RecurringBillEditorState.saver(owner)) {mutableStateOf(initial)}
     var busy by remember {mutableStateOf(false)}
+    var calculator by rememberSaveable(owner,bill?.id) {mutableStateOf(false)}
+    val focus=LocalFocusManager.current
     var discard by remember {mutableStateOf(false)}
     var picker by remember {mutableStateOf<String?>(null)}
     var action by remember {mutableStateOf<String?>(null)}
@@ -57,7 +63,10 @@ import vn.com.quyln.mistia.core.model.*
                 Spacer(Modifier.width(12.dp));Text(selected?.localizedBudgetName(language) ?: stringResource(R.string.planning_planning_payment_category))
             }
             OutlinedTextField(state.name,onValueChange={state=state.copy(name=it);error=null},label={Text(stringResource(R.string.planning_planning_bill_name))},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.name"))
-            OutlinedTextField(state.amountText,onValueChange={state=state.withAmount(it);error=null},label={Text(stringResource(R.string.planning_planning_amount_optional))},suffix={Text(state.currencyCode)},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.amount"))
+            OutlinedTextField(state.amountText,onValueChange={state=state.withAmount(it);error=null},label={Text(stringResource(R.string.planning_planning_amount_optional))},suffix={Text(state.currencyCode)},
+                trailingIcon={if(state.currencyCode in setOf("JPY","VND")) IconButton(enabled=!busy,onClick={focus.clearFocus();calculator=true},modifier=Modifier.testTag("bill.amount.calculator")) {
+                    Icon(Icons.Filled.Calculate,contentDescription=stringResource(R.string.shared_amount_calculator_open_calculator))
+                }},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.amount"))
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 BillScheduleKind.entries.forEach {kind -> FilterChip(selected=state.scheduleKind==kind,onClick={update(state.copy(scheduleKind=kind))},enabled=!busy,
                     label={Text(stringResource(if(kind==BillScheduleKind.RECURRING) R.string.planning_planning_recurring else R.string.planning_planning_one_time))})}
@@ -106,6 +115,8 @@ import vn.com.quyln.mistia.core.model.*
             Spacer(Modifier.height(16.dp))
         }
     }
+    if(calculator) AmountCalculatorDialog(state.amountText,"$owner:${bill?.id.orEmpty()}:${state.currencyCode}",
+        onCommit={state=state.withAmount(it);error=null},onDismiss={calculator=false})
     if(discard) AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.planning_budget_editor_discard_title))},
         confirmButton={TextButton(onClick={discard=false;onDismiss()},modifier=Modifier.testTag("bill.discard")) {Text(stringResource(R.string.planning_budget_editor_discard))}},
         dismissButton={TextButton(onClick={discard=false}) {Text(stringResource(R.string.planning_budget_editor_keep_editing))}})

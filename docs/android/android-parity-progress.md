@@ -2246,3 +2246,9 @@ Full1383 JVM/131suites, Swift609, lint/build, AndroidTest compile/package, contr
 Added native calculator entry to JPY/VND budget fields: exact BigDecimal/Long arithmetic, Swift operator/keypad semantics, positive integer validation, draft-only OK/cancel, owned expression restore. Shared36 vectors execute against actual Swift and Kotlin, plus6 input-state tests. Runtime RED/GREEN includes3 native workflows; final **36/36 planning cases pass** on API36 emulator. Inspected light/dark-font130 screenshots. Other forms and imported fractional currencies remain separate work.
 
 Full1390 JVM/133suites, Swift610, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK75/executed test APK/checksums: `evidence/2026-10-15-budget-calculator.md`. Two accessibility labels added to sole catalog and outputs regenerated. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue bill calculator and remaining full APK1–4/RC; goal stays active.
+
+## 2026-10-15 — native bill calculator (APK76)
+
+Wired JPY/VND optional bill amount to shared native calculator, retaining blank/null, exact minor and draft-only OK/cancel semantics. Owner/bill/currency expression restore and busy/focus handling are scoped. All3 native API36 workflow cases pass after3 missing-entry REDs; real Room/outbox verifies no write before Save, exact >2^53 result, optional-null save and owner isolation.
+
+Full1390 JVM/133suites, Swift610, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK76/executed test APK/checksums: `evidence/2026-10-15-bill-calculator.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue savings calculator and remaining full APK1–4/RC; goal stays active.
