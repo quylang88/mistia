@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -20,12 +21,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.model.*
 
 @Composable
@@ -49,6 +52,8 @@ private fun OwnedInstallmentEditorSheet(
     val initial = remember(owner, id) { original?.let { InstallmentEditorState.from(owner, it) } ?: InstallmentEditorState.fresh(owner, id, currency) }
     var state by rememberSaveable(owner, id, stateSaver = InstallmentEditorState.saver(owner, id)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
+    var calculator by rememberSaveable(owner, id) { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     var discard by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<String?>(null) }
@@ -79,6 +84,9 @@ private fun OwnedInstallmentEditorSheet(
                 modifier = Modifier.fillMaxWidth().testTag("installment.name"))
             OutlinedTextField(state.amountText, onValueChange = { state = state.copy(amountText = installmentAmountInput(it)); error = null },
                 label = { Text(stringResource(R.string.planning_planning_amount_per_cycle)) }, suffix = { Text(state.currencyCode) },
+                trailingIcon = { IconButton(enabled = !busy, onClick = { focus.clearFocus(); calculator = true }, modifier = Modifier.testTag("installment.amount.calculator")) {
+                    Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                } },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy,
                 modifier = Modifier.fillMaxWidth().testTag("installment.amountInput"))
             state.amountMinor()?.let { amount ->
@@ -136,6 +144,8 @@ private fun OwnedInstallmentEditorSheet(
             Spacer(Modifier.height(16.dp))
         }
     }
+    if (calculator) AmountCalculatorDialog(state.amountText, "$owner:$id:${state.currencyCode}",
+        onCommit = { state = state.copy(amountText = installmentAmountInput(it)); error = null }, onDismiss = { calculator = false })
     if (discard) AlertDialog(onDismissRequest = { discard = false },
         title = { Text(stringResource(R.string.planning_budget_editor_discard_title)) },
         text = { Text(stringResource(R.string.planning_installment_editor_discard_message)) },
