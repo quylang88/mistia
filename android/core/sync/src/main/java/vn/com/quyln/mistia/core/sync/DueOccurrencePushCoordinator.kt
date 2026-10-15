@@ -9,10 +9,12 @@ class DueOccurrencePushCoordinator(
     allowedSourceKinds:Set<DueSourceKind> = setOf(DueSourceKind.RECURRING_BILL),
     installmentDeletionCoordinator: InstallmentDeletionPushCoordinator? = null,
     installmentSkipCoordinator: InstallmentSkipPushCoordinator? = null,
+    installmentPaymentAcknowledgementCoordinator: InstallmentPaymentAcknowledgementCoordinator? = null,
     nowEpochMillis:()->Long=System::currentTimeMillis,
 ):DomainPushCoordinator {
     private val installmentDeletion = installmentDeletionCoordinator
     private val installmentSkip = installmentSkipCoordinator
+    private val installmentPaymentAcknowledgement = installmentPaymentAcknowledgementCoordinator
     private val allowedSourceValues = allowedSourceKinds.filter { it == DueSourceKind.RECURRING_BILL }.map { it.wireValue }.toSet()
     private val delegate=OutboxPushCoordinator(
         entity=CloudEntity.DUE_OCCURRENCE_RECORD,localStore=localStore,remoteStore=remoteStore,
@@ -77,5 +79,6 @@ class DueOccurrencePushCoordinator(
     override val entity=CloudEntity.DUE_OCCURRENCE_RECORD
     override suspend fun pushPending(ownerUserId:UserId,accessToken:String): DomainPushSummary =
         delegate.pushPending(ownerUserId,accessToken) + (installmentDeletion?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary()) +
-            (installmentSkip?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary())
+            (installmentSkip?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary()) +
+            (installmentPaymentAcknowledgement?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary())
 }

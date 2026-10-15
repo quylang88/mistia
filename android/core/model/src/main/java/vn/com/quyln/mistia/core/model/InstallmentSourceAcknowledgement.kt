@@ -129,7 +129,7 @@ fun planInstallmentSourceAcknowledgement(snapshot: InstallmentAcknowledgementSna
     return InstallmentSourceAckDecision.Ready(remote, targets, batch != null)
 }
 
-private fun ackIdentity(row: CloudRecord, entity: CloudEntity, owner: UserId, id: String) {
+internal fun ackIdentity(row: CloudRecord, entity: CloudEntity, owner: UserId, id: String) {
     require(row.entity == entity.table && row.ownerUserId == owner.value && row.id == id && ackUuid(id) == id)
     require(ackUuid(row.payload.ackText("id")) == id && ackUuid(row.payload.ackText("user_id")) == owner.value)
     val version = row.payload["sync_version"] as? JsonPrimitive
@@ -146,7 +146,7 @@ internal fun ackCycle(row: CloudRecord, owner: UserId, source: String, month: St
         require(it.deletedAt == row.deletedAt && Instant.parse(it.updatedAt) == Instant.parse(requireNotNull(row.updatedAt)))
     }
 }
-private fun ackLedger(row: CloudRecord, owner: UserId, id: String): LedgerTransactionRecord {
+internal fun ackLedger(row: CloudRecord, owner: UserId, id: String): LedgerTransactionRecord {
     ackIdentity(row, CloudEntity.LEDGER_TRANSACTION, owner, id)
     return LedgerTransactionRecord.fromCloudRecord(row).also {
         require(it.id == id && it.ownerUserId == owner.value && it.deletedAt == row.deletedAt)
@@ -155,7 +155,7 @@ private fun ackLedger(row: CloudRecord, owner: UserId, id: String): LedgerTransa
     }
 }
 private fun LedgerTransactionRecord.livePostedExpense() = deletedAt == null && !isArchived && primaryKind == TransactionPrimaryKind.EXPENSE && entryStatus == TransactionEntryStatus.POSTED && amountMinor > 0
-private fun LedgerTransactionRecord.financialAckPayload(): JsonObject {
+internal fun LedgerTransactionRecord.financialAckPayload(): JsonObject {
     val ignored = setOf("created_at", "updated_at", "sync_version", "last_modified_by_device_id", "created_by_user_id", "last_modified_by_user_id", "title", "note", "counterparty_name", "normalized_counterparty_key")
     val fields = toPayload().filterKeys { it !in ignored }.toMutableMap()
     listOf("occurred_at", "archived_at", "deleted_at").forEach { key -> (fields[key] as? JsonPrimitive)?.contentOrNull?.let { fields[key] = JsonPrimitive(Instant.parse(it).toString()) } }

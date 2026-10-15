@@ -271,6 +271,15 @@ interface LocalStore {
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
 
+    suspend fun installmentPaymentAcknowledgementSnapshot(owner: UserId, planId: String): InstallmentPaymentAcknowledgementSnapshot =
+        throw UnsupportedOperationException("Complete installment payment acknowledgement snapshot unavailable")
+    suspend fun commitInstallmentPaymentAcknowledgement(expected: InstallmentPaymentAcknowledgementSnapshot, queued: QueuedMutation,
+        remotePlan: CloudRecord, remoteCycle: CloudRecord?, remoteLedger: Map<String, CloudRecord?>, remoteWallets: Map<String, CloudRecord?>): Boolean =
+        throw UnsupportedOperationException("Atomic installment payment acknowledgement unavailable")
+    suspend fun recordInstallmentPaymentAcknowledgementFailure(expected: InstallmentPaymentAcknowledgementSnapshot, queued: QueuedMutation,
+        nextAttemptAtEpochMillis: Long, errorCode: String): Boolean =
+        throw UnsupportedOperationException("Scoped installment payment acknowledgement failure unavailable")
+
     suspend fun commitInstallmentSkipAcknowledgement(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation,
         remotePlan: CloudRecord, remoteCycle: CloudRecord, zone: java.time.ZoneId): Boolean =
         throw UnsupportedOperationException("Atomic installment skip acknowledgement unavailable")

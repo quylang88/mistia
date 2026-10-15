@@ -79,11 +79,16 @@ class InstallmentSkipAcknowledgementRoomTest {
             val db = Room.inMemoryDatabaseBuilder(context, MistiaDatabase::class.java).build()
             try {
                 val initial = RoomLocalStore(db); val (snapshot, queued, remote) = prepare(initial)
-                var checks = 0
-                val guarded = RoomLocalStore(db, currentBillOwner = { checks++; if (after && checks == 1) owner else UserId(other) })
+                var sawRemoval = false
+                val guarded = RoomLocalStore(db, currentBillOwner = {
+                    val exists = db.openHelper.writableDatabase.query("SELECT COUNT(*) FROM sync_outbox WHERE owner_user_id=? AND entity=? AND record_id=?", arrayOf(owner.value, queued.mutation.entity.table, queued.mutation.recordId)).use { it.moveToFirst(); it.getInt(0) > 0 }
+                    if (!exists) sawRemoval = true
+                    if (after && exists) owner else UserId(other)
+                })
                 var cancelled = false
                 try { guarded.commitInstallmentSkipAcknowledgement(snapshot, queued, source(snapshot), remote, zone) } catch (_: CancellationException) { cancelled = true }
-                assertTrue(cancelled); assertEquals(snapshot, initial.installmentAcknowledgementSnapshot(owner, id))
+                assertTrue(cancelled); if (after) assertTrue(sawRemoval)
+                assertEquals(snapshot, initial.installmentAcknowledgementSnapshot(owner, id))
             } finally { db.close() }
         }
     }

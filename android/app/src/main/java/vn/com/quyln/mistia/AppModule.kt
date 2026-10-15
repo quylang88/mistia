@@ -51,6 +51,7 @@ import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
 import vn.com.quyln.mistia.core.sync.DueOccurrencePushCoordinator
 import vn.com.quyln.mistia.core.sync.InstallmentDeletionPushCoordinator
 import vn.com.quyln.mistia.core.sync.InstallmentSkipPushCoordinator
+import vn.com.quyln.mistia.core.sync.InstallmentPaymentAcknowledgementCoordinator
 import vn.com.quyln.mistia.core.model.DueSourceKind
 import vn.com.quyln.mistia.core.sync.InstallmentPushCoordinator
 import vn.com.quyln.mistia.core.sync.RecurringBillPushCoordinator
@@ -316,8 +317,14 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator, installmentSkip: InstallmentSkipPushCoordinator):DueOccurrencePushCoordinator =
-        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion, installmentSkipCoordinator=installmentSkip)
+    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator, installmentSkip: InstallmentSkipPushCoordinator, installmentPaymentAck: InstallmentPaymentAcknowledgementCoordinator):DueOccurrencePushCoordinator =
+        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion, installmentSkipCoordinator=installmentSkip, installmentPaymentAcknowledgementCoordinator=installmentPaymentAck)
+
+    @Provides
+    @Singleton
+    fun provideInstallmentPaymentAcknowledgementCoordinator(localStore: LocalStore, remoteStore: RemoteMutationStore): InstallmentPaymentAcknowledgementCoordinator =
+        InstallmentPaymentAcknowledgementCoordinator(localStore, remoteStore, enabled = installmentOccurrenceDeleteWritesEnabled() &&
+            BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES)
 
     @Provides
     @Singleton

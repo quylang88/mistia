@@ -100,6 +100,14 @@ before each write while owned direct dependencies remain pending; DELETE is inde
 Nine added cases execute, including mid-fetch arrivals/create/base/forced update variants.
 Missing-remote-parent repair is separate open work. Paid occurrence ACK remains next.
 
+ACK-only installment paid-history reconciliation is implemented locally (APK68):
+`evidence/2026-10-15-installment-paid-ack.md`. Complete owned plan/due/ledger/wallet/
+queue/batch snapshots, exact amount/currency/dependency checks and atomic Room ACK/retry
+can acknowledge existing consistent server history, completed undo or restore a paid
+marker after a lost ledger-delete conflict.14 policy +11 worker cases execute; five new
+Room fixtures compile/package only. No remote paid-write capability was added. New paid
+creation/live paid deletion, cross-record atomicity and full duplicate recovery remain open.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.

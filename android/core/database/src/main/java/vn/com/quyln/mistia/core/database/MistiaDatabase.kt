@@ -1,5 +1,8 @@
 package vn.com.quyln.mistia.core.database
 
+import vn.com.quyln.mistia.core.model.InstallmentPaymentAcknowledgementSnapshot
+import vn.com.quyln.mistia.core.model.InstallmentPaymentAcknowledgement
+import vn.com.quyln.mistia.core.model.planInstallmentPaymentAcknowledgement
 import vn.com.quyln.mistia.core.model.planInstallmentSkipSync
 import vn.com.quyln.mistia.core.model.InstallmentSkipSyncDecision
 
@@ -780,6 +783,41 @@ class RoomLocalStore(
             ensureCurrentFinanceOwner(expected.base.owner)
             true
         }
+    }
+
+    override suspend fun installmentPaymentAcknowledgementSnapshot(owner: UserId, planId: String): InstallmentPaymentAcknowledgementSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val snapshot = readInstallmentPaymentAcknowledgementSnapshot(owner, planId)
+        ensureCurrentFinanceOwner(owner)
+        snapshot
+    }
+    private suspend fun readInstallmentPaymentAcknowledgementSnapshot(owner: UserId, planId: String) = InstallmentPaymentAcknowledgementSnapshot(
+        owner, planId, installmentDeletionBatch(owner, planId), InstallmentPaymentAcknowledgementSnapshot.entities.associateWith { recordsIncludingDeleted(owner, it.table) },
+        database.syncOutboxDao().rows(owner.value).filter { CloudEntity.fromTable(it.entity) in InstallmentPaymentAcknowledgementSnapshot.entities }.map { it.toQueuedMutation() })
+
+    override suspend fun commitInstallmentPaymentAcknowledgement(expected: InstallmentPaymentAcknowledgementSnapshot, queued: QueuedMutation,
+        remotePlan: CloudRecord, remoteCycle: CloudRecord?, remoteLedger: Map<String, CloudRecord?>, remoteWallets: Map<String, CloudRecord?>): Boolean {
+        val decision = planInstallmentPaymentAcknowledgement(expected, queued, remotePlan, remoteCycle, remoteLedger, remoteWallets)
+        require(decision is InstallmentPaymentAcknowledgement.Acknowledge)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current = readInstallmentPaymentAcknowledgementSnapshot(expected.owner, expected.planId)
+            if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+            check(removeQueuedMutationExact(queued))
+            database.cloudRecordDao().upsert(decision.record.toEntity(false, System.currentTimeMillis()))
+            ensureCurrentFinanceOwner(expected.owner)
+            true
+        }
+    }
+    override suspend fun recordInstallmentPaymentAcknowledgementFailure(expected: InstallmentPaymentAcknowledgementSnapshot, queued: QueuedMutation,
+        nextAttemptAtEpochMillis: Long, errorCode: String): Boolean = database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        require(expected.batch == null && queued in expected.queues && queued.mutation.entity == CloudEntity.DUE_OCCURRENCE_RECORD && queued.mutation.subjectUserId == expected.owner.value)
+        val current = readInstallmentPaymentAcknowledgementSnapshot(expected.owner, expected.planId)
+        if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+        val recorded = recordMutationFailure(queued, nextAttemptAtEpochMillis, errorCode)
+        ensureCurrentFinanceOwner(expected.owner)
+        recorded
     }
 
     override suspend fun commitInstallmentSkipAcknowledgement(expected: InstallmentAcknowledgementSnapshot, queued: QueuedMutation,
