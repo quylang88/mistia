@@ -113,12 +113,15 @@ class OfflineFirstFinanceRepository(
         deviceId: String,
         now: String,
     ): Result<LedgerWalletRecord> = runCatching {
-        val existing = draft.id?.let { recordId ->
+        val existingRecord = draft.id?.let { recordId ->
             localStore.record(ownerUserId, CloudEntity.LEDGER_WALLET.table, recordId.lowercase())
-                ?.let(LedgerWalletRecord::fromCloudRecord)
         }
+        val existing = existingRecord?.let(LedgerWalletRecord::fromCloudRecord)
         val mutation = draft.toMutation(ownerUserId, existing, deviceId, now)
-        localStore.commitMutation(mutation.record, mutation.pending)
+        if (existing != null && existing.currencyCode.trim().uppercase(Locale.ROOT) !=
+            LedgerWalletRecord.fromCloudRecord(mutation.record).currencyCode)
+            localStore.commitWalletCurrencyMutation(requireNotNull(existingRecord), mutation.record, mutation.pending)
+        else localStore.commitMutation(mutation.record, mutation.pending)
         LedgerWalletRecord.fromCloudRecord(mutation.record)
     }
 

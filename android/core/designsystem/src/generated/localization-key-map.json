@@ -872,6 +872,7 @@
   "management.profilePrivacy.sensitivePersonalDetailsShouldOnlyBe": "management_profile_privacy_sensitive_personal_details_should_only_be",
   "management.profilePrivacy.youStayInControlOfProfile": "management_profile_privacy_you_stay_in_control_of_profile",
   "management.profilePrivacy.yourNameProfilePhotoEmailAnd": "management_profile_privacy_your_name_profile_photo_email_and",
+  "management.walletEditor.currencyInUse": "management_wallet_editor_currency_in_use",
   "management.walletEditor.editTitle": "management_wallet_editor_edit_title",
   "management.walletEditor.newTitle": "management_wallet_editor_new_title",
   "notifications.creditCard.autoPaymentFailedBody": "notifications_credit_card_auto_payment_failed_body",

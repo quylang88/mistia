@@ -874,6 +874,7 @@
     <string name="management_profile_privacy_sensitive_personal_details_should_only_be">誕生日など、より慎重に扱うべき情報は、アカウント体験、年齢に関する扱い、アクセス権に必要な場合だけ入力するものです。任意項目は空のままにでき、入力しない情報がパーソナライズやプロフィール表示に使われることはありません。</string>
     <string name="management_profile_privacy_you_stay_in_control_of_profile">プロフィールの管理は利用者自身が行えます。アプリ内の選択肢から名前の編集、写真の変更、サインアウト、アカウント削除ができます。他のミスティア利用者が見る可能性のある場所に情報が表示される場合も、正しい人を識別するために必要な名前やアバターなどに限り、個人情報全体を表示しないことを前提にしています。</string>
     <string name="management_profile_privacy_your_name_profile_photo_email_and">名前、プロフィール写真、メールアドレス、入力した場合の誕生日は、アカウントに紐づく可能性のある情報です。これらはプロフィールの識別、サインインの補助、アカウント情報の表示、同じデバイス上の他の人のデータとの区別に使われます。</string>
+    <string name="management_wallet_editor_currency_in_use">有効な取引があるウォレットの通貨は変更できません。</string>
     <string name="management_wallet_editor_edit_title">ウォレットを編集</string>
     <string name="management_wallet_editor_new_title">新しいウォレット</string>
     <string name="notifications_credit_card_auto_payment_failed_body">%1$s の %2$s は %3$s のため自動支払いできませんでした。入金するか手動で支払ってください。</string>

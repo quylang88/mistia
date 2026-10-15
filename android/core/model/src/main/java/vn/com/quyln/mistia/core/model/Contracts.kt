@@ -337,6 +337,10 @@ interface LocalStore {
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
+    /** Recheck the exact wallet and current ledger references atomically with the currency edit/outbox. */
+    suspend fun commitWalletCurrencyMutation(expectedWallet: CloudRecord, record: CloudRecord, mutation: PendingMutation) {
+        throw UnsupportedOperationException("Atomic wallet currency edits unavailable")
+    }
     /** Implementations must commit the entire batch atomically or fail without writing. */
     suspend fun commitMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
         require(mutations.size == 1) { "Atomic batch mutations are unsupported by this store" }

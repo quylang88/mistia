@@ -2150,6 +2150,8 @@ nonisolated enum L10n {
         }
 
         nonisolated enum walletEditor {
+            static var currencyInUse: String { L10n.tr("management.walletEditor.currencyInUse", vi: "Không thể đổi tiền tệ của ví đang có giao dịch hoạt động.", en: "This wallet’s currency cannot change while it has active transactions.", ja: "有効な取引があるウォレットの通貨は変更できません。") }
+            static func currencyInUse(language: MistiaAppLanguage) -> String { L10n.tr("management.walletEditor.currencyInUse", vi: "Không thể đổi tiền tệ của ví đang có giao dịch hoạt động.", en: "This wallet’s currency cannot change while it has active transactions.", ja: "有効な取引があるウォレットの通貨は変更できません。", language: language) }
             static var editTitle: String { L10n.tr("management.walletEditor.editTitle", vi: "Sửa ví", en: "Edit wallet", ja: "ウォレットを編集") }
             static func editTitle(language: MistiaAppLanguage) -> String { L10n.tr("management.walletEditor.editTitle", vi: "Sửa ví", en: "Edit wallet", ja: "ウォレットを編集", language: language) }
             static var newTitle: String { L10n.tr("management.walletEditor.newTitle", vi: "Ví mới", en: "New wallet", ja: "新しいウォレット") }

@@ -755,6 +755,26 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun commitWalletCurrencyMutation(expectedWallet: CloudRecord, record: CloudRecord, mutation: PendingMutation) {
+        require(expectedWallet.entity == CloudEntity.LEDGER_WALLET.table && record.entity == expectedWallet.entity)
+        require(expectedWallet.ownerUserId == record.ownerUserId && expectedWallet.id == record.id)
+        require(expectedWallet.deletedAt == null && record.deletedAt == null && mutation.kind == MutationKind.UPSERT)
+        require(record.payload["user_id"] == JsonPrimitive(record.ownerUserId) && record.payload["id"] == JsonPrimitive(record.id))
+        require(record.payload["opening_balance_minor"] == expectedWallet.payload["opening_balance_minor"]) { "Currency edit cannot rewrite opening money" }
+        require(mutation.baseVersion == expectedWallet.syncVersion && record.syncVersion == expectedWallet.syncVersion &&
+            record.payload["sync_version"] == JsonPrimitive(expectedWallet.syncVersion)) { "Wallet version envelope disagrees" }
+        val owner = UserId(record.ownerUserId)
+        database.withTransaction {
+            ensureCurrentFinanceOwner(owner)
+            if (record(owner, expectedWallet.entity, expectedWallet.id) != expectedWallet)
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+            if (vn.com.quyln.mistia.core.model.walletHasLiveLedgerHistory(owner, record.id, recordsIncludingDeleted(owner, CloudEntity.LEDGER_TRANSACTION.table)))
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
+            commitMutationRows(record, mutation)
+            ensureCurrentFinanceOwner(owner)
+        }
+    }
+
     override suspend fun commitMutations(mutations: List<Pair<CloudRecord, PendingMutation>>) {
         require(mutations.isNotEmpty())
         require(mutations.map { it.first.ownerUserId }.distinct().size == 1)

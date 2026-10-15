@@ -253,9 +253,10 @@ fun WalletEditorSheet(
     onDismiss: () -> Unit,
     onSave: suspend (WalletDraft) -> Result<LedgerWalletRecord>,
     onArchive: suspend () -> Result<Unit>,
+    currencyEditable: Boolean = wallet == null,
 ) {
     if (wallet != null && wallet.ownerUserId != ownerId) return
-    key(ownerId, wallet?.id) { OwnedWalletEditorSheet(ownerId, wallet, nextSortOrder, onDismiss, onSave, onArchive) }
+    key(ownerId, wallet?.id) { OwnedWalletEditorSheet(ownerId, wallet, nextSortOrder, onDismiss, onSave, onArchive, currencyEditable) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -263,6 +264,7 @@ fun WalletEditorSheet(
 private fun OwnedWalletEditorSheet(
     ownerId: String, wallet: LedgerWalletRecord?, nextSortOrder: Int, onDismiss: () -> Unit,
     onSave: suspend (WalletDraft) -> Result<LedgerWalletRecord>, onArchive: suspend () -> Result<Unit>,
+    currencyEditable: Boolean,
 ) {
     var state by rememberSaveable(ownerId, wallet?.id, stateSaver = WalletEditorState.scopedSaver(ownerId)) {
         mutableStateOf(wallet?.let(WalletEditorState::edit) ?: WalletEditorState.new(nextSortOrder))
@@ -271,6 +273,7 @@ private fun OwnedWalletEditorSheet(
     val focus = LocalFocusManager.current
     var validation by remember { mutableStateOf<WalletEditorValidation?>(null) }
     var saveFailed by remember { mutableStateOf(false) }
+    var saveFailureMessage by remember { mutableStateOf(R.string.management_management_couldn_t_save_this_wallet_right_now) }
     var archiveConfirmation by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -317,6 +320,8 @@ private fun OwnedWalletEditorSheet(
                                 onFailure = {
                                     isSaving = false
                                     saveFailed = true
+                                    saveFailureMessage = if ((it as? vn.com.quyln.mistia.core.model.WalletValidationException)?.reason == vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
+                                        R.string.management_wallet_editor_currency_in_use else R.string.management_management_couldn_t_save_this_wallet_right_now
                                 },
                             )
                         }
@@ -461,6 +466,7 @@ private fun OwnedWalletEditorSheet(
                         listOf("JPY", "VND").forEach { code ->
                             FilterChip(
                                 selected = state.currencyCode == code,
+                                enabled = !isSaving && currencyEditable,
                                 onClick = { state = state.copy(currencyCode = code) },
                                 label = { Text(code) },
                             )
@@ -499,7 +505,7 @@ private fun OwnedWalletEditorSheet(
             }
             if (saveFailed) {
                 Text(
-                    text = stringResource(R.string.management_management_couldn_t_save_this_wallet_right_now),
+                    text = stringResource(saveFailureMessage),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -554,6 +560,7 @@ private fun OwnedWalletEditorSheet(
                                 onFailure = {
                                     isSaving = false
                                     saveFailed = true
+                                    saveFailureMessage = R.string.management_management_couldn_t_save_this_wallet_right_now
                                 },
                             )
                         }

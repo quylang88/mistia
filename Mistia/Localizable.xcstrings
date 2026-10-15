@@ -20080,6 +20080,28 @@
         }
       }
     },
+    "management.walletEditor.currencyInUse" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể đổi tiền tệ của ví đang có giao dịch hoạt động."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This wallet’s currency cannot change while it has active transactions."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有効な取引があるウォレットの通貨は変更できません。"
+          }
+        }
+      }
+    },
     "management.walletEditor.editTitle" : {
       "extractionState" : "stale",
       "localizations" : {

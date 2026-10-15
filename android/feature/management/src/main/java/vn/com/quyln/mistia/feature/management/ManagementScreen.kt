@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
@@ -57,6 +58,7 @@ import vn.com.quyln.mistia.core.model.CreditCardDraft
 import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
+import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.RecordId
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
@@ -78,10 +80,14 @@ fun ManagementScreen(
     modifier: Modifier = Modifier,
     onOpenNotificationSettings:()->Unit={},
 ) {
-    val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val categories by repository.observeCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val creditCardProfiles by repository.observeCreditCardProfiles(ownerUserId)
-        .collectAsStateWithLifecycle(emptyList())
+    val walletFlow = remember(ownerUserId,repository) {repository.observeWallets(ownerUserId)}
+    val categoryFlow = remember(ownerUserId,repository) {repository.observeCategories(ownerUserId)}
+    val cardFlow = remember(ownerUserId,repository) {repository.observeCreditCardProfiles(ownerUserId)}
+    val ledgerFlow = remember(ownerUserId,repository) {repository.observeTransactions(ownerUserId).map {ownerUserId.value to it}}
+    val wallets by walletFlow.collectAsStateWithLifecycle(emptyList())
+    val ledger by ledgerFlow.collectAsStateWithLifecycle(initialValue=null)
+    val categories by categoryFlow.collectAsStateWithLifecycle(emptyList())
+    val creditCardProfiles by cardFlow.collectAsStateWithLifecycle(emptyList())
     var walletEditorTarget by remember { mutableStateOf<WalletEditorTarget?>(null) }
     var creditCardEditorTarget by remember { mutableStateOf<CreditCardEditorTarget?>(null) }
     var categoryEditorTarget by remember { mutableStateOf<CategoryEditorTarget?>(null) }
@@ -192,6 +198,9 @@ fun ManagementScreen(
         val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
         WalletEditorSheet(
             ownerId = ownerUserId.value,
+            currencyEditable = wallet==null || ledger?.takeIf {it.first==ownerUserId.value}?.second?.none {
+                it.ownerUserId==ownerUserId.value && (it.sourceWalletId==wallet.id || it.destinationWalletId==wallet.id)
+            }==true,
             wallet = wallet,
             nextSortOrder = (wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1,
             onDismiss = { walletEditorTarget = null },
@@ -598,7 +607,7 @@ internal fun WalletRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (wallet.kind == WalletKind.CREDIT_CARD) Modifier.testTag("management.card.${wallet.id}") else Modifier)
+            .then(if (wallet.kind == WalletKind.CREDIT_CARD) Modifier.testTag("management.card.${wallet.id}") else Modifier.testTag("management.wallet.${wallet.id}"))
             .clickable(enabled = editable, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,

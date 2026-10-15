@@ -261,6 +261,8 @@ enum class WalletValidationError {
     DEDICATED_FLOW_REQUIRED,
     UNKNOWN_KIND,
     OWNER_MISMATCH,
+    CURRENCY_IN_USE,
+    STALE_EDIT,
 }
 
 class WalletValidationException(val reason: WalletValidationError) : IllegalArgumentException(reason.name)
