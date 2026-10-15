@@ -25,6 +25,7 @@ tasks.named("preBuild").configure { dependsOn(syncSharedCategoryCatalog) }
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    testImplementation(libs.junit)
     implementation(project(":core:model"))
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.core.ktx)

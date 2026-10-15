@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.*
+import org.junit.rules.ExternalResource
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import vn.com.quyln.mistia.core.database.*
 import vn.com.quyln.mistia.core.designsystem.MistiaTheme
@@ -26,7 +28,11 @@ import vn.com.quyln.mistia.core.model.*
 /** Synthetic owner, in-memory Room and no network client or authentication session. */
 @RunWith(AndroidJUnit4::class)
 class BudgetWorkflowTest {
-    @get:Rule val compose = createComposeRule()
+    private val compose = createComposeRule()
+    // Room collectors belong to the Compose rule; dispose it before closing its database.
+    @get:Rule val rules = RuleChain.outerRule(object : ExternalResource() {
+        override fun after() { if (::db.isInitialized) db.close() }
+    }).around(compose)
     private lateinit var db: MistiaDatabase
     private lateinit var store: RoomLocalStore
     private lateinit var repo: OfflineFirstFinanceRepository
@@ -48,7 +54,7 @@ class BudgetWorkflowTest {
             hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=parent.id),device,now).getOrThrow()
         categories=repo.observeBudgetCategories(owner).first()
     }
-    @After fun close()=db.close()
+
 
     @Test fun createEditAndDeletePersistThroughNativeBudgetWorkflow() {
         compose.setContent { MistiaTheme(darkTheme=false) { PlanningScreen(owner,repo,deviceIdProvider={device},exchangeRateRepository=rates) } }
@@ -65,6 +71,8 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("budget.amount").performTextReplacement("600")
         compose.onNodeWithTag("budget.save").performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeBudgets(owner).first().single().limitMinor==600L } }
+        compose.onNodeWithText("¥600.00", substring = true).assertDoesNotExist()
+        Assert.assertTrue(compose.onAllNodesWithText("￥600", substring = true).fetchSemanticsNodes().isNotEmpty())
         capture("budget.screen","budget-list-light.png")
         compose.onNodeWithTag("budget.edit.${budget.id}").performScrollTo().performClick()
         compose.onNodeWithTag("budget.destructive").performScrollTo().performClick()

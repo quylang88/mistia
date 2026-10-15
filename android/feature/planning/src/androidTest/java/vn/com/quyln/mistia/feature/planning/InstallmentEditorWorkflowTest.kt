@@ -22,6 +22,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.*
+import org.junit.rules.ExternalResource
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import vn.com.quyln.mistia.core.database.*
 import vn.com.quyln.mistia.core.designsystem.MistiaTheme
@@ -30,7 +32,11 @@ import vn.com.quyln.mistia.core.model.*
 /** Synthetic in-memory Room; compiled only until a device/emulator is available. */
 @RunWith(AndroidJUnit4::class)
 class InstallmentEditorWorkflowTest {
-    @get:Rule val compose = createComposeRule()
+    private val compose = createComposeRule()
+    // Room collectors belong to the Compose rule; dispose it before closing its database.
+    @get:Rule val rules = RuleChain.outerRule(object : ExternalResource() {
+        override fun after() { if (::db.isInitialized) db.close() }
+    }).around(compose)
     private lateinit var db: MistiaDatabase
     private lateinit var store: RoomLocalStore
     private lateinit var repo: OfflineFirstFinanceRepository
@@ -47,7 +53,7 @@ class InstallmentEditorWorkflowTest {
         store = RoomLocalStore(db); repo = OfflineFirstFinanceRepository(store)
         wallet = repo.saveWallet(owner, WalletDraft(name = "Cash", kind = WalletKind.CASH, currencyCode = "JPY"), device, now.toString()).getOrThrow()
     }
-    @After fun close() { db.close() }
+
     private fun plans() = runBlocking { repo.observeInstallments(owner).first() }
     private fun enterDraft(name: String = "Loan", amount: String = "9007199254740993") {
         compose.onNodeWithTag("installment.name").performTextReplacement(name)

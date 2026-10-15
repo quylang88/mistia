@@ -15,9 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import java.math.BigDecimal
-import java.text.NumberFormat
-import java.util.Currency
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
@@ -29,14 +26,6 @@ fun CloudRecord.string(field: String): String? =
 fun CloudRecord.long(field: String): Long? =
     (payload[field] as? JsonPrimitive)?.longOrNull
 
-fun formatMinorUnits(minor: Long, currencyCode: String): String {
-    val currency = runCatching { Currency.getInstance(currencyCode) }.getOrNull()
-    val fractionDigits = currency?.defaultFractionDigits?.coerceAtLeast(0) ?: 0
-    val value = BigDecimal.valueOf(minor).movePointLeft(fractionDigits)
-    return runCatching {
-        NumberFormat.getCurrencyInstance().apply { this.currency = currency }.format(value)
-    }.getOrElse { "$value $currencyCode" }
-}
 
 @Composable
 fun MistiaRecordRow(

@@ -1,0 +1,23 @@
+# Currency-specific exact presentation and native regression — 2026-10-15
+
+Branch `codex/android-apk2-4-parity`; baseline `138a96df`.
+
+Actual API36 planning screenshot review found JPY600 rendered with two fraction digits under English device locale. The shared formatter set Currency on a locale-default NumberFormat but retained the locale's original precision. Three-digit currency values could also round in presentation. Accounting Long values and outbox payloads were not changed.
+
+Moved formatMinorUnits into a focused presentation source and explicitly set minimum/maximum fraction digits to the existing currency's ISO precision. BigDecimal.valueOf(Long).movePointLeft remains the amount path; no Double conversion or rounding is introduced. Currency-specific presentation locales now match Swift CurrencyFormatting.locale(for:) for JPY/VND/USD/GBP/EUR/KRW/CNY/TWD/THB/SGD/AUD/CAD/HKD, with en-US fallback independent of app/device language. Invalid codes keep the original exact raw value/code fallback. No mutable formatter is shared across calls. This does not change parsing, stored minor values, exchange rates or cloud payloads.
+
+Direct Swift review compared CurrencyFormatting.swift and existing localization tests testCurrencyFormattingDoesNotChangeWhenAppLanguageChanges/testVNDFormatsWithoutFractionDigits. Swift's settings currency logic currently normalizes to its supported JPY/VND set. Android's existing ISO precision for imported USD/KWD is deliberately preserved here; this slice does not claim imported non-JPY/VND Swift accounting/display parity or broaden currency settings. That discrepancy remains part of the full monetary audit.
+
+Runtime TDD:5 JVM formatter cases produced4 expected failures before implementation, then all5 passed. Covers JPY/VND fraction digits, currency locale/grouping stability under US/JP/VI/DE defaults, existing USD2/KWD3 precision, zero/negative/>2^53/Long.MIN_VALUE exactness and invalid-code fallback. Added a native budget CRUD assertion that displayed JPY600 has no `.00` while the actual stored amount remains600 minor. Focused real Android test passes; inspected updated screenshot `2026-10-15-currency-presentation/budget-list-jpy.png` against the earlier screenshot.
+
+Initial full planning rerun exposed one intermittent fixture teardown race: @After closed Room while the Compose rule still owned active collectors. Replaced the teardown ordering in budget/installment editor/payment fixtures with an outer ExternalResource/RuleChain, so the Compose activity/effects dispose before database.close. No assertions or repository behavior were weakened. Initial run33/1failure log `/tmp/mistia-currency-presentation-native-full.log`; final actual Android **33/33 planning cases pass**,120.18seconds, log `/tmp/mistia-currency-presentation-native-final.log`. This is synthetic emulator execution, not Samsung or live sync proof.
+
+Full **1370 JVM tests /131 suites**, zero failures/errors; Swift609, app lint/build, database/management/planning AndroidTest compile/package, contract15, both localization checks, existing SQLite7/3/11 and packaged Room schemas1–6/bootstrap pass. Final fixture-only RuleChain changes were recompiled/packaged and executed in the33-case native suite after the full app run; product code is unchanged from that successful full run. Actual database122pass checkpoint is unchanged. No Swift runtime/catalog/schema change, Room6/remote15 unchanged. Direct self review complete; independent review remains pending.
+
+Logs `/tmp/mistia-currency-presentation-{red,green,full,swift,native-assemble,native-focused,native-full,native-final}.log`, `/tmp/mistia-planning-teardown-assemble.log`.
+
+APK `android/build/outputs/apk2/2026-10-15/mistia-0.2.0-apk2-currency-presentation-v71.apk`, debug versionCode71: SHA256 `0efa215ef76adacc8276784f35530f53e28563037f9e4a409936b062aa3e4c4a`.
+
+Actually executed final planning test APK `android/build/outputs/apk2/2026-10-15/mistia-planning-currency-presentation-test-v71.apk`: SHA256 `959e71b769cf241e220c6563f7fc84030aae0e775b64a34b6cc7bf8bbcc92a1c`. An earlier assembled test APK was replaced only after the fixture cleanup fix and successful execution; this checksum identifies the final artifact. Actual formatter DEX and app version checked.
+
+Only emulator connected; all10 flagsfalse; no Samsung/live Supabase/production write/deploy/migration. Next native management checks, followed by the remaining monetary input/settings audit, paid writes/undo orchestration/atomic recovery, maintenance/fund usage, APK3/4/RC and full visual/background/accessibility/device evidence. Goal remains active.

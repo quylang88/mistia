@@ -2210,3 +2210,9 @@ Full1365 JVM/130suites, Swift609, lint/build, AndroidTest compile/package, contr
 Executed the entire APK70 planning test package on API36 emulator: **33/33 Compose cases pass** across bill payment4, budget/savings/bill workflow7, installment read2/editor11/payment9. Saved seven synthetic fixture screenshots and inspected representative light/dark/font-large views. Full visual/iOS/accessibility/Samsung/process-kill/live-sync parity remains unproven. Screenshot review found a concrete JPY fractional-digit formatting mismatch (`¥600.00` under English locale); fix next with runtime regression. Evidence-only checkpoint uses unchanged APK70/build checks.
 
 Evidence: `evidence/2026-10-15-native-planning-suite.md`; screenshots under `evidence/2026-10-15-planning-emulator/`. All10 flagsfalse; full APK1–4/RC goal remains active.
+
+## 2026-10-15 — exact currency presentation (APK71)
+
+Fixed shared formatter's locale-inherited fraction digits observed on actual budget screenshot: JPY/VND render without fractions; existing imported USD2/KWD3 precision and exact BigDecimal/Long amounts remain intact. Currency presentation locale follows the Swift map independently of app/device language. Five runtime formatter cases pass after4 intended REDs. A native budget CRUD regression verifies rendered JPY600 while storage stays600 minor; updated screenshot inspected. Imported non-JPY/VND Swift parity remains an explicit monetary-audit gap.
+
+Full1370 JVM/131suites, Swift609, lint/build, contract/localization/schema/SQLite checks pass. Full planning rerun exposed one Room fixture teardown race; corrected RuleChain ordering to dispose Compose before database close, then **33/33 actual API36 Compose cases pass**. Evidence/APK71/final executed test APK/checksums: `evidence/2026-10-15-currency-presentation.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue native management and remaining full APK1–4/RC; goal stays active.
