@@ -11,7 +11,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import vn.com.quyln.mistia.core.model.*
 
-internal class OfflineInstallmentRepository(private val store: LocalStore) : InstallmentRepository {
+internal class OfflineInstallmentRepository(private val store: LocalStore, private val currentZone: () -> java.time.ZoneId = java.time.ZoneId::systemDefault) : InstallmentRepository {
     private val mutex = Mutex()
     override fun observeInstallments(ownerUserId: UserId): Flow<List<InstallmentPlanRecord>> =
         store.observeOwnedFinanceRows(CloudEntity.INSTALLMENT_PLAN, ownerUserId).map { records ->
@@ -19,6 +19,33 @@ internal class OfflineInstallmentRepository(private val store: LocalStore) : Ins
                 .filter { !it.isArchived && it.deletedAt == null }
                 .sortedWith(compareBy<InstallmentPlanRecord> { Instant.parse(it.createdAt) }.thenBy { it.id })
         }
+
+    override suspend fun skipInstallment(owner: UserId, expected: InstallmentPlanRecord, month: java.time.YearMonth, deviceId: String, now: String): Result<DueOccurrenceRecord> = result {
+        mutex.withLock {
+            val result = mutateCycle(owner, expected, month, deviceId, now, InstallmentCycleAction.SKIP)
+            requireNotNull(result)
+        }
+    }
+    override suspend fun undoInstallmentSkip(owner: UserId, expected: InstallmentPlanRecord, month: java.time.YearMonth, deviceId: String, now: String): Result<Unit> = result {
+        mutex.withLock { mutateCycle(owner, expected, month, deviceId, now, InstallmentCycleAction.UNDO_SKIP); Unit }
+    }
+    private suspend fun mutateCycle(owner: UserId, expected: InstallmentPlanRecord, month: java.time.YearMonth,
+        deviceId: String, now: String, action: InstallmentCycleAction): DueOccurrenceRecord? {
+        val id = uuid(expected.id); val device = uuid(deviceId); uuid(owner.value)
+        val timestamp = Instant.parse(now).toString(); val zone = currentZone(); val creationId = UUID.randomUUID().toString()
+        repeat(3) {
+            val base = store.installmentMutationSnapshot(owner, id)
+            require(base.owner == owner && base.planId == id)
+            val snapshot = InstallmentCycleSnapshot(base, expected, month, zone, action)
+            val writes = snapshot.buildMutations(creationId, device, timestamp)
+            if (writes.isEmpty()) return if (action == InstallmentCycleAction.SKIP)
+                snapshot.liveCycleRecords().map(DueOccurrenceRecord::fromCloudRecord).first { it.status == DueStatus.SKIPPED } else null
+            snapshot.requireValidMutations(writes)
+            if (store.commitInstallmentCycleMutations(snapshot, writes)) return if (action == InstallmentCycleAction.SKIP)
+                DueOccurrenceRecord.fromCloudRecord(writes.first().first) else null
+        }
+        fail(InstallmentValidationError.STALE_RECORD)
+    }
 
     override suspend fun saveInstallment(owner: UserId, draft: InstallmentDraft, deviceId: String, now: String): Result<InstallmentPlanRecord> = result {
         mutex.withLock {

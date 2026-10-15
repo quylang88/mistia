@@ -23231,6 +23231,144 @@
         }
       }
     },
+    "planning.installmentCycle.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not update this cycle. Try again."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể cập nhật kỳ trả này. Vui lòng thử lại."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この回を更新できませんでした。もう一度お試しください。"
+          }
+        }
+      }
+    },
+    "planning.installmentCycle.notScheduled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This installment is not scheduled for the selected month."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khoản trả góp này không có lịch trả trong tháng đã chọn."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この分割払いは選択した月には予定されていません。"
+          }
+        }
+      }
+    },
+    "planning.installmentCycle.settled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This cycle already has a payment record. Review it before changing its status."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kỳ này đã có dữ liệu thanh toán. Hãy kiểm tra trước khi đổi trạng thái."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この回には支払いの記録があります。状態を変更する前に確認してください。"
+          }
+        }
+      }
+    },
+    "planning.installmentCycle.skipMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip this installment for the selected month?"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bỏ qua khoản trả góp này trong tháng đã chọn?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択した月のこの分割払いをスキップしますか？"
+          }
+        }
+      }
+    },
+    "planning.installmentCycle.stale" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This item changed. Close this dialog and review it before trying again."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khoản này đã thay đổi. Hãy đóng hộp thoại và kiểm tra lại trước khi thử tiếp."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この項目が変更されました。ダイアログを閉じて内容を確認してから再試行してください。"
+          }
+        }
+      }
+    },
+    "planning.installmentCycle.undoMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo skipping this installment? It will return to pending status."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoàn tác bỏ qua khoản trả góp này? Kỳ trả sẽ trở về trạng thái chưa thanh toán."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この分割払いのスキップを取り消しますか？未払いの状態に戻ります。"
+          }
+        }
+      }
+    },
     "planning.installmentEditor.amountPreview" : {
       "extractionState" : "manual",
       "localizations" : {

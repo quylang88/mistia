@@ -35,6 +35,7 @@ import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
 import vn.com.quyln.mistia.core.model.categoryReferenceEntities
 import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
 import vn.com.quyln.mistia.core.model.billCycleRecords
+import vn.com.quyln.mistia.core.model.InstallmentCycleSnapshot
 import vn.com.quyln.mistia.core.model.InstallmentMutationSnapshot
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
 import vn.com.quyln.mistia.core.model.requireValidMutations
@@ -738,6 +739,18 @@ class RoomLocalStore(
         })
         ensureCurrentFinanceOwner(owner)
         snapshot
+    }
+
+    override suspend fun commitInstallmentCycleMutations(expected: InstallmentCycleSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean {
+        expected.requireValidMutations(mutations)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.base.owner)
+            val current = InstallmentMutationSnapshot.entities.associateWith { recordsIncludingDeleted(expected.base.owner, it.table) }
+            if (runCatching { expected.base.requireUnchanged(current) }.isFailure) return@withTransaction false
+            mutations.forEach { (record, mutation) -> commitMutationRows(record, mutation) }
+            ensureCurrentFinanceOwner(expected.base.owner)
+            true
+        }
     }
 
     override suspend fun commitInstallmentMutations(expected: InstallmentMutationSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean {

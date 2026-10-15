@@ -2544,6 +2544,21 @@ nonisolated enum L10n {
             static func retry(language: MistiaAppLanguage) -> String { L10n.tr("planning.installment.retry", vi: "Thử lại", en: "Retry", ja: "再試行", language: language) }
         }
 
+        nonisolated enum installmentCycle {
+            static var failed: String { L10n.tr("planning.installmentCycle.failed", vi: "Không thể cập nhật kỳ trả này. Vui lòng thử lại.", en: "Could not update this cycle. Try again.", ja: "この回を更新できませんでした。もう一度お試しください。") }
+            static func failed(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentCycle.failed", vi: "Không thể cập nhật kỳ trả này. Vui lòng thử lại.", en: "Could not update this cycle. Try again.", ja: "この回を更新できませんでした。もう一度お試しください。", language: language) }
+            static var notScheduled: String { L10n.tr("planning.installmentCycle.notScheduled", vi: "Khoản trả góp này không có lịch trả trong tháng đã chọn.", en: "This installment is not scheduled for the selected month.", ja: "この分割払いは選択した月には予定されていません。") }
+            static func notScheduled(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentCycle.notScheduled", vi: "Khoản trả góp này không có lịch trả trong tháng đã chọn.", en: "This installment is not scheduled for the selected month.", ja: "この分割払いは選択した月には予定されていません。", language: language) }
+            static var settled: String { L10n.tr("planning.installmentCycle.settled", vi: "Kỳ này đã có dữ liệu thanh toán. Hãy kiểm tra trước khi đổi trạng thái.", en: "This cycle already has a payment record. Review it before changing its status.", ja: "この回には支払いの記録があります。状態を変更する前に確認してください。") }
+            static func settled(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentCycle.settled", vi: "Kỳ này đã có dữ liệu thanh toán. Hãy kiểm tra trước khi đổi trạng thái.", en: "This cycle already has a payment record. Review it before changing its status.", ja: "この回には支払いの記録があります。状態を変更する前に確認してください。", language: language) }
+            static var skipMessage: String { L10n.tr("planning.installmentCycle.skipMessage", vi: "Bỏ qua khoản trả góp này trong tháng đã chọn?", en: "Skip this installment for the selected month?", ja: "選択した月のこの分割払いをスキップしますか？") }
+            static func skipMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentCycle.skipMessage", vi: "Bỏ qua khoản trả góp này trong tháng đã chọn?", en: "Skip this installment for the selected month?", ja: "選択した月のこの分割払いをスキップしますか？", language: language) }
+            static var stale: String { L10n.tr("planning.installmentCycle.stale", vi: "Khoản này đã thay đổi. Hãy đóng hộp thoại và kiểm tra lại trước khi thử tiếp.", en: "This item changed. Close this dialog and review it before trying again.", ja: "この項目が変更されました。ダイアログを閉じて内容を確認してから再試行してください。") }
+            static func stale(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentCycle.stale", vi: "Khoản này đã thay đổi. Hãy đóng hộp thoại và kiểm tra lại trước khi thử tiếp.", en: "This item changed. Close this dialog and review it before trying again.", ja: "この項目が変更されました。ダイアログを閉じて内容を確認してから再試行してください。", language: language) }
+            static var undoMessage: String { L10n.tr("planning.installmentCycle.undoMessage", vi: "Hoàn tác bỏ qua khoản trả góp này? Kỳ trả sẽ trở về trạng thái chưa thanh toán.", en: "Undo skipping this installment? It will return to pending status.", ja: "この分割払いのスキップを取り消しますか？未払いの状態に戻ります。") }
+            static func undoMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentCycle.undoMessage", vi: "Hoàn tác bỏ qua khoản trả góp này? Kỳ trả sẽ trở về trạng thái chưa thanh toán.", en: "Undo skipping this installment? It will return to pending status.", ja: "この分割払いのスキップを取り消しますか？未払いの状態に戻ります。", language: language) }
+        }
+
         nonisolated enum installmentEditor {
             static var amountPreview: String { L10n.tr("planning.installmentEditor.amountPreview", vi: "Mỗi kỳ: %1$s", en: "Per cycle: %1$s", ja: "1回あたり：%1$s") }
             static func amountPreview(language: MistiaAppLanguage) -> String { L10n.tr("planning.installmentEditor.amountPreview", vi: "Mỗi kỳ: %1$s", en: "Per cycle: %1$s", ja: "1回あたり：%1$s", language: language) }

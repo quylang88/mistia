@@ -2076,3 +2076,20 @@ Evidence: `docs/android/evidence/2026-10-14-installment-mutations.md`.
   remaining APK1–4 and RC. No device/process-death/live cloud verification.
 
 Evidence: `docs/android/evidence/2026-10-14-installment-editor.md`.
+
+
+## Native installment skip/undo — 2026-10-15
+
+- [x] Pending/skip row actions and native confirmations wired to real repository;
+  owner/month/zone scope, busy/late-callback guards and generated vi/en/ja failures.
+- [x] Full raw snapshot CAS and atomic Room occurrence/outbox writes; active semantic
+  source baseline, finite/frequency schedule, paid/linked duplicate guards, nullable
+  skip snapshots, preserved frozen undo tombstones and no ledger/balance movement.
+- [x]19 repository +5 policy runtime cases (initial16 produced15 intended REDs),
+ 1102 JVM/113 suites; full Android/Swift603/contracts/l10n/SQLite pass. Four Room and
+  three Compose additions compile only. APK56; all10 flagsfalse; no device/cloud write.
+- [ ] Installment payment/undo/currency, dedicated push/delete dependency preflight,
+  actual maintenance/notification audit, pending card policy, currency/settings/forms,
+  independent/Samsung/visual checks and remaining APK1–4/RC remain unfinished.
+
+Evidence: `docs/android/evidence/2026-10-15-installment-skip.md`.

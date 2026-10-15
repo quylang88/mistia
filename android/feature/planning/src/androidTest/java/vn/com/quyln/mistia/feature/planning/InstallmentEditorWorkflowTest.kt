@@ -16,6 +16,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
 import java.time.YearMonth
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -199,4 +201,58 @@ class InstallmentEditorWorkflowTest {
         compose.onNodeWithTag("installment.icon").performScrollTo().performClick()
         compose.onNodeWithTag("installment.pickIcon.mistia.plan.loan").performClick()
     }
+    @Test fun skipUndoNativeConfirmationPersistsOnlyOccurrenceAndOutbox() {
+        val source = original()
+        compose.setContent { MistiaTheme(darkTheme = false) {
+            Column(Modifier.verticalScroll(rememberScrollState())) { InstallmentDuePane(owner, repo, month, { device }, now = { now }) }
+        } }
+        compose.onNodeWithTag("installment.skip.${source.id}").performScrollTo().performClick()
+        Assert.assertTrue(runBlocking { repo.observeDueOccurrences(owner).first().isEmpty() })
+        compose.onNodeWithTag("installment.confirmCycle").performClick()
+        compose.waitUntil(5000) { runBlocking { repo.observeDueOccurrences(owner).first().any { it.status == DueStatus.SKIPPED } } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("installment.confirmCycle").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("installment.status.${source.id}").assertExists()
+        compose.onNodeWithTag("installment.skip.${source.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("installment.confirmCycle").performClick()
+        compose.waitUntil(5000) { runBlocking { repo.observeDueOccurrences(owner).first().isEmpty() } }
+        Assert.assertEquals(MutationKind.DELETE, runBlocking { store.pendingMutations(owner, CloudEntity.DUE_OCCURRENCE_RECORD, Long.MAX_VALUE).single().mutation.kind })
+        Assert.assertTrue(runBlocking { repo.observeTransactions(owner).first().isEmpty() })
+        Assert.assertEquals(source, plans().single())
+    }
+
+    @Test fun paidRowOffersMetadataEditButNoSkipAction() {
+        val source = original()
+        val paid = installmentDueRows(owner, listOf(source), emptyList(), month, java.time.ZoneId.systemDefault()).single().copy(status = DueStatus.PAID)
+        compose.setContent { MistiaTheme(darkTheme = false) {
+            InstallmentDueContent(listOf(paid), now, java.time.ZoneId.systemDefault(), onEdit = {}, onCycle = { error("Paid action forbidden") })
+        } }
+        compose.onNodeWithTag("installment.edit.${source.id}").assertHasClickAction()
+        compose.onNodeWithTag("installment.skip.${source.id}").assertDoesNotExist()
+    }
+
+    @Test fun lateNonCancellableResultAfterMonthChangeCannotDismissNewConfirmation() {
+        val source = original(); val release = CompletableDeferred<Unit>()
+        var selected by mutableStateOf(month)
+        val controlled = object : FinanceRepository by repo {
+            override suspend fun skipInstallment(owner: UserId, expected: InstallmentPlanRecord, month: YearMonth, deviceId: String, now: String): Result<DueOccurrenceRecord> =
+                withContext(NonCancellable) {
+                    release.await()
+                    Result.success(DueOccurrenceRecord(device, owner.value, "installment", expected.id, month.toString(), now, null, "skipped", null, null, now, now, null, 0, deviceId))
+                }
+        }
+        compose.setContent { MistiaTheme(darkTheme = false) {
+            Column(Modifier.verticalScroll(rememberScrollState())) { InstallmentDuePane(owner, controlled, selected, { device }, now = { now }) }
+        } }
+        compose.onNodeWithTag("installment.skip.${source.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("installment.confirmCycle").performClick().assertIsNotEnabled()
+        compose.onNodeWithTag("installment.cancelCycle").assertIsNotEnabled()
+        compose.runOnIdle { selected = month.plusMonths(1) }
+        compose.onNodeWithTag("installment.confirmCycle").assertDoesNotExist()
+        compose.onNodeWithTag("installment.skip.${source.id}").performScrollTo().performClick()
+        compose.runOnIdle { release.complete(Unit) }
+        compose.onNodeWithTag("installment.confirmCycle").assertExists().assertIsEnabled()
+        compose.onNodeWithTag("installment.cancelCycle").performClick()
+        Assert.assertTrue(runBlocking { repo.observeDueOccurrences(owner).first().isEmpty() })
+    }
+
 }

@@ -7,6 +7,10 @@ import kotlinx.serialization.json.*
 
 interface InstallmentRepository {
     fun observeInstallments(ownerUserId: UserId): Flow<List<InstallmentPlanRecord>>
+    suspend fun skipInstallment(owner: UserId, expected: InstallmentPlanRecord, month: java.time.YearMonth, deviceId: String, now: String): Result<DueOccurrenceRecord> =
+        Result.failure(UnsupportedOperationException("Installment skip unavailable"))
+    suspend fun undoInstallmentSkip(owner: UserId, expected: InstallmentPlanRecord, month: java.time.YearMonth, deviceId: String, now: String): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Installment skip undo unavailable"))
     suspend fun saveInstallment(owner: UserId, draft: InstallmentDraft, deviceId: String, now: String): Result<InstallmentPlanRecord>
     suspend fun deleteInstallment(owner: UserId, expected: InstallmentPlanRecord, deviceId: String, now: String): Result<Unit>
 }
@@ -27,7 +31,7 @@ data class InstallmentDraft(
 
 enum class InstallmentValidationError {
     NAME_REQUIRED, INVALID_AMOUNT, INVALID_DAYS, INVALID_FREQUENCY, INVALID_CURRENCY, INVALID_TOTAL_CYCLES,
-    INVALID_WALLET, INVALID_IDENTITY, NOT_FOUND, STALE_RECORD,
+    INVALID_WALLET, INVALID_IDENTITY, NOT_FOUND, STALE_RECORD, NOT_SCHEDULED, SETTLED_CYCLE,
 }
 class InstallmentValidationException(val reason: InstallmentValidationError) : IllegalArgumentException(reason.name)
 

@@ -1002,6 +1002,12 @@
     <string name="planning_goal_editor_invalid_amount">対応範囲内の有効な金額を入力してください。</string>
     <string name="planning_installment_load_error">現在、分割払いを読み込めません。</string>
     <string name="planning_installment_retry">再試行</string>
+    <string name="planning_installment_cycle_failed">この回を更新できませんでした。もう一度お試しください。</string>
+    <string name="planning_installment_cycle_not_scheduled">この分割払いは選択した月には予定されていません。</string>
+    <string name="planning_installment_cycle_settled">この回には支払いの記録があります。状態を変更する前に確認してください。</string>
+    <string name="planning_installment_cycle_skip_message">選択した月のこの分割払いをスキップしますか？</string>
+    <string name="planning_installment_cycle_stale">この項目が変更されました。ダイアログを閉じて内容を確認してから再試行してください。</string>
+    <string name="planning_installment_cycle_undo_message">この分割払いのスキップを取り消しますか？未払いの状態に戻ります。</string>
     <string name="planning_installment_editor_amount_preview">1回あたり：%1$s</string>
     <string name="planning_installment_editor_delete_message">この項目と支払予定を削除します。記録済みの取引は保持されます。</string>
     <string name="planning_installment_editor_discard_message">この分割払いの変更は保存されません。</string>

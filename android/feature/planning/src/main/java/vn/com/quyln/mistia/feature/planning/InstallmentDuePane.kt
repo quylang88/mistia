@@ -87,7 +87,7 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
             Text(stringResource(R.string.planning_installment_load_error), Modifier.testTag("installment.error"))
             TextButton(onClick = { retry++ }) { Text(stringResource(R.string.planning_installment_retry)) }
         }
-        rows?.isSuccess == true -> InstallmentDueContent(rows.getOrThrow(), reference, zone,
+        rows?.isSuccess == true -> InstallmentDueWorkflow(owner, repository, rows.getOrThrow(), month, reference, zone, deviceIdProvider, currentTime,
             onAdd = { navigation = InstallmentEditorNavigation.create(owner.value, defaultCurrency, UUID.randomUUID().toString()) },
             onEdit = { navigation = InstallmentEditorNavigation.edit(owner.value, it) })
     }
@@ -102,7 +102,7 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
 
 @Composable
 internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Instant, zone: ZoneId,
-    onAdd: (() -> Unit)? = null, onEdit: ((InstallmentPlanRecord) -> Unit)? = null) {
+    onAdd: (() -> Unit)? = null, onEdit: ((InstallmentPlanRecord) -> Unit)? = null, onCycle: ((InstallmentDueRow) -> Unit)? = null) {
     val locale = LocalConfiguration.current.locales[0]
     val dates = remember(locale, zone) { DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale).withZone(zone) }
     MistiaGlassCard(contentPadding = PaddingValues(0.dp)) { _ ->
@@ -134,6 +134,10 @@ internal fun InstallmentDueContent(rows: List<InstallmentDueRow>, reference: Ins
                         if (row.status != DueStatus.PENDING) Text(stringResource(if (row.status == DueStatus.PAID) R.string.planning_planning_paid else R.string.planning_duepayment_bill_skipped),
                             Modifier.testTag("installment.status.${row.plan.id}").background(color.copy(alpha = 0.12f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 6.dp),
                             color = color, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                    if (onCycle != null && row.status != DueStatus.PAID) TextButton(
+                        onClick = { onCycle(row) }, modifier = Modifier.align(Alignment.End).testTag("installment.skip.${row.plan.id}")) {
+                        Text(stringResource(if (row.status == DueStatus.SKIPPED) R.string.planning_duepayment_undo_skip else R.string.planning_duepayment_skip_this_month))
                     }
                     if (row.status == DueStatus.PENDING) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(dates.format(row.dueDate), Modifier.testTag("installment.due.${row.plan.id}"), style = MaterialTheme.typography.labelMedium,

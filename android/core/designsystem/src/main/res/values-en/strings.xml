@@ -1002,6 +1002,12 @@
     <string name="planning_goal_editor_invalid_amount">Enter valid amounts within the supported range.</string>
     <string name="planning_installment_load_error">Couldn\'t load installments right now.</string>
     <string name="planning_installment_retry">Retry</string>
+    <string name="planning_installment_cycle_failed">Could not update this cycle. Try again.</string>
+    <string name="planning_installment_cycle_not_scheduled">This installment is not scheduled for the selected month.</string>
+    <string name="planning_installment_cycle_settled">This cycle already has a payment record. Review it before changing its status.</string>
+    <string name="planning_installment_cycle_skip_message">Skip this installment for the selected month?</string>
+    <string name="planning_installment_cycle_stale">This item changed. Close this dialog and review it before trying again.</string>
+    <string name="planning_installment_cycle_undo_message">Undo skipping this installment? It will return to pending status.</string>
     <string name="planning_installment_editor_amount_preview">Per cycle: %1$s</string>
     <string name="planning_installment_editor_delete_message">This item and its payment schedule will be removed. Recorded transactions are kept.</string>
     <string name="planning_installment_editor_discard_message">Your changes to this installment will not be saved.</string>
