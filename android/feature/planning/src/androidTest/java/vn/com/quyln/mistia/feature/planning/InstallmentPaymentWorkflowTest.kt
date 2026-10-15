@@ -26,7 +26,7 @@ import vn.com.quyln.mistia.core.database.*
 import vn.com.quyln.mistia.core.designsystem.MistiaTheme
 import vn.com.quyln.mistia.core.model.*
 
-/** Synthetic in-memory Room. Compilation is not device execution. */
+/** Synthetic in-memory Room; executed on the isolated API36 emulator. */
 @RunWith(AndroidJUnit4::class)
 class InstallmentPaymentWorkflowTest {
     @get:Rule val compose = createComposeRule()
@@ -41,9 +41,10 @@ class InstallmentPaymentWorkflowTest {
     private val other = UserId("99999999-9999-9999-9999-999999999999")
     private val now = Instant.parse("2026-10-15T00:00:00Z")
     private val month = YearMonth.of(2026, 10)
+    private val catalog get() = SystemCategoryCatalog.parse(ApplicationProvider.getApplicationContext<Context>().assets.open("MistiaSystemCategories.json").bufferedReader().use { it.readText() })
     @Before fun setup() = runBlocking {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), MistiaDatabase::class.java).allowMainThreadQueries().build()
-        store = RoomLocalStore(db); repo = OfflineFirstFinanceRepository(store)
+        store = RoomLocalStore(db); repo = OfflineFirstFinanceRepository(store, systemCategoryCatalog = catalog)
         wallet = repo.saveWallet(owner, WalletDraft(name = "Dollar cash", kind = WalletKind.CASH, currencyCode = "USD", openingBalanceMinor = 10000), device, now.toString()).getOrThrow()
         plan = repo.saveInstallment(owner, InstallmentDraft(id, "Loan", 1375, 15, 1, 12, wallet.id, "USD"), device, now.toString()).getOrThrow()
     }
@@ -81,7 +82,7 @@ class InstallmentPaymentWorkflowTest {
         val restoration = StateRestorationTester(compose)
         var selected by mutableStateOf(month); var subject by mutableStateOf(owner)
         restoration.setContent {
-            val recreated = remember { OfflineFirstFinanceRepository(store) }
+            val recreated = remember { OfflineFirstFinanceRepository(store, systemCategoryCatalog = catalog) }
             MistiaTheme(darkTheme = false) { Column(Modifier.verticalScroll(rememberScrollState())) {
                 InstallmentDuePane(subject, recreated, selected, { device }, now = { now })
             } }

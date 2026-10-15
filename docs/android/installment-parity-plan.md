@@ -114,6 +114,12 @@ pass on isolated Android16/API36 ARM64 emulator after correcting a missing-walle
 in skip ACK. This supersedes earlier compile-only limitations for those exact database
 fixtures only; planning Compose/Samsung/visual/background evidence remains open.
 
+Actual installment payment Compose workflows now pass (APK70):
+`evidence/2026-10-15-native-payment-restoration.md`. Nine cases execute on API36,
+including real payment/undo/repay, wallet draft restore/discard, current currency and late
+response fencing. Fixed the observed localized-month/canonical-saver wiring crash and
+missing catalog test setup. Full planning and Samsung/visual/background checks remain open.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.

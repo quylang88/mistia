@@ -26,7 +26,7 @@ internal fun InstallmentPaymentSheet(owner: String, row: InstallmentDueRow, wall
     val locale = LocalConfiguration.current.locales[0]
     val cycleMonth = row.month.format(DateTimeFormatter.ofPattern("LLLL yyyy", locale))
     val initial = remember(owner, row.plan.id, row.month) { InstallmentPaymentState.initial(owner, row, wallets) }
-    var state by rememberSaveable(owner, row.plan.id, row.month, stateSaver = InstallmentPaymentState.saver(owner, row.plan.id, cycleMonth)) { mutableStateOf(initial) }
+    var state by rememberSaveable(owner, row.plan.id, row.month, stateSaver = InstallmentPaymentState.saver(owner, row.plan.id, row.month.toString())) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Int?>(null) }
     var choosing by remember { mutableStateOf(false) }
