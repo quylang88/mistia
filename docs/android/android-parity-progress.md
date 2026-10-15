@@ -2093,3 +2093,21 @@ Evidence: `docs/android/evidence/2026-10-14-installment-editor.md`.
   independent/Samsung/visual checks and remaining APK1–4/RC remain unfinished.
 
 Evidence: `docs/android/evidence/2026-10-15-installment-skip.md`.
+
+
+## Gated installment plan push foundation — 2026-10-15
+
+- [x] Typed owner/version/clock validated plan coordinator, Swift semantic comparison,
+  exact nullable/Long payloads, standard create/update/independent tombstone conflict,
+  ACK/retry/cancellation and stale-response behavior. Canonical UUID wallet dependency.
+- [x] Native DI/client allowlist behind installment+wallet flags; engine order80 before
+  due90. Source deletion with pending owned cycles is held before remote IO; existing
+  bill-only child gate stays closed. This is not complete installment synchronization.
+- [x]25 coordinator +10 HTTPS cases; initial20 produced19 REDs, plus dependent-delete
+  and UUID regressions.1137 JVM/115 suites; full Android/Swift603/contracts/l10n/SQLite
+  pass. APK57; all10 flagsfalse; no device/production write or schema change.
+- [ ] Causal source-delete/child conflict reconciliation and dedicated occurrence push,
+  installment payment/undo/currency, actual maintenance audit, card settlement policy,
+  settings/monetary forms, independent/device/visual QA and full APK1–4/RC remain open.
+
+Evidence: `docs/android/evidence/2026-10-15-installment-plan-push.md`.

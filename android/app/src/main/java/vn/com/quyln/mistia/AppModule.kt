@@ -49,6 +49,7 @@ import vn.com.quyln.mistia.core.sync.PullOnlySyncEngine
 import vn.com.quyln.mistia.core.sync.BudgetPushCoordinator
 import vn.com.quyln.mistia.core.sync.SavingsGoalPushCoordinator
 import vn.com.quyln.mistia.core.sync.DueOccurrencePushCoordinator
+import vn.com.quyln.mistia.core.sync.InstallmentPushCoordinator
 import vn.com.quyln.mistia.core.sync.RecurringBillPushCoordinator
 import vn.com.quyln.mistia.core.sync.CategoryPushCoordinator
 import vn.com.quyln.mistia.core.sync.CreditCardPushCoordinator
@@ -165,6 +166,7 @@ object AppModule {
             if (BuildConfig.ALLOW_RECURRING_BILL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES) {
                 add(CloudEntity.RECURRING_BILL_PLAN)
             }
+            if (BuildConfig.ALLOW_INSTALLMENT_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES) add(CloudEntity.INSTALLMENT_PLAN)
             if (BuildConfig.ALLOW_SAVINGS_GOAL_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES) {
                 add(CloudEntity.SAVINGS_GOAL)
             }
@@ -307,6 +309,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideInstallmentPushCoordinator(localStore: LocalStore, remoteStore: RemoteMutationStore): InstallmentPushCoordinator =
+        InstallmentPushCoordinator(localStore, remoteStore,
+            writesEnabled = BuildConfig.ALLOW_INSTALLMENT_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES)
+
+    @Provides
+    @Singleton
     fun provideRecurringBillPushCoordinator(
         localStore: LocalStore,
         remoteStore: RemoteMutationStore,
@@ -397,6 +405,7 @@ object AppModule {
         budgetPushCoordinator: BudgetPushCoordinator,
         savingsGoalPushCoordinator: SavingsGoalPushCoordinator,
         recurringBillPushCoordinator: RecurringBillPushCoordinator,
+        installmentPushCoordinator: InstallmentPushCoordinator,
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
         categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
@@ -417,6 +426,7 @@ object AppModule {
             budgetPushCoordinator,
             savingsGoalPushCoordinator,
             recurringBillPushCoordinator,
+            installmentPushCoordinator,
             dueOccurrencePushCoordinator,
         ),
         categoryTranslationCoordinator,

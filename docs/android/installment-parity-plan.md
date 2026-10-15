@@ -20,6 +20,11 @@ baseline, full snapshot CAS, atomic outbox and native scoped confirmations are w
 Nineteen repository and five policy JVM cases execute; four Room and three Compose
 additions compile only. Payment/undo and installment cloud push stay unfinished.
 
+Plan push foundation is completed locally (APK57):
+`evidence/2026-10-15-installment-plan-push.md`. Typed plan outbox/HTTP/DI/order and
+independent source tombstones are tested. Source deletes with pending owned cycles
+remain held; all installment child writes remain closed pending dedicated reconciliation.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
@@ -31,12 +36,14 @@ Next coherent slices:
    scoped frozen-history checks and deterministic currency policy. Do not copy raw minor
    values between currencies. Bill same-currency choice is accepted; card product question
    remains pending. Current installment read work does not decide settlement behavior.
-3. Dedicated installment push/dependency/coalescing/conflict/cancellation parity.
-   Current bill-only due source gate deliberately holds installment/card children. The
-   existing bill child-delete preflight restores paid history when linked ledger remains
-   live; installment plan deletion needs its own validated preflight because it retains
-   that expense. Do not merely enable the shared source list. Then inspect actual Swift
-   maintenance/notifications and integrate only the matching supported behaviors.
+3. Dedicated installment occurrence push and causal source-delete reconciliation.
+   Current bill-only child gate and source-delete dependency guard deliberately hold
+   the unsafe paths. A source-delete remote winner must reconcile exact dependent child
+   deletion intents without losing newer edits or hiding paid history under an active
+   plan. Track the causal batch explicitly; timestamp/device coincidence is insufficient.
+   Do not merely enable the shared source list or reuse bill linked-ledger undo preflight.
+   Preserve posted expenses on source deletion. Then inspect actual Swift maintenance/
+   notifications and integrate only its supported behaviors. All flags remain false.
 4. Samsung/visual/background checks when a device is available; independent review
    when available. Never treat compile-only AndroidTests as runtime verification.
 
