@@ -40,6 +40,13 @@ preservation are implemented. Runtime23 model +14 sync cases pass; ten new Room
 fixtures compile/package only. Successful source deletion still retains its children
 and batch for dedicated completion. Legacy unproven dependencies remain held.
 
+Unfinished-batch source pull protection is completed locally (APK60):
+`evidence/2026-10-15-installment-pull-pin.md`. A source with a durable owned batch
+stays fenced after source ACK, across active/missing/deleted remote full snapshots;
+normal pull resumes when the exact batch is cleared. Four new actual SQL cases pass;
+six Room fixtures compile/package only. The future batch worker must use authoritative
+fetches and explicit reconciliation rather than relying on generic pull to clear a batch.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.

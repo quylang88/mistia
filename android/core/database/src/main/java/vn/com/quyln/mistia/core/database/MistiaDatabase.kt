@@ -212,6 +212,11 @@ interface CloudRecordDao {
         """
         DELETE FROM cloud_records
         WHERE owner_user_id = :ownerUserId AND entity = :entity AND has_pending_mutation = 0
+          AND NOT (entity = 'installment_plans' AND EXISTS (
+            SELECT 1 FROM installment_delete_batches AS batch
+            WHERE batch.owner_user_id = cloud_records.owner_user_id
+              AND batch.plan_id = cloud_records.record_id
+          ))
         """
     )
     suspend fun deleteCleanSnapshot(ownerUserId: String, entity: String)
@@ -1128,7 +1133,15 @@ class RoomLocalStore(
         records: List<CloudRecord>,
     ) {
         database.withTransaction {
-            val pendingIds = database.syncOutboxDao().recordIds(ownerUserId.value, entity).toSet()
+            val installmentPull = entity == CloudEntity.INSTALLMENT_PLAN.table
+            if (installmentPull) {
+                ensureCurrentFinanceOwner(ownerUserId)
+                require(records.all { it.ownerUserId == ownerUserId.value && it.entity == entity })
+            }
+            // Source ACK can finish before its child batch. Keep that local source fenced
+            // until the dedicated reconciler resolves/clears the exact causal batch.
+            val protectedIds = if (installmentPull) database.installmentDeletionDao().rows(ownerUserId.value).map { it.planId }.toSet() else emptySet()
+            val pendingIds = database.syncOutboxDao().recordIds(ownerUserId.value, entity).toSet() + protectedIds
             database.cloudRecordDao().deleteCleanSnapshot(ownerUserId.value, entity)
             val now = System.currentTimeMillis()
             database.cloudRecordDao().upsert(
@@ -1156,6 +1169,7 @@ class RoomLocalStore(
                     lastRecordCount = records.size,
                 )
             )
+            if (installmentPull) ensureCurrentFinanceOwner(ownerUserId)
         }
     }
 

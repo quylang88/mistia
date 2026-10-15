@@ -2138,3 +2138,9 @@ Completed the gated source-delete reconciliation path with immutable per-request
 Runtime23 model +14 sync cases pass; full1190 JVM/118 suites, Swift603, lint/build, AndroidTest compilation/package, contract15, localization and existing SQLite checks pass. Ten new disk-Room fixtures are compile/package only; ADB empty. VersionCode59 APK/test APK and checksums are in `evidence/2026-10-15-installment-source-ack.md`. All10 flagsfalse; no cloud writes/deploy/migration or device proof.
 
 Next: dedicated installment child deletion/push/completion, resurrection and legacy recovery; actual payment/undo/currency handling and maintenance; remaining full APK1–4/RC and independent/Samsung/visual checks. Full goal remains active.
+
+## 2026-10-15 — protect unfinished installment deletion during pull (APK60)
+
+Fixed the post-source-ACK pull interval: clean source rows with an exact owned causal batch are preserved both from snapshot deletion and incoming UPSERT until dedicated reconciliation clears the batch. Current-owner guards cover source pull and cursor transaction rollback. Other plans/owners/entities remain unaffected; corrupt intent stays held for explicit recovery.
+
+Two actual-SQL behavioral RED cases now pass; installment SQLite helper11 (four additions), outbox7/notification3, full1190 JVM/118 suites, Swift603, lint/build, AndroidTest compile/package, contract15/localization and packaged six schemas pass. Six added disk-Room fixtures compile/package only; no ADB device. Evidence/APK60/test APK/checksums: `evidence/2026-10-15-installment-pull-pin.md`. All10 flagsfalse; no production writes/deploy/migration. Child completion/resurrection/legacy recovery and full APK1–4/RC remain active.

@@ -35,11 +35,13 @@ class InstallmentDeletionBatchRoomTest {
     private val active = AtomicReference<UserId?>(owner)
     private val flip = AtomicBoolean(false)
     private val flipAck = AtomicBoolean(false)
+    private val flipPull = AtomicBoolean(false)
     private fun open() {
         db = Room.databaseBuilder(context, MistiaDatabase::class.java, databaseName).allowMainThreadQueries()
             .setQueryCallback(RoomDatabase.QueryCallback { sql, _ ->
                 if (flip.get() && sql.contains("INSERT", true) && sql.contains("installment_delete_batches")) active.set(other)
                 if (flipAck.get() && sql.contains("DELETE", true) && sql.contains("sync_outbox")) active.set(other)
+                if (flipPull.get() && sql.contains("DELETE", true) && sql.contains("cloud_records")) active.set(other)
             }, Executor { it.run() }).build()
         store = RoomLocalStore(db, currentBillOwner = { active.get() }); repo = OfflineFirstFinanceRepository(store)
     }
@@ -247,6 +249,71 @@ class InstallmentDeletionBatchRoomTest {
         assertFalse(store.recordInstallmentSourceFailure(q, s.batch!!.batchId, 200, "network_io"))
         val current = store.pendingMutations(owner, CloudEntity.INSTALLMENT_PLAN, Long.MAX_VALUE).single()
         assertEquals(1, current.attemptCount); assertEquals(100L, current.nextAttemptAtEpochMillis)
+    }
+
+    private suspend fun acknowledgedDeletion(): InstallmentAcknowledgementSnapshot {
+        val s = deletionSnapshot(); val source = s.recordsByEntity.getValue(CloudEntity.INSTALLMENT_PLAN).single()
+        assertTrue(acknowledge(s, source))
+        return store.installmentAcknowledgementSnapshot(owner, id)
+    }
+    @Test fun pullCannotResurrectRemoveOrReplaceAcknowledgedSourceWhileBatchChildrenRemain() = runTest {
+        val s = acknowledgedDeletion()
+        val source = store.record(owner, CloudEntity.INSTALLMENT_PLAN.table, id)!!
+        assertFalse(db.cloudRecordDao().record(owner.value, source.entity, id)!!.hasPendingMutation)
+        for (incoming in listOf(listOf(serverSource()), emptyList(), listOf(source.copy(syncVersion = 99, payload = JsonObject(source.payload + ("sync_version" to JsonPrimitive(99))))))) {
+            repeat(3) { store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, incoming) }
+            s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+        }
+        db.close(); open()
+        store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, listOf(serverSource()))
+        s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+        assertEquals(payment(), store.record(owner, CloudEntity.LEDGER_TRANSACTION.table, wallet))
+    }
+    @Test fun normalPullResumesAsSoonAsTheExactBatchHasBeenCleared() = runTest {
+        val s = deletionSnapshot(); assertTrue(acknowledge(s)); assertNull(store.installmentDeletionBatch(owner, id))
+        val edited = plan().copy(name = "Subsequent remote edit", updatedAt = "2026-10-17T00:00:00Z", syncVersion = 9007199254740999).toCloudRecord()
+        store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, listOf(edited))
+        assertEquals(edited, store.record(owner, edited.entity, id))
+        store.replacePullSnapshot(owner, edited.entity, emptyList()); assertNull(store.record(owner, edited.entity, id))
+    }
+    @Test fun causalPullPinDoesNotSuppressOtherPlansOrOtherOwnersWithSameID() = runTest {
+        val s = acknowledgedDeletion(); val another = plan().copy(id = other.value, name = "Other plan").toCloudRecord()
+        store.replacePullSnapshot(owner, another.entity, listOf(serverSource(), another))
+        assertEquals(another, store.record(owner, another.entity, another.id))
+        assertEquals(s.recordsByEntity.getValue(CloudEntity.INSTALLMENT_PLAN).single(), store.record(owner, another.entity, id))
+        active.set(other)
+        val foreign = plan(other).toCloudRecord()
+        store.replacePullSnapshot(other, foreign.entity, listOf(foreign)); assertEquals(foreign, store.record(other, foreign.entity, id))
+        active.set(owner); assertEquals(s.batch, store.installmentDeletionBatch(owner, id))
+    }
+    private fun pullCursor(): Pair<Long, Int>? = db.openHelper.readableDatabase.query(
+        "SELECT last_full_pull_epoch_millis,last_record_count FROM sync_cursors WHERE owner_user_id=? AND entity=?",
+        arrayOf<Any>(owner.value, CloudEntity.INSTALLMENT_PLAN.table)).use { cursor ->
+        if (cursor.moveToFirst()) cursor.getLong(0) to cursor.getInt(1) else null
+    }
+    @Test fun pullOwnerFlipRollsBackSnapshotAndCursorWithoutReleasingBatch() = runTest {
+        val s = acknowledgedDeletion(); val cursorBefore = pullCursor()
+        flipPull.set(true)
+        try { store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, listOf(serverSource())); fail("Cancellation expected") }
+        catch (_: CancellationException) {
+            flipPull.set(false); active.set(owner)
+            s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+            assertEquals(cursorBefore, pullCursor())
+        }
+    }
+    @Test fun foreignInstallmentPullEnvelopeFailsBeforeAnyLocalSnapshotChange() = runTest {
+        val s = acknowledgedDeletion()
+        assertTrue(runCatching { store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, listOf(plan(other).toCloudRecord())) }.isFailure)
+        assertTrue(runCatching { store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, listOf(due(1))) }.isFailure)
+        s.requireUnchanged(store.installmentAcknowledgementSnapshot(owner, id))
+    }
+    @Test fun malformedBatchStorageRemainsPinnedUntilExplicitRecoveryRatherThanBeingDroppedByPull() = runTest {
+        val s = acknowledgedDeletion(); val source = store.record(owner, CloudEntity.INSTALLMENT_PLAN.table, id)
+        db.openHelper.writableDatabase.execSQL("UPDATE installment_delete_batches SET payload_json='{}' WHERE owner_user_id=?", arrayOf<Any>(owner.value))
+        store.replacePullSnapshot(owner, CloudEntity.INSTALLMENT_PLAN.table, listOf(serverSource()))
+        assertEquals(source, store.record(owner, CloudEntity.INSTALLMENT_PLAN.table, id))
+        assertEquals(1, db.installmentDeletionDao().rows(owner.value).size)
+        assertTrue(runCatching { store.installmentDeletionBatch(owner, id) }.isFailure)
     }
 
 }

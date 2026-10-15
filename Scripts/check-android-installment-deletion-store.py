@@ -111,4 +111,35 @@ class DeletionStoreTests(unittest.TestCase):
         self.assertEqual(1, db.execute(self.query('deleteExact'), {'ownerUserId': A, 'planId': PLAN, 'batchId': BATCH}).rowcount)
         self.assertEqual([(B,)], db.execute('SELECT owner_user_id FROM installment_delete_chunks').fetchall())
 
+    def delete_clean(self, db, owner=A, entity='installment_plans'):
+        dao = SOURCE.read_text().split('interface CloudRecordDao {', 1)[1].split('@Dao', 1)[0]
+        match = re.search(r'@Query\(\s*"""([^"]*)"""\s*\)\s*suspend fun deleteCleanSnapshot', dao, re.S)
+        self.assertIsNotNone(match)
+        return db.execute(match[1], {'ownerUserId': owner, 'entity': entity}).rowcount
+
+    def test_pull_keeps_clean_source_after_ack_while_causal_child_batch_is_unfinished(self):
+        db = self.store(); self.insert(db)
+        db.execute('UPDATE cloud_records SET has_pending_mutation=0'); db.execute('DELETE FROM sync_outbox')
+        db.execute("DELETE FROM sync_outbox WHERE entity='installment_plans'")
+        self.assertEqual(0, self.delete_clean(db))
+        self.assertEqual((CLOCK, 9007199254740993), db.execute('SELECT deleted_at,sync_version FROM cloud_records').fetchone())
+
+    def test_pull_batch_pin_is_partitioned_by_owner_and_entity_even_with_same_record_id(self):
+        db = self.store(); self.insert(db, owner=B)
+        db.execute('UPDATE cloud_records SET has_pending_mutation=0'); db.execute('DELETE FROM sync_outbox')
+        self.assertEqual(1, self.delete_clean(db))  # Foreign owner batch cannot pin A.
+        db.execute('INSERT INTO cloud_records VALUES (?,?,?,?,?,?,?,?,?)', (B, 'ledger_wallets', PLAN, '{}', CLOCK, None, 3, 0, 0))
+        self.assertEqual(1, self.delete_clean(db, owner=B, entity='ledger_wallets'))
+
+    def test_exact_batch_removal_releases_clean_source_for_normal_pull(self):
+        db = self.store(); self.insert(db); db.execute('UPDATE cloud_records SET has_pending_mutation=0'); db.execute('DELETE FROM sync_outbox')
+        self.assertEqual(0, self.delete_clean(db))
+        db.execute(self.query('deleteExact'), {'ownerUserId': A, 'planId': PLAN, 'batchId': BATCH})
+        self.assertEqual(1, self.delete_clean(db))
+
+    def test_pull_pin_never_uses_source_timestamp_or_device_coincidence(self):
+        db = self.store(); self.insert(db, plan=NEW)
+        db.execute('UPDATE cloud_records SET has_pending_mutation=0'); db.execute('DELETE FROM sync_outbox')
+        self.assertEqual(1, self.delete_clean(db))
+
 if __name__ == '__main__': unittest.main()
