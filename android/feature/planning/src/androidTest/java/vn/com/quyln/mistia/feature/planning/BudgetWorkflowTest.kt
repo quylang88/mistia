@@ -187,13 +187,18 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("goal.add").performScrollTo().performClick()
         compose.onNodeWithTag("goal.name").performTextReplacement("Travel")
         compose.onNodeWithTag("goal.target").performTextReplacement("1000")
-        compose.onNodeWithTag("goal.current").performTextReplacement("100")
+        compose.onNodeWithTag("goal.target").assertTextContains("1,000")
+        compose.onNodeWithTag("goal.current").performTextReplacement("123456")
+        compose.onNodeWithTag("goal.current").assertTextContains("123,456")
         capture("goal.editor","goal-editor-light.png")
         compose.onNodeWithTag("goal.save").performScrollTo().performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().size==1 } }
         val goal=runBlocking { repo.observeSavingsGoals(owner).first().single() }
         Assert.assertEquals(1000,goal.targetMinor)
+        Assert.assertEquals(123456L, goal.currentSavedMinor)
         compose.onNodeWithTag("goal.edit.${goal.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.target").assertTextContains("1,000")
+        compose.onNodeWithTag("goal.current").assertTextContains("123,456")
         compose.onNodeWithTag("goal.current").performTextReplacement("200")
         compose.onNodeWithTag("goal.save").performScrollTo().performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().single().currentSavedMinor==200L } }
@@ -217,6 +222,7 @@ class BudgetWorkflowTest {
         }
         compose.onNodeWithTag("goal.name").performTextReplacement("Pending")
         compose.onNodeWithTag("goal.target").performTextReplacement("1000")
+        compose.onNodeWithTag("goal.target").assertTextContains("1,000")
         compose.onNodeWithTag("goal.save").performScrollTo().performClick()
         compose.onNodeWithTag("goal.name").assertTextContains("Pending")
         Assert.assertFalse(dismissed)

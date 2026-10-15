@@ -2234,3 +2234,9 @@ Full1375 JVM/131suites, Swift609, lint/build, AndroidTest compile/package, contr
 Matched Swift JPY/VND grouping while typing/opening budgets without changing positive/exact minor parsing, branch currency/clear rules or owned month/identity. Common supported-currency selector is shared with bills; imported fractional input remains unchanged. Four new state cases pass after3 intended REDs; actual API36 budget CRUD creates/reopens exact >2^53 grouped amount, edits and deletes with correct outbox.
 
 Full1379 JVM/131suites, Swift609, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK73/executed focused test APK/checksums: `evidence/2026-10-15-budget-grouped-input.md`. Direct Swift review identified amount calculator action still missing on Android; separate slice follows savings grouping. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Full APK1–4/RC goal remains active.
+
+## 2026-10-15 — savings target/current grouping (APK74)
+
+Matched Swift JPY/VND grouping for both savings fields during input/opening, retaining exact positive target/signed-or-empty current, owned restoration, original date/identity and fractional-import semantics. Four new runtime state cases pass after3 intended REDs; actual API36 savings CRUD verifies grouped target/current before save and after reopen plus exact persistence/edit/delete/outbox.
+
+Full1383 JVM/131suites, Swift609, lint/build, AndroidTest compile/package, contract/localization/SQLite/schema checks pass. Evidence/APK74/executed focused test APK/checksums: `evidence/2026-10-15-goal-grouped-input.md`. All10 flagsfalse; no Samsung/live production writes/deploy/migration. Continue native amount calculator and remaining full APK1–4/RC; goal stays active.

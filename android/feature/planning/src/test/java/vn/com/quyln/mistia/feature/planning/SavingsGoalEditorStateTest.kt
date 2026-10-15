@@ -52,4 +52,34 @@ class SavingsGoalEditorStateTest {
         assertNull(navigation.copy(owner="other").goal())
         assertNull(navigation.copy(payload="invalid").goal())
     }
+    @Test fun `target and current group exact supported amounts with signed current value`() {
+        for (currency in listOf("JPY", "VND")) {
+            val state = SavingsGoalEditorState.fresh(LocalDate.of(2026,10,13), currency).copy(name = "Home")
+                .withTarget("9007199254740993").withCurrent("-123456")
+            assertEquals("9,007,199,254,740,993", state.targetText); assertEquals("-123,456", state.currentText)
+            assertEquals(9007199254740993L, state.toDraft(zone).targetMinor); assertEquals(-123456L, state.toDraft(zone).currentSavedMinor)
+        }
+    }
+    @Test fun `existing goal opens grouped without changing original date identity or amounts`() {
+        val state = SavingsGoalEditorState.from(goal.copy(currentSavedMinor = 123456), zone)
+        assertEquals("9,007,199,254,740,993", state.targetText); assertEquals("123,456", state.currentText)
+        assertEquals(goal.targetDate, state.toDraft(zone).targetDate); assertEquals(goal.id, state.toDraft(zone).id)
+    }
+    @Test fun `grouped current and target survive owner scoped restore and blank current remains zero`() {
+        val state = SavingsGoalEditorState.from(goal,zone).withTarget("123456").withCurrent("1234")
+        val saver = SavingsGoalEditorState.saver(goal.ownerUserId); val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals("123,456", saver.restore(saved)!!.targetText); assertEquals("1,234", saver.restore(saved)!!.currentText)
+        assertNull(SavingsGoalEditorState.saver("another-owner").restore(saved))
+        assertEquals(0L, saver.restore(saved)!!.withCurrent("").toDraft(zone).currentSavedMinor)
+    }
+    @Test fun `invalid target current and overflow are preserved and rejected without changing unit`() {
+        val state = SavingsGoalEditorState.from(goal,zone)
+        for (text in listOf("1.5", "1x23", "9223372036854775808")) {
+            assertThrows(IllegalArgumentException::class.java) { state.withTarget(text).toDraft(zone) }
+            assertThrows(IllegalArgumentException::class.java) { state.withCurrent(text).toDraft(zone) }
+        }
+        assertEquals("1x23", state.withCurrent("1x23").currentText)
+        assertEquals(1375L, state.copy(currencyCode = "USD").withTarget("13.75").withCurrent("12.50").toDraft(zone).targetMinor)
+    }
+
 }

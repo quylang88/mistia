@@ -14,6 +14,8 @@ data class SavingsGoalEditorState(
     val targetDate:String, val originalTargetDate:String?, val currencyCode:String,
     val iconSymbolName:String, val linkedWalletId:String?,
 ) {
+    fun withTarget(text: String) = copy(targetText = planningAmountInput(text, currencyCode))
+    fun withCurrent(text: String) = copy(currentText = planningAmountInput(text, currencyCode))
     fun toDraft(zone:ZoneId):SavingsGoalDraft {
         val trimmed=name.trim().takeIf { it.isNotEmpty() } ?: throw SavingsGoalValidationException(SavingsGoalValidationError.NAME_REQUIRED)
         fun parse(text:String,emptyZero:Boolean):Long {
@@ -34,7 +36,7 @@ data class SavingsGoalEditorState(
         fun fresh(date:LocalDate,currency:String)=SavingsGoalEditorState(null,"","","",date.toString(),null,currency,"mistia.goal.savings",null)
         fun from(goal:SavingsGoalRecord,zone:ZoneId):SavingsGoalEditorState {
             val digits=runCatching { Currency.getInstance(goal.currencyCode).defaultFractionDigits.coerceAtLeast(0) }.getOrDefault(0)
-            fun text(value:Long)=BigDecimal.valueOf(value,digits).stripTrailingZeros().toPlainString()
+            fun text(value:Long)=planningAmountInput(BigDecimal.valueOf(value,digits).stripTrailingZeros().toPlainString(), goal.currencyCode)
             return SavingsGoalEditorState(goal.id,goal.name,text(goal.targetMinor),text(goal.currentSavedMinor),
                 Instant.parse(goal.targetDate).atZone(zone).toLocalDate().toString(),goal.targetDate,goal.currencyCode,goal.iconSymbolName,goal.linkedWalletId)
         }
