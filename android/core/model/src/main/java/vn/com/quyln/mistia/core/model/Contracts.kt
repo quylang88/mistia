@@ -271,6 +271,9 @@ interface LocalStore {
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
 
+    suspend fun installmentDeletionBatch(owner: UserId, planId: String): InstallmentDeletionBatch? =
+        throw UnsupportedOperationException("Durable installment deletion intent unavailable")
+
     suspend fun commitInstallmentCycleMutations(expected: InstallmentCycleSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean =
         throw UnsupportedOperationException("Conditional installment cycle writes unavailable")
 

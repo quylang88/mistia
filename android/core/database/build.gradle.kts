@@ -14,6 +14,7 @@ android {
     namespace = "vn.com.quyln.mistia.core.database"
     compileSdk = 36
     sourceSets.getByName("androidTest").assets.srcDir(generatedBootstrapTestAssets)
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

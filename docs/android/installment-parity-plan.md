@@ -25,6 +25,14 @@ Plan push foundation is completed locally (APK57):
 independent source tombstones are tested. Source deletes with pending owned cycles
 remain held; all installment child writes remain closed pending dedicated reconciliation.
 
+Durable causal source-delete metadata is completed locally (APK58):
+`evidence/2026-10-15-installment-delete-batch.md`. Room6 stores exact source/cycle
+before-images, previous queues and an explicit member manifest atomically with deletes.
+Storage uses bounded64KiB BLOB chunks with checksum/identity validation.
+Sixteen model and seven actual SQLite cases execute; ten Room +one migration fixtures
+package only. Test APK schemas1–6 now bundle correctly. Source ACK/reconciliation,
+batch cleanup and legacy unproven-delete recovery are still unfinished; guards stay closed.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
@@ -40,7 +48,12 @@ Next coherent slices:
    Current bill-only child gate and source-delete dependency guard deliberately hold
    the unsafe paths. A source-delete remote winner must reconcile exact dependent child
    deletion intents without losing newer edits or hiding paid history under an active
-   plan. Track the causal batch explicitly; timestamp/device coincidence is insufficient.
+   plan. Use the persisted causal batch and exact current queue comparisons; timestamp/
+   device coincidence is insufficient. Restore only matching delete intents, preserve
+   newer child mutations, validate authoritative source/cycle/ledger ownership and commit
+   source ACK plus child restoration/queue changes atomically. Complete/clear only the
+   matching batch after safe outcomes; retain an explicit recovery path for legacy
+   pending deletes that have no proven batch. Do not infer one during migration.
    Do not merely enable the shared source list or reuse bill linked-ledger undo preflight.
    Preserve posted expenses on source deletion. Then inspect actual Swift maintenance/
    notifications and integrate only its supported behaviors. All flags remain false.

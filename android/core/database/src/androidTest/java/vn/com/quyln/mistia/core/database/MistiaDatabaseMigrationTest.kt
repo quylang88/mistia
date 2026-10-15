@@ -84,6 +84,24 @@ class MistiaDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migrateFiveToSixPreservesLegacyQueueWithoutInventingCausalMembership() {
+        val db = helper.createDatabase(DATABASE_NAME, 5)
+        db.execSQL("""INSERT INTO sync_outbox(owner_user_id,entity,record_id,kind,payload_json,modified_at,base_version,
+            device_id,attempt_count,remote_identity_observed,next_attempt_at_epoch_millis,last_error) VALUES
+            ('owner','installment_plans','known','delete','{}','clock',9007199254740993,'device',7,1,99,'http_503')""")
+        db.close()
+        val migrated = helper.runMigrationsAndValidate(DATABASE_NAME, 6, true, MistiaDatabase.MIGRATION_5_6)
+        migrated.query("SELECT base_version,attempt_count,remote_identity_observed FROM sync_outbox").use { cursor ->
+            org.junit.Assert.assertTrue(cursor.moveToFirst()); org.junit.Assert.assertEquals(9007199254740993L, cursor.getLong(0))
+            org.junit.Assert.assertEquals(7, cursor.getInt(1)); org.junit.Assert.assertEquals(1, cursor.getInt(2))
+        }
+        migrated.query("SELECT count(*) FROM installment_delete_batches").use { cursor ->
+            org.junit.Assert.assertTrue(cursor.moveToFirst()); org.junit.Assert.assertEquals(0, cursor.getInt(0))
+        }
+        migrated.close()
+    }
+
     private companion object {
         const val DATABASE_NAME = "mistia-migration-test"
     }

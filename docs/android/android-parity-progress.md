@@ -2111,3 +2111,22 @@ Evidence: `docs/android/evidence/2026-10-15-installment-skip.md`.
   settings/monetary forms, independent/device/visual QA and full APK1–4/RC remain open.
 
 Evidence: `docs/android/evidence/2026-10-15-installment-plan-push.md`.
+
+
+## Durable installment source-delete provenance — 2026-10-15
+
+- [x] Explicit causal batch with source/cycle before-images, exact prior queues/Long
+  metadata and child manifest; strict codec/actor/owner/frozen-field validation.
+- [x] Native Room capture in the same snapshot CAS/outbox transaction, owner read/clear,
+  non-replacing unresolved batches and local migration5→6. Bounded64KiB BLOB chunks,
+  integrity/UTF-8 checks and scoped cascade cleanup; legacy deletes stay unproven.
+- [x] Fixed missing schema assets in the actual database AndroidTest APK; six schemas
+  and bootstrap catalog verified. Ten disk-Room and one migration fixtures package only.
+- [x]16 model cases (9 initial REDs +actor/chunk regressions),7 actual SQLite cases and
+  artifact RED/GREEN;1153 JVM/116 suites. Full Android/Swift603/contracts/l10n/SQLite pass. APK58;
+  all10 flagsfalse. No AndroidTest/device execution or production schema/write change.
+- [ ] Source ACK/child restoration and causal batch cleanup, legacy recovery, occurrence
+  push and actual payment/undo/currency remain unfinished. Current guards remain closed;
+  card policy/settings/forms/full APK1–4/RC and independent/device/visual QA remain open.
+
+Evidence: `docs/android/evidence/2026-10-15-installment-delete-batch.md`.

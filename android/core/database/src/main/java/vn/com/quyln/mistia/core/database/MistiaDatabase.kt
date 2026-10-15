@@ -35,6 +35,10 @@ import vn.com.quyln.mistia.core.model.CategoryReferenceSnapshot
 import vn.com.quyln.mistia.core.model.categoryReferenceEntities
 import vn.com.quyln.mistia.core.model.planCategoryReferenceRepairs
 import vn.com.quyln.mistia.core.model.billCycleRecords
+import vn.com.quyln.mistia.core.model.InstallmentDeletionStorage
+import vn.com.quyln.mistia.core.model.InstallmentDeletionBlob
+import vn.com.quyln.mistia.core.model.InstallmentDeletionChunk
+import vn.com.quyln.mistia.core.model.InstallmentDeletionBatch
 import vn.com.quyln.mistia.core.model.InstallmentCycleSnapshot
 import vn.com.quyln.mistia.core.model.InstallmentMutationSnapshot
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
@@ -438,11 +442,14 @@ interface TransactionReceiptImageDao {
         CategoryTranslationOutboxEntity::class,
         TransactionReceiptImageEntity::class,
         LocalNotificationEntity::class,
+        InstallmentDeletionBatchEntity::class,
+        InstallmentDeletionChunkEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class MistiaDatabase : RoomDatabase() {
+    abstract fun installmentDeletionDao(): InstallmentDeletionDao
     abstract fun localNotificationDao(): LocalNotificationDao
     abstract fun cloudRecordDao(): CloudRecordDao
     abstract fun syncOutboxDao(): SyncOutboxDao
@@ -453,8 +460,17 @@ abstract class MistiaDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): MistiaDatabase =
             Room.databaseBuilder(context, MistiaDatabase::class.java, "mistia-android.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS installment_delete_batches (owner_user_id TEXT NOT NULL, plan_id TEXT NOT NULL, batch_id TEXT NOT NULL, payload_json TEXT NOT NULL, PRIMARY KEY(owner_user_id, plan_id))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_installment_delete_batches_owner_user_id_batch_id ON installment_delete_batches (owner_user_id, batch_id)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS installment_delete_chunks (owner_user_id TEXT NOT NULL, plan_id TEXT NOT NULL, batch_id TEXT NOT NULL, chunk_index INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(owner_user_id, plan_id, chunk_index), FOREIGN KEY(owner_user_id, plan_id) REFERENCES installment_delete_batches(owner_user_id, plan_id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_installment_delete_chunks_owner_user_id_plan_id ON installment_delete_chunks (owner_user_id, plan_id)")
+            }
+        }
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -753,12 +769,36 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun installmentDeletionBatch(owner: UserId, planId: String): InstallmentDeletionBatch? = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val row = database.installmentDeletionDao().record(owner.value, planId)
+        val batch = row?.let {
+            require(it.ownerUserId == owner.value && it.planId == planId)
+            val chunks = database.installmentDeletionDao().chunks(owner.value, planId, it.batchId)
+            require(chunks.all { chunk -> chunk.ownerUserId == owner.value && chunk.planId == planId && chunk.batchId == it.batchId })
+            InstallmentDeletionStorage.unpack(owner, planId, it.batchId, InstallmentDeletionBlob(json.parseToJsonElement(it.payloadJson) as JsonObject,
+                chunks.map { chunk -> InstallmentDeletionChunk(chunk.chunkIndex, chunk.payload) }))
+        }
+        ensureCurrentFinanceOwner(owner)
+        batch
+    }
+
     override suspend fun commitInstallmentMutations(expected: InstallmentMutationSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean {
         expected.requireValidMutations(mutations)
         return database.withTransaction {
             ensureCurrentFinanceOwner(expected.owner)
             val current = InstallmentMutationSnapshot.entities.associateWith { recordsIncludingDeleted(expected.owner, it.table) }
             if (runCatching { expected.requireUnchanged(current) }.isFailure) return@withTransaction false
+            if (mutations.any { it.second.entity == CloudEntity.INSTALLMENT_PLAN && it.second.kind == MutationKind.DELETE } && mutations.size > 1) {
+                val oldQueues = mutations.mapNotNull { (record, _) -> database.syncOutboxDao().record(record.ownerUserId, record.entity, record.id)?.toQueuedMutation() }
+                val known = mutations.mapNotNull { (record, pending) ->
+                    if (database.cloudRecordDao().record(record.ownerUserId, record.entity, record.id)?.hasPendingMutation == false) pending.entity to record.id else null
+                }.toSet()
+                val batch = requireNotNull(InstallmentDeletionBatch.capture(expected, mutations, oldQueues, java.util.UUID.randomUUID().toString(), known))
+                val blob = InstallmentDeletionStorage.pack(batch)
+                database.installmentDeletionDao().insert(InstallmentDeletionBatchEntity(expected.owner.value, expected.planId, batch.batchId, blob.header.toString()))
+                database.installmentDeletionDao().insertChunks(blob.chunks.map { chunk -> InstallmentDeletionChunkEntity(expected.owner.value, expected.planId, batch.batchId, chunk.index, chunk.bytes) })
+            }
             mutations.forEach { (record, mutation) -> commitMutationRows(record, mutation) }
             ensureCurrentFinanceOwner(expected.owner)
             true
@@ -1076,6 +1116,7 @@ class RoomLocalStore(
 
     override suspend fun clearAccount(ownerUserId: UserId) {
         database.withTransaction {
+            database.installmentDeletionDao().deleteAccount(ownerUserId.value)
             database.localNotificationDao().deleteAccount(ownerUserId.value)
             database.cloudRecordDao().deleteAccount(ownerUserId.value)
             database.syncOutboxDao().deleteAccount(ownerUserId.value)
