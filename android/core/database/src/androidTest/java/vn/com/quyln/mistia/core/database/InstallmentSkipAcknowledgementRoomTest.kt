@@ -27,7 +27,8 @@ class InstallmentSkipAcknowledgementRoomTest {
     private val zone = ZoneId.of("Asia/Tokyo")
     private suspend fun prepare(store: RoomLocalStore): Triple<InstallmentAcknowledgementSnapshot, QueuedMutation, CloudRecord> {
         val repo = OfflineFirstFinanceRepository(store, zone)
-        val plan = repo.saveInstallment(owner, InstallmentDraft(id, "Loan", 1375, 15, 1, 12, null, "USD"), device, now).getOrThrow()
+        val wallet = repo.saveWallet(owner, WalletDraft(name = "Cash", kind = WalletKind.CASH, currencyCode = "USD"), device, now).getOrThrow()
+        val plan = repo.saveInstallment(owner, InstallmentDraft(id, "Loan", 1375, 15, 1, 12, wallet.id, "USD"), device, now).getOrThrow()
         val root = store.pendingMutations(owner, CloudEntity.INSTALLMENT_PLAN, Long.MAX_VALUE).single()
         store.acknowledgeMutation(root, plan.toCloudRecord())
         val cycle = repo.skipInstallment(owner, plan, YearMonth.of(2026, 10), device, now).getOrThrow()

@@ -108,6 +108,12 @@ marker after a lost ledger-delete conflict.14 policy +11 worker cases execute; f
 Room fixtures compile/package only. No remote paid-write capability was added. New paid
 creation/live paid deletion, cross-record atomicity and full duplicate recovery remain open.
 
+Actual Room fixture execution is now available (APK69):
+`evidence/2026-10-15-native-room-emulator.md`. All122 database instrumentation cases
+pass on isolated Android16/API36 ARM64 emulator after correcting a missing-wallet setup
+in skip ACK. This supersedes earlier compile-only limitations for those exact database
+fixtures only; planning Compose/Samsung/visual/background evidence remains open.
+
 Next coherent slices:
 
 1. Continue the currency/settings and monetary-input audit across remaining forms.
