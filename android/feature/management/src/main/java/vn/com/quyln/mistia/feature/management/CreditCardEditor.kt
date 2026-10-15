@@ -17,6 +17,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -26,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
@@ -43,6 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.CreditCardAccount
@@ -112,6 +121,16 @@ data class CreditCardEditorState(
     }
 
     companion object {
+        fun scopedSaver(owner: String, walletId: String?, profileId: String?): Saver<CreditCardEditorState, Any> = Saver(
+            save = { state -> with(Saver) { save(state) }?.let { listOf(owner, walletId.orEmpty(), profileId.orEmpty(), it) } },
+            restore = { value ->
+                val items = value as? List<*>
+                if (items?.size != 4 || items[0] != owner || items[1] != walletId.orEmpty() || items[2] != profileId.orEmpty()) null
+                else items[3]?.let { runCatching { Saver.restore(it) }.getOrNull() }
+                    ?.takeIf { it.walletId == walletId && it.profileId == profileId }
+            },
+        )
+
         fun new(nextSortOrder: Int = 0): CreditCardEditorState = CreditCardEditorState(
             walletId = null,
             profileId = null,
@@ -212,6 +231,7 @@ enum class CreditCardEditorValidation {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreditCardEditorSheet(
+    ownerId: String,
     wallet: LedgerWalletRecord?,
     profile: CreditCardProfileRecord?,
     paymentSourceWallets: List<LedgerWalletRecord>,
@@ -220,12 +240,27 @@ fun CreditCardEditorSheet(
     onSave: suspend (CreditCardDraft) -> Result<CreditCardAccount>,
     currencyEditable: Boolean = wallet == null,
 ) {
-    var state by rememberSaveable(wallet?.id, stateSaver = CreditCardEditorState.Saver) {
+    if ((wallet == null) != (profile == null)) return
+    if (wallet != null && (wallet.ownerUserId != ownerId || profile?.ownerUserId != ownerId || profile.walletId != wallet.id)) return
+    key(ownerId, wallet?.id, profile?.id) {
+        OwnedCreditCardEditorSheet(ownerId, wallet, profile, paymentSourceWallets.filter { it.ownerUserId == ownerId }, nextSortOrder, onDismiss, onSave, currencyEditable)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun OwnedCreditCardEditorSheet(
+    ownerId: String, wallet: LedgerWalletRecord?, profile: CreditCardProfileRecord?, paymentSourceWallets: List<LedgerWalletRecord>,
+    nextSortOrder: Int, onDismiss: () -> Unit, onSave: suspend (CreditCardDraft) -> Result<CreditCardAccount>, currencyEditable: Boolean,
+) {
+    var state by rememberSaveable(ownerId, wallet?.id, profile?.id, stateSaver = CreditCardEditorState.scopedSaver(ownerId, wallet?.id, profile?.id)) {
         mutableStateOf(
             if (wallet != null && profile != null) CreditCardEditorState.edit(wallet, profile)
             else CreditCardEditorState.new(nextSortOrder)
         )
     }
+    var calculator by rememberSaveable(ownerId, wallet?.id, profile?.id) { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     var validation by remember { mutableStateOf<CreditCardEditorValidation?>(null) }
     var saveFailed by remember { mutableStateOf(false) }
     var saveFailureMessage by remember { mutableStateOf(R.string.planning_planning_couldn_t_save_this_card_right_now) }
@@ -263,7 +298,9 @@ fun CreditCardEditorSheet(
                         val draft = result.draft ?: return@Button
                         isSaving = true
                         scope.launch {
-                            onSave(draft).fold(
+                            val saved = onSave(draft)
+                            currentCoroutineContext().ensureActive()
+                            saved.fold(
                                 onSuccess = { onDismiss() },
                                 onFailure = {
                                     isSaving = false
@@ -360,6 +397,10 @@ fun CreditCardEditorSheet(
                         onValueChange = { state = state.withCreditLimit(it) },
                         modifier = Modifier.fillMaxWidth().testTag("card.creditLimit"),
                         label = { Text(stringResource(R.string.management_management_credit_limit)) },
+                        trailingIcon = { if (state.currencyCode in setOf("JPY", "VND")) IconButton(enabled = !isSaving,
+                            onClick = { focus.clearFocus(); calculator = true }, modifier = Modifier.testTag("card.creditLimit.calculator")) {
+                            Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                        } },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                     )
@@ -448,6 +489,9 @@ fun CreditCardEditorSheet(
             Spacer(Modifier.height(28.dp))
         }
     }
+    if (calculator && state.currencyCode in setOf("JPY", "VND"))
+        AmountCalculatorDialog(state.creditLimitText, "$ownerId:${wallet?.id.orEmpty()}:${profile?.id.orEmpty()}:${state.currencyCode}",
+            onCommit = { state = state.withCreditLimit(it); validation = null; saveFailed = false }, onDismiss = { calculator = false })
 }
 
 @Composable

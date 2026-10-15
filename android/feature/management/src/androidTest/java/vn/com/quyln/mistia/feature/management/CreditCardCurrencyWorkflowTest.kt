@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.*
 import org.junit.*
 import org.junit.rules.ExternalResource
@@ -44,9 +45,16 @@ class CreditCardCurrencyWorkflowTest {
     private fun records() = runBlocking { listOf(store.record(owner, CloudEntity.LEDGER_WALLET.table, card.wallet.id), store.record(owner, CloudEntity.CREDIT_CARD_PROFILE.table, card.profile.id)) }
     private fun queues() = runBlocking { store.pendingMutations(owner, CloudEntity.LEDGER_WALLET, Long.MAX_VALUE) + store.pendingMutations(owner, CloudEntity.CREDIT_CARD_PROFILE, Long.MAX_VALUE) }
     @Test fun managementLocksCardCurrencyThenUnlocksAfterHistoryIsRemoved() {
-        compose.setContent { MistiaTheme(darkTheme = false) { ManagementScreen(owner, repo, deviceIdProvider = { device },
+        var lifecycle: androidx.lifecycle.Lifecycle? = null
+        compose.setContent { MistiaTheme(darkTheme = false) { lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle; ManagementScreen(owner, repo, deviceIdProvider = { device },
             onTranslatePendingCategories = {}, onSyncNow = {}, onSignOut = {}, onOpenFamily = {}, onOpenInvestment = {}, onOpenCreditCardStatements = {}) } }
-        compose.waitUntil(5000) { compose.onAllNodesWithTag("management.editCard.${card.wallet.id}").fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("management.editCard.${card.wallet.id}").fetchSemanticsNodes().isNotEmpty() }
+        } catch (error: Throwable) {
+            println("CARD_STARTUP_DIAGNOSTIC lifecycle=${lifecycle?.currentState} wallets=${runBlocking { repo.observeWallets(owner).first() }} profiles=${runBlocking { repo.observeCreditCardProfiles(owner).first() }}")
+            println(compose.onRoot(useUnmergedTree = true).printToString())
+            throw error
+        }
         compose.onNodeWithTag("management.editCard.${card.wallet.id}").performClick()
         compose.onNodeWithText("VND").performScrollTo().assertIsNotEnabled()
         runBlocking { store.replacePullSnapshot(owner, CloudEntity.LEDGER_TRANSACTION.table, emptyList()) }
@@ -58,7 +66,7 @@ class CreditCardCurrencyWorkflowTest {
     }
     @Test fun staleEnabledCardEditorGetsLocalizedRejectionWithoutEitherPartialWrite() {
         val before = records(); val queue = queues()
-        compose.setContent { MistiaTheme(darkTheme = false) { CreditCardEditorSheet(card.wallet, card.profile, emptyList(), 0, onDismiss = {},
+        compose.setContent { MistiaTheme(darkTheme = false) { CreditCardEditorSheet(owner.value, card.wallet, card.profile, emptyList(), 0, onDismiss = {},
             onSave = { repo.saveCreditCard(owner, it, device, Instant.now().toString()) }, currencyEditable = true) } }
         compose.onNodeWithText("VND").performScrollTo().performClick(); compose.onNodeWithTag("card.save").performScrollTo().performClick()
         val message = ApplicationProvider.getApplicationContext<Context>().getString(R.string.management_wallet_editor_currency_in_use)

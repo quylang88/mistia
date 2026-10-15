@@ -3,12 +3,32 @@ package vn.com.quyln.mistia.feature.management
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import androidx.compose.runtime.saveable.SaverScope
 import vn.com.quyln.mistia.core.model.CreditCardNetwork
 import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class CreditCardEditorStateTest {
+    @Test fun `restored credit card draft rejects foreign owner or mismatched identity`() {
+        val state = CreditCardEditorState.edit(wallet(), profile())
+        val saver = CreditCardEditorState.scopedSaver(OWNER, CARD_WALLET_ID, PROFILE_ID)
+        val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals(state, saver.restore(saved))
+        assertNull(CreditCardEditorState.scopedSaver("other", CARD_WALLET_ID, PROFILE_ID).restore(saved))
+        assertNull(CreditCardEditorState.scopedSaver(OWNER, PAYMENT_WALLET_ID, PROFILE_ID).restore(saved))
+        assertNull(CreditCardEditorState.scopedSaver(OWNER, CARD_WALLET_ID, PAYMENT_WALLET_ID).restore(saved))
+        assertNull(CreditCardEditorState.scopedSaver(OWNER, null, null).restore(saved))
+    }
+
+    @Test fun `malformed or legacy unowned card draft fails restoration safely`() {
+        val saver = CreditCardEditorState.scopedSaver(OWNER, null, null)
+        assertNull(saver.restore(listOf("bad")))
+        assertNull(saver.restore(listOf(OWNER, "", "", listOf("bad"))))
+        val legacy = with(CreditCardEditorState.Saver) { SaverScope { true }.save(CreditCardEditorState.new()) }!!
+        assertNull(saver.restore(legacy))
+    }
+
     @Test fun `opening a supported currency card groups an exact large limit`() {
         for (currency in listOf("JPY", "VND")) {
             val state = CreditCardEditorState.edit(wallet().copy(currencyCode = currency), profile().copy(creditLimitMinor = 9007199254740993L))

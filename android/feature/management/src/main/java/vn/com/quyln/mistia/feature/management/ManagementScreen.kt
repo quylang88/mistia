@@ -230,6 +230,7 @@ fun ManagementScreen(
         val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
         val profile = wallet?.let { card -> creditCardProfiles.firstOrNull { it.walletId == card.id } }
         CreditCardEditorSheet(
+            ownerId = ownerUserId.value,
             currencyEditable = currencyEditable(wallet),
             wallet = wallet,
             profile = profile,

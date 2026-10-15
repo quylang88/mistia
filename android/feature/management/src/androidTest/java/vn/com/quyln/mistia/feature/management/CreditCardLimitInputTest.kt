@@ -41,7 +41,7 @@ class CreditCardLimitInputTest {
         val repo = OfflineFirstFinanceRepository(store)
         val visible = mutableStateOf(true)
         val card = mutableStateOf<CreditCardAccount?>(null)
-        compose.setContent { MistiaTheme(darkTheme = false) { if (visible.value) CreditCardEditorSheet(
+        compose.setContent { MistiaTheme(darkTheme = false) { if (visible.value) CreditCardEditorSheet(owner.value,
             card.value?.wallet, card.value?.profile, emptyList(), 0,
             onDismiss = { visible.value = false },
             onSave = { draft -> repo.saveCreditCard(owner, draft, device, Instant.now().toString()).onSuccess { card.value = it } },
