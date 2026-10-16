@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.feature.planning
 
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import java.time.Instant
 import java.math.BigDecimal
@@ -69,6 +70,22 @@ data class RecurringBillEditorState(
             frequencyMonths=if(recurring) frequencyMonths else 1,startsNextMonth=startsNextMonth,zoneId=zone)
     }
     companion object {
+        fun scopedSaver(owner:String,recordId:String?,currency:String):Saver<RecurringBillEditorState,Any> = Saver(
+            save={state ->
+                if(state.id!=recordId || state.currencyCode!=currency) null
+                else with(saver(owner)) {save(state)}?.let {listOf(owner,recordId.orEmpty(),currency,it)}
+            },
+            restore={value ->
+                val items=value as? List<*>
+                if(items?.size!=4 || items[0]!=owner || items[1]!=recordId.orEmpty() || items[2]!=currency) null
+                else items[3]?.let {raw -> runCatching {
+                    saver(owner).restore(raw)?.also {state ->
+                        LocalDate.parse(state.paymentStartDate);LocalDate.parse(state.dueDate);LocalDate.parse(state.autoPayDate)
+                        require(state.paymentStartDay in 1..31 && state.dueDay in 1..31 && state.autoPayDay in 1..31 && state.frequencyMonths>=1)
+                    }
+                }.getOrNull()}?.takeIf {it.id==recordId && it.currencyCode==currency}
+            },
+        )
         fun fresh(today:LocalDate,currency:String)=RecurringBillEditorState(null,"",null,"",null,currency,
             BillScheduleKind.RECURRING,10,10,false,today.toString(),today.toString(),false,10,today.toString(),1,false)
         fun from(bill:RecurringBillPlanRecord,today:LocalDate,zone:ZoneId):RecurringBillEditorState {

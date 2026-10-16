@@ -221,7 +221,7 @@ fun PlanningScreen(
         onPause={repository.pauseRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
         onResume={repository.resumeRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
         onArchive={repository.archiveRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
-        onDismiss={billNavigation=billNavigation.copy(open=false,payload=null)})
+        onDismiss={billNavigation=billNavigation.copy(open=false,payload=null)},primaryCurrencyCode=reportingCurrency)
     val editorGoal=goalNavigation.goal()
     LaunchedEffect(goalNavigation) {
         if(goalNavigation.open && goalNavigation.payload!=null && editorGoal==null) goalNavigation=goalNavigation.copy(open=false,payload=null)

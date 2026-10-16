@@ -22,6 +22,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.util.Locale
 import vn.com.quyln.mistia.core.designsystem.CategoryIcon
 import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.designsystem.R
@@ -33,10 +36,26 @@ import vn.com.quyln.mistia.core.model.*
     language:CategoryNameLanguage,
     onSave:suspend (RecurringBillDraft)->Result<RecurringBillPlanRecord>,
     onPause:suspend (String)->Result<Unit>,onResume:suspend (String)->Result<Unit>,onArchive:suspend (String)->Result<Unit>,onDismiss:()->Unit,
+    primaryCurrencyCode:String="JPY",
+) {
+    if(bill!=null && bill.ownerUserId!=owner) return
+    val currency=bill?.currencyCode ?: primaryCurrencyCode.trim().uppercase(Locale.ROOT)
+        .takeIf {it in CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
+    key(owner,bill?.id,currency) {
+        OwnedRecurringBillEditorSheet(owner,bill,categories,wallets,language,onSave,onPause,onResume,onArchive,onDismiss,currency)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun OwnedRecurringBillEditorSheet(
+    owner:String,bill:RecurringBillPlanRecord?,categories:List<TransactionCategoryRecord>,wallets:List<LedgerWalletRecord>,
+    language:CategoryNameLanguage,
+    onSave:suspend (RecurringBillDraft)->Result<RecurringBillPlanRecord>,
+    onPause:suspend (String)->Result<Unit>,onResume:suspend (String)->Result<Unit>,onArchive:suspend (String)->Result<Unit>,onDismiss:()->Unit,currency:String,
 ) {
     val zone=ZoneId.systemDefault()
-    val initial=remember(owner,bill?.id) {bill?.let {RecurringBillEditorState.from(it,LocalDate.now(zone),zone)} ?: RecurringBillEditorState.fresh(LocalDate.now(zone),"JPY")}
-    var state by rememberSaveable(owner,bill?.id,stateSaver=RecurringBillEditorState.saver(owner)) {mutableStateOf(initial)}
+    val initial=remember(owner,bill?.id,currency) {bill?.let {RecurringBillEditorState.from(it,LocalDate.now(zone),zone)} ?: RecurringBillEditorState.fresh(LocalDate.now(zone),currency)}
+    var state by rememberSaveable(owner,bill?.id,currency,stateSaver=RecurringBillEditorState.scopedSaver(owner,bill?.id,currency)) {mutableStateOf(initial)}
     var busy by remember {mutableStateOf(false)}
     var calculator by rememberSaveable(owner,bill?.id) {mutableStateOf(false)}
     var discard by remember {mutableStateOf(false)}
@@ -102,7 +121,7 @@ import vn.com.quyln.mistia.core.model.*
             Button(onClick={
                 val draft=try {state.toDraft(zone)} catch(validation:Exception) {error=billError(validation);return@Button}
                 busy=true;error=null
-                scope.launch {val result=onSave(draft);busy=false;result.fold(onSuccess={onDismiss()},onFailure={error=billError(it)})}
+                scope.launch {currentCoroutineContext().ensureActive();val result=onSave(draft);currentCoroutineContext().ensureActive();busy=false;result.fold(onSuccess={onDismiss()},onFailure={error=billError(it)})}
             },enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.save")) {
                 if(busy) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp) else Text(stringResource(R.string.common_save))
             }
@@ -125,7 +144,9 @@ import vn.com.quyln.mistia.core.model.*
         val message=when(operation) {"pause" -> R.string.planning_planning_pause_bill_message;"resume" -> R.string.planning_planning_resume_bill_message;else -> R.string.planning_planning_archived_bills_will_no_longer_appear_in}
         AlertDialog(onDismissRequest={if(!busy) action=null},title={Text(stringResource(title))},text={Text(stringResource(message))},
             confirmButton={TextButton(enabled=!busy,onClick={busy=true;error=null;scope.launch {
+                currentCoroutineContext().ensureActive()
                 val result=when(operation) {"pause" -> onPause(requireNotNull(bill).id);"resume" -> onResume(requireNotNull(bill).id);else -> onArchive(requireNotNull(bill).id)}
+                currentCoroutineContext().ensureActive()
                 busy=false;action=null;result.fold(onSuccess={onDismiss()},onFailure={error=if((it as? RecurringBillValidationException)?.reason==RecurringBillValidationError.UNPAID_CYCLES) R.string.planning_bill_archive_unpaid_cycles_message else when(operation) {"pause" -> R.string.planning_planning_couldn_t_pause_this_bill_right_now;"resume" -> R.string.planning_planning_couldn_t_resume_this_bill_right_now;else -> R.string.planning_planning_couldn_t_archive_this_bill_right_now}})
             }},modifier=Modifier.testTag("bill.confirmAction")) {Text(stringResource(title))}},dismissButton={TextButton(enabled=!busy,onClick={action=null}) {Text(stringResource(R.string.common_cancel))}})
     }
