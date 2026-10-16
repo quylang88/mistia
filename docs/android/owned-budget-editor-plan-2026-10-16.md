@@ -1,0 +1,10 @@
+# Owned budget editor and current-primary defaults — slice100
+
+After verified99commit. Swift PlanningEditors.swift9,92–94 takes AppStorage primary for fresh budgets and stored plan currency for edits; draft2462 initializes stored limit. User additionally requires a single currency per branch, already enforced in Android repository/category selection. Preserve that rule and current JPY/VND manual chips. Imported Android ISO minor/decimal meaning must remain unchanged; Swift imported normalization/presentation audit remains open.
+
+- [x] Add scoped saver envelope binding owner/record/selectedmonth/initialcurrency while permitting legitimate fresh JPY/VND currency-chip/branch overrides. Matching saved drafts keep exact values/source month; mismatched outer context/inner ID/month/edit currency and malformed calendar/raw slots reject safely. Preserve owner-only/raw saver APIs for compatibility.
+- [x] Native runtime REDs: real PlanningScreen creates exact VND and matching outbox; branch choice overrides JPY primary to existingVND and clears numeric input; storedJPY/importedUSD keep money; foreign plan hidden; record/month switch closes picker/calculator; live primary resets only freshdraft; lateNonCancellable old Save/delete cannot dismiss replacement owner/month editor. No wallet/ledger writes from form creation.
+- [x] Pass normalized current primary to BudgetEditorSheet. Whole subtree key owner/record/month/boundinitialcurrency; foreign original hidden before initialize. Existing edits ignore primary changes. Guard callback coroutine before/after both save and archive/delete. Do not claim repository atomic/opening-baseline protection from UI cancellation.
+- [x] Direct Swift/diff review; focused/full JVM, native planning, Swift, lint/build/contracts/localization/schema checks; settled130% light/dark visuals inspected; metadata/DEX/checksum and install-r/coldlaunch smoke; evidence/progress and independent100commit. Continue due/overview/family/investment and full APK1–4/RC.
+
+All10 flagsfalse, no production writes/deploy/migration. No Samsung claim.

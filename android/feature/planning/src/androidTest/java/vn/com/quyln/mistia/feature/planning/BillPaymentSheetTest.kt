@@ -56,9 +56,25 @@ class BillPaymentSheetTest {
         compose.setContent {MistiaTheme(darkTheme=false) {BillPaymentSheet(owner,row(null),month,listOf(wallet()),false,
             onPay={Result.failure(Exception())},onUndo={Result.success(Unit)},onDismiss={dismissed=true})}}
         compose.onNodeWithTag("bill.paymentAmount").performTextReplacement("500")
-        compose.onNodeWithTag("bill.closePayment").performClick()
+        val close=compose.onNodeWithTag("bill.closePayment")
+        val beforeScroll=close.fetchSemanticsNode().boundsInRoot
+        close.performScrollTo().assertIsDisplayed().performClick()
         assertFalse(dismissed)
-        compose.onNodeWithTag("bill.discardPayment").performClick()
+        try {
+            compose.waitUntil(5000) {compose.onAllNodesWithTag("bill.discardPayment").fetchSemanticsNodes().isNotEmpty()}
+        } catch(failure:Throwable) {
+            android.util.Log.e("MistiaBillPaymentDiagnostic","Close bounds before scroll=$beforeScroll")
+            val roots=compose.onAllNodes(isRoot()).fetchSemanticsNodes()
+            for(index in roots.indices) runCatching {android.util.Log.e("MistiaBillPaymentDiagnostic",compose.onAllNodes(isRoot())[index].printToString())}
+            val bitmap=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            bitmap?.let {
+                val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+                java.io.File(context.getExternalFilesDir(null),"bill-payment-discard-failure.png").outputStream().use {output -> it.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output)}
+                it.recycle()
+            }
+            throw failure
+        }
+        compose.onNodeWithTag("bill.discardPayment").assertIsDisplayed().performClick()
         compose.runOnIdle {assertTrue(dismissed)}
     }
     @Test fun paidSheetUsesUndoCallbackAndHidesEditablePaymentFields() {

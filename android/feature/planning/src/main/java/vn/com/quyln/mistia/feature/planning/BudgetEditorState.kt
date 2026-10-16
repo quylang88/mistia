@@ -47,6 +47,28 @@ data class BudgetEditorState(
             return BudgetEditorState(plan.id, budgetMonth(plan.monthAnchor, zone).toString(), month.toString(), plan.categoryId,
                 planningAmountInput(BigDecimal.valueOf(plan.limitMinor, digits).stripTrailingZeros().toPlainString(), plan.currencyCode), plan.currencyCode, plan.rolloverEnabled)
         }
+        fun scopedSaver(ownerId: String, recordId: String?, month: String, currency: String): Saver<BudgetEditorState, Any> {
+            fun matches(state: BudgetEditorState): Boolean = runCatching {
+                YearMonth.parse(month)
+                YearMonth.parse(state.selectedMonth)
+                state.sourceMonth?.let { YearMonth.parse(it) }
+                state.id == recordId && state.selectedMonth == month &&
+                    (state.sourceMonth != null) == (recordId != null) &&
+                    state.currencyCode.matches(Regex("[A-Z]{3}")) &&
+                    (recordId == null || state.currencyCode == currency)
+            }.getOrDefault(false)
+            return Saver(
+                save = { state ->
+                    if (!matches(state)) null
+                    else with(Saver) { save(state) }?.let { listOf(ownerId, recordId.orEmpty(), month, currency, it) }
+                },
+                restore = { value ->
+                    val items = value as? List<*>
+                    if (items?.size != 5 || items[0] != ownerId || items[1] != recordId.orEmpty() || items[2] != month || items[3] != currency) null
+                    else items[4]?.let { runCatching { Saver.restore(it) }.getOrNull() }?.takeIf(::matches)
+                },
+            )
+        }
         fun scopedSaver(ownerId: String): Saver<BudgetEditorState, Any> = Saver(
             save = { state -> with(Saver) { save(state) }?.let { listOf(ownerId, it) } },
             restore = { value ->

@@ -22,6 +22,9 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.util.Locale
 import vn.com.quyln.mistia.core.designsystem.CategoryIcon
 import vn.com.quyln.mistia.core.designsystem.MistiaSectionCard
 import vn.com.quyln.mistia.core.designsystem.R
@@ -42,6 +45,33 @@ internal fun BudgetEditorSheet(
     onArchive: suspend (String) -> Result<Unit>,
     onDelete: suspend (String) -> Result<Unit>,
     onDismiss: () -> Unit,
+    primaryCurrencyCode: String = "JPY",
+) {
+    if (plan != null && plan.ownerUserId != ownerId) return
+    val currency = plan?.currencyCode ?: primaryCurrencyCode.trim().uppercase(Locale.ROOT)
+        .takeIf { it in CurrencyPreferences.supportedCurrencyCodes } ?: "JPY"
+    key(ownerId, plan?.id, selectedMonth.toString(), currency) {
+        OwnedBudgetEditorSheet(ownerId, plan, selectedMonth, categories, plans, transactions, language,
+            categoryMetadata, onSave, onArchive, onDelete, onDismiss, currency)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OwnedBudgetEditorSheet(
+    ownerId: String,
+    plan: BudgetPlanRecord?,
+    selectedMonth: YearMonth,
+    categories: List<TransactionCategoryRecord>,
+    plans: List<BudgetPlanRecord>,
+    transactions: List<LedgerTransactionRecord>,
+    language: CategoryNameLanguage,
+    categoryMetadata: List<TransactionCategoryRecord>,
+    onSave: suspend (BudgetDraft) -> Result<BudgetPlanRecord>,
+    onArchive: suspend (String) -> Result<Unit>,
+    onDelete: suspend (String) -> Result<Unit>,
+    onDismiss: () -> Unit,
+    currency: String,
 ) {
     val zone = ZoneId.systemDefault()
     val identity = remember(ownerId, categoryMetadata) { CategoryIdentityIndex(UserId(ownerId), categoryMetadata) }
@@ -50,8 +80,8 @@ internal fun BudgetEditorSheet(
         return budgetCurrencyConstraints(UserId(ownerId), plans, selectedMonth, zone, categoryMetadata)
             .firstOrNull { it.logicalAllocation(identity).branchCategoryId == branchId }?.currencyCode
     }
-    val initial = remember(ownerId, plan?.id, selectedMonth) { BudgetEditorState.from(plan, selectedMonth, zone) }
-    var state by rememberSaveable(ownerId, plan?.id, selectedMonth.toString(), stateSaver = BudgetEditorState.scopedSaver(ownerId)) { mutableStateOf(initial) }
+    val initial = remember(ownerId, plan?.id, selectedMonth, currency) { BudgetEditorState.from(plan, selectedMonth, zone, currency) }
+    var state by rememberSaveable(ownerId, plan?.id, selectedMonth.toString(), currency, stateSaver = BudgetEditorState.scopedSaver(ownerId, plan?.id, selectedMonth.toString(), currency)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var calculator by rememberSaveable(ownerId, plan?.id, selectedMonth) { mutableStateOf(false) }
     var discard by remember { mutableStateOf(false) }
@@ -125,7 +155,9 @@ internal fun BudgetEditorSheet(
                 val draft = try { state.toDraft(zone) } catch (validation: BudgetValidationException) { error = validation.reason; return@Button }
                 busy = true; error = null; storageError = false
                 scope.launch {
+                    currentCoroutineContext().ensureActive()
                     val result = onSave(draft)
+                    currentCoroutineContext().ensureActive()
                     busy = false
                     result.fold(onSuccess = { onDismiss() }, onFailure = { error = (it as? BudgetValidationException)?.reason; storageError = true })
                 }
@@ -191,7 +223,9 @@ internal fun BudgetEditorSheet(
                 val id = state.id ?: return@TextButton
                 busy = true
                 scope.launch {
+                    currentCoroutineContext().ensureActive()
                     val result = if (archive) onArchive(id) else onDelete(id)
+                    currentCoroutineContext().ensureActive()
                     busy = false; destructive = null
                     result.fold(onSuccess = { onDismiss() }, onFailure = { storageError = true; error = (it as? BudgetValidationException)?.reason })
                 }

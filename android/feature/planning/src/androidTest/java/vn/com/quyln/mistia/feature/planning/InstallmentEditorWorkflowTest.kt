@@ -55,6 +55,11 @@ class InstallmentEditorWorkflowTest {
     }
 
     private fun plans() = runBlocking { repo.observeInstallments(owner).first() }
+    private fun addAction(): SemanticsNodeInteraction {
+        // The first Room/flow emission is asynchronous and is not a Compose idling resource.
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("installment.add").fetchSemanticsNodes().isNotEmpty() }
+        return compose.onNodeWithTag("installment.add")
+    }
     private fun enterDraft(name: String = "Loan", amount: String = "9007199254740993") {
         compose.onNodeWithTag("installment.name").performTextReplacement(name)
         compose.onNodeWithTag("installment.amountInput").performTextReplacement(amount)
@@ -72,7 +77,7 @@ class InstallmentEditorWorkflowTest {
                 InstallmentDuePane(owner, repo, month, { device }, now = { now })
             }
         } }
-        compose.onNodeWithTag("installment.add").performScrollTo().performClick()
+        addAction().performScrollTo().performClick()
         enterDraft()
         compose.onNodeWithTag("installment.cycles").performScrollTo().performTextReplacement("12")
         compose.onNodeWithTag("installment.save").performScrollTo().performClick()
@@ -109,7 +114,7 @@ class InstallmentEditorWorkflowTest {
                 }
             }
         }
-        compose.onNodeWithTag("installment.add").performClick()
+        addAction().performClick()
         enterDraft("Unsaved")
         compose.runOnIdle { selectedMonth = month.plusMonths(1) }
         compose.onNodeWithTag("installment.name").assertTextContains("Unsaved")
@@ -126,7 +131,7 @@ class InstallmentEditorWorkflowTest {
     @Test fun switchingOwnerRemovesOldEditorAndUnsavedName() {
         var subject by mutableStateOf(owner)
         compose.setContent { MistiaTheme(darkTheme = false) { InstallmentDuePane(subject, repo, month, { device }, now = { now }) } }
-        compose.onNodeWithTag("installment.add").performClick()
+        addAction().performClick()
         compose.onNodeWithTag("installment.name").performTextReplacement("Private draft")
         compose.runOnIdle { subject = other }
         compose.onNodeWithTag("installment.editor").assertDoesNotExist()

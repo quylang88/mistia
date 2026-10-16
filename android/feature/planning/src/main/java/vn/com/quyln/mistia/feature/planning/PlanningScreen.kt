@@ -235,7 +235,7 @@ fun PlanningScreen(
         onSave={ draft -> repository.saveBudget(ownerUserId,draft,deviceIdProvider(),Instant.now().toString()) },
         onArchive={ id -> repository.archiveBudget(ownerUserId,RecordId(id),deviceIdProvider(),Instant.now().toString()) },
         onDelete={ id -> repository.deleteBudget(ownerUserId,RecordId(id),deviceIdProvider(),Instant.now().toString()) },
-        onDismiss={ navigation=navigation.copy(editorOpen=false,editorId=null,editorPayload=null) })
+        onDismiss={ navigation=navigation.copy(editorOpen=false,editorId=null,editorPayload=null) },primaryCurrencyCode=reportingCurrency)
 }
 
 @Composable
