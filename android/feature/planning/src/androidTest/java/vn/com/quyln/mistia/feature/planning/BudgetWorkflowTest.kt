@@ -110,6 +110,24 @@ class BudgetWorkflowTest {
         compose.runOnIdle { Assert.assertTrue(dismissed) }
     }
 
+    @Test fun walletPickerReleasesAmountFocusAndPreservesExactUnsavedDraft() {
+        val wallet=runBlocking {repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY"),device,Instant.now().toString()).getOrThrow()}
+        compose.setContent {MistiaTheme(darkTheme=false) {
+            RecurringBillEditorSheet(owner.value,null,categories,listOf(wallet),CategoryNameLanguage.ENGLISH,
+                onSave={error("Save was not requested")},onPause={Result.success(Unit)},onResume={Result.success(Unit)},onArchive={Result.success(Unit)},onDismiss={})
+        }}
+        compose.onNodeWithTag("bill.name").performTextReplacement("Draft")
+        compose.onNodeWithTag("bill.amount").performScrollTo().performTextReplacement("9007199254740993")
+        compose.onNodeWithTag("bill.amount").assertIsFocused()
+        // Exercise the picker action independently of the IME scroll/touch race; the physical workflow is tested separately.
+        compose.onNodeWithTag("bill.wallet").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
+        compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        compose.onNodeWithTag("bill.amount").assertIsNotFocused().assertTextContains("9,007,199,254,740,993")
+        compose.onNodeWithTag("bill.name").assertTextContains("Draft")
+        Assert.assertTrue(runBlocking {repo.observeRecurringBills(owner).first().isEmpty()})
+        Assert.assertTrue(runBlocking {store.pendingMutations(owner,CloudEntity.RECURRING_BILL_PLAN,Long.MAX_VALUE).isEmpty()})
+    }
+
     @Test fun billFormPersistsExactAmountWithNativeControls() {
         val wallet=runBlocking {repo.saveWallet(owner,WalletDraft(name="Cash",kind=WalletKind.CASH,currencyCode="JPY"),device,Instant.now().toString()).getOrThrow()}
         var bill by mutableStateOf<RecurringBillPlanRecord?>(null)
@@ -124,8 +142,23 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("bill.name").performTextReplacement("Rent")
         compose.onNodeWithTag("bill.category").performClick()
         compose.onNodeWithTag("bill.category.$childId").performClick()
-        compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
-        compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        try {
+            compose.onNodeWithTag("bill.name").assertIsNotFocused()
+            compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
+            compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        } catch (failure: Throwable) {
+            android.util.Log.e("MistiaBillPicker", "Expected synthetic wallet=$wallet")
+            runCatching {
+                val roots=compose.onAllNodes(isRoot(),useUnmergedTree=true)
+                for(index in roots.fetchSemanticsNodes().indices) android.util.Log.e("MistiaBillPicker",roots[index].printToString())
+            }.onFailure {android.util.Log.e("MistiaBillPicker","Semantics diagnostic unavailable",it)}
+            runCatching {
+                val bitmap=checkNotNull(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                File(context.getExternalFilesDir(null),"bill-picker-failure.png").outputStream().use {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}
+                bitmap.recycle()
+            }
+            throw failure
+        }
         compose.onNodeWithTag("bill.amount").performScrollTo().performTextReplacement("9007199254740993")
         compose.onNodeWithTag("bill.amount").assertTextContains("9,007,199,254,740,993")
         compose.onNodeWithTag("bill.save").performScrollTo().performClick()
@@ -148,8 +181,22 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("bill.name").performTextReplacement("Rent")
         compose.onNodeWithTag("bill.category").performClick()
         compose.onNodeWithTag("bill.category.$childId").performClick()
-        compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
-        compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        try {
+            compose.onNodeWithTag("bill.wallet").performScrollTo().performClick()
+            compose.onNodeWithTag("bill.wallet.${wallet.id}").performClick()
+        } catch (failure: Throwable) {
+            android.util.Log.e("MistiaBillPicker", "Expected synthetic wallet=$wallet")
+            runCatching {
+                val roots=compose.onAllNodes(isRoot(),useUnmergedTree=true)
+                for(index in roots.fetchSemanticsNodes().indices) android.util.Log.e("MistiaBillPicker",roots[index].printToString())
+            }.onFailure {android.util.Log.e("MistiaBillPicker","Semantics diagnostic unavailable",it)}
+            runCatching {
+                val bitmap=checkNotNull(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                File(context.getExternalFilesDir(null),"bill-picker-failure.png").outputStream().use {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}
+                bitmap.recycle()
+            }
+            throw failure
+        }
         compose.onNodeWithTag("bill.amount").performScrollTo().performTextReplacement("123")
         compose.onNodeWithTag("bill.save").performScrollTo().performClick()
         compose.onNodeWithTag("bill.amount").assertTextContains("123")

@@ -39,7 +39,6 @@ import vn.com.quyln.mistia.core.model.*
     var state by rememberSaveable(owner,bill?.id,stateSaver=RecurringBillEditorState.saver(owner)) {mutableStateOf(initial)}
     var busy by remember {mutableStateOf(false)}
     var calculator by rememberSaveable(owner,bill?.id) {mutableStateOf(false)}
-    val focus=LocalFocusManager.current
     var discard by remember {mutableStateOf(false)}
     var picker by remember {mutableStateOf<String?>(null)}
     var action by remember {mutableStateOf<String?>(null)}
@@ -53,12 +52,13 @@ import vn.com.quyln.mistia.core.model.*
     })
     val selected=categories.firstOrNull {it.ownerUserId==owner && it.id==state.categoryId && it.deletedAt==null}
     ModalBottomSheet(onDismissRequest={close()},sheetState=sheet) {
+        val focus=LocalFocusManager.current
         Column(Modifier.testTag("bill.editor").fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                 Text(stringResource(if(bill==null) R.string.planning_planning_add_bill else R.string.planning_planning_s_a_h_a_n),style=MaterialTheme.typography.titleLarge)
                 TextButton(onClick={close()},enabled=!busy,modifier=Modifier.testTag("bill.close")) {Text(stringResource(R.string.common_close))}
             }
-            TextButton(onClick={picker="category"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.category")) {
+            TextButton(onClick={focus.clearFocus();picker="category"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("bill.category")) {
                 CategoryIcon(selected?.iconSymbolName ?: bill?.iconSymbolName ?: "mistia.plan.bill",TransactionCategoryKind.EXPENSE,selected?.iconColorHex ?: "#8A8A8E")
                 Spacer(Modifier.width(12.dp));Text(selected?.localizedBudgetName(language) ?: stringResource(R.string.planning_planning_payment_category))
             }
@@ -168,7 +168,8 @@ import vn.com.quyln.mistia.core.model.*
 }
 
 @Composable private fun BillPickerButton(label:Int,value:String,enabled:Boolean,tag:String,onClick:()->Unit) {
-    TextButton(onClick=onClick,enabled=enabled,modifier=Modifier.fillMaxWidth().testTag(tag)) {Text(stringResource(label),Modifier.weight(1f));Text(value)}
+    val focus=LocalFocusManager.current
+    TextButton(onClick={focus.clearFocus();onClick()},enabled=enabled,modifier=Modifier.fillMaxWidth().testTag(tag)) {Text(stringResource(label),Modifier.weight(1f));Text(value)}
 }
 private fun billError(error:Throwable):Int = when((error as? RecurringBillValidationException)?.reason) {
     RecurringBillValidationError.WALLET_CURRENCY_MISMATCH -> R.string.planning_bill_payment_currency_mismatch

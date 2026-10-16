@@ -49,7 +49,19 @@ class BudgetAmountCalculatorTest {
             onSave = { repo.saveBudget(subject, it, device, Instant.now().toString()) }, onArchive = { Result.success(Unit) }, onDelete = { Result.success(Unit) }, onDismiss = {}) } }
     }
     private fun key(text: String) { compose.onNodeWithTag("amountCalculator.key.$text").performClick() }
-    private fun start(amount: String) { compose.onNodeWithTag("budget.amount").performTextReplacement(amount); compose.onNodeWithTag("budget.amount.calculator").performClick() }
+    private fun start(amount: String) {
+        compose.onNodeWithTag("budget.amount").performTextReplacement(amount)
+        val bounds=compose.onNodeWithTag("budget.amount.calculator").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("budget.amount.calculator").performClick()
+        try {compose.onNodeWithTag("amountCalculator.dialog").assertExists()} catch(failure:Throwable) {
+            android.util.Log.e("MistiaBudgetDiagnostic","calculator click bounds=$bounds")
+            val roots=compose.onAllNodes(isRoot()).fetchSemanticsNodes()
+            for(index in roots.indices) runCatching {android.util.Log.e("MistiaBudgetDiagnostic",compose.onAllNodes(isRoot())[index].printToString())}
+            val bitmap=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            bitmap?.let { java.io.File(ApplicationProvider.getApplicationContext<Context>().getExternalFilesDir(null),"budget-calculator-open-failure.png").outputStream().use {output -> it.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output)};it.recycle() }
+            throw failure
+        }
+    }
     @Test fun keypadPrecedenceOnlyChangesDraftUntilExplicitBudgetSave() {
         compose.setContent { Editor() }
         compose.onNodeWithTag("budget.category").performClick(); compose.onNodeWithTag("budget.category.$category").performClick()
@@ -61,6 +73,15 @@ class BudgetAmountCalculatorTest {
         compose.onNodeWithTag("budget.save").performScrollTo().performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeBudgets(owner).first().size == 1 } }
         Assert.assertEquals(7L, runBlocking { repo.observeBudgets(owner).first().single().limitMinor })
+    }
+    @Test fun calculatorReleasesAmountFocusAndPreservesExactBudgetDraft() {
+        compose.setContent {Editor()}
+        compose.onNodeWithTag("budget.amount").performTextReplacement("9007199254740993")
+        compose.onNodeWithTag("budget.amount").assertIsFocused()
+        compose.onNodeWithTag("budget.amount.calculator").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
+        key("+");key("2");key("OK")
+        compose.onNodeWithTag("budget.amount").assertIsNotFocused().assertTextContains("9,007,199,254,740,995")
+        Assert.assertTrue(runBlocking {repo.observeBudgets(owner).first().isEmpty()})
     }
     @Test fun fractionalAndDivisionZeroCannotCommitAndCancelKeepsOriginalDraft() {
         compose.setContent { Editor(dark = true) }

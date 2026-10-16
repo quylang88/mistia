@@ -37,7 +37,6 @@ import vn.com.quyln.mistia.core.model.*
     var state by rememberSaveable(owner,goal?.id,stateSaver=SavingsGoalEditorState.saver(owner)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var calculatorField by rememberSaveable(owner,goal?.id) { mutableStateOf<String?>(null) }
-    val focus=LocalFocusManager.current
     var discard by remember { mutableStateOf(false) }
     var delete by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<String?>(null) }
@@ -49,12 +48,13 @@ import vn.com.quyln.mistia.core.model.*
         if(it==SheetValue.Hidden && (changed || busy)) { if(!busy) discard=true;false } else true
     })
     ModalBottomSheet(onDismissRequest={close()},sheetState=sheet) {
+        val focus=LocalFocusManager.current
         Column(Modifier.testTag("goal.editor").fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                 Text(stringResource(if(goal==null) R.string.planning_planning_m_c_ti_u_m_i else R.string.planning_planning_s_a_m_c_ti_u),style=MaterialTheme.typography.titleLarge)
                 TextButton(onClick={close()},enabled=!busy,modifier=Modifier.testTag("goal.close")) { Text(stringResource(R.string.common_close)) }
             }
-            TextButton(onClick={picker="icon"},enabled=!busy,modifier=Modifier.testTag("goal.icon")) {
+            TextButton(onClick={focus.clearFocus();picker="icon"},enabled=!busy,modifier=Modifier.testTag("goal.icon")) {
                 SavingsGoalIcon(state.iconSymbolName);Spacer(Modifier.width(12.dp));Text(stringResource(R.string.planning_planning_icon_m_c_ti_u))
             }
             OutlinedTextField(state.name,onValueChange={state=state.copy(name=it);error=null},label={Text(stringResource(R.string.planning_planning_goal_name))},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.name"))
@@ -66,10 +66,10 @@ import vn.com.quyln.mistia.core.model.*
                 trailingIcon={if(state.currencyCode in setOf("JPY","VND")) IconButton(enabled=!busy,onClick={focus.clearFocus();calculatorField="current"},modifier=Modifier.testTag("goal.current.calculator")) {
                     Icon(Icons.Filled.Calculate,contentDescription=stringResource(R.string.shared_amount_calculator_open_calculator))
                 }},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.current"))
-            TextButton(onClick={picker="date"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.date")) {
+            TextButton(onClick={focus.clearFocus();picker="date"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.date")) {
                 Text(stringResource(R.string.planning_planning_target_date),Modifier.weight(1f));Text(LocalDate.parse(state.targetDate).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)))
             }
-            TextButton(onClick={picker="wallet"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.wallet")) {
+            TextButton(onClick={focus.clearFocus();picker="wallet"},enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.wallet")) {
                 Text(stringResource(R.string.planning_planning_linked_wallet),Modifier.weight(1f))
                 Text(wallets.firstOrNull { it.id==state.linkedWalletId && it.ownerUserId==owner }?.name ?: stringResource(R.string.planning_planning_not_linked))
             }

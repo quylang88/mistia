@@ -47,7 +47,9 @@ fun PlanningScreen(
     modifier: Modifier = Modifier,
     deviceIdProvider: () -> String,
     exchangeRateRepository: ExchangeRateRepository,
+    primaryCurrencyCode: String = "JPY",
 ) {
+    val reportingCurrency = primaryCurrencyCode.trim().uppercase(Locale.ROOT).takeIf { it in CurrencyPreferences.supportedCurrencyCodes } ?: "JPY"
     var cycleAction by remember(ownerUserId.value) {mutableStateOf<Triple<String,String,Boolean>?>(null)}
     var cycleBusy by remember(ownerUserId.value) {mutableStateOf(false)}
     var cycleError by remember(ownerUserId.value) {mutableStateOf(false)}
@@ -95,7 +97,7 @@ fun PlanningScreen(
         context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(lang)) })
             .getString(R.string.transactions_generated_title_balance_adjustment)
     }.toSet() }
-    val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,wallets,month,Instant.now(),zone,rates,language,adjustmentTitles,"JPY",
+    val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,wallets,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
         stringResource(R.string.planning_planning_deleted_category))
     LazyColumn(
         modifier = modifier.testTag("budget.screen").fillMaxSize(),
@@ -122,9 +124,9 @@ fun PlanningScreen(
         if(selectedTab==0) {
         item {
             MistiaSectionCard(stringResource(R.string.planning_planning_budget)) {
-                Text(formatMinorUnits(projection.totalLimitMinor,"JPY"), style=MaterialTheme.typography.headlineSmall)
-                Text("${stringResource(R.string.planning_planning_spent)}: ${formatMinorUnits(projection.totalSpentMinor,"JPY")}")
-                Text("${stringResource(R.string.planning_planning_remaining)}: ${formatMinorUnits(projection.remainingMinor,"JPY")}")
+                Text(formatMinorUnits(projection.totalLimitMinor,reportingCurrency), style=MaterialTheme.typography.headlineSmall,modifier=Modifier.testTag("budget.summary.limit"))
+                Text("${stringResource(R.string.planning_planning_spent)}: ${formatMinorUnits(projection.totalSpentMinor,reportingCurrency)}",modifier=Modifier.testTag("budget.summary.spent"))
+                Text("${stringResource(R.string.planning_planning_remaining)}: ${formatMinorUnits(projection.remainingMinor,reportingCurrency)}",modifier=Modifier.testTag("budget.summary.remaining"))
             }
         }
         if (projection.branches.isEmpty()) item { Text(stringResource(R.string.planning_planning_no_budgets_yet)) }
@@ -135,7 +137,7 @@ fun PlanningScreen(
         }
         if(selectedTab==2) {
             val rows=savingsGoalRows(ownerUserId,goals,month,zone)
-            savingsGoalContent(rows,savingsGoalSummary(rows,"JPY",rates),
+            savingsGoalContent(rows,savingsGoalSummary(rows,reportingCurrency,rates),reportingCurrency=reportingCurrency,
                 onAdd={goalNavigation=goalNavigation.copy(open=true,payload=null)},
                 onEdit={goalNavigation=goalNavigation.copy(open=true,payload=it.toPayload().toString())})
         }

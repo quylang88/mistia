@@ -53,7 +53,6 @@ private fun OwnedInstallmentEditorSheet(
     var state by rememberSaveable(owner, id, stateSaver = InstallmentEditorState.saver(owner, id)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var calculator by rememberSaveable(owner, id) { mutableStateOf(false) }
-    val focus = LocalFocusManager.current
     var discard by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<String?>(null) }
@@ -68,6 +67,7 @@ private fun OwnedInstallmentEditorSheet(
         if (it == SheetValue.Hidden && (changed || busy)) { if (!busy) discard = true; false } else true
     })
     ModalBottomSheet(onDismissRequest = { close() }, sheetState = sheet) {
+        val focus = LocalFocusManager.current
         Column(Modifier.fillMaxWidth().testTag("installment.editor").verticalScroll(rememberScrollState()).imePadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -75,7 +75,7 @@ private fun OwnedInstallmentEditorSheet(
                     Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 TextButton(onClick = { close() }, enabled = !busy, modifier = Modifier.testTag("installment.close")) { Text(stringResource(R.string.common_close)) }
             }
-            TextButton(onClick = { picker = "icon" }, enabled = !busy, modifier = Modifier.testTag("installment.icon")) {
+            TextButton(onClick = { focus.clearFocus(); picker = "icon" }, enabled = !busy, modifier = Modifier.testTag("installment.icon")) {
                 InstallmentIcon(state.iconSymbolName); Spacer(Modifier.width(12.dp))
                 Text(stringResource(R.string.planning_planning_icon_kho_n_tr_g_p_vay))
             }
@@ -93,7 +93,7 @@ private fun OwnedInstallmentEditorSheet(
                 Text(stringResource(R.string.planning_installment_editor_amount_preview, formatMinorUnits(amount, state.currencyCode)),
                     Modifier.testTag("installment.amountPreview"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { picker = "day" }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("installment.day")) {
+            TextButton(onClick = { focus.clearFocus(); picker = "day" }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("installment.day")) {
                 Text(stringResource(R.string.planning_planning_due_day), Modifier.weight(1f))
                 Text(stringResource(R.string.planning_planning_day_value, state.dueDay.toString()))
             }
@@ -102,7 +102,7 @@ private fun OwnedInstallmentEditorSheet(
                     enabled = !busy && state.frequencyMonths in 2..12, modifier = Modifier.testTag("installment.frequencyLess")) {
                     Icon(Icons.Default.Remove, stringResource(R.string.planning_planning_frequency_every_value_month_s, (state.frequencyMonths - 1).toString()))
                 }
-                TextButton(onClick = { picker = "frequency" }, enabled = !busy, modifier = Modifier.weight(1f).testTag("installment.frequency")) {
+                TextButton(onClick = { focus.clearFocus(); picker = "frequency" }, enabled = !busy, modifier = Modifier.weight(1f).testTag("installment.frequency")) {
                     Text(stringResource(R.string.planning_planning_frequency_every_value_month_s, state.frequencyMonths.toString()))
                 }
                 IconButton(onClick = { state = state.copy(frequencyMonths = state.frequencyMonths + 1); error = null },
@@ -114,7 +114,7 @@ private fun OwnedInstallmentEditorSheet(
                 label = { Text(stringResource(R.string.planning_planning_total_cycles_optional)) }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), enabled = !busy,
                 modifier = Modifier.fillMaxWidth().testTag("installment.cycles"))
-            TextButton(onClick = { picker = "wallet" }, enabled = !busy && dataReady,
+            TextButton(onClick = { focus.clearFocus(); picker = "wallet" }, enabled = !busy && dataReady,
                 modifier = Modifier.fillMaxWidth().testTag("installment.wallet")) {
                 Text(stringResource(R.string.planning_planning_payment_wallet), Modifier.weight(1f))
                 if (!dataReady && !loadFailed) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)

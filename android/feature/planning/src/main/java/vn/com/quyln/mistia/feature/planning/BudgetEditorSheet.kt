@@ -54,7 +54,6 @@ internal fun BudgetEditorSheet(
     var state by rememberSaveable(ownerId, plan?.id, selectedMonth.toString(), stateSaver = BudgetEditorState.scopedSaver(ownerId)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var calculator by rememberSaveable(ownerId, plan?.id, selectedMonth) { mutableStateOf(false) }
-    val focus = LocalFocusManager.current
     var discard by remember { mutableStateOf(false) }
     var destructive by remember { mutableStateOf<String?>(null) }
     var pickerMode by remember { mutableStateOf(0) }
@@ -71,6 +70,7 @@ internal fun BudgetEditorSheet(
         if (it == SheetValue.Hidden && (busy || changed)) { if (!busy) discard = true; false } else true
     })
     ModalBottomSheet(onDismissRequest = { requestClose() }, sheetState = sheetState) {
+        val focus = LocalFocusManager.current
         Column(Modifier.testTag("budget.editor").fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(if (plan == null) R.string.planning_planning_ng_n_s_ch_m_i else R.string.planning_planning_s_a_ng_n_s_ch), style = MaterialTheme.typography.titleLarge)
@@ -85,7 +85,7 @@ internal fun BudgetEditorSheet(
                 }
                 val label = (if (identity.logical(state.categoryId) == identity.logical(plan?.categoryId)) plan?.localizedBudgetPath(language) else null)
                     ?: livePath ?: stringResource(R.string.planning_planning_choose_category)
-                TextButton(onClick = { categoryPicker = true }, enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.category")) {
+                TextButton(onClick = { focus.clearFocus(); categoryPicker = true }, enabled = !readOnly && !busy, modifier = Modifier.fillMaxWidth().testTag("budget.category")) {
                     Text(label, modifier = Modifier.weight(1f))
                 }
                 OutlinedTextField(state.amountText, onValueChange = { state = state.withAmount(it); error = null; storageError = false },

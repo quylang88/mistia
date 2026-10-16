@@ -29,7 +29,7 @@ import vn.com.quyln.mistia.core.database.*
 import vn.com.quyln.mistia.core.designsystem.MistiaTheme
 import vn.com.quyln.mistia.core.model.*
 
-/** Synthetic in-memory Room; compiled only until a device/emulator is available. */
+/** Synthetic owner and in-memory Room; no network or authentication session. */
 @RunWith(AndroidJUnit4::class)
 class InstallmentEditorWorkflowTest {
     private val compose = createComposeRule()
@@ -134,18 +134,45 @@ class InstallmentEditorWorkflowTest {
         Assert.assertTrue(plans().isEmpty())
     }
 
+    @Test fun walletPickerReleasesAmountFocusAndPreservesUnsavedInstallmentDraft() {
+        compose.setContent { MistiaTheme(darkTheme = false) {
+            InstallmentEditorSheet(owner.value, id, null, "JPY", listOf(wallet),
+                onSave = { error("Save was not requested") }, onDelete = { Result.success(Unit) }, onDismiss = {})
+        } }
+        compose.onNodeWithTag("installment.name").performTextReplacement("Draft")
+        compose.onNodeWithTag("installment.amountInput").performScrollTo().performTextReplacement("9007199254740993")
+        compose.onNodeWithTag("installment.amountInput").assertIsFocused()
+        compose.onNodeWithTag("installment.wallet").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        compose.onNodeWithTag("installment.pickWallet.${wallet.id}").performClick()
+        compose.onNodeWithTag("installment.amountInput").assertIsNotFocused().assertTextContains("9,007,199,254,740,993")
+        compose.onNodeWithTag("installment.name").assertTextContains("Draft")
+        Assert.assertTrue(plans().isEmpty())
+        Assert.assertTrue(runBlocking { store.pendingMutations(owner, CloudEntity.INSTALLMENT_PLAN, Long.MAX_VALUE).isEmpty() })
+    }
+
     @Test fun failedSaveRetainsDraftAndDirtyCloseRequiresExplicitDiscardInLargeFontDarkMode() {
         var dismissed = false
+        var attempts = 0
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, 1.3f)) { MistiaTheme(darkTheme = true) {
                 InstallmentEditorSheet(owner.value, id, null, "JPY", listOf(wallet),
-                    onSave = { Result.failure(IllegalStateException("fixture")) }, onDelete = { Result.success(Unit) }, onDismiss = { dismissed = true })
+                    onSave = { attempts++; Result.failure(IllegalStateException("fixture")) }, onDelete = { Result.success(Unit) }, onDismiss = { dismissed = true })
             } }
         }
         enterDraft()
         compose.onNodeWithTag("installment.save").performScrollTo().performClick()
-        compose.onNodeWithTag("installment.editorError").assertExists()
+        try { compose.onNodeWithTag("installment.editorError").assertExists() } catch (failure: AssertionError) {
+            android.util.Log.e("MistiaInstallmentDiagnostic", "save attempts=$attempts")
+            val roots=compose.onAllNodes(isRoot()).fetchSemanticsNodes()
+            for(index in roots.indices) runCatching { android.util.Log.e("MistiaInstallmentDiagnostic",compose.onAllNodes(isRoot())[index].printToString()) }
+            val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.File(ApplicationProvider.getApplicationContext<Context>().getExternalFilesDir(null),"installment-save-failure.png").outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+                bitmap.recycle()
+            }
+            throw failure
+        }
         compose.onNodeWithTag("installment.amountInput").assertTextContains("9,007,199,254,740,993")
         compose.onNodeWithTag("installment.close").performScrollTo().performClick()
         Assert.assertFalse(dismissed)

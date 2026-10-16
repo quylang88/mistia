@@ -22,11 +22,11 @@ import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.*
 
-internal fun LazyListScope.savingsGoalContent(rows:List<SavingsGoalRow>,summary:SavingsGoalSummary,onAdd:()->Unit,onEdit:(SavingsGoalRecord)->Unit) {
+internal fun LazyListScope.savingsGoalContent(rows:List<SavingsGoalRow>,summary:SavingsGoalSummary,onAdd:()->Unit,onEdit:(SavingsGoalRecord)->Unit,reportingCurrency:String="JPY") {
     item {
         MistiaSectionCard(stringResource(R.string.planning_planning_goals2)) {
             Text("${stringResource(R.string.planning_planning_active_goals)}: ${summary.activeCount}")
-            Text("${stringResource(R.string.planning_planning_saved)}: ${formatMinorUnits(summary.totalSavedMinor,"JPY")}",style=MaterialTheme.typography.headlineSmall)
+            Text("${stringResource(R.string.planning_planning_saved)}: ${formatMinorUnits(summary.totalSavedMinor,reportingCurrency)}",style=MaterialTheme.typography.headlineSmall,modifier=Modifier.testTag("goal.summary.saved"))
             summary.nearestGoalName?.let { Text("${stringResource(R.string.planning_planning_closest_to_goal)}: $it") }
         }
     }
@@ -37,6 +37,7 @@ internal fun LazyListScope.savingsGoalContent(rows:List<SavingsGoalRow>,summary:
     item { Button(onClick=onAdd,modifier=Modifier.fillMaxWidth().testTag("goal.add")) {Text(stringResource(R.string.planning_planning_add_goal))} }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun SavingsGoalCard(row:SavingsGoalRow,onClick:()->Unit) {
     val goal=row.goal
     Surface(Modifier.fillMaxWidth().testTag("goal.edit.${goal.id}").clickable(onClick=onClick),shape=MaterialTheme.shapes.large,tonalElevation=1.dp) {
@@ -47,9 +48,9 @@ internal fun LazyListScope.savingsGoalContent(rows:List<SavingsGoalRow>,summary:
             }
             val progress=if(goal.targetMinor>0) (goal.currentSavedMinor.toDouble()/goal.targetMinor.toDouble()).coerceIn(0.0,1.0).toFloat() else 0f
             LinearProgressIndicator(progress={progress},modifier=Modifier.fillMaxWidth(),color=Color(0xFF2DAA9E))
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text(Instant.parse(goal.targetDate).atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)),style=MaterialTheme.typography.bodySmall,modifier=Modifier.weight(1f))
-                Text(stringResource(R.string.planning_planning_need_value_month,formatMinorUnits(row.monthlyRequiredMinor,goal.currencyCode)),style=MaterialTheme.typography.bodySmall,color=Color(0xFF5B7BFF),textAlign=TextAlign.End,modifier=Modifier.weight(1f))
+            FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                Text(Instant.parse(goal.targetDate).atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)),style=MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.planning_planning_need_value_month,formatMinorUnits(row.monthlyRequiredMinor,goal.currencyCode)),style=MaterialTheme.typography.bodySmall,color=Color(0xFF5B7BFF),textAlign=TextAlign.End,modifier=Modifier.testTag("goal.monthly.${goal.id}"))
             }
         }
     }

@@ -27,6 +27,7 @@ class SavingsAmountCalculatorTest {
     @get:Rule val rules = RuleChain.outerRule(object : ExternalResource() { override fun after() { if (::db.isInitialized) db.close() } }).around(compose)
     private lateinit var db: MistiaDatabase
     private lateinit var store: RoomLocalStore
+    private var saveAttempts=0
     private lateinit var repo: OfflineFirstFinanceRepository
     private val owner = UserId("11111111-1111-1111-1111-111111111111")
     private val device = "22222222-2222-2222-2222-222222222222"
@@ -36,7 +37,7 @@ class SavingsAmountCalculatorTest {
     }
     @Composable private fun Editor(subject: UserId = owner) {
         MistiaTheme(darkTheme = false) { SavingsGoalEditorSheet(subject.value, null, emptyList(),
-            onSave = { repo.saveSavingsGoal(subject, it, device, Instant.now().toString()) },
+            onSave = { saveAttempts++; repo.saveSavingsGoal(subject, it, device, Instant.now().toString()) },
             onDelete = { Result.success(Unit) }, onDismiss = {}) }
     }
     private fun key(text: String) { compose.onNodeWithTag("amountCalculator.key.$text").performClick() }
@@ -54,10 +55,28 @@ class SavingsAmountCalculatorTest {
         Assert.assertTrue(runBlocking { repo.observeSavingsGoals(owner).first().isEmpty() })
         Assert.assertTrue(runBlocking { store.pendingMutations(owner, CloudEntity.SAVINGS_GOAL, Long.MAX_VALUE).isEmpty() })
         compose.onNodeWithTag("goal.save").performScrollTo().performClick()
-        compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().size == 1 } }
+        try { compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().size == 1 } } } catch (failure: Throwable) {
+            android.util.Log.e("MistiaGoalDiagnostic","save attempts=$saveAttempts")
+            val roots=compose.onAllNodes(isRoot()).fetchSemanticsNodes()
+            for(index in roots.indices) runCatching {android.util.Log.e("MistiaGoalDiagnostic",compose.onAllNodes(isRoot())[index].printToString())}
+            val bitmap=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            bitmap?.let { java.io.File(ApplicationProvider.getApplicationContext<Context>().getExternalFilesDir(null),"goal-save-failure.png").outputStream().use {output -> it.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output)};it.recycle() }
+            throw failure
+        }
         val goal = runBlocking { repo.observeSavingsGoals(owner).first().single() }
         Assert.assertEquals(9007199254740995L, goal.targetMinor); Assert.assertEquals(50L, goal.currentSavedMinor)
         Assert.assertEquals(1, runBlocking { store.pendingMutations(owner, CloudEntity.SAVINGS_GOAL, Long.MAX_VALUE).size })
+    }
+    @Test fun calculatorReleasesAmountFocusAndKeepsExactUnsavedGoal() {
+        compose.setContent { Editor() }
+        amount("target","9007199254740993")
+        compose.onNodeWithTag("goal.target").assertIsFocused()
+        compose.onNodeWithTag("goal.target.calculator").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
+        key("+");key("2");key("OK")
+        compose.onNodeWithTag("goal.target").assertIsNotFocused()
+        assertInput("target","9,007,199,254,740,995")
+        Assert.assertTrue(runBlocking {repo.observeSavingsGoals(owner).first().isEmpty()})
+        Assert.assertTrue(runBlocking {store.pendingMutations(owner,CloudEntity.SAVINGS_GOAL,Long.MAX_VALUE).isEmpty()})
     }
     @Test fun cancelKeepsSignedCurrentAndRejectedTargetDoesNotAlterEitherField() {
         compose.setContent { Editor() }

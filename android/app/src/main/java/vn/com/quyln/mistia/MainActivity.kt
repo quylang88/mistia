@@ -285,6 +285,7 @@ private fun SignedInRoot(
                         modifier,
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
                         exchangeRateRepository = exchangeRateRepository,
+                        primaryCurrencyCode = currencySettings.primaryCurrencyCode,
                     )
                     RootTab.MANAGEMENT -> ManagementScreen(
                         ownerUserId = authState.session.userId,
