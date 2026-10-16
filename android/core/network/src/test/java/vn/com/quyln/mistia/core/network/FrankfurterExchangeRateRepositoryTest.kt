@@ -98,6 +98,20 @@ class FrankfurterExchangeRateRepositoryTest {
     }
 
     @Test
+    fun `explicit refresh bypasses early morning and same-day cache throttles`() = runTest {
+        cache.snapshot = cachedRate("2026-09-23T05:00:00+09:00")
+        repository = newRepository()
+        repeat(2) { server.enqueue(MockResponse().setBody(
+            """{"date":"2026-09-22","base":"JPY","quote":"VND","rate":170}"""
+        )) }
+        assertTrue(repository.refreshNow(epochMillis("2026-09-23T06:00:00+09:00")).isSuccess)
+        assertEquals(1,server.requestCount)
+        assertTrue(repository.refreshNow(epochMillis("2026-09-23T06:01:00+09:00")).isSuccess)
+        assertEquals(2,server.requestCount)
+        assertEquals("170",repository.rates.value.single().rateDecimalString)
+    }
+
+    @Test
     fun `cached rate refreshes once on the next local day after seven`() = runTest {
         cache.snapshot = cachedRate("2026-09-22T08:00:00+09:00")
         repository = newRepository()

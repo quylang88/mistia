@@ -53,10 +53,11 @@ fun TransactionsScreen(
     accessTokenProvider: suspend () -> String?,
     deviceIdProvider: suspend () -> String,
     modifier: Modifier = Modifier,
+    primaryCurrencyCode: String = "JPY",
 ) {
     key(ownerUserId.value) {
         OwnedTransactionsScreen(ownerUserId, repository, exchangeRateRepository, receiptAnalysisClient, receiptImageRepository,
-            accessTokenProvider, deviceIdProvider, modifier)
+            accessTokenProvider, deviceIdProvider, modifier, primaryCurrencyCode)
     }
 }
 
@@ -70,6 +71,7 @@ private fun OwnedTransactionsScreen(
     accessTokenProvider: suspend () -> String?,
     deviceIdProvider: suspend () -> String,
     modifier: Modifier = Modifier,
+    primaryCurrencyCode: String,
 ) {
     val records by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
@@ -248,6 +250,7 @@ private fun OwnedTransactionsScreen(
         if (editorTransactionId == null || transaction != null) {
             TransactionEditorSheet(
                 ownerId = ownerUserId.value,
+                primaryCurrencyCode = primaryCurrencyCode,
                 transaction = transaction,
                 wallets = wallets,
                 categories = categories,

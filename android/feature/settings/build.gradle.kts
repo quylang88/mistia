@@ -6,7 +6,8 @@ plugins {
 android {
     namespace = "vn.com.quyln.mistia.feature.settings"
     compileSdk = 36
-    defaultConfig { minSdk = 26 }
+    defaultConfig { minSdk = 26; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    testOptions { targetSdk = 36 }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
@@ -16,6 +17,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test)
+    androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     debugImplementation(libs.compose.ui.test.manifest)

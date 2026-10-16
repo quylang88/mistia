@@ -78,6 +78,7 @@ fun ManagementScreen(
     onOpenCreditCardStatements: (String) -> Unit,
     modifier: Modifier = Modifier,
     onOpenNotificationSettings:()->Unit={},
+    onOpenCurrencySettings:()->Unit={},
 ) {
     val walletFlow = remember(ownerUserId,repository) {repository.observeWallets(ownerUserId)}
     val categoryFlow = remember(ownerUserId,repository) {repository.observeCategories(ownerUserId)}
@@ -182,6 +183,11 @@ fun ManagementScreen(
         item {
             Button(onClick = onSyncNow, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.management_managementauth_sync_now))
+            }
+        }
+        item {
+            OutlinedButton(onClick=onOpenCurrencySettings,modifier=Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_currency_title))
             }
         }
         item {

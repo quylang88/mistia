@@ -34,6 +34,12 @@ import vn.com.quyln.mistia.core.model.DeviceRegistry
 import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.InvestmentRepository
+import vn.com.quyln.mistia.core.model.CurrencyPreferencesStore
+import vn.com.quyln.mistia.core.database.LocalCurrencyPreferencesStore
+import vn.com.quyln.mistia.core.network.SettingsExchangeRateRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
 import vn.com.quyln.mistia.core.model.ExchangeRateRepository
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.SystemCategoryCatalog
@@ -90,7 +96,15 @@ object AppModule {
         @ApplicationContext context: Context,
         client: OkHttpClient,
         json: Json,
-    ): ExchangeRateRepository = FrankfurterExchangeRateRepository(context, client, json)
+        preferences: CurrencyPreferencesStore,
+    ): ExchangeRateRepository = SettingsExchangeRateRepository(preferences,
+        FrankfurterExchangeRateRepository(context, client, json),
+        // Singleton repository and device preferences share the application lifetime.
+        CoroutineScope(SupervisorJob() + Dispatchers.Default))
+
+    @Provides
+    @Singleton
+    fun provideCurrencyPreferences(@ApplicationContext context: Context): CurrencyPreferencesStore = LocalCurrencyPreferencesStore(context)
 
     @Provides
     @Singleton

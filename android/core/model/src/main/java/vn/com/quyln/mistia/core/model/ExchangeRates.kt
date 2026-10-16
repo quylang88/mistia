@@ -26,6 +26,7 @@ data class ExchangeRateResolution(
 interface ExchangeRateRepository {
     val rates: StateFlow<List<ExchangeRateSnapshot>>
     suspend fun refreshIfStale(nowEpochMillis: Long = System.currentTimeMillis()): Result<Unit>
+    suspend fun refreshNow(nowEpochMillis: Long = System.currentTimeMillis()): Result<Unit> = refreshIfStale(nowEpochMillis)
 }
 
 fun resolveExchangeRate(

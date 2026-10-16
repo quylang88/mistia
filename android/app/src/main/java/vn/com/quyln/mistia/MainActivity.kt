@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import vn.com.quyln.mistia.core.model.CurrencyPreferencesStore
 import vn.com.quyln.mistia.core.model.NotificationPreferencesStore
 import android.os.Bundle
 import android.os.Build
@@ -79,6 +80,7 @@ import vn.com.quyln.mistia.core.sync.CategoryTranslationCoordinator
 class MainActivity : ComponentActivity() {
     @Inject lateinit var authRepository: AuthRepository
     @Inject lateinit var notificationPreferences:NotificationPreferencesStore
+    @Inject lateinit var currencyPreferences:CurrencyPreferencesStore
     @Inject lateinit var financeRepository: FinanceRepository
     @Inject lateinit var familyRepository: FamilyRepository
     @Inject lateinit var investmentRepository: InvestmentRepository
@@ -105,6 +107,7 @@ class MainActivity : ComponentActivity() {
                     authRepository = authRepository,
                     financeRepository = financeRepository,
                     notificationPreferences=notificationPreferences,
+                    currencyPreferences=currencyPreferences,
                     familyRepository = familyRepository,
                     investmentRepository = investmentRepository,
                     syncEngine = syncEngine,
@@ -129,6 +132,7 @@ private fun MistiaApp(
     authRepository: AuthRepository,
     financeRepository: FinanceRepository,
     notificationPreferences:NotificationPreferencesStore,
+    currencyPreferences:CurrencyPreferencesStore,
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
     syncEngine: SyncEngine,
@@ -182,6 +186,7 @@ private fun MistiaApp(
                 authRepository = authRepository,
                 financeRepository = financeRepository,
                 notificationPreferences=notificationPreferences,
+                currencyPreferences=currencyPreferences,
                 walletReminders=walletReminders,
                 familyRepository = familyRepository,
                 investmentRepository = investmentRepository,
@@ -211,6 +216,7 @@ private fun SignedInRoot(
     authRepository: AuthRepository,
     financeRepository: FinanceRepository,
     notificationPreferences:NotificationPreferencesStore,
+    currencyPreferences:CurrencyPreferencesStore,
     walletReminders:vn.com.quyln.mistia.core.model.WalletReminderRepository,
     familyRepository: FamilyRepository,
     investmentRepository: InvestmentRepository,
@@ -222,6 +228,7 @@ private fun SignedInRoot(
     receiptImageRepository: TransactionReceiptImageRepository,
     openedFromFamilyInvite: Boolean,
 ) {
+    val currencySettings by currencyPreferences.state.collectAsStateWithLifecycle()
     val notificationRows by produceState<List<vn.com.quyln.mistia.core.model.AppNotificationRecord>?>(null,authState.session.userId,financeRepository) {
         financeRepository.observeAppNotifications(authState.session.userId).collect {value=it}
     }
@@ -263,6 +270,7 @@ private fun SignedInRoot(
                         ownerUserId = authState.session.userId,
                         repository = financeRepository,
                         exchangeRateRepository = exchangeRateRepository,
+                        primaryCurrencyCode = currencySettings.primaryCurrencyCode,
                         receiptAnalysisClient = receiptAnalysisClient,
                         receiptImageRepository = receiptImageRepository,
                         accessTokenProvider = {
@@ -295,6 +303,7 @@ private fun SignedInRoot(
                         onOpenInvestment = { navController.navigate("investment") },
                         onOpenCreditCardStatements = { walletId -> navController.navigate("credit-card-statements/$walletId") },
                         onOpenNotificationSettings={navController.navigate("notification-settings")},
+                        onOpenCurrencySettings={navController.navigate("currency-settings")},
                         modifier = modifier,
                     )
                 }
@@ -304,6 +313,10 @@ private fun SignedInRoot(
             val walletId = entry.arguments?.getString("walletId") ?: return@composable
             vn.com.quyln.mistia.feature.management.CreditCardStatementScreen(
                 authState.session.userId, walletId, financeRepository, onBack = { navController.popBackStack() })
+        }
+        composable("currency-settings") {
+            vn.com.quyln.mistia.feature.settings.CurrencySettingsScreen(currencyPreferences, exchangeRateRepository,
+                onBack = { navController.popBackStack() })
         }
         composable("notification-settings") {
             val context=LocalContext.current

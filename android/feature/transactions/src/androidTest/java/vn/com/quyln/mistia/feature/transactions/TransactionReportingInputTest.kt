@@ -92,6 +92,50 @@ class TransactionReportingInputTest {
         }
     }
 
+    @Test fun transactionsScreenUsesCurrentDevicePrimaryForOpenAndSave() {
+        val existing = record()
+        val prefName = "transaction-currency-fixture-${java.util.UUID.randomUUID()}"
+        val preferences = LocalCurrencyPreferencesStore(context, prefName)
+        try {
+            preferences.setEnabled("VND", true); preferences.setPrimary("VND")
+            val exchange = object : ExchangeRateRepository {
+                override val rates = kotlinx.coroutines.flow.MutableStateFlow(this@TransactionReportingInputTest.rates)
+                override suspend fun refreshIfStale(nowEpochMillis: Long) = Result.success(Unit)
+            }
+            val images = object : TransactionReceiptImageRepository {
+                override suspend fun receipt(transactionId: String): TransactionReceiptImageRecord? = null
+                override suspend fun replaceReceipt(ownerUserId: UserId, transactionId: String, imageData: ByteArray, thumbnailData: ByteArray, contentType: String, now: String): Result<TransactionReceiptImageRecord> = error("unused")
+                override suspend fun imageData(receipt: TransactionReceiptImageRecord): Result<ByteArray> = error("unused")
+                override suspend fun thumbnailData(receipt: TransactionReceiptImageRecord): Result<ByteArray> = error("unused")
+                override suspend fun deleteReceipt(transactionId: String) = Result.success(Unit)
+                override suspend fun deleteAccount(ownerUserId: UserId) = Result.success(Unit)
+            }
+            val analysis = object : ReceiptAnalysisClient {
+                override suspend fun analyzeBillItems(request: BillItemAnalysisRequest, accessToken: String): BillItemAnalysisResult = error("unused")
+            }
+            compose.setContent {
+                val selected by preferences.state.collectAsState()
+                MistiaTheme(darkTheme = false) { TransactionsScreen(owner, repo, exchange, analysis, images,
+                    accessTokenProvider = { null }, deviceIdProvider = { device }, primaryCurrencyCode = selected.primaryCurrencyCode) }
+            }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Stored").fetchSemanticsNodes().size == 1 }
+            compose.onNodeWithText("Stored").performClick()
+            reporting().performScrollTo().assertTextContains("200").performTextReplacement("400")
+            Assert.assertEquals(existing,runBlocking { repo.observeTransactions(owner).first().single() })
+            save()
+            compose.waitUntil(5000) { runBlocking { repo.observeTransactions(owner).first().single().reportingAmountMinor == 400L } }
+            compose.onNodeWithText("Stored").performClick()
+            compose.runOnIdle { preferences.setPrimary("JPY") }
+            reporting().assertDoesNotExist();save()
+            compose.waitUntil(5000) { runBlocking { repo.observeTransactions(owner).first().single().reportingAmountMinor == null } }
+            val saved=runBlocking { repo.observeTransactions(owner).first().single() }
+            Assert.assertEquals(100L,saved.amountMinor);Assert.assertEquals("JPY",saved.sourceCurrencyCode)
+            Assert.assertNull(saved.reportingCurrencyCode);Assert.assertNull(saved.exchangeRateDecimalString)
+        } finally {
+            preferences.close(); context.getSharedPreferences(prefName,Context.MODE_PRIVATE).edit().clear().commit()
+        }
+    }
+
     @Test fun importedManualReportingTargetCannotBeReinterpretedAsAnotherCurrency() {
         val source = wallets.first { it.ownerUserId == owner.value && it.currencyCode == "VND" }
         val existing = runBlocking { repo.saveTransaction(owner, TransactionDraft(primaryKind = TransactionPrimaryKind.EXPENSE, title = "Imported", amountMinor = 1000,

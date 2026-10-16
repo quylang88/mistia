@@ -52,11 +52,14 @@ class FrankfurterExchangeRateRepository internal constructor(
 
     override val rates: StateFlow<List<ExchangeRateSnapshot>> = mutableRates.asStateFlow()
 
-    override suspend fun refreshIfStale(nowEpochMillis: Long): Result<Unit> = refreshMutex.withLock {
+    override suspend fun refreshIfStale(nowEpochMillis: Long): Result<Unit> = refresh(nowEpochMillis, force = false)
+    override suspend fun refreshNow(nowEpochMillis: Long): Result<Unit> = refresh(nowEpochMillis, force = true)
+
+    private suspend fun refresh(nowEpochMillis: Long, force: Boolean): Result<Unit> = refreshMutex.withLock {
         val now = Instant.ofEpochMilli(nowEpochMillis).atZone(zoneId)
-        if (now.toLocalTime().isBefore(REFRESH_TIME)) return@withLock Result.success(Unit)
+        if (!force && now.toLocalTime().isBefore(REFRESH_TIME)) return@withLock Result.success(Unit)
         val current = mutableRates.value.singleOrNull()
-        if (current != null && fetchedLocalDate(current) == now.toLocalDate()) {
+        if (!force && current != null && fetchedLocalDate(current) == now.toLocalDate()) {
             return@withLock Result.success(Unit)
         }
 
