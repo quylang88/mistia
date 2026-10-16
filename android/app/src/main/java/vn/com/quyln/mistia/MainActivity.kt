@@ -229,6 +229,9 @@ private fun SignedInRoot(
     openedFromFamilyInvite: Boolean,
 ) {
     val currencySettings by currencyPreferences.state.collectAsStateWithLifecycle()
+    var overviewEditor by rememberSaveable(authState.session.userId.value,stateSaver=vn.com.quyln.mistia.feature.transactions.StoredTransactionEditorNavigation.saver(authState.session.userId.value)) {
+        mutableStateOf(vn.com.quyln.mistia.feature.transactions.StoredTransactionEditorNavigation(authState.session.userId.value,null))
+    }
     val notificationRows by produceState<List<vn.com.quyln.mistia.core.model.AppNotificationRecord>?>(null,authState.session.userId,financeRepository) {
         financeRepository.observeAppNotifications(authState.session.userId).collect {value=it}
     }
@@ -263,6 +266,7 @@ private fun SignedInRoot(
                         financeRepository,
                         syncEngine.status,
                         modifier,
+                        onOpenTransaction={id -> overviewEditor=overviewEditor.copy(recordId=id)},
                         primaryCurrencyCode=currencySettings.primaryCurrencyCode,
                         unreadNotificationCount=unreadNotifications,
                         onOpenNotifications={navController.navigate("notifications")},
@@ -352,6 +356,10 @@ private fun SignedInRoot(
                 onBack = { navController.popBackStack() },
             )
         }
+    }
+    overviewEditor.recordId?.takeIf {overviewEditor.owner==authState.session.userId.value}?.let {id ->
+        vn.com.quyln.mistia.feature.transactions.StoredTransactionEditorRoute(authState.session.userId,id,financeRepository,exchangeRateRepository,
+            receiptImageRepository,{deviceIdStore.getOrCreate()},currencySettings.primaryCurrencyCode,onDismiss={overviewEditor=overviewEditor.copy(recordId=null)})
     }
     if(notificationActionKey!=null && notificationRows!=null) {
         val row=notificationRows!!.singleOrNull {it.key==notificationActionKey}

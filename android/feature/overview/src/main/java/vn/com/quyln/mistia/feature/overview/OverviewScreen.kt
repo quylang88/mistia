@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.feature.overview
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,9 +47,10 @@ fun OverviewScreen(
     unreadNotificationCount:Int=0,
     onOpenNotifications:()->Unit={},
     primaryCurrencyCode:String="JPY",
+    onOpenTransaction:(String)->Unit={},
 ) {
     key(ownerUserId.value) {
-        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode)
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode, onOpenTransaction)
     }
 }
 
@@ -61,6 +63,7 @@ private fun OwnedOverviewScreen(
     unreadNotificationCount: Int,
     onOpenNotifications: () -> Unit,
     primaryCurrencyCode: String,
+    onOpenTransaction: (String) -> Unit,
 ) {
     val reference=rememberOverviewReferenceTime()
     val zone=ZoneId.systemDefault()
@@ -130,7 +133,7 @@ private fun OwnedOverviewScreen(
                     )
                 } else {
                     recent.forEachIndexed { index,row ->
-                        OverviewRecentTransactionRow(row,titleCategoriesById[row.transaction.categoryId],reference,zone)
+                        OverviewRecentTransactionRow(row,titleCategoriesById[row.transaction.categoryId],reference,zone,Modifier.clickable {onOpenTransaction(row.transaction.id)})
                         if(index<recent.lastIndex) HorizontalDivider()
                     }
                 }

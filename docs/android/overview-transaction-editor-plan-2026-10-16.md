@@ -1,0 +1,10 @@
+# Stored transaction editor from Overview — slice103
+
+After verified102commit. Swift OverviewView803–807 routes recentrow ID through ownedtransactionsByID to presentEditor951–963, leaving Overviewbehind; canEdit checks owner/family permissions. Android personal Overview currently has no row action. Reuse native existing transaction editor/receipt functions through a public feature-transactions stored-record route composed at app root, rather than switching tabs or bypassing repository. Existing native supported-kind restrictions and paidstatement guards remain explicit; full family/debt/settlement editors and permissions remain APK3 work.
+
+- [x] Owned savednavigation runtime REDs for owner/record/tampered or malformedcontext; closed/open identity and process-state restoration. Keep raw payload/private data out of navigation.
+- [x] Native actual REDs for Overviewtap→storedform→exactedit/Room/outbox (samecurrency VND >2^53, importedUSD), invalid/foreign/missing/paid/unsupported target held/read-only rather than creatingnewrecord, owner/record change clearsdraft/lateNonCancellablesave, receipt owner/transaction envelope before readingbytes, late receipt result cannot replace currentroute. Read-only navigation/cancel cannot write data.
+- [x] Public owned StoredTransactionEditor route loads owner-scoped dependencies before edit, typed/raw target fences and existing capability/paid guards, receiptload/removal with existing helpers and cancellation before/after callbacks. Scope whole route owner/id, saveable receipt flags and draft. MainActivity owner-bound navigation receives Overviewrow callback and renders modalroute; actual root continuesOverview/tab. No productionwrites/gates.
+- [x] Focused/full relevant tests, directSwift/diff review, exact APK/testcontents/checksums and native/visual/smoke evidence, progress and independent103commit. Continue remaining fullOverviewhero and APK1–4/RC.
+
+All10flagsfalse; Room6/SwiftDataV11/iOS751. Generic editor-opening baselines/atomic receipt+financial changes and unsupportedAPK3 semantics remain separate; never claim fullflow completed until nativeverification.

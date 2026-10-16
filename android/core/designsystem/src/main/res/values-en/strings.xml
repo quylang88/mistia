@@ -1966,6 +1966,9 @@
     <string name="transactions_settlement_shared_expense_quick_create_subtitle">Enter who paid what and calculate what to collect or pay.</string>
     <string name="transactions_settlement_shared_expense_title">Split expense</string>
     <string name="transactions_settlement_total_paid">Total paid</string>
+    <string name="transactions_stored_editor_loading">Loading cashflow item…</string>
+    <string name="transactions_stored_editor_unavailable">This cashflow item is no longer available.</string>
+    <string name="transactions_stored_editor_unsupported">This cashflow item is read-only here.</string>
     <string name="transactions_transactioneditor_add_a_note_if_needed">Add a note if needed</string>
     <string name="transactions_transactioneditor_add_receipt_image">Add receipt image</string>
     <string name="transactions_transactioneditor_amount">Amount</string>

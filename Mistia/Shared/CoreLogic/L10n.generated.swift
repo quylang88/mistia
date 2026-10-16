@@ -5096,6 +5096,15 @@ nonisolated enum L10n {
             static func totalPaid(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.totalPaid", vi: "Tổng đã trả", en: "Total paid", ja: "支払い合計", language: language) }
         }
 
+        nonisolated enum storedEditor {
+            static var loading: String { L10n.tr("transactions.storedEditor.loading", vi: "Đang tải giao dịch…", en: "Loading cashflow item…", ja: "取引を読み込み中…") }
+            static func loading(language: MistiaAppLanguage) -> String { L10n.tr("transactions.storedEditor.loading", vi: "Đang tải giao dịch…", en: "Loading cashflow item…", ja: "取引を読み込み中…", language: language) }
+            static var unavailable: String { L10n.tr("transactions.storedEditor.unavailable", vi: "Giao dịch này không còn khả dụng.", en: "This cashflow item is no longer available.", ja: "この取引は現在利用できません。") }
+            static func unavailable(language: MistiaAppLanguage) -> String { L10n.tr("transactions.storedEditor.unavailable", vi: "Giao dịch này không còn khả dụng.", en: "This cashflow item is no longer available.", ja: "この取引は現在利用できません。", language: language) }
+            static var unsupported: String { L10n.tr("transactions.storedEditor.unsupported", vi: "Giao dịch này chỉ có thể xem tại đây.", en: "This cashflow item is read-only here.", ja: "この画面ではこの取引は閲覧のみ可能です。") }
+            static func unsupported(language: MistiaAppLanguage) -> String { L10n.tr("transactions.storedEditor.unsupported", vi: "Giao dịch này chỉ có thể xem tại đây.", en: "This cashflow item is read-only here.", ja: "この画面ではこの取引は閲覧のみ可能です。", language: language) }
+        }
+
         nonisolated enum transactioneditor {
             static var addANoteIfNeeded: String { L10n.tr("transactions.transactioneditor.addANoteIfNeeded", vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加") }
             static func addANoteIfNeeded(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.addANoteIfNeeded", vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加", language: language) }

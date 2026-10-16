@@ -1966,6 +1966,9 @@
     <string name="transactions_settlement_shared_expense_quick_create_subtitle">Nhập ai đã trả bao nhiêu để tính phần cần thu/trả.</string>
     <string name="transactions_settlement_shared_expense_title">Chia chi phí</string>
     <string name="transactions_settlement_total_paid">Tổng đã trả</string>
+    <string name="transactions_stored_editor_loading">Đang tải giao dịch…</string>
+    <string name="transactions_stored_editor_unavailable">Giao dịch này không còn khả dụng.</string>
+    <string name="transactions_stored_editor_unsupported">Giao dịch này chỉ có thể xem tại đây.</string>
     <string name="transactions_transactioneditor_add_a_note_if_needed">Thêm ghi chú nếu cần</string>
     <string name="transactions_transactioneditor_add_receipt_image">Thêm ảnh bill</string>
     <string name="transactions_transactioneditor_amount">Số tiền</string>

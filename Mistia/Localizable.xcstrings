@@ -45147,6 +45147,75 @@
         }
       }
     },
+    "transactions.storedEditor.loading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading cashflow item…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取引を読み込み中…"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đang tải giao dịch…"
+          }
+        }
+      }
+    },
+    "transactions.storedEditor.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This cashflow item is no longer available."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この取引は現在利用できません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch này không còn khả dụng."
+          }
+        }
+      }
+    },
+    "transactions.storedEditor.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This cashflow item is read-only here."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この画面ではこの取引は閲覧のみ可能です。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch này chỉ có thể xem tại đây."
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.addANoteIfNeeded" : {
       "extractionState" : "stale",
       "localizations" : {

@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -200,7 +201,8 @@ private fun OwnedTransactionEditorSheet(
             .withCurrentAppRate(sourceWallet?.currencyCode, conversionTarget, exchangeRates, reporting = isReporting)
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!isSaving) onDismiss() }) {
+    ModalBottomSheet(onDismissRequest = { if (!isSaving) onDismiss() },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

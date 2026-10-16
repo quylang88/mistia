@@ -27,7 +27,7 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun OverviewRecentTransactionRow(row:OverviewRecentRow,category:TransactionCategoryRecord?,reference:Instant,zone:ZoneId) {
+@Composable internal fun OverviewRecentTransactionRow(row:OverviewRecentRow,category:TransactionCategoryRecord?,reference:Instant,zone:ZoneId,modifier:Modifier=Modifier) {
     val style=overviewCashflow(row.transaction)
     val color=when(style) {
         OverviewCashflow.INCOME -> Color(0.18f,0.67f,0.62f)
@@ -36,7 +36,7 @@ import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
     }
     val prefix=when(style) {OverviewCashflow.INCOME -> "+";OverviewCashflow.EXPENSE -> "-";OverviewCashflow.NEUTRAL -> ""}
     val token=overviewRecentIcon(row.transaction,category)
-    FlowRow(Modifier.fillMaxWidth().padding(vertical=12.dp).testTag("overview.recent.${row.transaction.id}"),
+    FlowRow(modifier.fillMaxWidth().padding(vertical=12.dp).testTag("overview.recent.${row.transaction.id}"),
         horizontalArrangement=Arrangement.SpaceBetween,verticalArrangement=Arrangement.spacedBy(8.dp),itemVerticalAlignment=Alignment.CenterVertically) {
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             val iconModifier=Modifier.size(36.dp).testTag("overview.recent.icon.${row.transaction.id}.$token")
