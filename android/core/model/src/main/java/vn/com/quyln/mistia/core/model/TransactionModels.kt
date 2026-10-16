@@ -242,6 +242,8 @@ data class TransactionDraft(
     val exchangeRateDecimalString: String? = null,
     val exchangeRateProvider: String? = null,
     val exchangeRateDate: String? = null,
+    val reportingCurrencyCode: String? = null,
+    val reportingAmountMinor: Long? = null,
 ) {
     fun toMutation(
         ownerUserId: UserId,
@@ -335,24 +337,12 @@ data class TransactionDraft(
                         ) {
                             val destinationAmount = destinationAmountMinor?.takeIf { it > 0 }
                                 ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                            val mode = conversionMode
-                                ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                            val rate = exchangeRateDecimalString.transactionOptional()
-                            if (mode == CurrencyConversionMode.APP_RATE && rate == null) {
-                                transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
-                            }
-                            if (rate != null && runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1) {
-                                transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE)
-                            }
-                            val rateDate = exchangeRateDate.transactionOptional()
-                            if (rateDate != null && runCatching { LocalDate.parse(rateDate) }.isFailure) {
-                                transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE_DATE)
-                            }
+                            val metadata = transactionConversionMetadata(conversionMode, exchangeRateDecimalString, exchangeRateProvider, exchangeRateDate)
                             normalizedDestinationAmount = destinationAmount
-                            normalizedConversionMode = mode.wireValue
-                            normalizedRate = rate
-                            normalizedProvider = exchangeRateProvider.transactionOptional()
-                            normalizedRateDate = rateDate
+                            normalizedConversionMode = metadata.mode.wireValue
+                            normalizedRate = metadata.rate
+                            normalizedProvider = metadata.provider
+                            normalizedRateDate = metadata.date
                         }
                     }
                     TransactionTransferSubtype.DEBT -> {
@@ -382,6 +372,46 @@ data class TransactionDraft(
             }
         }
 
+        var normalizedReportingCurrency: String? = null
+        var normalizedReportingAmount: Long? = null
+        if (primaryKind == TransactionPrimaryKind.TRANSFER) {
+            if (reportingCurrencyCode != null || reportingAmountMinor != null)
+                transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)
+        } else {
+            val requestedCurrency = reportingCurrencyCode?.transactionCurrency()
+            if (requestedCurrency == null && reportingAmountMinor != null)
+                transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)
+            if (requestedCurrency != null) {
+                if (normalizedSourceCurrency == null) transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                if (requestedCurrency != normalizedSourceCurrency) {
+                    normalizedReportingAmount = reportingAmountMinor?.takeIf { it > 0 }
+                        ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                    val metadata = transactionConversionMetadata(conversionMode, exchangeRateDecimalString, exchangeRateProvider, exchangeRateDate)
+                    normalizedReportingCurrency = requestedCurrency
+                    normalizedConversionMode = metadata.mode.wireValue
+                    normalizedRate = metadata.rate
+                    normalizedProvider = metadata.provider ?: "manual".takeIf { metadata.mode == CurrencyConversionMode.MANUAL }
+                    normalizedRateDate = metadata.date
+                }
+            } else if (existing != null && (existing.reportingCurrencyCode != null || existing.reportingAmountMinor != null)) {
+                // Older callers can edit metadata without discarding a stored conversion. Money edits must resolve it explicitly.
+                if (existing.primaryKind != primaryKind || existing.entryStatus != entryStatus || existing.amountMinor != amountMinor ||
+                    existing.sourceWalletId != sourceId || existing.sourceCurrencyCode?.transactionCurrency() != normalizedSourceCurrency)
+                    transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                val currency = existing.reportingCurrencyCode?.transactionCurrency()
+                    ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                if (currency == normalizedSourceCurrency) transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                normalizedReportingAmount = existing.reportingAmountMinor?.takeIf { it > 0 }
+                    ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+                val metadata = transactionConversionMetadata(existing.conversionMode, existing.exchangeRateDecimalString, existing.exchangeRateProvider, existing.exchangeRateDate)
+                normalizedReportingCurrency = currency
+                normalizedConversionMode = metadata.mode.wireValue
+                normalizedRate = metadata.rate
+                normalizedProvider = metadata.provider
+                normalizedRateDate = metadata.date
+            }
+        }
+
         val record = LedgerTransactionRecord(
             id = canonicalId,
             ownerUserId = owner,
@@ -395,8 +425,8 @@ data class TransactionDraft(
             sourceCurrencyCode = normalizedSourceCurrency,
             destinationCurrencyCode = normalizedDestinationCurrency,
             destinationAmountMinor = normalizedDestinationAmount,
-            reportingCurrencyCode = existing?.reportingCurrencyCode.takeUnless { isStandaloneDebtLend },
-            reportingAmountMinor = existing?.reportingAmountMinor.takeUnless { isStandaloneDebtLend },
+            reportingCurrencyCode = normalizedReportingCurrency,
+            reportingAmountMinor = normalizedReportingAmount,
             conversionModeWireValue = normalizedConversionMode,
             exchangeRateDecimalString = normalizedRate,
             exchangeRateProvider = normalizedProvider,
@@ -563,6 +593,18 @@ private fun LedgerTransactionRecord.hasSettlementOwnership(): Boolean =
         settlementRoleWireValue != null ||
         reportingExpenseMinor != null ||
         reportingIncomeMinor != null
+private data class TransactionConversionMetadata(val mode: CurrencyConversionMode, val rate: String?, val provider: String?, val date: String?)
+
+private fun transactionConversionMetadata(mode: CurrencyConversionMode?, rateText: String?, provider: String?, dateText: String?): TransactionConversionMetadata {
+    val selected = mode ?: transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+    val rate = rateText.transactionOptional()
+    if (selected == CurrencyConversionMode.APP_RATE && rate == null) transactionFail(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED)
+    if (rate != null && runCatching { BigDecimal(rate) }.getOrNull()?.signum() != 1) transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE)
+    val date = dateText.transactionOptional()
+    if (date != null && runCatching { LocalDate.parse(date) }.isFailure) transactionFail(TransactionValidationError.INVALID_EXCHANGE_RATE_DATE)
+    return TransactionConversionMetadata(selected, rate, provider.transactionOptional(), date)
+}
+
 private fun String.transactionCurrency(): String {
     val value = trim().uppercase(Locale.ROOT)
     if (!value.matches(Regex("^[A-Z]{3}$"))) transactionFail(TransactionValidationError.INVALID_KIND_FIELDS)

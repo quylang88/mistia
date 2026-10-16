@@ -1,11 +1,81 @@
 package vn.com.quyln.mistia.core.model
 
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TransactionModelsTest {
+    @Test fun `manual reporting expense preserves exact source and reporting minor pair`() {
+        val draft = baseDraft(TransactionPrimaryKind.EXPENSE, CATEGORY_ID).copy(amountMinor = 9007199254740993L,
+            reportingCurrencyCode = "VND", reportingAmountMinor = 18014398509481986L, conversionMode = CurrencyConversionMode.MANUAL)
+        val mutation = reportingMutation(draft)
+        assertEquals(9007199254740993L, mutation.record.amountMinor); assertEquals(18014398509481986L, mutation.record.reportingAmountMinor)
+        assertEquals("JPY", mutation.record.sourceCurrencyCode); assertEquals("VND", mutation.record.reportingCurrencyCode)
+        assertEquals(CurrencyConversionMode.MANUAL, mutation.record.conversionMode); assertEquals("manual", mutation.record.exchangeRateProvider)
+        assertNull(mutation.record.exchangeRateDecimalString); assertNull(mutation.record.exchangeRateDate)
+        assertEquals(JsonPrimitive(18014398509481986L), mutation.pending.payload?.get("reporting_amount_minor"))
+        assertEquals(JsonNull, mutation.pending.payload?.get("destination_amount_minor"))
+    }
+    @Test fun `app reporting income preserves actual positive rate metadata`() {
+        val mutation = reportingMutation(baseDraft(TransactionPrimaryKind.INCOME, CATEGORY_ID).copy(reportingCurrencyCode = "VND", reportingAmountMinor = 16550,
+            conversionMode = CurrencyConversionMode.APP_RATE, exchangeRateDecimalString = "165.5", exchangeRateProvider = "fixture", exchangeRateDate = "2026-10-15"))
+        assertEquals(16550L, mutation.record.reportingAmountMinor); assertEquals("VND", mutation.record.reportingCurrencyCode)
+        assertEquals("165.5", mutation.record.exchangeRateDecimalString); assertEquals("fixture", mutation.record.exchangeRateProvider); assertEquals("2026-10-15", mutation.record.exchangeRateDate)
+        assertEquals(CurrencyConversionMode.APP_RATE, mutation.record.conversionMode)
+    }
+    @Test fun `reporting conversion requires target positive amount and selected mode`() {
+        val valid = baseDraft(TransactionPrimaryKind.EXPENSE, CATEGORY_ID).copy(reportingCurrencyCode = "VND", reportingAmountMinor = 16500, conversionMode = CurrencyConversionMode.MANUAL)
+        listOf(valid.copy(reportingAmountMinor = null), valid.copy(reportingAmountMinor = 0), valid.copy(reportingAmountMinor = -1), valid.copy(conversionMode = null)).forEach {
+            assertEquals(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED, (runCatching { reportingMutation(it) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+        }
+        assertEquals(TransactionValidationError.INVALID_KIND_FIELDS, (runCatching { reportingMutation(valid.copy(reportingCurrencyCode = null)) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+    }
+    @Test fun `app reporting rejects missing malformed or nonpositive rate and malformed date`() {
+        val valid = baseDraft(TransactionPrimaryKind.EXPENSE, CATEGORY_ID).copy(reportingCurrencyCode = "VND", reportingAmountMinor = 16500, conversionMode = CurrencyConversionMode.APP_RATE)
+        assertEquals(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED, (runCatching { reportingMutation(valid) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+        listOf("0", "-1", "NaN", "bad").forEach { value ->
+            assertEquals(TransactionValidationError.INVALID_EXCHANGE_RATE, (runCatching { reportingMutation(valid.copy(exchangeRateDecimalString = value)) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+        }
+        assertEquals(TransactionValidationError.INVALID_EXCHANGE_RATE_DATE, (runCatching { reportingMutation(valid.copy(exchangeRateDecimalString = "165", exchangeRateDate = "bad")) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+    }
+    @Test fun `explicit same currency reporting clears stale pair and fx metadata`() {
+        val existing = reportedRecord()
+        val mutation = reportingMutation(baseDraft(TransactionPrimaryKind.EXPENSE, CATEGORY_ID).copy(reportingCurrencyCode = "JPY", reportingAmountMinor = 999), existing)
+        assertNull(mutation.record.reportingCurrencyCode); assertNull(mutation.record.reportingAmountMinor); assertNull(mutation.record.conversionMode)
+        assertNull(mutation.record.exchangeRateDecimalString); assertNull(mutation.record.exchangeRateProvider); assertNull(mutation.record.exchangeRateDate)
+        assertEquals(JsonNull, mutation.pending.payload?.get("reporting_amount_minor"))
+    }
+    @Test fun `ordinary internal transfer clears old expense reporting pair`() {
+        val mutation = baseDraft(TransactionPrimaryKind.TRANSFER).copy(transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER, destinationWalletId = DESTINATION_WALLET_ID)
+            .toMutation(UserId(OWNER), reportedRecord(), wallet(SOURCE_WALLET_ID, WalletKind.CASH, "JPY"), wallet(DESTINATION_WALLET_ID, WalletKind.CASH, "JPY"), null, DEVICE, NOW)
+        assertNull(mutation.record.reportingCurrencyCode); assertNull(mutation.record.reportingAmountMinor)
+    }
+    @Test fun `legacy reporting monetary edit needs an explicit refreshed conversion`() {
+        assertEquals(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED,
+            (runCatching { reportingMutation(baseDraft(TransactionPrimaryKind.EXPENSE, CATEGORY_ID).copy(amountMinor = 101), reportedRecord()) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+        assertEquals(TransactionValidationError.CROSS_CURRENCY_DETAILS_REQUIRED,
+            (runCatching { reportingMutation(baseDraft(TransactionPrimaryKind.INCOME, CATEGORY_ID), reportedRecord()) }.exceptionOrNull() as? TransactionValidationException)?.reason)
+    }
+    @Test fun `legacy reporting metadata edit preserves complete old conversion`() {
+        val existing = reportedRecord()
+        val mutation = reportingMutation(baseDraft(TransactionPrimaryKind.EXPENSE, CATEGORY_ID).copy(title = "New title"), existing)
+        assertEquals("New title", mutation.record.title); assertEquals(16550L, mutation.record.reportingAmountMinor)
+        assertEquals("VND", mutation.record.reportingCurrencyCode); assertEquals("165.5", mutation.record.exchangeRateDecimalString)
+        assertEquals("fixture", mutation.record.exchangeRateProvider); assertEquals("2026-10-15", mutation.record.exchangeRateDate)
+        assertEquals(CurrencyConversionMode.APP_RATE, mutation.record.conversionMode)
+    }
+    @Test fun `internal transfer cannot accept expense reporting input`() {
+        val draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER, destinationWalletId = DESTINATION_WALLET_ID,
+            reportingCurrencyCode = "VND", reportingAmountMinor = 16500)
+        assertEquals(TransactionValidationError.INVALID_KIND_FIELDS, failureReason(draft, wallet(SOURCE_WALLET_ID, WalletKind.CASH, "JPY"), wallet(DESTINATION_WALLET_ID, WalletKind.CASH, "JPY")))
+    }
+    private fun reportingMutation(draft: TransactionDraft, existing: LedgerTransactionRecord? = null) = draft.toMutation(UserId(OWNER), existing,
+        wallet(SOURCE_WALLET_ID, WalletKind.CASH, "JPY"), null, category(if (draft.primaryKind == TransactionPrimaryKind.INCOME) TransactionCategoryKind.INCOME else TransactionCategoryKind.EXPENSE), DEVICE, NOW)
+    private fun reportedRecord() = transactionRecord().copy(reportingCurrencyCode = "VND", reportingAmountMinor = 16550,
+        conversionModeWireValue = CurrencyConversionMode.APP_RATE.wireValue, exchangeRateDecimalString = "165.5", exchangeRateProvider = "fixture", exchangeRateDate = "2026-10-15")
+
     @Test fun `manual cross currency pair does not require an invented rate`() {
         val draft = baseDraft(TransactionPrimaryKind.TRANSFER).copy(transferSubtype = TransactionTransferSubtype.INTERNAL_TRANSFER,
             destinationWalletId = DESTINATION_WALLET_ID, destinationAmountMinor = 16500, conversionMode = CurrencyConversionMode.MANUAL)
