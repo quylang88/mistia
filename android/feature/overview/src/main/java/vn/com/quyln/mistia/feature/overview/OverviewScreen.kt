@@ -49,9 +49,10 @@ fun OverviewScreen(
     primaryCurrencyCode:String="JPY",
     onOpenTransaction:(String)->Unit={},
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?=null,
+    overlayPresented:Boolean=false,
 ) {
     key(ownerUserId.value) {
-        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode, onOpenTransaction, exchangeRates)
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode, onOpenTransaction, exchangeRates, overlayPresented)
     }
 }
 
@@ -66,6 +67,7 @@ private fun OwnedOverviewScreen(
     primaryCurrencyCode: String,
     onOpenTransaction: (String) -> Unit,
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?,
+    overlayPresented:Boolean,
 ) {
     val reference=rememberOverviewReferenceTime()
     val rates=exchangeRates?.rates?.collectAsStateWithLifecycle()?.value.orEmpty()
@@ -89,6 +91,9 @@ private fun OwnedOverviewScreen(
     }
     val monthly=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
         vn.com.quyln.mistia.core.model.overviewMonthlyCashflow(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone).last()
+    }
+    val weeks=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
+        vn.com.quyln.mistia.core.model.overviewWeeklySpending(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
     }
     val recent = remember(ownerUserId, transactions, wallets, primaryCurrencyCode) {
         overviewRecentTransactions(ownerUserId, transactions, wallets, primaryCurrencyCode)
@@ -123,7 +128,7 @@ private fun OwnedOverviewScreen(
                 }
             }
         }
-        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance)}
+        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,overlayPresented)}
         item {
             MistiaSectionCard(title = stringResource(R.string.family_family_wallets_cards)) {
                 Row(

@@ -35,7 +35,7 @@ fun overviewMonthlyCashflow(owner:UserId,records:List<LedgerTransactionRecord>,w
     return result
 }
 
-private fun reportedOverviewExpense(record:LedgerTransactionRecord,walletKind:WalletKind?,titles:Map<GeneratedTransactionTitle,Collection<String>>):Long {
+internal fun reportedOverviewExpense(record:LedgerTransactionRecord,walletKind:WalletKind?,titles:Map<GeneratedTransactionTitle,Collection<String>>):Long {
     record.reportingExpenseMinor?.let {return it}
     val adjustment=record.isOverviewAdjustment(titles)
     val installment=record.categoryId==SystemCategoryIdentity.canonicalId("loan_repayment")
