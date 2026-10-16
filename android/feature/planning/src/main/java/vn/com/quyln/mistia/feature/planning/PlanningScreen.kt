@@ -148,7 +148,7 @@ fun PlanningScreen(
                 }
             }}
             if(dueMode==1) item {PlanningCountCard(stringResource(R.string.planning_planning_credit_cards),values[CloudEntity.CREDIT_CARD_PROFILE.table] ?: 0)}
-            if(dueMode==2) item {InstallmentDuePane(ownerUserId, repository, month, deviceIdProvider)}
+            if(dueMode==2) item {InstallmentDuePane(ownerUserId, repository, month, deviceIdProvider, defaultCurrency=reportingCurrency)}
             if(dueMode==0) {
             val rows=recurringBillDueRows(ownerUserId,bills,occurrences,month,zone)
             item { Text(stringResource(R.string.planning_planning_bills2),style=MaterialTheme.typography.titleLarge) }

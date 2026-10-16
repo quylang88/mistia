@@ -1,0 +1,20 @@
+# Current-primary installment creation and scoped editor — APK99
+
+PlanningScreen now forwards actual reporting primary to InstallmentDuePane. New creation follows normalized supportedJPY/VND primary. Existing edits retain stored currency, identity and frozen owned baseline. Live primary change resets only active creation to a fresh UUID: an old Save may already have committed legitimately, so the new currency must never reuse that old identity. Foreign, deleted, archived or route-ID-mismatched originals are hidden before initialization. Whole editor subtree and scoped11slot saver bind owner/routeID/currency/create-vs-edit; baseline and exact Long version retained. Existing guarded mutation/atomic repository behavior and same-currency payment rule remain.
+
+Direct Swift audit: PlanningEditors.swift1720–1755 uses current primary only for creation, and filters non-card wallets through installmentPaymentWalletIsEligible. PlanningInstallmentDraft2598–2601 and CurrencyFormatting.swift60–68 use raw integer minor input for every currency. Android preserves this installment contract, including importedUSD1375÷5=275; the existing Android ISO preview is preserved. Full imported normalization/presentation parity remains separately open.
+
+TDD: minimal scoped-saver wrapper produced3 intended runtimeREDs/4 before guards; focused17 JVM (4new+13existing) pass. Initial8 native cases produced6 intended actual REDs; existingJPY/importedUSD already passed. No compile/selector failures counted as RED. After changes **8/8 native pass31.91sec**. Real PlanningScreen/Room/outbox verifies VND9007199254740993 and identical queued payload, onlyVND non-card wallet, no ledger/wallet mutation; existingJPY with unsavedname survives primarychange; importedUSD rawinteger retained; directcurrency/liveprimary changes clear private draft/calculator/wallet; foreign/mismatched originals hidden. Pendingcreate fixture commits oldJPY123 before holding NonCancellable response, then creates different-ID VND200; released old response cannot dismiss next draft. Finally always releases held work. Explicit editor-dismiss wait precedes opening next draft after Room emission.
+
+Supplemental settled visual **1/1 passes8.595sec**. All4 light/dark130% PNGs inspected: full exact amount/VND suffix readable, selected CashVND in dark form, complete calculator number, no transition ghosting. Numeric IME visible in light form and lower controls scroll. Stable compositor-frame capture uses no fixed sleep/animation override. Independent read-only review reports no findings.
+
+Full **1469 JVM/139suites**, Swift610 (4contract+137data+469core), lint/build15sec, Room/management/planning/transaction/settings AndroidTest compilation, Room/planning packaging, contract15, both localization checks, SQLite7/3/11, packaged6Room schemas/bootstrap and whitespace pass. Final **82/82 native planning passes351.55sec** on the checksum-matched executed package. Earlier native startup/open/save concerns remain causally unproven; this green run does not close those broader concerns.
+
+Logs `/tmp/mistia-primary-installment-{state-red,native-red-build,native-red,focused-build,native-focused-build,native-focused,visual-build,visual,full,swift,native-final}.log`.
+
+Metadata/manifest/DEX-verified archives `android/build/outputs/apk2/2026-10-16/`:
+
+- `mistia-0.2.0-apk2-primary-installment-v99.apk`, version99, SHA256 `c8be1cf70ebdda4ad3a62de9e7451cb2f89888a05128dcef759fdec6f4fa90cf`.
+- `mistia-primary-installment-test-v99.apk`, target36, SHA256 `7a9ec4bd05db5e4529416acedd3846815fe2a8194c962a408da680636e279f1b`. Installed executed test base.apk SHA matches.
+
+API36 emulator only; app99 installed with install-r preserving data, cold MainActivity Statusok1036ms and installed version99 confirmed. No Samsung/live Supabase/production write/deploy/migration. All10 flagsfalse; Room6/SwiftDataV11/iOS751 unchanged. Generic bill/savings opening-baseline/read-set guards, owned budget/primary defaults, due/overview/family/investment/imported/no-wallet cases, prior native startup/open/save concerns and full APK1–4/RC remain open. Goal active; continue owned budget/primary next.

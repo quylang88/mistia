@@ -19,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import java.util.UUID
+import java.util.Locale
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -43,7 +44,8 @@ private sealed interface InstallmentLoad {
 @Composable
 internal fun InstallmentDuePane(owner: UserId, repository: FinanceRepository, month: YearMonth, deviceIdProvider: () -> String, defaultCurrency: String = "JPY", now: () -> Instant = Instant::now) {
     // Saveable keys must survive repository recreation after process death.
-    key(owner.value) { OwnedInstallmentDuePane(owner, repository, month, deviceIdProvider, defaultCurrency, now) }
+    val primary = defaultCurrency.trim().uppercase(Locale.ROOT).takeIf { it in CurrencyPreferences.supportedCurrencyCodes } ?: "JPY"
+    key(owner.value) { OwnedInstallmentDuePane(owner, repository, month, deviceIdProvider, primary, now) }
 }
 
 @Composable
@@ -55,6 +57,11 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
         mutableStateOf(InstallmentEditorNavigation.closed(owner.value))
     }
     LaunchedEffect(navigation) { if (!navigation.valid()) navigation = InstallmentEditorNavigation.closed(owner.value) }
+    LaunchedEffect(defaultCurrency) {
+        if (navigation.editorId != null && navigation.baselinePayload == null && navigation.currency != defaultCurrency) {
+            navigation = InstallmentEditorNavigation.create(owner.value, defaultCurrency, UUID.randomUUID().toString())
+        }
+    }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) { reference = currentTime(); delay(60_000) }

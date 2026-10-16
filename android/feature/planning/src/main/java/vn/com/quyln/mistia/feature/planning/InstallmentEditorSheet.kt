@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import java.util.Locale
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
@@ -38,7 +39,11 @@ internal fun InstallmentEditorSheet(
     onSave: suspend (InstallmentDraft) -> Result<InstallmentPlanRecord>,
     onDelete: suspend (InstallmentPlanRecord) -> Result<Unit>, onDismiss: () -> Unit,
 ) {
-    key(owner, id) { OwnedInstallmentEditorSheet(owner, id, original, currency, wallets, dataReady, loadFailed, onRetryLoad, onSave, onDelete, onDismiss) }
+    if (original != null && (original.ownerUserId != owner || original.id != id || original.isArchived || original.deletedAt != null)) return
+    val boundCurrency = original?.currencyCode ?: currency.trim().uppercase(Locale.ROOT)
+    key(owner, id, boundCurrency, original != null) {
+        OwnedInstallmentEditorSheet(owner, id, original, boundCurrency, wallets, dataReady, loadFailed, onRetryLoad, onSave, onDelete, onDismiss)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,7 +55,7 @@ private fun OwnedInstallmentEditorSheet(
     onDelete: suspend (InstallmentPlanRecord) -> Result<Unit>, onDismiss: () -> Unit,
 ) {
     val initial = remember(owner, id) { original?.let { InstallmentEditorState.from(owner, it) } ?: InstallmentEditorState.fresh(owner, id, currency) }
-    var state by rememberSaveable(owner, id, stateSaver = InstallmentEditorState.saver(owner, id)) { mutableStateOf(initial) }
+    var state by rememberSaveable(owner, id, currency, original != null, stateSaver = InstallmentEditorState.scopedSaver(owner, id, currency, original != null)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var calculator by rememberSaveable(owner, id) { mutableStateOf(false) }
     var discard by remember { mutableStateOf(false) }

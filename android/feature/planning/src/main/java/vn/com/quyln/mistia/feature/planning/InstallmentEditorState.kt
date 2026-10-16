@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.feature.planning
 
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import java.util.Locale
 import java.util.UUID
@@ -43,6 +44,18 @@ internal data class InstallmentEditorState(
         return InstallmentDraft(id, title, amount, dueDay, frequencyMonths, count, wallet.id, currency, iconSymbolName, original)
     }
     companion object {
+        fun scopedSaver(owner:String,id:String,currency:String,editingExisting:Boolean):Saver<InstallmentEditorState,Any> = Saver(
+            save={state ->
+                if(state.owner!=owner || state.id!=id || state.currencyCode!=currency || (state.baselinePayload!=null)!=editingExisting) null
+                else with(saver(owner,id)) {save(state)}?.let {listOf(owner,id,currency,editingExisting,it)}
+            },
+            restore={value ->
+                val items=value as? List<*>
+                if(items?.size!=5 || items[0]!=owner || items[1]!=id || items[2]!=currency || items[3]!=editingExisting) null
+                else items[4]?.let {raw -> runCatching {saver(owner,id).restore(raw)}.getOrNull()}
+                    ?.takeIf {it.currencyCode==currency && (it.baselinePayload!=null)==editingExisting}
+            },
+        )
         fun fresh(owner: String, id: String, currency: String) = InstallmentEditorState(owner, id, null, "", "", 15, 1, "", null,
             currency.trim().uppercase(Locale.ROOT), "mistia.plan.installment")
         fun from(owner: String, plan: InstallmentPlanRecord): InstallmentEditorState {
