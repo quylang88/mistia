@@ -76,6 +76,25 @@ class StoredTransactionEditorRouteTest {
         val saved=records().single();Assert.assertEquals(original.amountMinor,saved.amountMinor);Assert.assertEquals(original.id,saved.id)
         Assert.assertEquals(saved.toPayload(),runBlocking {store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single()}.mutation.payload)
     }
+    @Test fun realOverviewDayHoldAndRowOpenStoredFormThenSaveExactMoneyAndMatchingOutbox() {
+        val original=seed();var selected by mutableStateOf<String?>(null)
+        compose.setContent {MistiaTheme(darkTheme=false) {
+            OverviewScreen(owner,repo,MutableStateFlow(SyncStatus.Idle),primaryCurrencyCode="VND",onOpenTransaction={selected=it},overlayPresented=selected!=null)
+            selected?.let {id -> StoredTransactionEditorRoute(owner,id,repo,exchange,Receipts(),{device},"VND",onDismiss={selected=null})}
+        }}
+        val day=java.time.Instant.parse(time).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        val bar=hasTestTag("overview.chart.day.$day") and hasContentDescription(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(original.amountMinor,"VND"),substring=true)
+        compose.waitUntil(5000) {compose.onAllNodes(bar).fetchSemanticsNodes().isNotEmpty()}
+        compose.onNode(bar).performScrollTo().performTouchInput {down(center);advanceEventTime(400);up()}
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.day.row.${original.id}").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("overview.day.row.${original.id}").performScrollTo().performTouchInput {click()};awaitTitle("Original")
+        compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist()
+        compose.onNodeWithTag("transaction.amount").performScrollTo().assertTextContains("9,007,199,254,740,993")
+        title().performScrollTo().performTextReplacement("Edited from day details");save()
+        compose.waitUntil(5000) {records().single().title=="Edited from day details" && selected==null}
+        val saved=records().single();Assert.assertEquals(original.amountMinor,saved.amountMinor);Assert.assertEquals(original.id,saved.id)
+        Assert.assertEquals(saved.toPayload(),runBlocking {store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single()}.mutation.payload)
+    }
     @Test fun switchingRecordClosesOldCalculatorAndLoadsOnlySelectedOwnedAmount() {
         val first=seed("First",123);val second=seed("Second",456);var id by mutableStateOf(first.id)
         val before=records().associateBy {it.id}

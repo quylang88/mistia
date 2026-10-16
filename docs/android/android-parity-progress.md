@@ -2455,3 +2455,16 @@ Initial10modelcases8intendedruntimeREDs→20focusedgreen;7/7native missingchartR
 Full **1521JVM/146suites**, Swift610, lint/build73sec plus finalcorrected11sec, relevantAndroidTestcompile/package, contract/localization/SQLite/schema/whitespace pass. Evidence/APKs/preservedfailures/executedchecksums `evidence/2026-10-16-overview-weekly-chart.md`. All10flagsfalse; noSamsung/liveproductionwrite/deploy/migration; Room6/SwiftDataV11/iOS751 unchanged. Continue daydetail/categorycharts/budget-due-config and remainingfamily/investment/imported/editoratomicity/receiptdeviceQA/fullAPK1–4/RC. Goalactive.
 
 App106 install-r preserving data, coldMainActivity Statusok1033ms and installedversion106 confirmed on API36 emulator.
+
+
+## 2026-10-16 — owned Overview day details and stored editor navigation (APK107)
+
+Physical350ms positivebarhold now opens native medium/large day sheet; exact originalsource rows, full localizeddate/time/wallet/category, count/unlimitedrecency and liveprimary/perrecordFXtotal. Missing/unsupported FX is unavailable rather than a partial/relabelledtotal, intentionally correcting Swift's source-minors/primary-label mismatch. Ownerreplacement and externaloverlayclear private sheet; rowdismisses before existingeditor. Zero/reporting-onlybar cannot open unrelatedemptydetail; signed/zerospending classification distinctfromreportingoverride chart. Sharedclassifierextraction retainsmonthly/weekly behavior.
+
+Model8cases7actualREDs→28focusedGREEN; native7cases6missing-sheetREDs41.274sec andactualeditorRED6.728sec→GREEN. Locale diagnostic proved sheetwindowEnglishlabels vsVietnamesedate, fixed scopedparentresources. New actualfontScale assertion RED1.0vs1.3 thenparentDensityfix→7/7GREEN19.28sec. Firstfull41GREEN76.41sec predatesreviewfixes. IndependentreviewImportantdoubleminus plusparentdatebaseline68px<font79.2px reproduced2nativeREDs4.964sec, magnitudeformatterunitRED→6GREEN; oneprefixcashflowdirection/BigDecimalmagnitude/standalonedatestyle fix. Final8focusedGREEN23.812sec; fourcorrectedsettled actual130% light/darkPNGs inspectedafterphysicalexpandandrowIsDisplayed. Partial-sheetcaptures excluded.
+
+Final **42/42Overviewnative GREEN79.66sec**, actualrecent/dayrow→storededitor→exactRoom/outbox **2/2GREEN7.446sec**. Full **1530JVM/147suites**, Swift610, final lint/build39sec, relevantAndroidTestcompile/package, contract/localization/SQLite/schema/whitespace pass. Evidence/APKs/executedchecksums: `evidence/2026-10-16-overview-day-details.md`.
+
+ReviewMinor Eventbadge in dayrows remains requiredfamilyOverviewwork. New open verification audit: earlier simulated130% sheet captures lack actualfontScale assertion; remeasure/recapture before claiming130% proof. FullscreenOverview104–106 unaffected. All10flagsfalse; noSamsung/liveproductionwrite/deploy/migration; Room6/SwiftDataV11/iOS751 unchanged. Continue categorycharts/drilldown/budget-due-config/remainingOverview, family/investment/imported/editoratomicity/receiptdeviceQA/priornative-timing/fontscaleaudit/fullAPK1–4/RC. Goalactive.
+
+App107 install-r preserving data, coldMainActivity Statusok1050ms and installedversion107 confirmed on API36 emulator.

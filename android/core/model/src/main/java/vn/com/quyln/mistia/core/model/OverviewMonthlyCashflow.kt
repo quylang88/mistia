@@ -37,13 +37,17 @@ fun overviewMonthlyCashflow(owner:UserId,records:List<LedgerTransactionRecord>,w
 
 internal fun reportedOverviewExpense(record:LedgerTransactionRecord,walletKind:WalletKind?,titles:Map<GeneratedTransactionTitle,Collection<String>>):Long {
     record.reportingExpenseMinor?.let {return it}
+    return if(isOverviewExpenseSpending(record,walletKind,titles)) record.amountMinor else 0
+}
+
+fun isOverviewExpenseSpending(record:LedgerTransactionRecord,walletKind:WalletKind?,titles:Map<GeneratedTransactionTitle,Collection<String>> = emptyMap()):Boolean {
     val adjustment=record.isOverviewAdjustment(titles)
     val installment=record.categoryId==SystemCategoryIdentity.canonicalId("loan_repayment")
     val paidFor=record.primaryKind==TransactionPrimaryKind.TRANSFER && record.transferSubtype==TransactionTransferSubtype.DEBT &&
         record.debtIntent==TransactionDebtIntent.BORROW && record.sourceWalletId==null && record.categoryId!=null
-    if(paidFor && !adjustment && !installment) return record.amountMinor
+    if(paidFor && !adjustment && !installment) return true
     val payment=walletKind!=WalletKind.CREDIT_CARD && listOf("card payment","thanh toan the","thanh toán thẻ","カード支払い").any {record.title.lowercase(Locale.ROOT).contains(it)}
-    return if(record.primaryKind==TransactionPrimaryKind.EXPENSE && !adjustment && !installment && !payment) record.amountMinor else 0
+    return record.primaryKind==TransactionPrimaryKind.EXPENSE && !adjustment && !installment && !payment
 }
 
 private fun reportedOverviewIncome(record:LedgerTransactionRecord,titles:Map<GeneratedTransactionTitle,Collection<String>>):Long {

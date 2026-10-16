@@ -4,7 +4,7 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
@@ -46,7 +46,7 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.OverviewWeekSpending
 
-@Composable internal fun OverviewWeeklyChart(pages:List<OverviewWeekSpending>,currency:String,overlayPresented:Boolean=false,dismissToken:Int=0) {
+@Composable internal fun OverviewWeeklyChart(pages:List<OverviewWeekSpending>,currency:String,overlayPresented:Boolean=false,dismissToken:Int=0,onOpenExpenseDay:((LocalDate)->Unit)?=null) {
     if(pages.isEmpty()) return
     val pager=rememberPagerState(initialPage=pages.lastIndex) {pages.size}
     var selectedWeek by remember {mutableStateOf(pages.last().start)}
@@ -73,6 +73,10 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
         onDispose {lifecycle.removeObserver(observer)}
     }
     val language=LocalConfiguration.current.locales[0].language
+    val viewConfiguration=androidx.compose.ui.platform.LocalViewConfiguration.current
+    val chartConfiguration=remember(viewConfiguration) {object:androidx.compose.ui.platform.ViewConfiguration by viewConfiguration {override val longPressTimeoutMillis=350L}}
+    val haptic=androidx.compose.ui.platform.LocalHapticFeedback.current
+    val dayDetailsLabel=stringResource(R.string.overview_overview_day_details)
     val range="${week.start.format(chartDateFormat)} - ${week.end.format(chartDateFormat)}"
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         FlowRow(Modifier.fillMaxWidth().pointerInput(Unit) {detectTapGestures {selectedDate=null}},horizontalArrangement=Arrangement.SpaceBetween,verticalArrangement=Arrangement.spacedBy(4.dp)) {
@@ -80,6 +84,7 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
             Text(if(week.isCurrent) stringResource(R.string.shared_corelogic_mistialocalization_this_week_value,range) else range,
                 Modifier.testTag("overview.chart.range"),fontSize=11.sp,fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        CompositionLocalProvider(androidx.compose.ui.platform.LocalViewConfiguration provides chartConfiguration) {
         HorizontalPager(pager,Modifier.fillMaxWidth().height(154.dp).testTag("overview.chart.pager"),key={pages[it].start.toString()}) {index ->
             val page=pages[index]
             val active=index==pager.currentPage
@@ -115,7 +120,11 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
                                 val tint=chartTint(day.intensity)
                                 val opacity=if(!active || point==null) 0.92f else if(point.date==day.date) 1f else 0.42f
                                 Column(Modifier.weight(1f).fillMaxHeight().testTag("overview.chart.day.${day.date}").semantics {contentDescription=description}
-                                    .clickable {if(!overlayPresented) selectedDate=if(day.amountMinor<=0 || selectedDate==day.date) null else day.date},
+                                    .combinedClickable(onClick={if(!overlayPresented) selectedDate=if(day.amountMinor<=0 || selectedDate==day.date) null else day.date},
+                                        onLongClickLabel=dayDetailsLabel,hapticFeedbackEnabled=false,
+                                        onLongClick=if(day.amountMinor>0 && !overlayPresented && onOpenExpenseDay!=null) {{
+                                            selectedDate=null;haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress);onOpenExpenseDay(day.date)
+                                        }} else null),
                                     horizontalAlignment=Alignment.CenterHorizontally) {
                                     Box(Modifier.fillMaxWidth().height(plotHeight),contentAlignment=Alignment.BottomCenter) {
                                         if(ratio>0) Box(Modifier.fillMaxWidth(0.78f).fillMaxHeight(ratio).alpha(opacity)
@@ -145,6 +154,7 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
                     }
                 }
             }
+        }
         }
     }
 }

@@ -18,7 +18,7 @@ import vn.com.quyln.mistia.core.designsystem.*
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.*
 
-@Composable internal fun OverviewHeroMetrics(month:OverviewMonthlyCashflow,currency:String,assetBalance:Long,weeks:List<OverviewWeekSpending>,overlayPresented:Boolean) {
+@Composable internal fun OverviewHeroMetrics(month:OverviewMonthlyCashflow,currency:String,assetBalance:Long,weeks:List<OverviewWeekSpending>,overlayPresented:Boolean,onOpenExpenseDay:(java.time.LocalDate)->Unit) {
     val code=currency.trim().uppercase(java.util.Locale.ROOT).takeIf {it in CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
     var dismissToken by remember {mutableIntStateOf(0)}
     MistiaGlassCard {padding ->
@@ -39,7 +39,7 @@ import vn.com.quyln.mistia.core.model.*
                     }
                 }
             }
-            OverviewWeeklyChart(weeks,code,overlayPresented,dismissToken)
+            OverviewWeeklyChart(weeks,code,overlayPresented,dismissToken,onOpenExpenseDay)
         }
     }
 }

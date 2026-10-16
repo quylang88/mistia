@@ -31,4 +31,10 @@ class CurrencyFormattingTest {
     @Test fun `unsupported code keeps exact raw integer and code instead of claiming a conversion`() {
         assertEquals("9007199254740993 INVALID", formatMinorUnits(9007199254740993, "INVALID"))
     }
+    @Test fun `magnitude formatting retains exact minimum Long and original currency fraction digits without negative prefix`() {
+        assertEquals("￥9,223,372,036,854,775,808",formatMinorUnitsMagnitude(Long.MIN_VALUE,"JPY"))
+        assertEquals("$13.75",formatMinorUnitsMagnitude(-1375,"USD"))
+        assertEquals(formatMinorUnits(0,"VND"),formatMinorUnitsMagnitude(0,"VND"))
+        assertEquals(formatMinorUnits(Long.MAX_VALUE,"JPY"),formatMinorUnitsMagnitude(Long.MAX_VALUE,"JPY"))
+    }
 }

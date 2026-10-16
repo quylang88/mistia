@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.time.ZoneId
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,6 +104,10 @@ private fun OwnedOverviewScreen(
     val titleCategoriesById = remember(titleCategories, ownerUserId) { titleCategories.filter { it.ownerUserId == ownerUserId.value }.associateBy { it.id } }
     val status by syncStatus.collectAsStateWithLifecycle()
     val countMap = counts.associate { it.entity to it.count }
+    var selectedDay by remember {mutableStateOf<java.time.LocalDate?>(null)}
+    androidx.compose.runtime.LaunchedEffect(overlayPresented) {if(overlayPresented) selectedDay=null}
+    fun expenseDay(day:java.time.LocalDate)=vn.com.quyln.mistia.core.model.overviewExpenseDay(ownerUserId,financial.records,financial.wallets,day,primaryCurrencyCode,rates,knownTitles,zone)
+    val dayDetails=remember(selectedDay,ownerUserId,financial,primaryCurrencyCode,rates,knownTitles,zone) {selectedDay?.let(::expenseDay)}
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -128,7 +134,9 @@ private fun OwnedOverviewScreen(
                 }
             }
         }
-        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,overlayPresented)}
+        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,overlayPresented || selectedDay!=null) {day ->
+            if(!overlayPresented && expenseDay(day).rows.isNotEmpty()) selectedDay=day
+        }}
         item {
             MistiaSectionCard(title = stringResource(R.string.family_family_wallets_cards)) {
                 Row(
@@ -165,4 +173,9 @@ private fun OwnedOverviewScreen(
         }
         item { Spacer(Modifier.height(92.dp)) }
     }
+    dayDetails?.let {day -> key(day.day) {
+        OverviewDayTransactionsSheet(day,financial.wallets.associateBy {it.id},titleCategoriesById,zone,onDismiss={selectedDay=null},onSelect={id ->
+            if(day.rows.any {it.transaction.id==id}) {selectedDay=null;onOpenTransaction(id)}
+        })
+    }}
 }

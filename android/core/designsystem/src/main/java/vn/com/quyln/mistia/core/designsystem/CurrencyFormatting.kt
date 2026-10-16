@@ -23,10 +23,15 @@ private fun currencyPresentationLocale(code: String): Locale = Locale.forLanguag
     else -> "en-US"
 })
 
-fun formatMinorUnits(minor: Long, currencyCode: String): String {
+fun formatMinorUnits(minor:Long,currencyCode:String):String = formatCurrencyMinorDecimal(BigDecimal.valueOf(minor),currencyCode)
+
+/** Magnitude remains exact even when abs(Long.MIN_VALUE) cannot fit in Long. */
+fun formatMinorUnitsMagnitude(minor:Long,currencyCode:String):String = formatCurrencyMinorDecimal(BigDecimal.valueOf(minor).abs(),currencyCode)
+
+private fun formatCurrencyMinorDecimal(minor:BigDecimal,currencyCode:String):String {
     val currency = runCatching { Currency.getInstance(currencyCode) }.getOrNull()
     val digits = currency?.defaultFractionDigits?.coerceAtLeast(0) ?: 0
-    val value = BigDecimal.valueOf(minor).movePointLeft(digits)
+    val value = minor.movePointLeft(digits)
     if (currency == null) return "$value $currencyCode"
     return NumberFormat.getCurrencyInstance(currencyPresentationLocale(currency.currencyCode)).apply {
         this.currency = currency
