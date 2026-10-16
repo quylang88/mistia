@@ -263,6 +263,7 @@ private fun SignedInRoot(
                         financeRepository,
                         syncEngine.status,
                         modifier,
+                        primaryCurrencyCode=currencySettings.primaryCurrencyCode,
                         unreadNotificationCount=unreadNotifications,
                         onOpenNotifications={navController.navigate("notifications")},
                     )

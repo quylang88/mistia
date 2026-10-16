@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -31,13 +33,10 @@ import vn.com.quyln.mistia.core.designsystem.MistiaSectionCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.localizedTransactionTitle
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
-import vn.com.quyln.mistia.core.designsystem.string
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
-import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
 import vn.com.quyln.mistia.core.model.SyncStatus
 import vn.com.quyln.mistia.core.model.UserId
-import vn.com.quyln.mistia.core.model.transactionDisplayMoney
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
@@ -48,13 +47,31 @@ fun OverviewScreen(
     modifier: Modifier = Modifier,
     unreadNotificationCount:Int=0,
     onOpenNotifications:()->Unit={},
+    primaryCurrencyCode:String="JPY",
+) {
+    key(ownerUserId.value) {
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode)
+    }
+}
+
+@Composable
+private fun OwnedOverviewScreen(
+    ownerUserId: UserId,
+    repository: FinanceRepository,
+    syncStatus: StateFlow<SyncStatus>,
+    modifier: Modifier,
+    unreadNotificationCount: Int,
+    onOpenNotifications: () -> Unit,
+    primaryCurrencyCode: String,
 ) {
     val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
-    val walletCurrencies = wallets.associate { it.id to it.string("currency_code") }
+    val recent = remember(ownerUserId, transactions, wallets, primaryCurrencyCode) {
+        overviewRecentTransactions(ownerUserId, transactions, wallets, primaryCurrencyCode)
+    }
     val titleCategories by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val titleCategoriesById = remember(titleCategories, ownerUserId) { titleCategories.filter { it.ownerUserId == ownerUserId.value }.associateBy { it.id } }
     val status by syncStatus.collectAsStateWithLifecycle()
@@ -105,27 +122,19 @@ fun OverviewScreen(
         }
         item {
             MistiaSectionCard(title = stringResource(R.string.overview_overview_recent_transactions)) {
-                if (transactions.isEmpty()) {
+                if (recent.isEmpty()) {
                     Text(
                         text = stringResource(R.string.overview_overview_no_transactions_have_been_recorded_recently),
                         modifier = Modifier.padding(top = 12.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    transactions.take(8).forEach { transaction ->
-                        val money = transaction.transactionDisplayMoney(
-                            walletCurrencies[transaction.string("source_wallet_id")],
-                            walletCurrencies[transaction.string("destination_wallet_id")],
-                        )
-                        val typed = remember(transaction, ownerUserId) {
-                            if (transaction.ownerUserId != ownerUserId.value) null else runCatching { LedgerTransactionRecord.fromCloudRecord(transaction) }
-                                .getOrNull()?.takeIf { it.ownerUserId == ownerUserId.value }
-                        }
+                    recent.forEach { row ->
                         MistiaRecordRow(
-                            title = typed?.let { localizedTransactionTitle(it, titleCategoriesById[it.categoryId]) }
-                                ?: transaction.string("title") ?: stringResource(R.string.shared_corelogic_transaction_unknown_name),
-                            subtitle = transaction.string("occurred_at"),
-                            trailing = money?.let { formatMinorUnits(it.minor, it.currencyCode) },
+                            title = localizedTransactionTitle(row.transaction, titleCategoriesById[row.transaction.categoryId]),
+                            subtitle = row.transaction.occurredAt,
+                            trailing = formatMinorUnits(row.money.minor, row.money.currencyCode),
+                            modifier = Modifier.testTag("overview.recent.${row.transaction.id}"),
                         )
                     }
                 }
