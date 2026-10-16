@@ -117,7 +117,7 @@ class OverviewRecentScreenTest {
             compose.runOnIdle {dark=theme=="dark"}
             for(code in listOf("VND","JPY")) {
                 val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-                compose.onNodeWithText(formatMinorUnits(9007199254740993L,code)).performScrollTo()
+                compose.onNodeWithText("-"+formatMinorUnits(9007199254740993L,code)).performScrollTo()
                     .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) {it(layouts)}
                 val layout=layouts.single()
                 Assert.assertEquals("$code line count",1,layout.lineCount)

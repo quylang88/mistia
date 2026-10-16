@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -22,17 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
-import androidx.compose.ui.platform.testTag
+import java.time.ZoneId
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
 import vn.com.quyln.mistia.core.designsystem.MistiaSectionCard
 import vn.com.quyln.mistia.core.designsystem.R
-import vn.com.quyln.mistia.core.designsystem.localizedTransactionTitle
-import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.SyncStatus
@@ -64,6 +62,8 @@ private fun OwnedOverviewScreen(
     onOpenNotifications: () -> Unit,
     primaryCurrencyCode: String,
 ) {
+    val reference=rememberOverviewReferenceTime()
+    val zone=ZoneId.systemDefault()
     val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
@@ -129,13 +129,9 @@ private fun OwnedOverviewScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    recent.forEach { row ->
-                        MistiaRecordRow(
-                            title = localizedTransactionTitle(row.transaction, titleCategoriesById[row.transaction.categoryId]),
-                            subtitle = row.transaction.occurredAt,
-                            trailing = formatMinorUnits(row.money.minor, row.money.currencyCode),
-                            modifier = Modifier.testTag("overview.recent.${row.transaction.id}"),
-                        )
+                    recent.forEachIndexed { index,row ->
+                        OverviewRecentTransactionRow(row,titleCategoriesById[row.transaction.categoryId],reference,zone)
+                        if(index<recent.lastIndex) HorizontalDivider()
                     }
                 }
             }
