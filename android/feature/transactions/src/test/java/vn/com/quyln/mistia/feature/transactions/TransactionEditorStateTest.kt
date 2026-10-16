@@ -15,6 +15,69 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test fun `manual reporting draft maps exact source and converted inputs`() {
+        val state = reportingState().copy(amountText = "9,007,199,254,740,993", reportingAmountText = "18,014,398,509,481,986", conversionMode = CurrencyConversionMode.MANUAL)
+        val draft = state.toDraft("JPY", null, primaryCurrencyCode = "VND").draft
+        assertEquals(9007199254740993L, draft?.amountMinor); assertEquals(18014398509481986L, draft?.reportingAmountMinor)
+        assertEquals("VND", draft?.reportingCurrencyCode); assertEquals(CurrencyConversionMode.MANUAL, draft?.conversionMode)
+        assertNull(draft?.destinationAmountMinor); assertNull(draft?.exchangeRateDecimalString); assertEquals("manual", draft?.exchangeRateProvider)
+    }
+    @Test fun `reporting app pair updates reporting field without touching destination draft`() {
+        val state = reportingState().copy(amountText = "1,000", destinationAmountText = "private transfer amount")
+            .withFxPair("JPY", "VND", listOf(rate()), reporting = true)
+        assertEquals("165,500", state.reportingAmountText); assertEquals("private transfer amount", state.destinationAmountText)
+        val draft = state.toDraft("JPY", null, listOf(rate()), primaryCurrencyCode = "VND").draft
+        assertEquals(165500L, draft?.reportingAmountMinor); assertEquals("165.5", draft?.exchangeRateDecimalString)
+        assertEquals("frankfurter", draft?.exchangeRateProvider); assertNull(draft?.destinationAmountMinor)
+    }
+    @Test fun `automatic reporting fails instead of inventing missing rates`() {
+        val state = reportingState().copy(conversionMode = CurrencyConversionMode.APP_RATE)
+        assertEquals(TransactionEditorValidation.INVALID_EXCHANGE_RATE, state.toDraft("JPY", null, primaryCurrencyCode = "VND").validation)
+    }
+    @Test fun `manual reporting validates exact positive minor amount`() {
+        for (text in listOf("", "0", "-1", "1.5", "9,223,372,036,854,775,808")) {
+            val state = reportingState().copy(reportingAmountText = text, conversionMode = CurrencyConversionMode.MANUAL)
+            assertEquals(TransactionEditorValidation.INVALID_REPORTING_AMOUNT, state.toDraft("JPY", null, primaryCurrencyCode = "VND").validation)
+        }
+    }
+    @Test fun `reporting edit opens exact converted amount and saves current target`() {
+        val record = transaction().copy(primaryKindWireValue = "expense", transferSubtypeWireValue = null, destinationWalletId = null, destinationCurrencyCode = null,
+            destinationAmountMinor = null, categoryId = CATEGORY_ID, reportingCurrencyCode = "VND", reportingAmountMinor = 18014398509481986L)
+        val state = TransactionEditorState.edit(record)
+        assertEquals("18,014,398,509,481,986", state.reportingAmountText)
+        val draft = state.toDraft("JPY", null, primaryCurrencyCode = "VND").draft
+        assertEquals(18014398509481986L, draft?.reportingAmountMinor)
+    }
+    @Test fun `same reporting currency explicitly clears stale conversion on save`() {
+        val draft = reportingState().copy(conversionMode = CurrencyConversionMode.MANUAL, reportingAmountText = "99").toDraft("JPY", null, primaryCurrencyCode = "JPY").draft
+        assertEquals("JPY", draft?.reportingCurrencyCode); assertNull(draft?.reportingAmountMinor); assertNull(draft?.conversionMode)
+    }
+    @Test fun `changing transaction kind clears reporting input`() {
+        val state = reportingState().copy(reportingAmountText = "123")
+        assertEquals("", state.selectKind(TransactionPrimaryKind.INCOME).reportingAmountText)
+        assertEquals("", state.selectKind(TransactionPrimaryKind.TRANSFER).reportingAmountText)
+    }
+    @Test fun `reporting draft restoration retains text only for the same primary currency`() {
+        val state = reportingState().copy(reportingAmountText = "9,007,199,254,740,993")
+        val saver = TransactionEditorState.scopedSaver(OWNER, null, "VND")
+        val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals(state, saver.restore(saved)); assertNull(TransactionEditorState.scopedSaver(OWNER, null, "JPY").restore(saved))
+    }
+    @Test fun `manual reporting edit cannot reinterpret stored amount under a different target`() {
+        val stored = transaction().copy(primaryKindWireValue = "expense", transferSubtypeWireValue = null, destinationWalletId = null, destinationCurrencyCode = null,
+            destinationAmountMinor = null, categoryId = CATEGORY_ID, sourceCurrencyCode = "VND", reportingCurrencyCode = "USD", reportingAmountMinor = 200)
+        val state = TransactionEditorState.edit(stored)
+        assertEquals(TransactionEditorValidation.INVALID_REPORTING_AMOUNT, state.toDraft("VND", null, primaryCurrencyCode = "JPY").validation)
+    }
+    @Test fun `scoped reporting target uses canonical currency codes`() {
+        val state = reportingState()
+        val saver = TransactionEditorState.scopedSaver(OWNER, null, "VND")
+        val saved = with(saver) { SaverScope { true }.save(state) }!!
+        assertEquals(state, TransactionEditorState.scopedSaver(OWNER, null, " vnd ").restore(saved))
+    }
+
+    private fun reportingState() = TransactionEditorState.new(NOW).copy(sourceWalletId = SOURCE_WALLET_ID, categoryId = CATEGORY_ID, amountText = "100", title = "Report").withReportingAmount("", "VND")
+
     @Test fun `manual FX saves an explicit pair without rate entry`() {
         val state = TransactionEditorState.edit(transaction()).copy(exchangeRateText = "")
         val result = state.toDraft("JPY", "VND")

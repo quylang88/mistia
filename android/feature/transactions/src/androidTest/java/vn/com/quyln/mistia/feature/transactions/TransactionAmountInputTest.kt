@@ -103,12 +103,13 @@ class TransactionAmountInputTest {
             initialState = initial(), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
         compose.onNodeWithText(context.getString(R.string.settings_currency_rate_value)).assertDoesNotExist()
     }
-    @Test fun appRateGroupsDerivedReadOnlyAmountAndPersistsExactPair() {
+    @Test fun appRateHidesExtraInputsAndPersistsExactPair() {
         val rates = listOf(ExchangeRateSnapshot("JPY", "VND", "165.5", "fixture", 1L, "2026-10-15"))
         compose.setContent { MistiaTheme(darkTheme = false) { TransactionEditorSheet(owner.value, null, wallets, emptyList(), rates, now,
             initialState = initial(CurrencyConversionMode.APP_RATE), onDismiss = {}, onSave = { repo.saveTransaction(owner, it, device, now) }) } }
         sourceField().performScrollTo().performTextReplacement("1000")
-        sourceField().assertTextContains("1,000"); destinationField().performScrollTo().assertTextContains("165,500")
+        sourceField().assertTextContains("1,000"); destinationField().assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.settings_currency_rate_value)).assertDoesNotExist()
         save(); compose.waitUntil(5000) { runBlocking { repo.observeTransactions(owner).first().size == 1 } }
         val saved = runBlocking { repo.observeTransactions(owner).first().single() }
         Assert.assertEquals(1000L, saved.amountMinor); Assert.assertEquals(165500L, saved.destinationAmountMinor)

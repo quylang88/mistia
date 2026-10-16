@@ -60,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -100,6 +101,7 @@ internal fun TransactionEditorSheet(
     categories: List<TransactionCategoryRecord>,
     exchangeRates: List<ExchangeRateSnapshot>,
     now: String,
+    primaryCurrencyCode: String = "JPY",
     initialState: TransactionEditorState? = null,
     receiptState: TransactionReceiptEditorState = TransactionReceiptEditorState.none(),
     receiptLoading: Boolean = false,
@@ -110,9 +112,10 @@ internal fun TransactionEditorSheet(
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
 ) {
     if (transaction != null && transaction.ownerUserId != ownerId) return
-    key(ownerId, transaction?.id, initialState) {
+    val primary = primaryCurrencyCode.trim().uppercase(Locale.ROOT)
+    key(ownerId, transaction?.id, initialState, primary) {
         OwnedTransactionEditorSheet(ownerId, transaction, wallets.filter { it.ownerUserId == ownerId }, categories.filter { it.ownerUserId == ownerId },
-            exchangeRates, now, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave)
+            exchangeRates, now, primary, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave)
     }
 }
 
@@ -125,6 +128,7 @@ private fun OwnedTransactionEditorSheet(
     categories: List<TransactionCategoryRecord>,
     exchangeRates: List<ExchangeRateSnapshot>,
     now: String,
+    primaryCurrencyCode: String,
     initialState: TransactionEditorState? = null,
     receiptState: TransactionReceiptEditorState = TransactionReceiptEditorState.none(),
     receiptLoading: Boolean = false,
@@ -134,12 +138,11 @@ private fun OwnedTransactionEditorSheet(
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
 ) {
-    var state by rememberSaveable(ownerId, transaction?.id, initialState, stateSaver = TransactionEditorState.scopedSaver(ownerId, transaction?.id)) {
-        mutableStateOf(
-            transaction?.let(TransactionEditorState::edit)
-                ?: initialState
-                ?: TransactionEditorState.new(now)
-        )
+    var state by rememberSaveable(ownerId, transaction?.id, initialState, primaryCurrencyCode, stateSaver = TransactionEditorState.scopedSaver(ownerId, transaction?.id, primaryCurrencyCode)) {
+        val initial = transaction?.let(TransactionEditorState::edit) ?: initialState ?: TransactionEditorState.new(now)
+        val initialCurrency = wallets.firstOrNull { it.id == initial.sourceWalletId && !it.isArchived && it.deletedAt == null }?.currencyCode
+        mutableStateOf(if (initial.primaryKind != TransactionPrimaryKind.TRANSFER)
+            initial.forReportingCurrency(initialCurrency, primaryCurrencyCode, exchangeRates) else initial)
     }
     var validation by remember { mutableStateOf<TransactionEditorValidation?>(null) }
     var operationError by remember { mutableStateOf<TransactionValidationError?>(null) }
@@ -171,33 +174,30 @@ private fun OwnedTransactionEditorSheet(
     }
     val sourceWallet = activeWallets.firstOrNull { it.id == state.sourceWalletId }
     val destinationWallet = activeWallets.firstOrNull { it.id == state.destinationWalletId }
-    val isCrossCurrency = state.transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER &&
-        sourceWallet != null && destinationWallet != null &&
-        !sourceWallet.currencyCode.equals(destinationWallet.currencyCode, ignoreCase = true)
-    val displayedFxState = if (isCrossCurrency) {
-        state.withCurrentAppRate(
-            sourceWallet.currencyCode,
-            destinationWallet.currencyCode,
-            exchangeRates,
-        )
-    } else {
-        state
-    }
+    val sourceCurrency = sourceWallet?.currencyCode?.trim()?.uppercase(Locale.ROOT)
+    val destinationCurrency = destinationWallet?.currencyCode?.trim()?.uppercase(Locale.ROOT)
+    val isReporting = state.primaryKind != TransactionPrimaryKind.TRANSFER
+    val conversionTarget = if (isReporting) primaryCurrencyCode else destinationCurrency
+    val isCrossCurrency = state.primaryKind == TransactionPrimaryKind.TRANSFER && state.transferSubtype == TransactionTransferSubtype.INTERNAL_TRANSFER &&
+        sourceWallet != null && destinationWallet != null && sourceCurrency != destinationCurrency
+    val showsConversion = isCrossCurrency || (isReporting && sourceWallet != null && sourceCurrency != primaryCurrencyCode)
+    val displayedFxState = if (showsConversion) state.withCurrentAppRate(sourceWallet?.currencyCode, conversionTarget, exchangeRates, reporting = isReporting) else state
 
-    val sourceCalculatorAvailable = sourceWallet?.currencyCode in setOf("JPY", "VND")
+    val sourceCalculatorAvailable = sourceCurrency in setOf("JPY", "VND")
     val destinationCalculatorAvailable = isCrossCurrency && state.conversionMode == CurrencyConversionMode.MANUAL &&
-        destinationWallet?.currencyCode in setOf("JPY", "VND")
-    val calculatorScope = listOf(ownerId, transaction?.id.orEmpty(), state.primaryKind.name, state.transferSubtype?.name.orEmpty(),
-        state.sourceWalletId.orEmpty(), sourceWallet?.currencyCode.orEmpty(), state.destinationWalletId.orEmpty(),
-        destinationWallet?.currencyCode.orEmpty(), state.conversionMode?.name.orEmpty()).joinToString(":")
+        destinationCurrency in setOf("JPY", "VND")
+    val reportingCalculatorAvailable = showsConversion && isReporting && state.conversionMode == CurrencyConversionMode.MANUAL && primaryCurrencyCode in setOf("JPY", "VND")
+    val calculatorScope = listOf(primaryCurrencyCode, ownerId, transaction?.id.orEmpty(), state.primaryKind.name, state.transferSubtype?.name.orEmpty(),
+        state.sourceWalletId.orEmpty(), sourceCurrency.orEmpty(), state.destinationWalletId.orEmpty(),
+        destinationCurrency.orEmpty(), state.conversionMode?.name.orEmpty()).joinToString(":")
     var calculatorField by rememberSaveable(calculatorScope, stateSaver = listSaver<String?, String>(
         save = { listOf(calculatorScope, it.orEmpty()) },
-        restore = { values -> values.takeIf { it.size == 2 && it[0] == calculatorScope }?.get(1)?.takeIf { it == "source" || it == "destination" } },
+        restore = { values -> values.takeIf { it.size == 2 && it[0] == calculatorScope }?.get(1)?.takeIf { it == "source" || it == "destination" || it == "reporting" } },
     )) { mutableStateOf<String?>(null) }
     val focus = LocalFocusManager.current
     fun changeAmount(value: String) {
         state = state.withAmount(value, sourceWallet?.currencyCode)
-            .withCurrentAppRate(sourceWallet?.currencyCode, destinationWallet?.currencyCode, exchangeRates)
+            .withCurrentAppRate(sourceWallet?.currencyCode, conversionTarget, exchangeRates, reporting = isReporting)
     }
 
     ModalBottomSheet(onDismissRequest = { if (!isSaving) onDismiss() }) {
@@ -231,6 +231,7 @@ private fun OwnedTransactionEditorSheet(
                             sourceCurrencyCode = sourceWallet?.currencyCode,
                             destinationCurrencyCode = destinationWallet?.currencyCode,
                             rates = exchangeRates,
+                            primaryCurrencyCode = primaryCurrencyCode,
                         )
                         validation = result.validation
                         operationError = null
@@ -293,6 +294,9 @@ private fun OwnedTransactionEditorSheet(
                                         } else {
                                             selected
                                         }
+                                        val selectedSource = activeWallets.firstOrNull { it.id == state.sourceWalletId }
+                                        state = state.withFxPair(selectedSource?.currencyCode, if (kind == TransactionPrimaryKind.TRANSFER) destinationWallet?.currencyCode else primaryCurrencyCode,
+                                            exchangeRates, reporting = kind != TransactionPrimaryKind.TRANSFER)
                                         validation = null
                                         operationError = null
                                     },
@@ -318,7 +322,7 @@ private fun OwnedTransactionEditorSheet(
                         } },
                         label = {
                             Text(
-                                sourceWallet?.currencyCode?.let {
+                                sourceCurrency?.let {
                                     "${stringResource(R.string.transactions_transactioneditor_amount)} ($it)"
                                 } ?: stringResource(R.string.transactions_transactioneditor_amount)
                             )
@@ -390,8 +394,9 @@ private fun OwnedTransactionEditorSheet(
                                             destinationWalletId = selectedDestination?.id,
                                         ).withFxPair(
                                             wallet.currencyCode,
-                                            selectedDestination?.currencyCode,
+                                            if (isReporting) primaryCurrencyCode else selectedDestination?.currencyCode,
                                             exchangeRates,
+                                            reporting = isReporting,
                                         )
                                         validation = null
                                     },
@@ -463,76 +468,38 @@ private fun OwnedTransactionEditorSheet(
                 }
             }
 
-            if (isCrossCurrency) {
+            if (showsConversion && sourceWallet != null && conversionTarget != null) {
                 MistiaGlassCard { padding ->
                     Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            stringResource(R.string.transactions_transactioneditor_conversion),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                        Text(stringResource(R.string.transactions_transactioneditor_conversion), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val appRateAvailable = matchingExchangeRateSnapshot(
-                                sourceWallet.currencyCode,
-                                destinationWallet.currencyCode,
-                                exchangeRates,
-                            ) != null
-                            FilterChip(
-                                selected = state.conversionMode == CurrencyConversionMode.APP_RATE,
-                                enabled = appRateAvailable,
+                            val appRateAvailable = matchingExchangeRateSnapshot(sourceWallet.currencyCode, conversionTarget, exchangeRates) != null
+                            FilterChip(selected = state.conversionMode == CurrencyConversionMode.APP_RATE, enabled = appRateAvailable,
                                 onClick = {
-                                    state = state.withFxPair(
-                                        sourceWallet.currencyCode,
-                                        destinationWallet.currencyCode,
-                                        exchangeRates,
-                                    )
+                                    state = state.withFxPair(sourceWallet.currencyCode, conversionTarget, exchangeRates, reporting = isReporting)
                                     validation = null
-                                },
-                                label = { Text(stringResource(R.string.transactions_transactioneditor_use_app_rate)) },
-                            )
-                            FilterChip(
-                                selected = state.conversionMode != CurrencyConversionMode.APP_RATE,
+                                }, label = { Text(stringResource(R.string.transactions_transactioneditor_use_app_rate)) })
+                            FilterChip(selected = state.conversionMode != CurrencyConversionMode.APP_RATE,
                                 onClick = {
-                                    state = state.copy(
-                                        conversionMode = CurrencyConversionMode.MANUAL,
-                                        destinationAmountText = "",
-                                        exchangeRateText = "",
-                                        exchangeRateProvider = "manual",
-                                        exchangeRateDate = null,
-                                    )
+                                    state = state.copy(conversionMode = CurrencyConversionMode.MANUAL,
+                                        destinationAmountText = if (isReporting) state.destinationAmountText else "",
+                                        reportingAmountText = if (isReporting) "" else state.reportingAmountText,
+                                        exchangeRateText = "", exchangeRateProvider = "manual", exchangeRateDate = null)
                                     validation = null
-                                },
-                                label = { Text(stringResource(R.string.transactions_transactioneditor_enter_manually)) },
-                            )
+                                }, label = { Text(stringResource(R.string.transactions_transactioneditor_enter_manually)) })
                         }
-                        OutlinedTextField(
-                            value = displayedFxState.destinationAmountText,
-                            onValueChange = { state = state.withDestinationAmount(it, destinationWallet?.currencyCode) },
-                            modifier = Modifier.fillMaxWidth().testTag("transaction.destinationAmount"),
-                            trailingIcon = { if (destinationCalculatorAvailable) IconButton(enabled = !isSaving,
-                                onClick = { focus.clearFocus(); calculatorField = "destination" }, modifier = Modifier.testTag("transaction.destinationAmount.calculator")) {
-                                Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
-                            } },
-                            label = {
-                                Text(
-                                    "${stringResource(R.string.transactions_transactioneditor_destination_amount)} " +
-                                        "(${destinationWallet.currencyCode})"
-                                )
-                            },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            readOnly = state.conversionMode == CurrencyConversionMode.APP_RATE,
-                            singleLine = true,
-                        )
-                        if (state.conversionMode == CurrencyConversionMode.APP_RATE) {
-                            OutlinedTextField(
-                                value = displayedFxState.exchangeRateText,
-                                onValueChange = {},
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text(stringResource(R.string.settings_currency_rate_value)) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                readOnly = true,
-                                singleLine = true,
-                            )
+                        if (state.conversionMode != CurrencyConversionMode.APP_RATE) {
+                            val fieldTag = if (isReporting) "transaction.reportingAmount" else "transaction.destinationAmount"
+                            val canCalculate = if (isReporting) reportingCalculatorAvailable else destinationCalculatorAvailable
+                            OutlinedTextField(value = if (isReporting) displayedFxState.reportingAmountText else displayedFxState.destinationAmountText,
+                                onValueChange = { state = if (isReporting) state.withReportingAmount(it, conversionTarget) else state.withDestinationAmount(it, conversionTarget) },
+                                modifier = Modifier.fillMaxWidth().testTag(fieldTag),
+                                trailingIcon = { if (canCalculate) IconButton(enabled = !isSaving,
+                                    onClick = { focus.clearFocus(); calculatorField = if (isReporting) "reporting" else "destination" }, modifier = Modifier.testTag("$fieldTag.calculator")) {
+                                    Icon(Icons.Filled.Calculate, contentDescription = stringResource(R.string.shared_amount_calculator_open_calculator))
+                                } },
+                                label = { Text("${stringResource(if (isReporting) R.string.transactions_transactioneditor_converted_amount else R.string.transactions_transactioneditor_destination_amount)} ($conversionTarget)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         }
                     }
                 }
@@ -578,10 +545,12 @@ private fun OwnedTransactionEditorSheet(
 
     val calculatesSource = calculatorField == "source" && sourceCalculatorAvailable
     val calculatesDestination = calculatorField == "destination" && destinationCalculatorAvailable
-    if (!isSaving && (calculatesSource || calculatesDestination)) {
-        AmountCalculatorDialog(if (calculatesSource) state.amountText else state.destinationAmountText, "$calculatorScope:$calculatorField",
+    val calculatesReporting = calculatorField == "reporting" && reportingCalculatorAvailable
+    if (!isSaving && (calculatesSource || calculatesDestination || calculatesReporting)) {
+        AmountCalculatorDialog(if (calculatesSource) state.amountText else if (calculatesReporting) state.reportingAmountText else state.destinationAmountText, "$calculatorScope:$calculatorField",
             onCommit = {
                 if (calculatesSource) changeAmount(it)
+                else if (calculatesReporting) state = state.withReportingAmount(it, primaryCurrencyCode)
                 else state = state.withDestinationAmount(it, destinationWallet?.currencyCode)
                 validation = null; operationError = null; genericFailure = false
             }, onDismiss = { calculatorField = null })
@@ -847,7 +816,8 @@ private fun transactionEditorError(
             R.string.transactions_transactioneditor_source_and_destination_wallets_must_be_different
         validation == TransactionEditorValidation.INVALID_AMOUNT ->
             R.string.transactions_transactioneditor_enter_an_amount_greater_than
-        validation == TransactionEditorValidation.INVALID_DESTINATION_AMOUNT ||
+        validation == TransactionEditorValidation.INVALID_REPORTING_AMOUNT ||
+            validation == TransactionEditorValidation.INVALID_DESTINATION_AMOUNT ||
             validation == TransactionEditorValidation.INVALID_EXCHANGE_RATE ->
             R.string.transactions_transactioneditor_enter_the_converted_amount_or_refresh_rates
         operationError == TransactionValidationError.TITLE_REQUIRED ->
@@ -897,7 +867,7 @@ private fun sourceWalletsForKind(
 }
 
 private fun walletPickerTitle(wallet: LedgerWalletRecord): String =
-    "${wallet.name} · ${wallet.currencyCode}"
+    "${wallet.name} · ${wallet.currencyCode.trim().uppercase(Locale.ROOT)}"
 
 private fun transactionLocalDateTime(value: String): LocalDateTime =
     runCatching { Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDateTime() }

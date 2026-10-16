@@ -77,7 +77,7 @@ class TransactionCalculatorTest {
         compose.setContent { Editor(seed = initial(mode = CurrencyConversionMode.APP_RATE).copy(amountText = "1,000")) }
         compose.onNodeWithTag("transaction.destinationAmount.calculator").assertDoesNotExist()
         open(); key("+"); key("1"); key("OK")
-        field().performScrollTo().assertTextContains("1,001"); field(true).performScrollTo().assertTextContains("165,666"); noTransactions()
+        field().performScrollTo().assertTextContains("1,001"); field(true).assertDoesNotExist(); noTransactions()
         compose.onNodeWithText(context.getString(R.string.common_save)).performScrollTo().performClick()
         compose.waitUntil(5000) { runBlocking { repo.observeTransactions(owner).first().size == 1 } }
         val saved = runBlocking { repo.observeTransactions(owner).first().single() }
