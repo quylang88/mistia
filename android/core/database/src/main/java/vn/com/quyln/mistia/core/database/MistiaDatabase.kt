@@ -52,6 +52,7 @@ import vn.com.quyln.mistia.core.model.InstallmentDeletionChunk
 import vn.com.quyln.mistia.core.model.InstallmentDeletionBatch
 import vn.com.quyln.mistia.core.model.InstallmentCycleSnapshot
 import vn.com.quyln.mistia.core.model.InstallmentMutationSnapshot
+import vn.com.quyln.mistia.core.model.TransactionSaveSnapshot
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
 import vn.com.quyln.mistia.core.model.requireValidMutations
 import vn.com.quyln.mistia.core.model.requireUnchanged
@@ -750,6 +751,27 @@ class RoomLocalStore(
 
     override suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord? =
         database.cloudRecordDao().record(ownerUserId.value, entity, recordId)?.toCloudRecord()
+
+    override suspend fun transactionSaveSnapshot(owner: UserId): TransactionSaveSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val snapshot = TransactionSaveSnapshot(owner, TransactionSaveSnapshot.entities.associateWith { recordsIncludingDeleted(owner, it.table) })
+        snapshot.requireValid()
+        ensureCurrentFinanceOwner(owner)
+        snapshot
+    }
+
+    override suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {
+        expected.requireValidMutation(record, mutation)
+        database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            expected.requireUnchanged(transactionSaveSnapshot(expected.owner))
+            val previous = expected.recordsByEntity.getValue(CloudEntity.LEDGER_TRANSACTION).singleOrNull { it.id == record.id }
+            val queue = database.syncOutboxDao().record(expected.owner.value, record.entity, record.id)
+            require(previous != null || queue == null) { "Transaction identity has an orphan queue" }
+            commitMutationRows(record, mutation)
+            ensureCurrentFinanceOwner(expected.owner)
+        }
+    }
 
     override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
         database.withTransaction {

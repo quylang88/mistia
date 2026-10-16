@@ -200,11 +200,13 @@ class OfflineFirstFinanceRepository(
         now: String,
     ): Result<LedgerTransactionRecord> = runCatching {
         val statementZone=ZoneId.systemDefault()
-        val transactions = transactionSnapshot(ownerUserId)
-        val wallets = walletSnapshot(ownerUserId)
-        val categories = categorySnapshot(ownerUserId)
-        val creditCardProfiles = creditCardProfileSnapshot(ownerUserId)
-        val dueOccurrences = dueOccurrenceSnapshot(ownerUserId)
+        val snapshot = localStore.transactionSaveSnapshot(ownerUserId)
+        snapshot.requireValid()
+        val transactions = snapshot.active(CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord)
+        val wallets = snapshot.active(CloudEntity.LEDGER_WALLET).map(LedgerWalletRecord::fromCloudRecord)
+        val categories = snapshot.active(CloudEntity.TRANSACTION_CATEGORY).map(TransactionCategoryRecord::fromCloudRecord)
+        val creditCardProfiles = snapshot.active(CloudEntity.CREDIT_CARD_PROFILE).map(CreditCardProfileRecord::fromCloudRecord)
+        val dueOccurrences = snapshot.active(CloudEntity.DUE_OCCURRENCE_RECORD)
         val existing = draft.id?.lowercase()?.let { id -> transactions.firstOrNull { it.id == id } }
         if (existing?.isLockedByPaidCreditCardStatement(
                 wallets = wallets,
@@ -256,7 +258,7 @@ class OfflineFirstFinanceRepository(
             creditCardProfiles = creditCardProfiles,
             excludingTransactionId = existing?.id,
         )
-        localStore.commitMutation(mutation.record.toCloudRecord(), mutation.pending)
+        localStore.commitTransactionMutation(snapshot, mutation.record.toCloudRecord(), mutation.pending)
         mutation.record
     }
 
@@ -384,13 +386,6 @@ class OfflineFirstFinanceRepository(
     private suspend fun creditCardProfileSnapshot(ownerUserId: UserId): List<CreditCardProfileRecord> =
         localStore.observe(CloudEntity.CREDIT_CARD_PROFILE.table, ownerUserId).first()
             .map(CreditCardProfileRecord::fromCloudRecord)
-
-    private suspend fun transactionSnapshot(ownerUserId: UserId): List<LedgerTransactionRecord> =
-        localStore.observe(CloudEntity.LEDGER_TRANSACTION.table, ownerUserId).first()
-            .map(LedgerTransactionRecord::fromCloudRecord)
-
-    private suspend fun dueOccurrenceSnapshot(ownerUserId: UserId): List<CloudRecord> =
-        localStore.observe(CloudEntity.DUE_OCCURRENCE_RECORD.table, ownerUserId).first()
 
     private fun normalizeCategoryName(value: String): String = value.trim()
         .split(Regex("\\s+"))

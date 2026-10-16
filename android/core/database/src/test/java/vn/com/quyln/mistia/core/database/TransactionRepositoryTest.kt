@@ -24,6 +24,7 @@ import vn.com.quyln.mistia.core.model.QueuedMutation
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionDebtIntent
+import vn.com.quyln.mistia.core.model.TransactionSaveSnapshot
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 import vn.com.quyln.mistia.core.model.TransactionValidationError
@@ -33,6 +34,20 @@ import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class TransactionRepositoryTest {
+    @Test fun `unsupported atomic transaction store fails before generic write`() = runTest {
+        val store = TransactionMemoryStore(); val seed = OfflineFirstFinanceRepository(store)
+        seedExpenseDependencies(seed, OWNER)
+        val unsupported = object : LocalStore by store {
+            override suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {
+                super<LocalStore>.commitTransactionMutation(expected, record, mutation)
+            }
+        }
+        val result = OfflineFirstFinanceRepository(unsupported).saveTransaction(UserId(OWNER), expenseDraft(), DEVICE, NOW)
+        assertTrue(result.exceptionOrNull() is UnsupportedOperationException)
+        assertTrue(seed.observeTransactions(UserId(OWNER)).first().isEmpty())
+        assertTrue(store.outbox.keys.none { it.second == CloudEntity.LEDGER_TRANSACTION.table })
+    }
+
     @Test fun `manual FX queues exact amounts and explicit null rate`() = runTest {
         val store = TransactionMemoryStore(); val repo = OfflineFirstFinanceRepository(store)
         repo.saveWallet(UserId(OWNER), walletDraft(SOURCE_WALLET_ID, "JPY"), DEVICE, NOW).getOrThrow()
@@ -566,6 +581,16 @@ class TransactionRepositoryTest {
             }
             outbox.putAll(batch.associate { (row, pending) -> Triple(row.ownerUserId, row.entity, row.id) to pending })
             records.value = records.value + rows
+        }
+        override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String) =
+            records.value.values.filter { it.ownerUserId == ownerUserId.value && it.entity == entity }
+        override suspend fun transactionSaveSnapshot(owner: UserId) =
+            TransactionSaveSnapshot(owner, TransactionSaveSnapshot.entities.associateWith { recordsIncludingDeleted(owner, it.table) })
+        override suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {
+            expected.requireValidMutation(record, mutation)
+            expected.requireUnchanged(transactionSaveSnapshot(expected.owner))
+            require(records.value.containsKey(Triple(record.ownerUserId, record.entity, record.id)) || !outbox.containsKey(Triple(record.ownerUserId, record.entity, record.id)))
+            commitMutation(record, mutation)
         }
         override suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation) {
             seed(record)

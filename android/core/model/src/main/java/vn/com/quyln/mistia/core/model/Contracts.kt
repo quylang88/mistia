@@ -337,6 +337,11 @@ interface LocalStore {
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
+    suspend fun transactionSaveSnapshot(owner: UserId): TransactionSaveSnapshot =
+        throw UnsupportedOperationException("Atomic transaction dependency snapshot unavailable")
+    suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {
+        throw UnsupportedOperationException("Atomic validated transaction save unavailable")
+    }
     /** Recheck the exact wallet and current ledger references atomically with the currency edit/outbox. */
     suspend fun commitWalletCurrencyMutation(expectedWallet: CloudRecord, record: CloudRecord, mutation: PendingMutation) {
         throw UnsupportedOperationException("Atomic wallet currency edits unavailable")

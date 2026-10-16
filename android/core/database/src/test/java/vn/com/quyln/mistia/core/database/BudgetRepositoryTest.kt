@@ -411,6 +411,14 @@ class BudgetRepositoryTest {
             require(billCycleRecords(recordsIncludingDeleted(UserId(bill.ownerUserId),CloudEntity.DUE_OCCURRENCE_RECORD.table),bill,monthKey)==expectedOccurrences.sortedBy {it.id})
             commitMutations(mutations)
         }
+        override suspend fun transactionSaveSnapshot(owner: UserId) =
+            TransactionSaveSnapshot(owner, TransactionSaveSnapshot.entities.associateWith { recordsIncludingDeleted(owner, it.table) })
+        override suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {
+            expected.requireValidMutation(record, mutation)
+            expected.requireUnchanged(transactionSaveSnapshot(expected.owner))
+            require(records.value.containsKey(Triple(record.ownerUserId, record.entity, record.id)) || !outbox.containsKey(Triple(record.ownerUserId, record.entity, record.id)))
+            commitMutation(record, mutation)
+        }
         override suspend fun commitBillMoneyMutations(snapshot:BillMoneySnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>) {
             snapshot.requireValidMutations(mutations)
             snapshot.requireUnchanged(CloudEntity.entries.associateWith { recordsIncludingDeleted(snapshot.owner,it.table) })
