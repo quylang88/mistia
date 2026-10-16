@@ -22,6 +22,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.util.Locale
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.model.*
@@ -31,10 +34,25 @@ import vn.com.quyln.mistia.core.model.*
     owner:String,goal:SavingsGoalRecord?,wallets:List<LedgerWalletRecord>,
     onSave:suspend (SavingsGoalDraft)->Result<SavingsGoalRecord>,
     onDelete:suspend (String)->Result<Unit>,onDismiss:()->Unit,
+    primaryCurrencyCode:String="JPY",
+) {
+    if(goal!=null && goal.ownerUserId!=owner) return
+    val currency=goal?.currencyCode ?: primaryCurrencyCode.trim().uppercase(Locale.ROOT)
+        .takeIf {it in CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
+    key(owner,goal?.id,currency) {
+        OwnedSavingsGoalEditorSheet(owner,goal,wallets,onSave,onDelete,onDismiss,currency)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun OwnedSavingsGoalEditorSheet(
+    owner:String,goal:SavingsGoalRecord?,wallets:List<LedgerWalletRecord>,
+    onSave:suspend (SavingsGoalDraft)->Result<SavingsGoalRecord>,
+    onDelete:suspend (String)->Result<Unit>,onDismiss:()->Unit,currency:String,
 ) {
     val zone=ZoneId.systemDefault()
-    val initial=remember(owner,goal?.id) { goal?.let { SavingsGoalEditorState.from(it,zone) } ?: SavingsGoalEditorState.fresh(LocalDate.now(zone),"JPY") }
-    var state by rememberSaveable(owner,goal?.id,stateSaver=SavingsGoalEditorState.saver(owner)) { mutableStateOf(initial) }
+    val initial=remember(owner,goal?.id,currency) { goal?.let { SavingsGoalEditorState.from(it,zone) } ?: SavingsGoalEditorState.fresh(LocalDate.now(zone),currency) }
+    var state by rememberSaveable(owner,goal?.id,currency,stateSaver=SavingsGoalEditorState.scopedSaver(owner,goal?.id,currency)) { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var calculatorField by rememberSaveable(owner,goal?.id) { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
@@ -83,7 +101,7 @@ import vn.com.quyln.mistia.core.model.*
                     };return@Button
                 }
                 busy=true;error=null
-                scope.launch { val result=onSave(draft);busy=false
+                scope.launch { currentCoroutineContext().ensureActive();val result=onSave(draft);currentCoroutineContext().ensureActive();busy=false
                     result.fold(onSuccess={onDismiss()},onFailure={error=R.string.planning_planning_couldn_t_save_this_goal_right_now}) }
             },enabled=!busy,modifier=Modifier.fillMaxWidth().testTag("goal.save")) {
                 if(busy) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp) else Text(stringResource(R.string.common_save))
@@ -102,7 +120,7 @@ import vn.com.quyln.mistia.core.model.*
         confirmButton={TextButton(onClick={discard=false;onDismiss()},modifier=Modifier.testTag("goal.discard")) { Text(stringResource(R.string.planning_budget_editor_discard)) }},
         dismissButton={TextButton(onClick={discard=false}) { Text(stringResource(R.string.planning_budget_editor_keep_editing)) }})
     if(delete) AlertDialog(onDismissRequest={delete=false},title={Text(stringResource(R.string.planning_planning_delete_this_goal))},
-        confirmButton={TextButton(onClick={delete=false;busy=true;scope.launch { val result=onDelete(requireNotNull(goal).id);busy=false
+        confirmButton={TextButton(onClick={delete=false;busy=true;scope.launch { currentCoroutineContext().ensureActive();val result=onDelete(requireNotNull(goal).id);currentCoroutineContext().ensureActive();busy=false
             result.fold(onSuccess={onDismiss()},onFailure={error=R.string.planning_planning_couldn_t_delete_this_goal_right_now}) }},modifier=Modifier.testTag("goal.confirmDelete")) {Text(stringResource(R.string.common_delete))}},
         dismissButton={TextButton(onClick={delete=false}) {Text(stringResource(R.string.common_cancel))}})
     if(picker=="date") {

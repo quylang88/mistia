@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.feature.planning
 
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -33,6 +34,23 @@ data class SavingsGoalEditorState(
         return SavingsGoalDraft(trimmed,target,parse(currentText,true),timestamp,currencyCode,id,id!=null,linkedWalletId,iconSymbolName)
     }
     companion object {
+        fun scopedSaver(owner:String,recordId:String?,currency:String):Saver<SavingsGoalEditorState,Any> = Saver(
+            save={state ->
+                if(state.id!=recordId || state.currencyCode!=currency) null
+                else with(saver(owner)) {save(state)}?.let {listOf(owner,recordId.orEmpty(),currency,it)}
+            },
+            restore={value ->
+                val items=value as? List<*>
+                if(items?.size!=4 || items[0]!=owner || items[1]!=recordId.orEmpty() || items[2]!=currency) null
+                else items[3]?.let {raw -> runCatching {
+                    saver(owner).restore(raw)?.also {state ->
+                        LocalDate.parse(state.targetDate)
+                        state.originalTargetDate?.let {Instant.parse(it)}
+                    }
+                }.getOrNull()}
+                    ?.takeIf {it.id==recordId && it.currencyCode==currency}
+            },
+        )
         fun fresh(date:LocalDate,currency:String)=SavingsGoalEditorState(null,"","","",date.toString(),null,currency,"mistia.goal.savings",null)
         fun from(goal:SavingsGoalRecord,zone:ZoneId):SavingsGoalEditorState {
             val digits=runCatching { Currency.getInstance(goal.currencyCode).defaultFractionDigits.coerceAtLeast(0) }.getOrDefault(0)

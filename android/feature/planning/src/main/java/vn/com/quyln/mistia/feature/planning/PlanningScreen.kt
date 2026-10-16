@@ -229,7 +229,7 @@ fun PlanningScreen(
     if(goalNavigation.open && (goalNavigation.payload==null || editorGoal!=null)) SavingsGoalEditorSheet(ownerUserId.value,editorGoal,goalWallets,
         onSave={repository.saveSavingsGoal(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
         onDelete={repository.deleteSavingsGoal(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
-        onDismiss={goalNavigation=goalNavigation.copy(open=false,payload=null)})
+        onDismiss={goalNavigation=goalNavigation.copy(open=false,payload=null)},primaryCurrencyCode=reportingCurrency)
     if (navigation.editorOpen) BudgetEditorSheet(ownerUserId.value,navigation.editorPlan(),month,categories,budgets,transactions,language,
         categoryMetadata=categoryMetadata,
         onSave={ draft -> repository.saveBudget(ownerUserId,draft,deviceIdProvider(),Instant.now().toString()) },
