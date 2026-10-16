@@ -20,6 +20,9 @@ fun localizedTransactionTitle(transaction: LedgerTransactionRecord, category: Tr
     return kind?.let { stringResource(it.resourceId()) } ?: transaction.title
 }
 
+/** All supported-language generated titles for semantic classification of legacy stored records. */
+fun knownTransactionTitles(context:Context):Map<GeneratedTransactionTitle,Collection<String>> = GeneratedTitleResources.knownTitles(context)
+
 /** Cache only immutable strings, never an Activity/context or an account's records. */
 private object GeneratedTitleResources {
     private var cached: Map<GeneratedTransactionTitle, Collection<String>>? = null

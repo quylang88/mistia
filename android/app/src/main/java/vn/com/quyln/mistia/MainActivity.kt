@@ -267,6 +267,7 @@ private fun SignedInRoot(
                         syncEngine.status,
                         modifier,
                         onOpenTransaction={id -> overviewEditor=overviewEditor.copy(recordId=id)},
+                        exchangeRates=exchangeRateRepository,
                         primaryCurrencyCode=currencySettings.primaryCurrencyCode,
                         unreadNotificationCount=unreadNotifications,
                         onOpenNotifications={navController.navigate("notifications")},

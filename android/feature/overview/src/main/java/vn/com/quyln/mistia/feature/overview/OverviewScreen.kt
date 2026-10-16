@@ -48,9 +48,10 @@ fun OverviewScreen(
     onOpenNotifications:()->Unit={},
     primaryCurrencyCode:String="JPY",
     onOpenTransaction:(String)->Unit={},
+    exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?=null,
 ) {
     key(ownerUserId.value) {
-        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode, onOpenTransaction)
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode, onOpenTransaction, exchangeRates)
     }
 }
 
@@ -64,14 +65,22 @@ private fun OwnedOverviewScreen(
     onOpenNotifications: () -> Unit,
     primaryCurrencyCode: String,
     onOpenTransaction: (String) -> Unit,
+    exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?,
 ) {
     val reference=rememberOverviewReferenceTime()
+    val rates=exchangeRates?.rates?.collectAsStateWithLifecycle()?.value.orEmpty()
+    androidx.compose.runtime.LaunchedEffect(exchangeRates) {exchangeRates?.refreshIfStale()}
+    val context=androidx.compose.ui.platform.LocalContext.current
+    val knownTitles=remember(context) {vn.com.quyln.mistia.core.designsystem.knownTransactionTitles(context)}
     val zone=ZoneId.systemDefault()
     val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
+    val monthly=remember(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,reference,zone,knownTitles) {
+        overviewMonthlyProjection(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,knownTitles,reference,zone).last()
+    }
     val recent = remember(ownerUserId, transactions, wallets, primaryCurrencyCode) {
         overviewRecentTransactions(ownerUserId, transactions, wallets, primaryCurrencyCode)
     }
@@ -105,6 +114,7 @@ private fun OwnedOverviewScreen(
                 }
             }
         }
+        item {OverviewMonthlyMetrics(monthly,primaryCurrencyCode)}
         item {
             MistiaSectionCard(title = stringResource(R.string.family_family_wallets_cards)) {
                 Row(
