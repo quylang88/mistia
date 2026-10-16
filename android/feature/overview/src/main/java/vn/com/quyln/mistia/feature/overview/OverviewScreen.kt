@@ -78,8 +78,17 @@ private fun OwnedOverviewScreen(
         .collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
-    val monthly=remember(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,reference,zone,knownTitles) {
-        overviewMonthlyProjection(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,knownTitles,reference,zone).last()
+    val channels by repository.observe(CloudEntity.INVESTMENT_CHANNEL,ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val investmentAssets by repository.observe(CloudEntity.INVESTMENT_ASSET,ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val trades by repository.observe(CloudEntity.INVESTMENT_TRADE,ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val financial=remember(ownerUserId,transactions,wallets) {overviewFinancialInputs(ownerUserId,transactions,wallets)}
+    val inventory=remember(ownerUserId,channels,investmentAssets,trades) {vn.com.quyln.mistia.core.model.overviewInventoryCost(ownerUserId,channels,investmentAssets,trades)}
+    val assetBalance=remember(ownerUserId,financial,wallets,inventory,primaryCurrencyCode,rates) {
+        val accounting=vn.com.quyln.mistia.core.model.overviewInventoryAccountingCurrency(ownerUserId,wallets,primaryCurrencyCode)
+        vn.com.quyln.mistia.core.model.overviewTotalAssets(ownerUserId,financial.wallets,financial.records,primaryCurrencyCode,rates,if(accounting==null) java.math.BigInteger.ZERO else inventory,accounting ?: primaryCurrencyCode)
+    }
+    val monthly=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
+        vn.com.quyln.mistia.core.model.overviewMonthlyCashflow(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone).last()
     }
     val recent = remember(ownerUserId, transactions, wallets, primaryCurrencyCode) {
         overviewRecentTransactions(ownerUserId, transactions, wallets, primaryCurrencyCode)
@@ -114,7 +123,7 @@ private fun OwnedOverviewScreen(
                 }
             }
         }
-        item {OverviewMonthlyMetrics(monthly,primaryCurrencyCode)}
+        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance)}
         item {
             MistiaSectionCard(title = stringResource(R.string.family_family_wallets_cards)) {
                 Row(

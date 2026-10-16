@@ -369,6 +369,10 @@ final class InvestmentLogicTests: XCTestCase {
     }
 
     func testSystemWalletIDIsStableAndOwnerScoped() {
+        XCTAssertEqual(
+            InvestmentSystemWalletIdentity.walletID(ownerUserID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!).uuidString.lowercased(),
+            "b491e482-7dfc-5ecc-874f-d07ebc5ea67c"
+        )
         let ownerA = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let ownerB = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 

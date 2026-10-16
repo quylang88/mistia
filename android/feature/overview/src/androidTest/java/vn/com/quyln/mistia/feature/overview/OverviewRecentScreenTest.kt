@@ -62,8 +62,10 @@ class OverviewRecentScreenTest {
         compose.setContent {Screen()}
         compose.waitUntil(5000) {compose.onAllNodesWithText("Row 7").fetchSemanticsNodes().isNotEmpty()}
         for(title in listOf("Archived","Draft","Investment","Malformed","Deleted","Row 1","Row 2")) compose.onNodeWithText(title).assertDoesNotExist()
-        val positions=(7 downTo 3).map {number -> compose.onNodeWithTag("overview.recent.${id(number)}").fetchSemanticsNode().boundsInRoot.top}
+        // Measure layout order before scrolling; clipped offscreen semantics bounds collapse to zero.
+        val positions=(7 downTo 3).map {number -> compose.onNodeWithTag("overview.recent.${id(number)}").getUnclippedBoundsInRoot().top.value}
         Assert.assertEquals(positions.sorted(),positions)
+        for(number in 7 downTo 3) compose.onNodeWithTag("overview.recent.${id(number)}").performScrollTo().assertIsDisplayed()
         Assert.assertEquals(before,rows());Assert.assertEquals(pending,queue())
     }
     @Test fun foreignAndMismatchedRawEnvelopeNeverExposePrivateTitlesOrMoney() {
