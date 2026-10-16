@@ -55,6 +55,7 @@ import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.CreditCardAccount
+import vn.com.quyln.mistia.core.model.CurrencyPreferences
 import vn.com.quyln.mistia.core.model.CreditCardDraft
 import vn.com.quyln.mistia.core.model.CreditCardNetwork
 import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
@@ -239,11 +240,13 @@ fun CreditCardEditorSheet(
     onDismiss: () -> Unit,
     onSave: suspend (CreditCardDraft) -> Result<CreditCardAccount>,
     currencyEditable: Boolean = wallet == null,
+    enabledCurrencyCodes: List<String> = listOf("JPY", "VND"),
 ) {
     if ((wallet == null) != (profile == null)) return
     if (wallet != null && (wallet.ownerUserId != ownerId || profile?.ownerUserId != ownerId || profile.walletId != wallet.id)) return
+    val choices = CurrencyPreferences.fromStored(enabledCurrencyCodes.joinToString(","), null, null, null).enabledCurrencyCodes
     key(ownerId, wallet?.id, profile?.id) {
-        OwnedCreditCardEditorSheet(ownerId, wallet, profile, paymentSourceWallets.filter { it.ownerUserId == ownerId }, nextSortOrder, onDismiss, onSave, currencyEditable)
+        OwnedCreditCardEditorSheet(ownerId, wallet, profile, paymentSourceWallets.filter { it.ownerUserId == ownerId }, nextSortOrder, onDismiss, onSave, currencyEditable, choices)
     }
 }
 
@@ -252,6 +255,7 @@ fun CreditCardEditorSheet(
 private fun OwnedCreditCardEditorSheet(
     ownerId: String, wallet: LedgerWalletRecord?, profile: CreditCardProfileRecord?, paymentSourceWallets: List<LedgerWalletRecord>,
     nextSortOrder: Int, onDismiss: () -> Unit, onSave: suspend (CreditCardDraft) -> Result<CreditCardAccount>, currencyEditable: Boolean,
+    enabledCurrencyCodes: List<String>,
 ) {
     var state by rememberSaveable(ownerId, wallet?.id, profile?.id, stateSaver = CreditCardEditorState.scopedSaver(ownerId, wallet?.id, profile?.id)) {
         mutableStateOf(
@@ -405,9 +409,13 @@ private fun OwnedCreditCardEditorSheet(
                         singleLine = true,
                     )
                     Text(stringResource(R.string.management_management_currency))
+                    if (state.currencyCode !in enabledCurrencyCodes) {
+                        Text(state.currencyCode, modifier = Modifier.testTag("card.currentCurrency"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("JPY", "VND").forEach { code ->
+                        enabledCurrencyCodes.forEach { code ->
                             FilterChip(
+                                modifier = Modifier.testTag("card.currency.$code"),
                                 selected = state.currencyCode == code,
                                 enabled = !isSaving && currencyEditable,
                                 onClick = { state = state.copy(currencyCode = code) },

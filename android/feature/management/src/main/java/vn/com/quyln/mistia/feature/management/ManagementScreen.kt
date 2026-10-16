@@ -79,6 +79,7 @@ fun ManagementScreen(
     modifier: Modifier = Modifier,
     onOpenNotificationSettings:()->Unit={},
     onOpenCurrencySettings:()->Unit={},
+    enabledCurrencyCodes: List<String> = listOf("JPY", "VND"),
 ) {
     val walletFlow = remember(ownerUserId,repository) {repository.observeWallets(ownerUserId)}
     val categoryFlow = remember(ownerUserId,repository) {repository.observeCategories(ownerUserId)}
@@ -207,6 +208,7 @@ fun ManagementScreen(
         val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
         WalletEditorSheet(
             ownerId = ownerUserId.value,
+            enabledCurrencyCodes = enabledCurrencyCodes,
             currencyEditable = currencyEditable(wallet),
             wallet = wallet,
             nextSortOrder = (wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1,
@@ -237,6 +239,7 @@ fun ManagementScreen(
         val profile = wallet?.let { card -> creditCardProfiles.firstOrNull { it.walletId == card.id } }
         CreditCardEditorSheet(
             ownerId = ownerUserId.value,
+            enabledCurrencyCodes = enabledCurrencyCodes,
             currencyEditable = currencyEditable(wallet),
             wallet = wallet,
             profile = profile,

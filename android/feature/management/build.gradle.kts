@@ -12,6 +12,7 @@ android {
     namespace = "vn.com.quyln.mistia.feature.management"
     compileSdk = 36
     defaultConfig { minSdk = 26; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    testOptions { targetSdk = 36 }
     buildFeatures { compose = true }
     sourceSets.getByName("test").resources.srcDir(generatedCategoryAssets)
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

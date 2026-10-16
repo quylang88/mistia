@@ -288,6 +288,7 @@ private fun SignedInRoot(
                     )
                     RootTab.MANAGEMENT -> ManagementScreen(
                         ownerUserId = authState.session.userId,
+                        enabledCurrencyCodes = currencySettings.enabledCurrencyCodes,
                         repository = financeRepository,
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
                         onTranslatePendingCategories = {

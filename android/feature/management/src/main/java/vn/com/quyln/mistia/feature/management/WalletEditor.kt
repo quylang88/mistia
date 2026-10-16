@@ -72,6 +72,7 @@ import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
+import vn.com.quyln.mistia.core.model.CurrencyPreferences
 import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
 import vn.com.quyln.mistia.core.model.currencyAmountInput
@@ -254,9 +255,11 @@ fun WalletEditorSheet(
     onSave: suspend (WalletDraft) -> Result<LedgerWalletRecord>,
     onArchive: suspend () -> Result<Unit>,
     currencyEditable: Boolean = wallet == null,
+    enabledCurrencyCodes: List<String> = listOf("JPY", "VND"),
 ) {
     if (wallet != null && wallet.ownerUserId != ownerId) return
-    key(ownerId, wallet?.id) { OwnedWalletEditorSheet(ownerId, wallet, nextSortOrder, onDismiss, onSave, onArchive, currencyEditable) }
+    val choices = CurrencyPreferences.fromStored(enabledCurrencyCodes.joinToString(","), null, null, null).enabledCurrencyCodes
+    key(ownerId, wallet?.id) { OwnedWalletEditorSheet(ownerId, wallet, nextSortOrder, onDismiss, onSave, onArchive, currencyEditable, choices) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -265,6 +268,7 @@ private fun OwnedWalletEditorSheet(
     ownerId: String, wallet: LedgerWalletRecord?, nextSortOrder: Int, onDismiss: () -> Unit,
     onSave: suspend (WalletDraft) -> Result<LedgerWalletRecord>, onArchive: suspend () -> Result<Unit>,
     currencyEditable: Boolean,
+    enabledCurrencyCodes: List<String>,
 ) {
     var state by rememberSaveable(ownerId, wallet?.id, stateSaver = WalletEditorState.scopedSaver(ownerId)) {
         mutableStateOf(wallet?.let(WalletEditorState::edit) ?: WalletEditorState.new(nextSortOrder))
@@ -462,9 +466,13 @@ private fun OwnedWalletEditorSheet(
                         stringResource(R.string.management_management_currency),
                         style = MaterialTheme.typography.labelLarge,
                     )
+                    if (state.currencyCode !in enabledCurrencyCodes) {
+                        Text(state.currencyCode, modifier = Modifier.testTag("wallet.currentCurrency"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("JPY", "VND").forEach { code ->
+                        enabledCurrencyCodes.forEach { code ->
                             FilterChip(
+                                modifier = Modifier.testTag("wallet.currency.$code"),
                                 selected = state.currencyCode == code,
                                 enabled = !isSaving && currencyEditable,
                                 onClick = { state = state.copy(currencyCode = code) },
