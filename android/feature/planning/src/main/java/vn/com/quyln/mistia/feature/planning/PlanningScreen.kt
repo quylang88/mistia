@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -68,7 +69,7 @@ fun PlanningScreen(
     LaunchedEffect(billNavigation) { if(billNavigation.open && billNavigation.payload!=null && editorBill==null) billNavigation=billNavigation.copy(open=false,payload=null) }
     val goals by repository.observeSavingsGoals(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val walletRecords by repository.observe(CloudEntity.LEDGER_WALLET,ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val goalWallets=walletRecords.filter { it.ownerUserId==ownerUserId.value && it.deletedAt==null }.mapNotNull {
+    val historicalWallets=walletRecords.filter { it.ownerUserId==ownerUserId.value && it.deletedAt==null }.mapNotNull {
         runCatching { LedgerWalletRecord.fromCloudRecord(it).takeIf { wallet -> wallet.ownerUserId==ownerUserId.value && wallet.id==it.id } }.getOrNull()
     }
     var selectedTab by rememberSaveable(ownerUserId.value) { mutableIntStateOf(0) }
@@ -92,12 +93,14 @@ fun PlanningScreen(
     val values=counts.associate {it.entity to it.count}
     val month=YearMonth.parse(navigation.month)
     val context = LocalContext.current
-    val language = when (Locale.getDefault().language) { "vi" -> CategoryNameLanguage.VIETNAMESE; "ja" -> CategoryNameLanguage.JAPANESE; else -> CategoryNameLanguage.ENGLISH }
+    val appLocale=LocalConfiguration.current.locales[0]
+    val language = when (appLocale.language) { "vi" -> CategoryNameLanguage.VIETNAMESE; "ja" -> CategoryNameLanguage.JAPANESE; else -> CategoryNameLanguage.ENGLISH }
     val adjustmentTitles = remember(context) { listOf("vi","en","ja").map { lang ->
         context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(lang)) })
             .getString(R.string.transactions_generated_title_balance_adjustment)
     }.toSet() }
-    val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,wallets,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
+    // Historical spending retains source currency/kind after its wallet is archived.
+    val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,historicalWallets,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
         stringResource(R.string.planning_planning_deleted_category))
     LazyColumn(
         modifier = modifier.testTag("budget.screen").fillMaxSize(),
@@ -117,16 +120,17 @@ fun PlanningScreen(
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { navigation=navigation.copy(month=month.minusMonths(1).toString()) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.core_ui_mistiamonthnavigation_previous_month)) }
-                Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy",Locale.getDefault())), style = MaterialTheme.typography.titleMedium)
+                Text(month.format(DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(appLocale,"yMMMM"),appLocale)), style = MaterialTheme.typography.titleMedium)
                 IconButton(onClick = { navigation=navigation.copy(month=month.plusMonths(1).toString()) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.core_ui_mistiamonthnavigation_next_month)) }
             }
         }
         if(selectedTab==0) {
         item {
             MistiaSectionCard(stringResource(R.string.planning_planning_budget)) {
-                Text(formatMinorUnits(projection.totalLimitMinor,reportingCurrency), style=MaterialTheme.typography.headlineSmall,modifier=Modifier.testTag("budget.summary.limit"))
-                Text("${stringResource(R.string.planning_planning_spent)}: ${formatMinorUnits(projection.totalSpentMinor,reportingCurrency)}",modifier=Modifier.testTag("budget.summary.spent"))
-                Text("${stringResource(R.string.planning_planning_remaining)}: ${formatMinorUnits(projection.remainingMinor,reportingCurrency)}",modifier=Modifier.testTag("budget.summary.remaining"))
+                BudgetSummaryMoney(projection.totalLimitMinor,reportingCurrency,"budget.summary.limit",large=true)
+                BudgetSummaryMoney(projection.totalSpentMinor,reportingCurrency,"budget.summary.spent",stringResource(R.string.planning_planning_spent))
+                BudgetSummaryMoney(projection.remainingMinor,reportingCurrency,"budget.summary.remaining",stringResource(R.string.planning_planning_remaining))
+                if(projection.totalLimitMinor==null || projection.totalSpentMinor==null || projection.remainingMinor==null) Text(stringResource(R.string.overview_overview_reporting_amount_unavailable),Modifier.testTag("budget.summary.unavailable"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (projection.branches.isEmpty()) item { Text(stringResource(R.string.planning_planning_no_budgets_yet)) }
@@ -196,7 +200,7 @@ fun PlanningScreen(
             paymentNavigation=paymentNavigation.copy(billId=null)
     }
     if(paymentRow!=null && billSnapshot!=null && occurrenceSnapshot!=null) key(ownerUserId.value,paymentRow.bill.id,paymentMonth,paymentNavigation.undo) {
-        BillPaymentSheet(ownerUserId.value,paymentRow,paymentMonth,goalWallets,paymentNavigation.undo,
+        BillPaymentSheet(ownerUserId.value,paymentRow,paymentMonth,historicalWallets,paymentNavigation.undo,
             onPay={repository.payRecurringBill(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
             onUndo={repository.undoRecurringBillPayment(ownerUserId,RecordId(paymentRow.bill.id),paymentMonth,deviceIdProvider(),Instant.now().toString())},
             onDismiss={paymentNavigation=paymentNavigation.copy(billId=null)},category=categories.firstOrNull {it.id==paymentRow.bill.categoryId && it.ownerUserId==ownerUserId.value})
@@ -216,7 +220,7 @@ fun PlanningScreen(
                 }
             },modifier=Modifier.testTag("bill.confirmSkip")) {Text(stringResource(title))}},dismissButton={TextButton(enabled=!cycleBusy,onClick={cycleAction=null}) {Text(stringResource(R.string.common_cancel))}})
     }
-    if(billNavigation.open && (billNavigation.payload==null || editorBill!=null)) RecurringBillEditorSheet(ownerUserId.value,editorBill,categories,goalWallets,language,
+    if(billNavigation.open && (billNavigation.payload==null || editorBill!=null)) RecurringBillEditorSheet(ownerUserId.value,editorBill,categories,historicalWallets,language,
         onSave={repository.saveRecurringBill(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
         onPause={repository.pauseRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
         onResume={repository.resumeRecurringBill(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
@@ -226,7 +230,7 @@ fun PlanningScreen(
     LaunchedEffect(goalNavigation) {
         if(goalNavigation.open && goalNavigation.payload!=null && editorGoal==null) goalNavigation=goalNavigation.copy(open=false,payload=null)
     }
-    if(goalNavigation.open && (goalNavigation.payload==null || editorGoal!=null)) SavingsGoalEditorSheet(ownerUserId.value,editorGoal,goalWallets,
+    if(goalNavigation.open && (goalNavigation.payload==null || editorGoal!=null)) SavingsGoalEditorSheet(ownerUserId.value,editorGoal,historicalWallets,
         onSave={repository.saveSavingsGoal(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
         onDelete={repository.deleteSavingsGoal(ownerUserId,RecordId(it),deviceIdProvider(),Instant.now().toString())},
         onDismiss={goalNavigation=goalNavigation.copy(open=false,payload=null)},primaryCurrencyCode=reportingCurrency)

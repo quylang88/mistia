@@ -11,9 +11,9 @@ import java.util.Locale
 
 enum class BudgetHealth { STABLE, CAUTION, EXCEEDED }
 data class BudgetPace(
-    val health: BudgetHealth,
-    val projectedSpentMinor: Long,
-    val dailyAllowanceMinor: Long,
+    val health: BudgetHealth?,
+    val projectedSpentMinor: BigInteger?,
+    val dailyAllowanceMinor: BigInteger?,
     val daysRemaining: Int,
     val isPastMonth: Boolean,
     val isFutureMonth: Boolean,
@@ -23,19 +23,22 @@ data class BudgetRow(
     val name: String,
     val icon: String,
     val colorHex: String,
-    val spentMinor: Long,
+    val spentMinor: BigInteger?,
     val pace: BudgetPace,
-)
+) {
+    val currencyCode:String? get()=plan.currencyCode.overviewCurrencyCode()
+    val limitMinor:BigInteger? get()=currencyCode?.let {plan.limitMinor.big()}
+}
 data class BudgetBranchRow(
     val id: String,
     val name: String,
     val icon: String,
     val colorHex: String,
-    val currencyCode: String,
-    val limitMinor: Long,
-    val spentMinor: Long,
-    val allocatedMinor: Long,
-    val unallocatedMinor: Long,
+    val currencyCode: String?,
+    val limitMinor: BigInteger?,
+    val spentMinor: BigInteger?,
+    val allocatedMinor: BigInteger?,
+    val unallocatedMinor: BigInteger?,
     val primaryBudgetId: String?,
     val parentBudgetId: String?,
     val children: List<BudgetRow>,
@@ -43,9 +46,9 @@ data class BudgetBranchRow(
 )
 data class BudgetProjection(
     val branches: List<BudgetBranchRow>,
-    val totalLimitMinor: Long,
-    val totalSpentMinor: Long,
-    val remainingMinor: Long,
+    val totalLimitMinor: BigInteger?,
+    val totalSpentMinor: BigInteger?,
+    val remainingMinor: BigInteger?,
 )
 
 fun activeBudgetPlans(owner: UserId, plans: List<BudgetPlanRecord>, month: YearMonth, zone: ZoneId,
@@ -71,31 +74,35 @@ fun budgetCurrencyConstraints(owner: UserId, plans: List<BudgetPlanRecord>, mont
         it.ownerUserId == owner.value && !it.isArchived && it.deletedAt == null && budgetMonth(it.monthAnchor, zone) > month
     }).distinctBy { it.id }
 
-fun budgetPace(spent: Long, limit: Long, month: YearMonth, reference: Instant, zone: ZoneId): BudgetPace {
-    val date = reference.atZone(zone).toLocalDate()
-    val past = month < YearMonth.from(date)
-    val future = month > YearMonth.from(date)
-    val days = month.lengthOfMonth()
-    val elapsed = if (past) days else if (future) 0 else date.dayOfMonth.coerceIn(1, days)
-    val remainingDays = if (past) 0 else if (future) days else days - elapsed
-    val projected = if (past || future || elapsed == 0 || spent <= 0) maxOf(spent, 0) else {
-        BigDecimal.valueOf(spent).multiply(BigDecimal.valueOf(days.toLong()))
-            .divide(BigDecimal.valueOf(elapsed.toLong()), 0, RoundingMode.HALF_UP).toBigInteger().clamped()
+fun budgetPace(spent:Long,limit:Long,month:YearMonth,reference:Instant,zone:ZoneId):BudgetPace =
+    budgetPace(spent.big(),limit.big(),month,reference,zone)
+
+/** Read-only exact assessment; unknown required spending/limit cannot assert stable health. */
+fun budgetPace(spent:BigInteger?,limit:BigInteger?,month:YearMonth,reference:Instant,zone:ZoneId):BudgetPace {
+    val date=reference.atZone(zone).toLocalDate()
+    val past=month<YearMonth.from(date);val future=month>YearMonth.from(date)
+    val days=month.lengthOfMonth()
+    val elapsed=if(past) days else if(future) 0 else date.dayOfMonth.coerceIn(1,days)
+    val remainingDays=if(past) 0 else if(future) days else days-elapsed
+    val projected=spent?.let {value ->
+        if(past || future || elapsed==0 || value.signum()<=0) value.max(BigInteger.ZERO)
+        else BigDecimal(value).multiply(BigDecimal.valueOf(days.toLong())).divide(BigDecimal.valueOf(elapsed.toLong()),0,RoundingMode.HALF_UP).toBigIntegerExact()
     }
-    // Swift's 15% pace buffer and 1e-9 comparison tolerance, without binary accounting.
-    val numerator = maxOf(spent, 0).big().multiply(days.big()).multiply(100.big())
-        .subtract(limit.big().multiply(elapsed.big()).multiply(115.big()))
-    val aboveBuffer = numerator.multiply(1_000_000_000.big()) > limit.big().multiply(days.big()).multiply(100.big())
-    val health = when {
-        future -> BudgetHealth.STABLE
-        limit > 0 && spent >= limit -> BudgetHealth.EXCEEDED
-        past || limit <= 0 || elapsed <= 0 -> BudgetHealth.STABLE
-        aboveBuffer -> BudgetHealth.CAUTION
-        else -> BudgetHealth.STABLE
+    val health=if(spent==null || limit==null) null else {
+        val numerator=spent.max(BigInteger.ZERO).multiply(days.big()).multiply(100.big())
+            .subtract(limit.multiply(elapsed.big()).multiply(115.big()))
+        val aboveBuffer=numerator.multiply(1_000_000_000.big())>limit.multiply(days.big()).multiply(100.big())
+        when {
+            future -> BudgetHealth.STABLE
+            limit.signum()>0 && spent>=limit -> BudgetHealth.EXCEEDED
+            past || limit.signum()<=0 || elapsed<=0 -> BudgetHealth.STABLE
+            aboveBuffer -> BudgetHealth.CAUTION
+            else -> BudgetHealth.STABLE
+        }
     }
-    val allowance = if (remainingDays == 0) 0 else limit.big().subtract(spent.big()).max(BigInteger.ZERO)
-        .divide(remainingDays.big()).clamped()
-    return BudgetPace(health, projected, allowance, remainingDays, past, future)
+    val allowance=if(spent==null || limit==null) null else if(remainingDays==0) BigInteger.ZERO
+        else limit.subtract(spent).max(BigInteger.ZERO).divide(remainingDays.big())
+    return BudgetPace(health,projected,allowance,remainingDays,past,future)
 }
 
 fun projectBudgets(
@@ -114,7 +121,7 @@ fun projectBudgets(
     deletedCategoryName: String = "",
 ): BudgetProjection {
     val index = CategoryIdentityIndex(owner, categories)
-    val walletById = wallets.filter { it.ownerUserId == owner.value }.associateBy { it.id }
+    val walletById = wallets.filter { it.ownerUserId == owner.value && it.deletedAt==null }.associateBy { it.id }
     val active = activeBudgetPlans(owner, plans, selectedMonth, zone, categories)
     val monthStart = selectedMonth.atDay(1).atStartOfDay(zone).toInstant()
     val monthEnd = selectedMonth.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant()
@@ -130,26 +137,35 @@ fun projectBudgets(
         return localized.nonblank() ?: vi.nonblank() ?: live?.localizedBudgetName(language) ?: deletedCategoryName
     }
     fun allocation(plan: BudgetPlanRecord) = plan.logicalAllocation(index)
-    fun spent(plan: BudgetPlanRecord, branch: Boolean): Long {
-        val snapshot = allocation(plan)
-        val targetId = if (branch) snapshot.branchCategoryId else snapshot.categoryId
-        val targetName = groupingKey(name(plan, parent = branch && !snapshot.categoryIsParent))
-        val start = if (plan.rolloverEnabled) minOf(budgetMonth(plan.monthAnchor, zone).atDay(1).atStartOfDay(zone).toInstant(), monthStart) else monthStart
-        return transactions.asSequence().filter { it.ownerUserId == owner.value && it.entryStatus == TransactionEntryStatus.POSTED && !it.isArchived && it.deletedAt == null }
-            .distinctBy { it.id }.filter { Instant.parse(it.occurredAt) >= start && Instant.parse(it.occurredAt) < monthEnd }
-            .filter { record ->
-                val category = index.category(record.categoryId)
-                val identity = index.logical(if (branch) category?.parentCategoryId ?: record.categoryId else record.categoryId)
-                val names = if (branch) listOf(category?.localizedBudgetName(language), index.category(category?.parentCategoryId)?.localizedBudgetName(language))
-                    else listOf(category?.localizedBudgetName(language))
-                (targetId != null && identity == targetId) || (targetName.isNotEmpty() && names.any { it != null && groupingKey(it) == targetName })
-            }.map { record ->
-                val expense = reportedBudgetExpense(record, index.category(record.categoryId), walletById[record.sourceWalletId], adjustmentTitles)
-                planningMoneyMinorExact(expense, record.sourceCurrencyCode, plan.currencyCode, rates)
-            }.fold(BigInteger.ZERO) { sum, amount -> sum.add(amount) }.clamped()
+    fun convert(amount:BigInteger?,source:String?,target:String?):BigInteger? {
+        if(amount==BigInteger.ZERO) return BigInteger.ZERO
+        return if(amount==null || source==null || target==null) null else overviewMoneyMinorExact(amount,source,target,rates)
+    }
+    fun spent(plan:BudgetPlanRecord,branch:Boolean):BigInteger? {
+        val snapshot=allocation(plan)
+        val targetId=if(branch) snapshot.branchCategoryId else snapshot.categoryId
+        val targetName=groupingKey(name(plan,parent=branch && !snapshot.categoryIsParent))
+        val start=if(plan.rolloverEnabled) minOf(budgetMonth(plan.monthAnchor,zone).atDay(1).atStartOfDay(zone).toInstant(),monthStart) else monthStart
+        var total:BigInteger?=BigInteger.ZERO
+        for(record in transactions.asSequence().filter {it.ownerUserId==owner.value && it.entryStatus!=TransactionEntryStatus.DRAFT && !it.isArchived && it.deletedAt==null}.distinctBy {it.id}) {
+            val category=index.category(record.categoryId)
+            val identity=index.logical(if(branch) category?.parentCategoryId ?: record.categoryId else record.categoryId)
+            val names=if(branch) listOf(category?.localizedBudgetName(language),index.category(category?.parentCategoryId)?.localizedBudgetName(language)) else listOf(category?.localizedBudgetName(language))
+            if(!((targetId!=null && identity==targetId) || (targetName.isNotEmpty() && names.any {it!=null && groupingKey(it)==targetName}))) continue
+            val wallet=walletById[record.sourceWalletId]
+            val expense=reportedBudgetExpense(record,category,wallet,adjustmentTitles)
+            if(expense==0L) continue
+            val occurred=runCatching {Instant.parse(record.occurredAt)}.getOrNull()
+            if(occurred!=null && (occurred<start || occurred>=monthEnd)) continue
+            val source=if(record.sourceCurrencyCode!=null) record.sourceCurrencyCode.overviewCurrencyCode()
+                else if(wallet!=null) wallet.currencyCode.overviewCurrencyCode() else "JPY"
+            val amount=if(record.entryStatus!=TransactionEntryStatus.POSTED || occurred==null) null else convert(expense?.big(),source,plan.currencyCode.overviewCurrencyCode())
+            total=total?.let {subtotal ->amount?.let(subtotal::plus)}
+        }
+        return total
     }
     val rowComparator = Comparator<BudgetRow> { a, b ->
-        val ratio = compareProgress(b.spentMinor, b.plan.limitMinor, a.spentMinor, a.plan.limitMinor)
+        val ratio = compareProgress(b.spentMinor,b.limitMinor,a.spentMinor,a.limitMinor)
         if (ratio != 0) ratio else Collator.getInstance().compare(a.name, b.name)
     }
     val branches = active.groupBy { allocation(it).branchCategoryId }.mapNotNull { (branchId, branchPlans) ->
@@ -159,28 +175,28 @@ fun projectBudgets(
             val amount = spent(plan, false)
             BudgetRow(plan, name(plan), plan.categoryIconSymbolNameSnapshot ?: index.category(plan.categoryId)?.iconSymbolName ?: "questionmark.circle.fill",
                 plan.categoryColorHexSnapshot ?: index.category(plan.categoryId)?.iconColorHex ?: "#8A8A8E", amount,
-                budgetPace(amount, plan.limitMinor, selectedMonth, referenceDate, zone))
+                budgetPace(amount,plan.currencyCode.overviewCurrencyCode()?.let {plan.limitMinor.big()},selectedMonth,referenceDate,zone))
         }.sortedWith(rowComparator)
         val template = parent ?: branchPlans.first()
-        val code = template.currencyCode
-        val childLimit = sumBudgetExact(children.map { planningMoneyMinorExact(it.plan.limitMinor, it.plan.currencyCode, code, rates) })
-        val totalSpent = if (parent != null) spent(parent, true) else sumBudgetExact(children.map { planningMoneyMinorExact(it.spentMinor, it.plan.currencyCode, code, rates) })
-        val limit = parent?.limitMinor ?: childLimit
+        val code=template.currencyCode.overviewCurrencyCode()
+        val childLimit = sumBudgetExact(children.map {convert(it.limitMinor,it.currencyCode,code)})
+        val totalSpent = if (parent != null) spent(parent, true) else sumBudgetExact(children.map {convert(it.spentMinor,it.currencyCode,code)})
+        val limit=if(parent!=null) code?.let {parent.limitMinor.big()} else childLimit
         val onlyChild = parent == null && children.size == 1
         val branchName = if (onlyChild) children.single().name else name(template, parent = parent == null)
         BudgetBranchRow(branchId, branchName,
             if (onlyChild) children.single().icon else parent?.categoryIconSymbolNameSnapshot ?: parent?.let { index.category(it.categoryId)?.iconSymbolName } ?: template.categoryParentIconSymbolNameSnapshot ?: index.category(index.category(template.categoryId)?.parentCategoryId)?.iconSymbolName ?: "questionmark.circle.fill",
             if (onlyChild) children.single().colorHex else parent?.categoryColorHexSnapshot ?: parent?.let { index.category(it.categoryId)?.iconColorHex } ?: template.categoryParentColorHexSnapshot ?: index.category(index.category(template.categoryId)?.parentCategoryId)?.iconColorHex ?: "#8A8A8E",
-            code, limit, totalSpent, childLimit, limit.big().subtract(childLimit.big()).max(BigInteger.ZERO).clamped(),
+            code, limit, totalSpent, childLimit, limit?.let {value ->childLimit?.let {value.subtract(it).max(BigInteger.ZERO)}},
             parent?.id ?: children.singleOrNull()?.plan?.id, parent?.id, if (onlyChild) emptyList() else children,
             budgetPace(totalSpent, limit, selectedMonth, referenceDate, zone))
     }.sortedWith { a, b ->
         val ratio = compareProgress(b.spentMinor, b.limitMinor, a.spentMinor, a.limitMinor)
         if (ratio != 0) ratio else Collator.getInstance().compare(a.name, b.name)
     }
-    val limit = sumBudgetExact(branches.map { planningMoneyMinorExact(it.limitMinor, it.currencyCode, reportingCurrency, rates) })
-    val spent = sumBudgetExact(branches.map { planningMoneyMinorExact(it.spentMinor, it.currencyCode, reportingCurrency, rates) })
-    return BudgetProjection(branches, limit, spent, limit.big().subtract(spent.big()).max(BigInteger.ZERO).clamped())
+    val limit = sumBudgetExact(branches.map {convert(it.limitMinor,it.currencyCode,reportingCurrency.overviewCurrencyCode())})
+    val spent = sumBudgetExact(branches.map {convert(it.spentMinor,it.currencyCode,reportingCurrency.overviewCurrencyCode())})
+    return BudgetProjection(branches, limit, spent, limit?.let {value ->spent?.let {value.subtract(it).max(BigInteger.ZERO)}})
 }
 
 fun TransactionCategoryRecord.localizedBudgetName(language: CategoryNameLanguage): String = when (language) {
@@ -189,30 +205,40 @@ fun TransactionCategoryRecord.localizedBudgetName(language: CategoryNameLanguage
     CategoryNameLanguage.JAPANESE -> nameJapanese.nonblank() ?: name
 }
 
-private fun reportedBudgetExpense(record: LedgerTransactionRecord, category: TransactionCategoryRecord?, wallet: LedgerWalletRecord?, adjustmentTitles: Set<String>): Long {
+private fun reportedBudgetExpense(record: LedgerTransactionRecord, category: TransactionCategoryRecord?, wallet: LedgerWalletRecord?, adjustmentTitles: Set<String>): Long? {
     record.reportingExpenseMinor?.let { return it }
+    if(record.amountMinor==0L) return 0
     if (category?.isBalanceAdjustmentSystemCategory == true || record.categoryId == TransactionCategoryRecord.BALANCE_ADJUSTMENT_EXPENSE_ID ||
         record.categoryId == TransactionCategoryRecord.BALANCE_ADJUSTMENT_INCOME_ID || adjustmentTitles.any { it.trim().equals(record.title.trim(), ignoreCase = true) }) return 0
     if (category?.systemKey == "loan_repayment" || record.categoryId == "d872b8af-d28a-5b90-8822-839dfa097b23") return 0
-    val paidFor = record.primaryKind == TransactionPrimaryKind.TRANSFER && record.transferSubtype == TransactionTransferSubtype.DEBT &&
-        record.debtIntent == TransactionDebtIntent.BORROW && record.sourceWalletId == null && record.categoryId != null
-    if (paidFor) return record.amountMinor
-    if (record.primaryKind != TransactionPrimaryKind.EXPENSE) return 0
-    val title = record.title.lowercase(Locale.ROOT)
-    val cardTitle = listOf("card payment", "thanh toán thẻ", "thanh toan the", "カード支払い").any(title::contains)
-    return if (wallet?.kind != WalletKind.CREDIT_CARD && cardTitle) 0 else record.amountMinor
+    val primary=record.primaryKind?.let(::listOf) ?: TransactionPrimaryKind.entries
+    fun <T> choices(wire:String?,parsed:T?,all:List<T>):List<T?> = if(wire==null) listOf(null) else parsed?.let(::listOf) ?: (listOf(null)+all)
+    val subtypes=choices(record.transferSubtypeWireValue,record.transferSubtype,TransactionTransferSubtype.entries)
+    val intents=choices(record.debtIntentWireValue,record.debtIntent,TransactionDebtIntent.entries)
+    val kinds=if(wallet!=null && wallet.kind==null) listOf(null,WalletKind.CREDIT_CARD) else listOf(wallet?.kind)
+    val titles=mapOf(GeneratedTransactionTitle.BALANCE_ADJUSTMENT to adjustmentTitles)
+    var seen=false;var result:Long?=null
+    // Finite equivalence classes use the existing core expense classifier; no future enum becomes a neutral default.
+    for(kind in primary) for(subtype in subtypes) for(intent in intents) for(walletKind in kinds) {
+        val candidate=record.copy(primaryKindWireValue=kind.wireValue,transferSubtypeWireValue=subtype?.wireValue,debtIntentWireValue=intent?.wireValue)
+        val amount=if(isOverviewExpenseSpending(candidate,walletKind,titles)) record.amountMinor else 0L
+        if(!seen) {seen=true;result=amount} else if(result!=amount) return null
+    }
+    return result
 }
+
 private fun currency(value: String?): String = value?.trim()?.uppercase(Locale.ROOT)?.takeIf { it == "JPY" || it == "VND" } ?: "JPY"
-private fun sumBudgetExact(values: List<BigInteger>): Long = values.fold(BigInteger.ZERO, BigInteger::add).clamped()
+private fun sumBudgetExact(values:List<BigInteger?>):BigInteger?=values.fold<BigInteger?,BigInteger?>(BigInteger.ZERO) {sum,value ->sum?.let {subtotal ->value?.let(subtotal::plus)}}
 private fun groupingKey(value: String): String = value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
 private fun String?.nonblank(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 private fun Long.big(): BigInteger = BigInteger.valueOf(this)
 private fun Int.big(): BigInteger = toLong().big()
-private fun BigInteger.clamped(): Long = max(BigInteger.valueOf(Long.MIN_VALUE)).min(BigInteger.valueOf(Long.MAX_VALUE)).toLong()
-private fun compareProgress(a: Long, aLimit: Long, b: Long, bLimit: Long): Int {
-    val aa = if (aLimit > 0) a else 0
-    val bb = if (bLimit > 0) b else 0
-    return aa.big().multiply(maxOf(bLimit, 1).big()).compareTo(bb.big().multiply(maxOf(aLimit, 1).big()))
+private fun compareProgress(a:BigInteger?,aLimit:BigInteger?,b:BigInteger?,bLimit:BigInteger?):Int {
+    val aKnown=a!=null && aLimit!=null;val bKnown=b!=null && bLimit!=null
+    if(!aKnown || !bKnown) return aKnown.compareTo(bKnown)
+    val aa=if(aLimit!!.signum()>0) a!! else BigInteger.ZERO
+    val bb=if(bLimit!!.signum()>0) b!! else BigInteger.ZERO
+    return aa.multiply(bLimit.max(BigInteger.ONE)).compareTo(bb.multiply(aLimit.max(BigInteger.ONE)))
 }
 
 fun BudgetPlanRecord.localizedBudgetPath(language: CategoryNameLanguage): String? {

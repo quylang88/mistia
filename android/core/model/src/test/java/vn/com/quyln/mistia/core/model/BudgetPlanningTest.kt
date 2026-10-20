@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.core.model
 
+import java.math.BigInteger
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -10,6 +11,9 @@ class BudgetPlanningTest {
     private val zone = ZoneId.of("Asia/Tokyo")
     private val october = YearMonth.of(2026, 10)
     private val reference = Instant.parse("2026-10-13T00:00:00Z")
+
+    private fun assertMinor(expected:Long,actual:BigInteger?)=assertEquals(BigInteger.valueOf(expected),actual)
+    private fun assertMinor(expected:BigInteger,actual:BigInteger?)=assertEquals(expected,actual)
 
     @Test fun `latest eligible continuity plan wins independently of currency and owner`() {
         val old = budget()
@@ -26,26 +30,26 @@ class BudgetPlanningTest {
         val records = listOf(row, row.copy(id = TX2, occurredAt = "2026-09-30T14:59:59Z"),
             row.copy(id = TX3, occurredAt = "2026-10-31T15:00:00Z"), row.copy(id = TX4, entryStatusWireValue = "draft"),
             row.copy(id = TX5, isArchived = true), row.copy(id = TX6, ownerUserId = OTHER_OWNER))
-        assertEquals(100, project(listOf(budget()), records).branches.single().spentMinor)
+        assertMinor(100, project(listOf(budget()), records).branches.single().spentMinor)
     }
 
     @Test fun `rollover includes previous months since source plan without multiplying limit`() {
         val older = transactionRecord().copy(occurredAt = "2026-09-05T00:00:00Z")
         val current = older.copy(id = TX2, occurredAt = "2026-10-05T00:00:00Z")
-        assertEquals(100, project(listOf(budget()), listOf(older,current)).branches.single().spentMinor)
+        assertMinor(100, project(listOf(budget()), listOf(older,current)).branches.single().spentMinor)
         val rolled = project(listOf(budget().copy(rolloverEnabled = true)),listOf(older,current)).branches.single()
-        assertEquals(200, rolled.spentMinor)
-        assertEquals(1000, rolled.limitMinor)
+        assertMinor(200, rolled.spentMinor)
+        assertMinor(1000, rolled.limitMinor)
     }
 
-    @Test fun `FX uses source expense amount and excludes unavailable conversion`() {
+    @Test fun `FX uses source expense amount and retains unavailable conversion`() {
         val jpy = transactionRecord().copy(occurredAt = "2026-10-05T00:00:00Z", reportingAmountMinor = 999, reportingCurrencyCode = "VND")
         val plan = budget().copy(currencyCode = "VND")
-        assertEquals(0, project(listOf(plan),listOf(jpy)).branches.single().spentMinor)
+        assertNull(project(listOf(plan),listOf(jpy)).branches.single().spentMinor)
         val rate = ExchangeRateSnapshot("JPY","VND","165.25","test",0,null)
-        assertEquals(16525, project(listOf(plan),listOf(jpy), rates=listOf(rate)).branches.single().spentMinor)
+        assertMinor(16525, project(listOf(plan),listOf(jpy), rates=listOf(rate)).branches.single().spentMinor)
         val vnd = jpy.copy(sourceCurrencyCode = "VND",amountMinor = 16525)
-        assertEquals(100,project(listOf(budget()),listOf(vnd),rates=listOf(rate)).branches.single().spentMinor)
+        assertMinor(100,project(listOf(budget()),listOf(vnd),rates=listOf(rate)).branches.single().spentMinor)
     }
 
     @Test fun `parent branch includes unbudgeted children once and summary never doubles children`() {
@@ -58,17 +62,17 @@ class BudgetPlanningTest {
         val second = first.copy(id = TX2, categoryId = OTHER_CHILD_ID,amountMinor = 200)
         val projection = project(listOf(parent,budget().copy(limitMinor=500)), listOf(first,second),listOf(child,sibling))
         assertEquals(1,projection.branches.size)
-        assertEquals(300,projection.branches.single().spentMinor)
-        assertEquals(100,projection.branches.single().children.single().spentMinor)
-        assertEquals(1000,projection.totalLimitMinor)
-        assertEquals(300,projection.totalSpentMinor)
-        assertEquals(700,projection.remainingMinor)
+        assertMinor(300,projection.branches.single().spentMinor)
+        assertMinor(100,projection.branches.single().children.single().spentMinor)
+        assertMinor(1000,projection.totalLimitMinor)
+        assertMinor(300,projection.totalSpentMinor)
+        assertMinor(700,projection.remainingMinor)
     }
-    @Test fun `reporting FX overflow clamps displayed budget spending instead of erasing it`() {
+    @Test fun `reporting FX overflow stays exact in budget spending`() {
         val rate=ExchangeRateSnapshot("JPY","VND","200","fixture",0,null)
         val plan=budget().copy(currencyCode="VND")
         val expense=transactionRecord().copy(amountMinor=Long.MAX_VALUE)
-        assertEquals(Long.MAX_VALUE,project(listOf(plan),listOf(expense),rates=listOf(rate)).branches.single().spentMinor)
+        assertMinor(BigInteger.valueOf(Long.MAX_VALUE)*BigInteger.valueOf(200),project(listOf(plan),listOf(expense),rates=listOf(rate)).branches.single().spentMinor)
     }
 
     @Test fun `frozen localized category labels survive live rename and legacy hierarchy falls back`() {
@@ -91,15 +95,15 @@ class BudgetPlanningTest {
         val adjustment = ordinary.copy(id=TX4,title="Balance adjustment")
         val cardPayment = ordinary.copy(id=TX5,title="Card payment Visa")
         val records=listOf(ordinary,lend,reported,adjustment,cardPayment)
-        assertEquals(300,project(listOf(budget()),records).branches.single().spentMinor)
+        assertMinor(300,project(listOf(budget()),records).branches.single().spentMinor)
     }
 
-    @Test fun `large accounting sums retain precision and overflow saturates only final projection`() {
+    @Test fun `large accounting sums retain precision beyond Long without saturation`() {
         val large=9007199254740993L
         val transaction=transactionRecord(amountMinor=large).copy(occurredAt="2026-10-05T00:00:00Z")
-        assertEquals(large,project(listOf(budget()),listOf(transaction)).branches.single().spentMinor)
+        assertMinor(large,project(listOf(budget()),listOf(transaction)).branches.single().spentMinor)
         val extreme=transaction.copy(amountMinor=Long.MAX_VALUE)
-        assertEquals(Long.MAX_VALUE,project(listOf(budget()),listOf(extreme,extreme.copy(id=TX2))).totalSpentMinor)
+        assertMinor(BigInteger.valueOf(Long.MAX_VALUE)*BigInteger.TWO,project(listOf(budget()),listOf(extreme,extreme.copy(id=TX2))).totalSpentMinor)
     }
 
     @Test fun `pace golden vectors preserve buffer projection days and exact allowance`() {
@@ -107,9 +111,9 @@ class BudgetPlanningTest {
         val day3=Instant.parse("2026-04-02T15:00:00Z")
         val pace=budgetPace(25000,100000,month,day3,zone)
         assertEquals(BudgetHealth.CAUTION,pace.health)
-        assertEquals(250000,pace.projectedSpentMinor)
+        assertMinor(250000,pace.projectedSpentMinor)
         assertEquals(27,pace.daysRemaining)
-        assertEquals(2777,pace.dailyAllowanceMinor)
+        assertMinor(2777,pace.dailyAllowanceMinor)
         assertEquals(BudgetHealth.STABLE,budgetPace(11500,100000,month,day3,zone).health)
         assertEquals(BudgetHealth.CAUTION,budgetPace(11501,100000,month,day3,zone).health)
         assertEquals(BudgetHealth.EXCEEDED,budgetPace(100000,100000,month,day3,zone).health)
@@ -120,7 +124,7 @@ class BudgetPlanningTest {
     @Test fun `rollover normalizes a legacy month anchor to the full local month`() {
         val firstDay = transactionRecord().copy(occurredAt="2026-08-31T15:00:00Z")
         val current = firstDay.copy(id=TX2,occurredAt="2026-10-05T00:00:00Z")
-        assertEquals(200,project(listOf(budget().copy(rolloverEnabled=true)),listOf(firstDay,current)).totalSpentMinor)
+        assertMinor(200,project(listOf(budget().copy(rolloverEnabled=true)),listOf(firstDay,current)).totalSpentMinor)
     }
 
     @Test fun `legacy parent snapshot falls back to live name icon and color`() {
@@ -139,7 +143,7 @@ class BudgetPlanningTest {
         val loan="d872b8af-d28a-5b90-8822-839dfa097b23"
         val plan=budget().copy(categoryId=loan,categoryIdSnapshot=loan)
         val transaction=transactionRecord().copy(categoryId=loan)
-        assertEquals(0,project(listOf(plan),listOf(transaction)).totalSpentMinor)
+        assertMinor(0,project(listOf(plan),listOf(transaction)).totalSpentMinor)
     }
 
     @Test fun `localized editor path keeps frozen hierarchy and falls back from missing locale`() {
@@ -173,11 +177,11 @@ class BudgetPlanningTest {
             categoryParentIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"),categoryNameEnglishSnapshot="Frozen title")
         val before=plan.toPayload()
         val projection=project(listOf(plan),listOf(transactionRecord().copy(categoryId=childId)),listOf(parent,child))
-        assertEquals(100,projection.branches.single().spentMinor)
+        assertMinor(100,projection.branches.single().spentMinor)
         assertEquals("Frozen title",projection.branches.single().name)
         assertEquals(before,plan.toPayload())
         val foreign=child.copy(id=SystemCategoryIdentity.cloudId("rent",UserId(OTHER_OWNER)),ownerUserId=OTHER_OWNER)
-        assertEquals(0,project(listOf(plan),listOf(transactionRecord().copy(categoryId=foreign.id)),listOf(parent,child,foreign)).totalSpentMinor)
+        assertMinor(0,project(listOf(plan),listOf(transactionRecord().copy(categoryId=foreign.id)),listOf(parent,child,foreign)).totalSpentMinor)
     }
     @Test fun `canonical and cloud snapshots share one continuity plan and one summary branch`() {
         val owner=UserId(OWNER_ID)
@@ -188,7 +192,7 @@ class BudgetPlanningTest {
         val old=budget().copy(categoryId=childId,categoryIdSnapshot=SystemCategoryIdentity.canonicalId("rent"),categoryParentIdSnapshot=SystemCategoryIdentity.canonicalId("parent_expense_housing"))
         val current=old.copy(id=OTHER_BUDGET_ID,categoryIdSnapshot=childId,categoryParentIdSnapshot=parentId,monthAnchor="2026-09-30T15:00:00Z",limitMinor=2000)
         val projection=project(listOf(old,current),emptyList(),categories)
-        assertEquals(1,projection.branches.size);assertEquals(2000,projection.totalLimitMinor)
+        assertEquals(1,projection.branches.size);assertMinor(2000,projection.totalLimitMinor)
     }
 
     @Test fun `canonical parent branch counts unbudgeted children once and keeps frozen display`() {
@@ -205,9 +209,9 @@ class BudgetPlanningTest {
         val records=listOf(transactionRecord().copy(categoryId=rentId),transactionRecord().copy(id=TX2,categoryId=internetId,amountMinor=200))
         val projection=project(listOf(parent,rent),records,categories)
         assertEquals(1,projection.branches.size)
-        assertEquals(2000,projection.totalLimitMinor)
-        assertEquals(300,projection.totalSpentMinor)
-        assertEquals(100,projection.branches.single().children.single().spentMinor)
+        assertMinor(2000,projection.totalLimitMinor)
+        assertMinor(300,projection.totalSpentMinor)
+        assertMinor(100,projection.branches.single().children.single().spentMinor)
         assertEquals("Frozen housing",projection.branches.single().name)
     }
     @Test fun `logical aliases preserve actual custom IDs and foreign owner boundaries`() {

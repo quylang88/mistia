@@ -5,7 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -80,6 +80,8 @@ class OwnedBillEditorTest {
         tag("bill.wallet").performScrollTo().performClick()
         compose.waitUntil(5000) {compose.onAllNodesWithTag("bill.wallet.${wallet(code).id}").fetchSemanticsNodes().isNotEmpty()}
         tag("bill.wallet.${wallet(code).id}").performClick()
+        tag("bill.wallet").assertTextContains(wallet(code).name,substring=true)
+        tag("bill.category").assertTextContains(category.localizedBudgetName(CategoryNameLanguage.ENGLISH),substring=true)
     }
     @Test fun realPlanningCreatesExactVndBillWithSameCurrencyWalletAndOutbox() {
         compose.setContent {Screen(" vnd ")};newBill()
@@ -184,9 +186,10 @@ class OwnedBillEditorTest {
             val result=repo.saveRecurringBill(captured,draft,device,now());started.complete(Unit)
             withContext(NonCancellable) {release.await()};finished.complete(Unit);result
         },dismiss={visible=false})}}
-        details();amount("123")
+        details();amount("123");tag("bill.amount").assertTextContains("123")
         try {
-            tag("bill.save").performScrollTo().performClick();compose.waitUntil(5000) {started.isCompleted};compose.runOnIdle {subject=other}
+            tag("bill.save").performScrollTo().performClick();compose.waitForIdle()
+            compose.waitUntil(5000) {started.isCompleted};compose.runOnIdle {subject=other}
             tag("bill.name").performScrollTo().assertIsEnabled().performTextReplacement("New")
             compose.runOnIdle {release.complete(Unit)};compose.waitUntil(5000) {finished.isCompleted}
             tag("bill.name").assertTextContains("New");Assert.assertEquals(123L,bills().single().amountMinor);Assert.assertTrue(bills(other).isEmpty())

@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -102,9 +102,13 @@ class PlanningReportingCurrencyTest {
         compose.onNodeWithText("Other owner").assertDoesNotExist()
         Assert.assertEquals(before,snapshot())
     }
-    @Test fun missingAutomaticRatesNeverSumUnconvertedMinorAsPrimaryMoney() {
+    @Test fun missingAutomaticRatesHoldWholeBudgetInsteadOfPublishingPartialKnownTotals() {
         seed();snapshots.value=emptyList();val before=snapshot();compose.setContent {Screen()};waitBudget()
-        budget(1000,300,700,"VND")
+        tag("budget.summary.limit").performScrollTo().assertTextEquals("\u2014")
+        tag("budget.summary.spent").assertTextEquals("${context.getString(R.string.planning_planning_spent)}: \u2014")
+        tag("budget.summary.remaining").assertTextEquals("${context.getString(R.string.planning_planning_remaining)}: \u2014")
+        tag("budget.summary.unavailable").assertExists()
+        // Savings still has its separate legacy projection; missing-rate availability needs its own consumer audit.
         tag("planning.tab.2").performClick();saved(300,"VND")
         Assert.assertEquals(before,snapshot())
     }

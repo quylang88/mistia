@@ -8,7 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -59,7 +59,11 @@ class InstallmentPaymentWorkflowTest {
     private fun cycles() = runBlocking { repo.observeDueOccurrences(owner).first() }
     private fun transactions() = runBlocking { repo.observeTransactions(owner).first() }
     private fun balance() = TransactionWalletBalanceIndex(listOf(wallet), transactions()).balance(wallet.id)
-    private fun open() { compose.onNodeWithTag("installment.pay.$id").performScrollTo().performClick() }
+    private fun open() {
+        // Room loading is outside Compose idling; wait for the merged actionable target.
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("installment.pay.$id").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("installment.pay.$id").performScrollTo().performClick()
+    }
     private fun submit() { compose.onNodeWithTag("installment.submitPayment").performScrollTo().performClick() }
     private fun confirm() { compose.onNodeWithTag("installment.confirmPayment").performClick() }
     private fun waitClosed() { compose.waitUntil(5000) { compose.onAllNodesWithTag("installment.paymentSheet").fetchSemanticsNodes().isEmpty() } }
