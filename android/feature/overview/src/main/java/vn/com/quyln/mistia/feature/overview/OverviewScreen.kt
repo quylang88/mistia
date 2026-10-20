@@ -96,8 +96,8 @@ private fun OwnedOverviewScreen(
     val monthly=remember(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,reference,zone,knownTitles) {
         overviewRawMonthlyCashflow(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
     }
-    val weeks=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
-        vn.com.quyln.mistia.core.model.overviewWeeklySpending(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
+    val weeks=remember(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,reference,zone,knownTitles) {
+        overviewRawWeeklySpending(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
     }
     val recent = remember(ownerUserId, transactions, wallets, primaryCurrencyCode) {
         overviewRecentTransactions(ownerUserId, transactions, wallets, primaryCurrencyCode)

@@ -67,7 +67,7 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
         onWeekChanged(selectedWeek)
     }
     LaunchedEffect(week.start,overlayPresented,dismissToken) {selectedDate=null}
-    LaunchedEffect(week.points) {if(point==null) selectedDate=null}
+    LaunchedEffect(week.points,week.hasUnavailableConversion) {if(point==null) selectedDate=null}
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer=LifecycleEventObserver {_,event ->
@@ -95,7 +95,7 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
             val active=index==pager.currentPage
             if(page.hasUnavailableConversion) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(alpha=0.03f),RoundedCornerShape(18.dp)).padding(18.dp),contentAlignment=Alignment.Center) {
-                    BasicText(stringResource(R.string.overview_overview_conversion_unavailable),
+                    BasicText(stringResource(R.string.overview_overview_reporting_amount_unavailable),
                         if(active) Modifier.fillMaxWidth().testTag("overview.chart.unavailable") else Modifier.fillMaxWidth(),
                         style=androidx.compose.ui.text.TextStyle(fontSize=14.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,textAlign=androidx.compose.ui.text.style.TextAlign.Center),
                         autoSize=TextAutoSize.StepBased(minFontSize=10.sp,maxFontSize=14.sp,stepSize=0.5.sp))

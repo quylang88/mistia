@@ -11,9 +11,9 @@ data class OverviewMonthlyCashflow(val month:YearMonth,val incomeMinor:BigIntege
 }
 
 /** Read-only report effect: null money/currency/calendar retains an unreadable required dependency. */
-data class OverviewMonthlyEffect(val occurredAt:Instant?,val sourceCurrencyCode:String?,val incomeMinor:Long?,val expenseMinor:Long?)
+data class OverviewReportingEffect(val occurredAt:Instant?,val sourceCurrencyCode:String?,val incomeMinor:Long?,val expenseMinor:Long?)
 
-fun overviewMonthlyCashflowEffects(effects:List<OverviewMonthlyEffect>,reportingCurrency:String,
+fun overviewMonthlyCashflowEffects(effects:List<OverviewReportingEffect>,reportingCurrency:String,
     rates:List<ExchangeRateSnapshot> = emptyList(),reference:Instant,zone:ZoneId):List<OverviewMonthlyCashflow> {
     val current=YearMonth.from(reference.atZone(zone))
     data class Totals(var income:BigInteger?=BigInteger.ZERO,var expense:BigInteger?=BigInteger.ZERO)
@@ -50,7 +50,7 @@ fun overviewMonthlyCashflow(owner:UserId,records:List<LedgerTransactionRecord>,w
     reportingCurrency:String,rates:List<ExchangeRateSnapshot> = emptyList(),knownTitles:Map<GeneratedTransactionTitle,Collection<String>> = emptyMap(),
     reference:Instant,zone:ZoneId):List<OverviewMonthlyCashflow> {
     val ownedWallets=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null}.associateBy {it.id}
-    val effects=mutableListOf<OverviewMonthlyEffect>()
+    val effects=mutableListOf<OverviewReportingEffect>()
     for(record in records) {
         if(record.ownerUserId!=owner.value || record.deletedAt!=null || record.isArchived || record.entryStatus!=TransactionEntryStatus.POSTED || record.primaryKind==null) continue
         val wallet=ownedWallets[record.sourceWalletId]
@@ -59,7 +59,7 @@ fun overviewMonthlyCashflow(owner:UserId,records:List<LedgerTransactionRecord>,w
         if(expense==0L && income==0L) continue
         val occurred=runCatching {Instant.parse(record.occurredAt)}.getOrNull() ?: continue
         val source=record.sourceCurrencyCode?.takeIf(String::isNotBlank) ?: wallet?.currencyCode ?: "JPY"
-        effects+=OverviewMonthlyEffect(occurred,source,income,expense)
+        effects+=OverviewReportingEffect(occurred,source,income,expense)
     }
     return overviewMonthlyCashflowEffects(effects,reportingCurrency,rates,reference,zone)
 }
