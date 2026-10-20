@@ -60,12 +60,12 @@ import vn.com.quyln.mistia.core.model.*
                             else stringResource(if(kind=="income") R.string.overview_overview_income_this_month else R.string.overview_overview_expense_this_month)
                         Text(title,
                             fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        val conversionHint=stringResource(R.string.overview_overview_cashflow_conversion_unavailable)
+                        val reportingHint=stringResource(R.string.overview_overview_reporting_amount_unavailable)
                         BasicText(amount?.let {formatMinorUnits(it,code)} ?: "—",Modifier.testTag("overview.monthly.$kind")
-                            .then(if(amount==null) Modifier.semantics {stateDescription=conversionHint} else Modifier),
+                            .then(if(amount==null) Modifier.semantics {stateDescription=reportingHint} else Modifier),
                             style=TextStyle(fontSize=18.sp,fontWeight=FontWeight.Bold,color=if(kind=="income") Color(0xFF2DAA9E) else Color(0xFFF45C7E)),maxLines=1,softWrap=false,
                             autoSize=TextAutoSize.StepBased(minFontSize=10.sp,maxFontSize=18.sp,stepSize=0.5.sp))
-                        if(amount==null) Text(conversionHint,Modifier.widthIn(max=240.dp).testTag("overview.monthly.$kind.unavailable"),
+                        if(amount==null) Text(reportingHint,Modifier.widthIn(max=240.dp).testTag("overview.monthly.$kind.unavailable"),
                             style=TextStyle(fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant))
                     }
                 }

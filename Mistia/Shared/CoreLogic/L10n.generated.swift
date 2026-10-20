@@ -2424,6 +2424,8 @@ nonisolated enum L10n {
             static func overview(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.overview", vi: "Tổng quan", en: "Overview", ja: "ホーム", language: language) }
             static var recentTransactions: String { L10n.tr("overview.overview.recentTransactions", vi: "Thu chi gần đây", en: "Recent cashflow", ja: "最近の収支") }
             static func recentTransactions(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.recentTransactions", vi: "Thu chi gần đây", en: "Recent cashflow", ja: "最近の収支", language: language) }
+            static var reportingAmountUnavailable: String { L10n.tr("overview.overview.reportingAmountUnavailable", vi: "Chưa thể tính đầy đủ số tiền.", en: "Some amounts cannot be calculated yet.", ja: "一部の金額をまだ計算できません。") }
+            static func reportingAmountUnavailable(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.reportingAmountUnavailable", vi: "Chưa thể tính đầy đủ số tiền.", en: "Some amounts cannot be calculated yet.", ja: "一部の金額をまだ計算できません。", language: language) }
             static var requestEditAccess: String { L10n.tr("overview.overview.requestEditAccess", vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト") }
             static func requestEditAccess(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.requestEditAccess", vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト", language: language) }
             static var requestSent: String { L10n.tr("overview.overview.requestSent", vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました") }

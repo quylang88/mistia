@@ -22126,6 +22126,29 @@
         }
       }
     },
+    "overview.overview.reportingAmountUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some amounts cannot be calculated yet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の金額をまだ計算できません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa thể tính đầy đủ số tiền."
+          }
+        }
+      }
+    },
     "overview.overview.requestSent" : {
       "extractionState" : "stale",
       "localizations" : {

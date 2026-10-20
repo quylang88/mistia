@@ -960,6 +960,7 @@
   "overview.overview.noWalletSelected": "overview_overview_no_wallet_selected",
   "overview.overview.overview": "overview_overview_overview",
   "overview.overview.recentTransactions": "overview_overview_recent_transactions",
+  "overview.overview.reportingAmountUnavailable": "overview_overview_reporting_amount_unavailable",
   "overview.overview.requestEditAccess": "overview_overview_request_edit_access",
   "overview.overview.requestSent": "overview_overview_request_sent",
   "overview.overview.resetToDefault": "overview_overview_reset_to_default",

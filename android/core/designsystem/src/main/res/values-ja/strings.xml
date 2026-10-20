@@ -962,6 +962,7 @@
     <string name="overview_overview_no_wallet_selected">ウォレット未選択</string>
     <string name="overview_overview_overview">ホーム</string>
     <string name="overview_overview_recent_transactions">最近の収支</string>
+    <string name="overview_overview_reporting_amount_unavailable">一部の金額をまだ計算できません。</string>
     <string name="overview_overview_request_edit_access">編集権限をリクエスト</string>
     <string name="overview_overview_request_sent">リクエストを送信しました</string>
     <string name="overview_overview_reset_to_default">デフォルトに戻す</string>

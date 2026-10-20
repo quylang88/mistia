@@ -962,6 +962,7 @@
     <string name="overview_overview_no_wallet_selected">Chưa chọn ví</string>
     <string name="overview_overview_overview">Tổng quan</string>
     <string name="overview_overview_recent_transactions">Thu chi gần đây</string>
+    <string name="overview_overview_reporting_amount_unavailable">Chưa thể tính đầy đủ số tiền.</string>
     <string name="overview_overview_request_edit_access">Yêu cầu quyền chỉnh sửa</string>
     <string name="overview_overview_request_sent">Đã gửi yêu cầu</string>
     <string name="overview_overview_reset_to_default">Khôi phục mặc định</string>

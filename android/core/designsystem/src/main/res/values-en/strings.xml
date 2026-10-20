@@ -962,6 +962,7 @@
     <string name="overview_overview_no_wallet_selected">No wallet selected</string>
     <string name="overview_overview_overview">Overview</string>
     <string name="overview_overview_recent_transactions">Recent cashflow</string>
+    <string name="overview_overview_reporting_amount_unavailable">Some amounts cannot be calculated yet.</string>
     <string name="overview_overview_request_edit_access">Request edit access</string>
     <string name="overview_overview_request_sent">Request sent</string>
     <string name="overview_overview_reset_to_default">Reset to default</string>

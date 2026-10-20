@@ -87,7 +87,7 @@ class OverviewMonthlyScreenTest {
         compose.runOnIdle {subject=other};metric("expense",0,"JPY");metric("income",0,"JPY")
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())
     }
-    @Test fun malformedRawAmountsDatesAndOwnerEnvelopesNeverContributeFallbackMoney() {
+    @Test fun unreadableRawEffectsHoldUntilRepairAndUnusedCalendarDoesNotDropKnownMoney() {
         val invalid=listOf(row().with("reporting_expense_minor" to JsonPrimitive("broken")),row().with("reporting_income_minor" to JsonPrimitive("broken")),
             row().with("amount_minor" to JsonPrimitive("broken")),row().with("occurred_at" to JsonPrimitive("broken")),row().with("created_at" to JsonPrimitive("broken")),
             row().with("is_archived" to JsonPrimitive("broken")),row().with("user_id" to JsonPrimitive(other.value)),row().with("id" to JsonPrimitive(UUID.randomUUID().toString())),
@@ -96,7 +96,14 @@ class OverviewMonthlyScreenTest {
         val source=object:FinanceRepository by repo {
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)
         }
-        compose.setContent {Screen(source=source)};metric("expense",7,"JPY");Assert.assertTrue(rows().isEmpty());Assert.assertTrue(pending().isEmpty())
+        compose.setContent {Screen(source=source)}
+        for(kind in listOf("income","expense")) {
+            compose.onNodeWithTag("overview.monthly.$kind").assertTextEquals("\u2014")
+            compose.onNodeWithTag("overview.monthly.$kind.unavailable").assertExists()
+        }
+        compose.runOnIdle {raw.value=invalid.drop(6)+invalid[4]+row(7)};metric("expense",107,"JPY");metric("income",0,"JPY")
+        compose.runOnIdle {raw.value=invalid.drop(6)+row(7)};metric("expense",7,"JPY");metric("income",0,"JPY")
+        Assert.assertTrue(rows().isEmpty());Assert.assertTrue(pending().isEmpty())
     }
     @Test fun monthlyMetricsShowCompleteAmountsLightDarkAtFont130WithoutWrites() {
         seed(row().with("source_currency_code" to JsonPrimitive("VND"),"reporting_expense_minor" to JsonPrimitive(Long.MIN_VALUE)));seed(row(Long.MAX_VALUE,"income").with("source_currency_code" to JsonPrimitive("VND")))
