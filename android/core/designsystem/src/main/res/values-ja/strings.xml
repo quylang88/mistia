@@ -936,6 +936,7 @@
     <string name="overview_overview_available_assets">利用可能資産</string>
     <string name="overview_overview_budget_watchlist">注意が必要な予算</string>
     <string name="overview_overview_category">カテゴリ</string>
+    <string name="overview_overview_conversion_unavailable">一部の支出を基準通貨に換算できません。</string>
     <string name="overview_overview_couldn_t_send">送信できませんでした</string>
     <string name="overview_overview_couldn_t_send_the_request_right_now">現在リクエストは送信できません。</string>
     <string name="overview_overview_customize_overview">ホームのカスタマイズ</string>

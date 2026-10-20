@@ -37,4 +37,11 @@ class CurrencyFormattingTest {
         assertEquals(formatMinorUnits(0,"VND"),formatMinorUnitsMagnitude(0,"VND"))
         assertEquals(formatMinorUnits(Long.MAX_VALUE,"JPY"),formatMinorUnitsMagnitude(Long.MAX_VALUE,"JPY"))
     }
+    @Test fun `read aggregates beyond Long format every digit with original currency minor precision`() {
+        val amount=java.math.BigInteger.valueOf(Long.MAX_VALUE)*java.math.BigInteger.TWO
+        assertEquals("￥18,446,744,073,709,551,614",formatMinorUnits(amount,"JPY"))
+        assertEquals("$184,467,440,737,095,516.14",formatMinorUnits(amount,"USD"))
+        assertEquals("18446744073709551614 INVALID",formatMinorUnits(amount,"INVALID"))
+        assertEquals(formatMinorUnits(0,"VND"),formatMinorUnits(java.math.BigInteger.ZERO,"VND"))
+    }
 }

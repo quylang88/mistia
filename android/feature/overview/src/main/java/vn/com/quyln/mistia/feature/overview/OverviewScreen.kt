@@ -92,7 +92,7 @@ private fun OwnedOverviewScreen(
         vn.com.quyln.mistia.core.model.overviewTotalAssets(ownerUserId,financial.wallets,financial.records,primaryCurrencyCode,rates,if(accounting==null) java.math.BigInteger.ZERO else inventory,accounting ?: primaryCurrencyCode)
     }
     val monthly=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
-        vn.com.quyln.mistia.core.model.overviewMonthlyCashflow(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone).last()
+        vn.com.quyln.mistia.core.model.overviewMonthlyCashflow(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
     }
     val weeks=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
         vn.com.quyln.mistia.core.model.overviewWeeklySpending(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
@@ -102,6 +102,12 @@ private fun OwnedOverviewScreen(
     }
     val titleCategories by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val titleCategoriesById = remember(titleCategories, ownerUserId) { titleCategories.filter { it.ownerUserId == ownerUserId.value }.associateBy { it.id } }
+    val language=androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language
+    val categoryCatalog=remember(context.applicationContext) {vn.com.quyln.mistia.core.designsystem.systemCategoryCatalog(context)}
+    val categoryCurrency=primaryCurrencyCode.trim().uppercase(java.util.Locale.ROOT).takeIf {it in vn.com.quyln.mistia.core.model.CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
+    val categoryMonths=remember(ownerUserId,financial,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone) {
+        vn.com.quyln.mistia.core.model.overviewCategorySpendingMonths(ownerUserId,financial.records,financial.wallets,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone)
+    }
     val status by syncStatus.collectAsStateWithLifecycle()
     val countMap = counts.associate { it.entity to it.count }
     var selectedDay by remember {mutableStateOf<java.time.LocalDate?>(null)}
@@ -134,7 +140,7 @@ private fun OwnedOverviewScreen(
                 }
             }
         }
-        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,overlayPresented || selectedDay!=null) {day ->
+        item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,categoryMonths,overlayPresented || selectedDay!=null) {day ->
             if(!overlayPresented && expenseDay(day).rows.isNotEmpty()) selectedDay=day
         }}
         item {

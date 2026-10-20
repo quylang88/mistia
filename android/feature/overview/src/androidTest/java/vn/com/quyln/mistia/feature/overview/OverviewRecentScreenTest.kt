@@ -117,6 +117,8 @@ class OverviewRecentScreenTest {
         }
         for(theme in listOf("light","dark")) {
             compose.runOnIdle {dark=theme=="dark"}
+            // Bring the lazy recent section into composition before finding its descendants.
+            compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToIndex(3)
             for(code in listOf("VND","JPY")) {
                 val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
                 compose.onNodeWithText("-"+formatMinorUnits(9007199254740993L,code)).performScrollTo()

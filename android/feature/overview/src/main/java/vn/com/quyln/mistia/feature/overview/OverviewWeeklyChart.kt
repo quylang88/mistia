@@ -46,10 +46,12 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.OverviewWeekSpending
 
-@Composable internal fun OverviewWeeklyChart(pages:List<OverviewWeekSpending>,currency:String,overlayPresented:Boolean=false,dismissToken:Int=0,onOpenExpenseDay:((LocalDate)->Unit)?=null) {
+@Composable internal fun OverviewWeeklyChart(pages:List<OverviewWeekSpending>,currency:String,overlayPresented:Boolean=false,dismissToken:Int=0,onOpenExpenseDay:((LocalDate)->Unit)?=null,
+    preferredWeek:LocalDate?=null,onWeekChanged:(LocalDate)->Unit={},headerControls:@Composable ()->Unit={}) {
     if(pages.isEmpty()) return
-    val pager=rememberPagerState(initialPage=pages.lastIndex) {pages.size}
-    var selectedWeek by remember {mutableStateOf(pages.last().start)}
+    val initial=pages.indexOfFirst {it.start==preferredWeek}.takeIf {it>=0} ?: pages.lastIndex
+    val pager=rememberPagerState(initialPage=initial) {pages.size}
+    var selectedWeek by remember {mutableStateOf(pages[initial].start)}
     var selectedDate by remember {mutableStateOf<LocalDate?>(null)}
     val week=pages[pager.currentPage.coerceIn(pages.indices)]
     val point=week.points.singleOrNull {it.date==selectedDate && it.amountMinor>0}
@@ -57,10 +59,12 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
     LaunchedEffect(dates) {
         val target=pages.indexOfFirst {it.start==selectedWeek}.takeIf {it>=0} ?: pages.lastIndex
         selectedWeek=pages[target].start
+        onWeekChanged(selectedWeek)
         pager.scrollToPage(target)
     }
     LaunchedEffect(pager.settledPage) {
         selectedWeek=pages[pager.settledPage.coerceIn(pages.indices)].start
+        onWeekChanged(selectedWeek)
     }
     LaunchedEffect(week.start,overlayPresented,dismissToken) {selectedDate=null}
     LaunchedEffect(week.points) {if(point==null) selectedDate=null}
@@ -84,6 +88,7 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
             Text(if(week.isCurrent) stringResource(R.string.shared_corelogic_mistialocalization_this_week_value,range) else range,
                 Modifier.testTag("overview.chart.range"),fontSize=11.sp,fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        headerControls()
         CompositionLocalProvider(androidx.compose.ui.platform.LocalViewConfiguration provides chartConfiguration) {
         HorizontalPager(pager,Modifier.fillMaxWidth().height(154.dp).testTag("overview.chart.pager"),key={pages[it].start.toString()}) {index ->
             val page=pages[index]

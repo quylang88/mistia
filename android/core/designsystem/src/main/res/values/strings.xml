@@ -936,6 +936,7 @@
     <string name="overview_overview_available_assets">Tài sản khả dụng</string>
     <string name="overview_overview_budget_watchlist">Ngân sách cần chú ý</string>
     <string name="overview_overview_category">Danh mục</string>
+    <string name="overview_overview_conversion_unavailable">Chưa thể quy đổi đầy đủ chi tiêu sang tiền tệ chính.</string>
     <string name="overview_overview_couldn_t_send">Chưa thể gửi</string>
     <string name="overview_overview_couldn_t_send_the_request_right_now">Không thể gửi yêu cầu lúc này.</string>
     <string name="overview_overview_customize_overview">Tùy chỉnh Tổng quan</string>

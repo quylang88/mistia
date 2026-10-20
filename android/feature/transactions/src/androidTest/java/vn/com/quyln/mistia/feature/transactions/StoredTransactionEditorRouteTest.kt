@@ -83,6 +83,10 @@ class StoredTransactionEditorRouteTest {
             selected?.let {id -> StoredTransactionEditorRoute(owner,id,repo,exchange,Receipts(),{device},"VND",onDismiss={selected=null})}
         }}
         val day=java.time.Instant.parse(time).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        val monday=java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)
+        val historyWeeks=java.time.temporal.ChronoUnit.WEEKS.between(day.with(monday),java.time.LocalDate.now().with(monday)).toInt().coerceAtLeast(0)
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.chart.pager").fetchSemanticsNodes().isNotEmpty()}
+        repeat(historyWeeks) {compose.onNodeWithTag("overview.chart.pager").performScrollTo().performTouchInput {swipeRight()}}
         val bar=hasTestTag("overview.chart.day.$day") and hasContentDescription(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(original.amountMinor,"VND"),substring=true)
         compose.waitUntil(5000) {compose.onAllNodes(bar).fetchSemanticsNodes().isNotEmpty()}
         compose.onNode(bar).performScrollTo().performTouchInput {down(center);advanceEventTime(400);up()}

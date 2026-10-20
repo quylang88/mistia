@@ -936,6 +936,7 @@
     <string name="overview_overview_available_assets">Available assets</string>
     <string name="overview_overview_budget_watchlist">Budget watchlist</string>
     <string name="overview_overview_category">Category</string>
+    <string name="overview_overview_conversion_unavailable">Some spending cannot be converted to your primary currency yet.</string>
     <string name="overview_overview_couldn_t_send">Couldn\'t send</string>
     <string name="overview_overview_couldn_t_send_the_request_right_now">Couldn\'t send the request right now.</string>
     <string name="overview_overview_customize_overview">Customize Overview</string>

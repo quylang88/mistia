@@ -21597,6 +21597,29 @@
         }
       }
     },
+    "overview.overview.conversionUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some spending cannot be converted to your primary currency yet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の支出を基準通貨に換算できません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa thể quy đổi đầy đủ chi tiêu sang tiền tệ chính."
+          }
+        }
+      }
+    },
     "overview.overview.dailyExpenses" : {
       "extractionState" : "stale",
       "localizations" : {

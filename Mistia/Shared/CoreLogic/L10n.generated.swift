@@ -2364,6 +2364,8 @@ nonisolated enum L10n {
             static func budgetWatchlist(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.budgetWatchlist", vi: "Ngân sách cần chú ý", en: "Budget watchlist", ja: "注意が必要な予算", language: language) }
             static var category: String { L10n.tr("overview.overview.category", vi: "Danh mục", en: "Category", ja: "カテゴリ") }
             static func category(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.category", vi: "Danh mục", en: "Category", ja: "カテゴリ", language: language) }
+            static var conversionUnavailable: String { L10n.tr("overview.overview.conversionUnavailable", vi: "Chưa thể quy đổi đầy đủ chi tiêu sang tiền tệ chính.", en: "Some spending cannot be converted to your primary currency yet.", ja: "一部の支出を基準通貨に換算できません。") }
+            static func conversionUnavailable(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.conversionUnavailable", vi: "Chưa thể quy đổi đầy đủ chi tiêu sang tiền tệ chính.", en: "Some spending cannot be converted to your primary currency yet.", ja: "一部の支出を基準通貨に換算できません。", language: language) }
             static var couldnTSend: String { L10n.tr("overview.overview.couldnTSend", vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした") }
             static func couldnTSend(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.couldnTSend", vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした", language: language) }
             static var couldnTSendTheRequestRightNow: String { L10n.tr("overview.overview.couldnTSendTheRequestRightNow", vi: "Không thể gửi yêu cầu lúc này.", en: "Couldn't send the request right now.", ja: "現在リクエストは送信できません。") }

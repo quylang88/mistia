@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.core.designsystem
 
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.text.NumberFormat
 import java.util.Currency
 import java.util.Locale
@@ -24,6 +25,7 @@ private fun currencyPresentationLocale(code: String): Locale = Locale.forLanguag
 })
 
 fun formatMinorUnits(minor:Long,currencyCode:String):String = formatCurrencyMinorDecimal(BigDecimal.valueOf(minor),currencyCode)
+fun formatMinorUnits(minor:BigInteger,currencyCode:String):String = formatCurrencyMinorDecimal(BigDecimal(minor),currencyCode)
 
 /** Magnitude remains exact even when abs(Long.MIN_VALUE) cannot fit in Long. */
 fun formatMinorUnitsMagnitude(minor:Long,currencyCode:String):String = formatCurrencyMinorDecimal(BigDecimal.valueOf(minor).abs(),currencyCode)
