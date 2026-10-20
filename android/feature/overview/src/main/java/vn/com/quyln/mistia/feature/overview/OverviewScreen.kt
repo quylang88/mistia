@@ -53,8 +53,10 @@ fun OverviewScreen(
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?=null,
     overlayPresented:Boolean=false,
 ) {
+    val reportingCurrency=primaryCurrencyCode.trim().uppercase(java.util.Locale.ROOT)
+        .takeIf {it in vn.com.quyln.mistia.core.model.CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
     key(ownerUserId.value) {
-        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, primaryCurrencyCode, onOpenTransaction, exchangeRates, overlayPresented)
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, reportingCurrency, onOpenTransaction, exchangeRates, overlayPresented)
     }
 }
 

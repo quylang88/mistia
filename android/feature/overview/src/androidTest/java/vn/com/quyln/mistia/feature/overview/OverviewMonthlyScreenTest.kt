@@ -71,7 +71,8 @@ class OverviewMonthlyScreenTest {
         seed(row(3).with("reporting_currency_code" to JsonPrimitive("VND"),"reporting_amount_minor" to JsonPrimitive(999)))
         var primary by mutableStateOf("JPY")
         compose.setContent {Screen(primary=primary)};metric("expense",3,"JPY")
-        compose.runOnIdle {primary="VND"};metric("expense",0,"VND")
+        compose.runOnIdle {primary="VND"};compose.onNodeWithTag("overview.monthly.expense").assertTextEquals("—")
+        compose.onNodeWithTag("overview.monthly.expense.unavailable").assertExists()
         compose.runOnIdle {rateRows.value=listOf(ExchangeRateSnapshot("JPY","VND","2.5","test",0,null))};metric("expense",8,"VND")
         compose.runOnIdle {primary="JPY"};metric("expense",3,"JPY");Assert.assertEquals(3,(rows().single().payload["amount_minor"] as JsonPrimitive).long)
     }

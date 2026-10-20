@@ -13,6 +13,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,8 +56,13 @@ import vn.com.quyln.mistia.core.model.*
                             else stringResource(if(kind=="income") R.string.overview_overview_income_this_month else R.string.overview_overview_expense_this_month)
                         Text(title,
                             fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(formatMinorUnits(amount,code),Modifier.testTag("overview.monthly.$kind"),fontSize=18.sp,fontWeight=FontWeight.Bold,
-                            color=if(kind=="income") Color(0xFF2DAA9E) else Color(0xFFF45C7E),maxLines=1,softWrap=false)
+                        val conversionHint=stringResource(R.string.overview_overview_cashflow_conversion_unavailable)
+                        BasicText(amount?.let {formatMinorUnits(it,code)} ?: "—",Modifier.testTag("overview.monthly.$kind")
+                            .then(if(amount==null) Modifier.semantics {stateDescription=conversionHint} else Modifier),
+                            style=TextStyle(fontSize=18.sp,fontWeight=FontWeight.Bold,color=if(kind=="income") Color(0xFF2DAA9E) else Color(0xFFF45C7E)),maxLines=1,softWrap=false,
+                            autoSize=TextAutoSize.StepBased(minFontSize=10.sp,maxFontSize=18.sp,stepSize=0.5.sp))
+                        if(amount==null) Text(conversionHint,Modifier.widthIn(max=240.dp).testTag("overview.monthly.$kind.unavailable"),
+                            style=TextStyle(fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant))
                     }
                 }
             }

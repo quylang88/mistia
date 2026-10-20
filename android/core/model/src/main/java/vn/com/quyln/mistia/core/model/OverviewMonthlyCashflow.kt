@@ -6,30 +6,37 @@ import java.time.ZoneId
 import java.math.BigInteger
 import java.util.Locale
 
-data class OverviewMonthlyCashflow(val month:YearMonth,val incomeMinor:Long,val expenseMinor:Long)
+data class OverviewMonthlyCashflow(val month:YearMonth,val incomeMinor:BigInteger?,val expenseMinor:BigInteger?) {
+    constructor(month:YearMonth,incomeMinor:Long,expenseMinor:Long):this(month,BigInteger.valueOf(incomeMinor),BigInteger.valueOf(expenseMinor))
+}
 
 fun overviewMonthlyCashflow(owner:UserId,records:List<LedgerTransactionRecord>,wallets:List<LedgerWalletRecord>,
     reportingCurrency:String,rates:List<ExchangeRateSnapshot> = emptyList(),knownTitles:Map<GeneratedTransactionTitle,Collection<String>> = emptyMap(),
     reference:Instant,zone:ZoneId):List<OverviewMonthlyCashflow> {
     val current=YearMonth.from(reference.atZone(zone))
-    val walletKinds=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null}.associate {it.id to it.kind}
-    val totals=mutableMapOf<YearMonth,Pair<BigInteger,BigInteger>>()
+    val ownedWallets=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null}.associateBy {it.id}
+    val target=reportingCurrency.overviewCurrencyCode() ?: reportingCurrency
+    data class Totals(var income:BigInteger?=BigInteger.ZERO,var expense:BigInteger?=BigInteger.ZERO)
+    val totals=mutableMapOf<YearMonth,Totals>()
     for(record in records) {
         if(record.ownerUserId!=owner.value || record.deletedAt!=null || record.isArchived || record.entryStatus!=TransactionEntryStatus.POSTED || record.primaryKind==null) continue
-        val expense=reportedOverviewExpense(record,walletKinds[record.sourceWalletId],knownTitles)
+        val wallet=ownedWallets[record.sourceWalletId]
+        val expense=reportedOverviewExpense(record,wallet?.kind,knownTitles)
         val income=reportedOverviewIncome(record,knownTitles)
         if(expense==0L && income==0L) continue
         val month=runCatching {YearMonth.from(Instant.parse(record.occurredAt).atZone(zone))}.getOrNull() ?: continue
         if(month>current) continue
-        val previous=totals[month] ?: (BigInteger.ZERO to BigInteger.ZERO)
-        totals[month]=(previous.first+planningMoneyMinorExact(income,record.sourceCurrencyCode,reportingCurrency,rates)) to
-            (previous.second+planningMoneyMinorExact(expense,record.sourceCurrencyCode,reportingCurrency,rates))
+        val source=record.sourceCurrencyCode?.takeIf(String::isNotBlank) ?: wallet?.currencyCode ?: "JPY"
+        val total=totals.getOrPut(month) {Totals()}
+        // Availability is independent and sticky per direction; incomplete sums never become partial totals.
+        total.income=total.income?.let {subtotal ->overviewMoneyMinorExact(income,source,target,rates)?.let(subtotal::plus)}
+        total.expense=total.expense?.let {subtotal ->overviewMoneyMinorExact(expense,source,target,rates)?.let(subtotal::plus)}
     }
     val result=mutableListOf<OverviewMonthlyCashflow>()
     var month=totals.keys.minOrNull() ?: current
     while(month<=current) {
-        val total=totals[month] ?: (BigInteger.ZERO to BigInteger.ZERO)
-        result+=OverviewMonthlyCashflow(month,total.first.overviewClamped(),total.second.overviewClamped())
+        val total=totals[month] ?: Totals()
+        result+=OverviewMonthlyCashflow(month,total.income,total.expense)
         month=month.plusMonths(1)
     }
     return result
@@ -63,4 +70,3 @@ private fun LedgerTransactionRecord.isOverviewAdjustment(titles:Map<GeneratedTra
     categoryId in setOf(TransactionCategoryRecord.BALANCE_ADJUSTMENT_EXPENSE_ID,TransactionCategoryRecord.BALANCE_ADJUSTMENT_INCOME_ID) ||
         title.matchesOverviewTitle(titles[GeneratedTransactionTitle.BALANCE_ADJUSTMENT].orEmpty())
 private fun String.matchesOverviewTitle(titles:Collection<String>)=trim().isNotEmpty() && titles.any {it.trim().equals(trim(),ignoreCase=true)}
-private fun BigInteger.overviewClamped():Long=max(BigInteger.valueOf(Long.MIN_VALUE)).min(BigInteger.valueOf(Long.MAX_VALUE)).toLong()

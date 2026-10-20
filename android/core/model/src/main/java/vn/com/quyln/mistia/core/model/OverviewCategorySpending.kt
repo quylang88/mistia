@@ -22,7 +22,7 @@ data class OverviewCategoryChartSlice(val id:String,val name:String?,val iconSym
 fun overviewCategorySpendingMonths(owner:UserId,records:List<LedgerTransactionRecord>,wallets:List<LedgerWalletRecord>,categories:List<TransactionCategoryRecord>,currency:String,
     rates:List<ExchangeRateSnapshot> = emptyList(),language:String="vi",catalog:SystemCategoryCatalog?=null,reference:Instant,zone:ZoneId):List<OverviewCategorySpendingMonth> {
     val current=YearMonth.from(reference.atZone(zone))
-    val target=currency.categoryCurrency() ?: "JPY"
+    val target=currency.overviewCurrencyCode() ?: "JPY"
     val ownedWallets=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null}.associateBy {it.id}
     // Metadata retains historical soft-deleted labels, independently of active edit eligibility.
     val ownedCategories=categories.filter {it.ownerUserId==owner.value}.associateBy {it.id}
@@ -46,7 +46,7 @@ fun overviewCategorySpendingMonths(owner:UserId,records:List<LedgerTransactionRe
         val month=runCatching {YearMonth.from(Instant.parse(record.occurredAt).atZone(zone))}.getOrNull() ?: continue
         val parent=ownedCategories[category?.parentCategoryId]?.takeIf {it.id!=category?.id}
         val source=record.sourceCurrencyCode?.takeIf(String::isNotBlank) ?: wallet?.currencyCode ?: "JPY"
-        val amount=categoryConvertedMinor(record.reportingExpenseMinor ?: record.amountMinor,source,target,rates)
+        val amount=overviewMoneyMinorExact(record.reportingExpenseMinor ?: record.amountMinor,source,target,rates)
         byMonth.getOrPut(month) {mutableListOf()}+=Entry(category,parent,amount)
     }
     val collator=Collator.getInstance(locale).apply {strength=Collator.SECONDARY;decomposition=Collator.CANONICAL_DECOMPOSITION}
@@ -94,14 +94,6 @@ private fun categoryNameKey(name:String?):String {
         }
     }
     return Normalizer.normalize(compact.lowercase(Locale.ROOT),Normalizer.Form.NFC)
-}
-private fun String.categoryCurrency():String?=trim().uppercase(Locale.ROOT).takeIf {it.matches(Regex("[A-Z]{3}"))}
-private fun categoryConvertedMinor(amount:Long,source:String,target:String,rates:List<ExchangeRateSnapshot>):BigInteger? {
-    if(amount==0L) return BigInteger.ZERO
-    val from=source.categoryCurrency() ?: return null
-    if(from==target) return BigInteger.valueOf(amount)
-    if(from !in CurrencyPreferences.supportedCurrencyCodes || target !in CurrencyPreferences.supportedCurrencyCodes || matchingExchangeRateSnapshot(from,target,rates)==null) return null
-    return planningMoneyMinorExact(amount,from,target,rates)
 }
 
 private fun Char.isCategoryWhitespace():Boolean=isWhitespace() || this=='\u0085'

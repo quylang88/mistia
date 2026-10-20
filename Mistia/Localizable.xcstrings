@@ -21597,6 +21597,29 @@
         }
       }
     },
+    "overview.overview.cashflowConversionUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some amounts cannot be converted to your primary currency yet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の金額を基準通貨に換算できません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa thể quy đổi đầy đủ số tiền sang tiền tệ chính."
+          }
+        }
+      }
+    },
     "overview.overview.conversionUnavailable" : {
       "extractionState" : "manual",
       "localizations" : {

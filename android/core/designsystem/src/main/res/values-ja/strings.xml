@@ -935,6 +935,7 @@
     <string name="notifications_notificationcenter_value_value_your_value_value_request">%1$sがあなたの%2$s %3$sのリクエスト%4$s。</string>
     <string name="overview_overview_available_assets">利用可能資産</string>
     <string name="overview_overview_budget_watchlist">注意が必要な予算</string>
+    <string name="overview_overview_cashflow_conversion_unavailable">一部の金額を基準通貨に換算できません。</string>
     <string name="overview_overview_category">カテゴリ</string>
     <string name="overview_overview_conversion_unavailable">一部の支出を基準通貨に換算できません。</string>
     <string name="overview_overview_couldn_t_send">送信できませんでした</string>
