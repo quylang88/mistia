@@ -54,7 +54,7 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
     var selectedWeek by remember {mutableStateOf(pages[initial].start)}
     var selectedDate by remember {mutableStateOf<LocalDate?>(null)}
     val week=pages[pager.currentPage.coerceIn(pages.indices)]
-    val point=week.points.singleOrNull {it.date==selectedDate && it.amountMinor>0}
+    val point=week.points.singleOrNull {!week.hasUnavailableConversion && it.date==selectedDate && (it.amountMinor?.signum() ?: 0)>0}
     val dates=pages.map {it.start}
     LaunchedEffect(dates) {
         val target=pages.indexOfFirst {it.start==selectedWeek}.takeIf {it>=0} ?: pages.lastIndex
@@ -93,8 +93,17 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
         HorizontalPager(pager,Modifier.fillMaxWidth().height(154.dp).testTag("overview.chart.pager"),key={pages[it].start.toString()}) {index ->
             val page=pages[index]
             val active=index==pager.currentPage
-            val maximum=page.points.maxOfOrNull {it.amountMinor}?.coerceAtLeast(0) ?: 0
-            val scale=BigDecimal.valueOf(maximum).multiply(BigDecimal("1.2")).max(BigDecimal.ONE)
+            if(page.hasUnavailableConversion) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(alpha=0.03f),RoundedCornerShape(18.dp)).padding(18.dp),contentAlignment=Alignment.Center) {
+                    BasicText(stringResource(R.string.overview_overview_conversion_unavailable),
+                        if(active) Modifier.fillMaxWidth().testTag("overview.chart.unavailable") else Modifier.fillMaxWidth(),
+                        style=androidx.compose.ui.text.TextStyle(fontSize=14.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,textAlign=androidx.compose.ui.text.style.TextAlign.Center),
+                        autoSize=TextAutoSize.StepBased(minFontSize=10.sp,maxFontSize=14.sp,stepSize=0.5.sp))
+                }
+                return@HorizontalPager
+            }
+            val maximum=page.points.mapNotNull {it.amountMinor}.maxOrNull()?.max(BigInteger.ZERO) ?: BigInteger.ZERO
+            val scale=BigDecimal(maximum).multiply(BigDecimal("1.2")).max(BigDecimal.ONE)
             val top=scale.setScale(0,RoundingMode.HALF_UP).toBigIntegerExact()
             val middle=scale.divide(BigDecimal("2")).setScale(0,RoundingMode.HALF_UP).toBigIntegerExact()
             val grid=MaterialTheme.colorScheme.onSurface.copy(alpha=0.10f)
@@ -103,10 +112,16 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
             val topText=chartAxisLabel(top);val middleText=chartAxisLabel(middle)
             val density=LocalDensity.current;val measurer=rememberTextMeasurer()
             val requiredAxis=with(density) {maxOf(measurer.measure(topText,axisStyle).size.width,measurer.measure(middleText,axisStyle).size.width).toDp()}+2.dp
-            BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(alpha=0.03f),RoundedCornerShape(18.dp)).padding(horizontal=12.dp,vertical=10.dp)) {
+            BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(alpha=0.03f),RoundedCornerShape(18.dp)).padding(horizontal=12.dp,vertical=10.dp)
+                .pointerInput(Unit) {detectTapGestures {selectedDate=null}}) {
                 val axisWidth=requiredAxis.coerceAtLeast(24.dp).coerceAtMost(maxWidth*0.4f)
-                val plotHeight=(maxHeight-20.dp).coerceAtLeast(0.dp)
-                Row(Modifier.fillMaxSize(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                val shownPoint=point?.takeIf {active && !overlayPresented}
+                val calloutStyle=MaterialTheme.typography.labelLarge.copy(color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.Bold)
+                val calloutSpace=shownPoint?.let {
+                    with(density) {measurer.measure(formatMinorUnits(checkNotNull(it.amountMinor),currency),calloutStyle).size.height.toDp()}+22.dp
+                } ?: 0.dp
+                val plotHeight=(maxHeight-calloutSpace-20.dp).coerceAtLeast(0.dp)
+                Row(Modifier.fillMaxSize().padding(top=calloutSpace),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     Box(Modifier.width(axisWidth).fillMaxHeight().padding(bottom=20.dp)) {
                         BasicText(topText,Modifier.align(Alignment.TopStart).fillMaxWidth(),style=axisStyle,maxLines=1,softWrap=false,autoSize=axisAuto)
                         if(middle!=top && middle!=BigInteger.ZERO) BasicText(middleText,Modifier.align(Alignment.CenterStart).fillMaxWidth(),style=axisStyle,maxLines=1,softWrap=false,autoSize=axisAuto)
@@ -119,15 +134,16 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
                         }
                         Row(Modifier.fillMaxSize(),horizontalArrangement=Arrangement.spacedBy(3.dp)) {
                             page.points.forEach {day ->
+                                val amount=checkNotNull(day.amountMinor)
                                 val label=chartWeekday(day.date,language)
-                                val description="$label, ${day.date.format(chartDateFormat)}, ${formatMinorUnits(day.amountMinor,currency)}"
-                                val ratio=if(day.amountMinor<=0) 0f else BigDecimal.valueOf(day.amountMinor).divide(scale,24,RoundingMode.HALF_UP).toFloat().coerceIn(0f,1f)
+                                val description="$label, ${day.date.format(chartDateFormat)}, ${formatMinorUnits(amount,currency)}"
+                                val ratio=if(amount.signum()<=0) 0f else BigDecimal(amount).divide(scale,24,RoundingMode.HALF_UP).toFloat().coerceIn(0f,1f)
                                 val tint=chartTint(day.intensity)
                                 val opacity=if(!active || point==null) 0.92f else if(point.date==day.date) 1f else 0.42f
                                 Column(Modifier.weight(1f).fillMaxHeight().testTag("overview.chart.day.${day.date}").semantics {contentDescription=description}
-                                    .combinedClickable(onClick={if(!overlayPresented) selectedDate=if(day.amountMinor<=0 || selectedDate==day.date) null else day.date},
+                                    .combinedClickable(onClick={if(!overlayPresented) selectedDate=if(amount.signum()<=0 || selectedDate==day.date) null else day.date},
                                         onLongClickLabel=dayDetailsLabel,hapticFeedbackEnabled=false,
-                                        onLongClick=if(day.amountMinor>0 && !overlayPresented && onOpenExpenseDay!=null) {{
+                                        onLongClick=if(amount.signum()>0 && !overlayPresented && onOpenExpenseDay!=null) {{
                                             selectedDate=null;haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress);onOpenExpenseDay(day.date)
                                         }} else null),
                                     horizontalAlignment=Alignment.CenterHorizontally) {
@@ -143,18 +159,16 @@ import vn.com.quyln.mistia.core.model.OverviewWeekSpending
                         }
                     }
                 }
-                // The callout can span the full panel while remaining transparent to pointer hit testing.
-                if(active && point!=null && !overlayPresented) {
-                    val pointIndex=page.points.indexOfFirst {it.date==point.date}
-                    val ratio=BigDecimal.valueOf(point.amountMinor).divide(scale,24,RoundingMode.HALF_UP).toFloat().coerceIn(0f,1f)
-                    val topOffset=(plotHeight*(1-ratio)-20.dp).coerceAtLeast(0.dp).coerceAtMost((plotHeight-34.dp).coerceAtLeast(0.dp))
+                // Reserve a measured row above the axes; the callout remains transparent to pointer hit testing.
+                if(shownPoint!=null) {
+                    val pointIndex=page.points.indexOfFirst {it.date==shownPoint.date}
                     val anchor=axisWidth+4.dp+(maxWidth-axisWidth-4.dp)*((pointIndex+0.5f)/page.points.size)
                     val bias=if(maxWidth>0.dp) ((anchor/maxWidth)*2-1).coerceIn(-1f,1f) else 0f
                     val shape=RoundedCornerShape(50)
-                    Box(Modifier.align(BiasAlignment(bias,-1f)).offset(y=topOffset)
+                    Box(Modifier.align(BiasAlignment(bias,-1f))
                         .shadow(3.dp,shape).background(MaterialTheme.colorScheme.surface.copy(alpha=0.96f),shape).border(0.5.dp,MaterialTheme.colorScheme.outlineVariant,shape)) {
-                        BasicText(formatMinorUnits(point.amountMinor,currency),Modifier.padding(horizontal=12.dp,vertical=7.dp).testTag("overview.chart.selection"),
-                            style=MaterialTheme.typography.labelLarge.copy(color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.Bold),maxLines=1,softWrap=false,
+                        BasicText(formatMinorUnits(checkNotNull(shownPoint.amountMinor),currency),Modifier.padding(horizontal=12.dp,vertical=7.dp).testTag("overview.chart.selection"),
+                            style=calloutStyle,maxLines=1,softWrap=false,
                             autoSize=TextAutoSize.StepBased(minFontSize=12.sp,maxFontSize=14.sp,stepSize=0.5.sp))
                     }
                 }

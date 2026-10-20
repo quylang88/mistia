@@ -66,16 +66,20 @@ class OverviewDayScreenTest {
         }}
     }
     private fun bar()=compose.onNodeWithTag("overview.chart.day.$monday")
-    private fun awaitBar(amount:Long,code:String) {
+    private fun awaitBar(amount:Long,code:String)=awaitBar(java.math.BigInteger.valueOf(amount),code)
+    private fun awaitBar(amount:java.math.BigInteger,code:String) {
         compose.waitUntil(5000) {compose.onAllNodes(hasTestTag("overview.chart.day.$monday") and hasContentDescription(formatMinorUnits(amount,code),substring=true)).fetchSemanticsNodes().isNotEmpty()}
     }
-    private fun holdDay(amount:Long=100,code:String="JPY") {
+    private fun holdDay(amount:Long=100,code:String="JPY")=holdDay(java.math.BigInteger.valueOf(amount),code)
+    private fun holdDay(amount:java.math.BigInteger,code:String) {
         awaitBar(amount,code);bar().performScrollTo().performTouchInput {down(center);advanceEventTime(400);up()}
     }
-    private fun openDay(amount:Long=100,code:String="JPY") {
+    private fun openDay(amount:Long=100,code:String="JPY")=openDay(java.math.BigInteger.valueOf(amount),code)
+    private fun openDay(amount:java.math.BigInteger,code:String="JPY") {
         holdDay(amount,code);compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.day.sheet").fetchSemanticsNodes().isNotEmpty()}
     }
-    private fun total(amount:Long?,code:String) {
+    private fun total(amount:Long?,code:String)=totalExact(amount?.let(java.math.BigInteger::valueOf),code)
+    private fun totalExact(amount:java.math.BigInteger?,code:String) {
         val text=amount?.let {formatMinorUnits(it,code)} ?: "—"
         compose.waitUntil(5000) {compose.onAllNodes(hasTestTag("overview.day.total") and hasText(text)).fetchSemanticsNodes().size==1}
         compose.onNodeWithTag("overview.day.total").assertTextEquals(text)
@@ -139,7 +143,8 @@ class OverviewDayScreenTest {
         compose.setContent {val density=androidx.compose.ui.platform.LocalDensity.current
             CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density,1.3f)) {Screen(primary="VND",dark=dark)}
         }
-        openDay(Long.MAX_VALUE,"VND");total(Long.MAX_VALUE,"VND")
+        val exact=java.math.BigInteger.valueOf(Long.MAX_VALUE)+java.math.BigInteger.valueOf(100)
+        openDay(exact,"VND");totalExact(exact,"VND")
         val dateLayouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
         compose.onNodeWithTag("overview.day.date").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) {it(dateLayouts)}
         val dateLayout=dateLayouts.single()
@@ -160,7 +165,9 @@ class OverviewDayScreenTest {
     @Test fun signedSourceRowsShowExpenseDirectionOnceIncludingZeroAndLongMinimumWithoutOverflow() {
         val positive=row(100,hour=1);val negative=row(-3,hour=2);val zero=row(0,hour=3);val minimum=row(Long.MIN_VALUE,hour=4)
         listOf(positive,negative,zero,minimum,row(Long.MAX_VALUE,hour=5),row(Long.MAX_VALUE,hour=6)).forEach(::seed)
-        val before=rows();val queue=pending();compose.setContent {Screen()};openDay(Long.MAX_VALUE);total(Long.MAX_VALUE,"JPY")
+        val before=rows();val queue=pending();compose.setContent {Screen()}
+        val exact=java.math.BigInteger.valueOf(Long.MAX_VALUE)+java.math.BigInteger.valueOf(96)
+        openDay(exact);totalExact(exact,"JPY")
         val expected=mapOf(positive.id to "-"+formatMinorUnits(100,"JPY"),negative.id to "+"+formatMinorUnits(3,"JPY"),zero.id to "-"+formatMinorUnits(0,"JPY"),
             minimum.id to "+"+formatMinorUnits(Long.MAX_VALUE,"JPY").replace("807","808"))
         for((id,text) in expected) compose.onNodeWithTag("overview.day.amount.$id",useUnmergedTree=true).performScrollTo().assertTextEquals(text)

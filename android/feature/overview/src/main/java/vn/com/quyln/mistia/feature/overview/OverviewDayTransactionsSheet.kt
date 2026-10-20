@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +48,7 @@ import vn.com.quyln.mistia.core.model.*
         CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides context,
             LocalConfiguration provides configuration,androidx.compose.ui.platform.LocalResources provides context.resources,
             androidx.compose.ui.platform.LocalDensity provides density) {
+        val conversionUnavailable=stringResource(R.string.overview_overview_conversion_unavailable)
         Column(Modifier.fillMaxWidth().heightIn(min=height*0.5f,max=height*0.9f)) {
             Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
                 IconButton(onClick=onDismiss) {Icon(Icons.Default.Close,stringResource(R.string.common_close))}
@@ -63,6 +66,8 @@ import vn.com.quyln.mistia.core.model.*
                                 BasicText(day.totalMinor?.let {formatMinorUnits(it,day.currencyCode)} ?: "—",Modifier.testTag("overview.day.total"),
                                     style=TextStyle(fontSize=16.sp,fontWeight=FontWeight.Bold,color=expense),maxLines=1,softWrap=false,
                                     autoSize=TextAutoSize.StepBased(minFontSize=10.sp,maxFontSize=16.sp,stepSize=0.5.sp))
+                                if(day.totalMinor==null) Text(conversionUnavailable,Modifier.testTag("overview.day.total.unavailable"),
+                                    style=TextStyle(fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant))
                             }
                             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                                 Text(stringResource(R.string.overview_overview_transactions),fontSize=11.sp,fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -91,7 +96,8 @@ import vn.com.quyln.mistia.core.model.*
                                         Text(subtitle,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=2,overflow=TextOverflow.Ellipsis)
                                     }
                                 }
-                                BasicText((if(row.money.minor<0) "+" else "-")+formatMinorUnitsMagnitude(row.money.minor,row.money.currencyCode),Modifier.fillMaxWidth().testTag("overview.day.amount.${record.id}"),
+                                BasicText(row.money?.let {(if(it.minor<0) "+" else "-")+formatMinorUnitsMagnitude(it.minor,it.currencyCode)} ?: "—",
+                                    Modifier.fillMaxWidth().testTag("overview.day.amount.${record.id}").semantics {if(row.money==null) stateDescription=conversionUnavailable},
                                     style=TextStyle(fontSize=15.sp,fontWeight=FontWeight.Bold,color=expense,textAlign=TextAlign.End),maxLines=1,softWrap=false,
                                     autoSize=TextAutoSize.StepBased(minFontSize=10.sp,maxFontSize=15.sp,stepSize=0.5.sp))
                             }

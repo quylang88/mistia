@@ -173,10 +173,11 @@ class OverviewWeeklyScreenTest {
             for(i in text.indices) {val box=layout.getBoundingBox(i);Assert.assertTrue("Axis $text glyph $i outside $box / ${layout.size}",box.left>=-1 && box.right<=layout.size.width+1 && box.top>=-1 && box.bottom<=layout.size.height+1)}
         }
     }
-    @Test fun physicalTapOnCalloutReachesUnderlyingDayInsteadOfBeingIntercepted() {
+    @Test fun physicalTapOnCalloutClearsSelectionAndDayRemainsSelectable() {
         seed(expense(100));compose.setContent {Screen()};select(monday);selected(100,"JPY")
         compose.onNodeWithTag("overview.chart.selection").performTouchInput {click()}
         compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist()
+        select(monday);selected(100,"JPY")
     }
     @Test fun wideExtremeAxisKeepsAllSevenWeekdayLabelsCompleteAtFont130() {
         seed(expense(Long.MAX_VALUE,code="VND"))
