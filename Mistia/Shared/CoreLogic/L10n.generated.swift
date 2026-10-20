@@ -2442,8 +2442,8 @@ nonisolated enum L10n {
             static func thisWeek(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.thisWeek", vi: "Tuần này", en: "This week", ja: "今週", language: language) }
             static var totalSpent: String { L10n.tr("overview.overview.totalSpent", vi: "Tổng chi", en: "Total spent", ja: "合計支出") }
             static func totalSpent(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.totalSpent", vi: "Tổng chi", en: "Total spent", ja: "合計支出", language: language) }
-            static var transactions: String { L10n.tr("overview.overview.transactions", vi: "Thu chi", en: "Cashflow", ja: "収支") }
-            static func transactions(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.transactions", vi: "Thu chi", en: "Cashflow", ja: "収支", language: language) }
+            static var transactions: String { L10n.tr("overview.overview.transactions", vi: "Giao dịch", en: "Transactions", ja: "取引件数") }
+            static func transactions(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.transactions", vi: "Giao dịch", en: "Transactions", ja: "取引件数", language: language) }
             static var transactions2: String { L10n.tr("overview.overview.transactions2", vi: "thu chi", en: "cashflow items", ja: "収支") }
             static func transactions2(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.transactions2", vi: "thu chi", en: "cashflow items", ja: "収支", language: language) }
             static var upcomingDueItems: String { L10n.tr("overview.overview.upcomingDueItems", vi: "Khoản sắp tới", en: "Upcoming items", ja: "今後の項目") }

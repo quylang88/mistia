@@ -971,7 +971,7 @@
     <string name="overview_overview_the_permission_request_was_sent_to_the">Yêu cầu quyền đã được gửi tới chủ dữ liệu.</string>
     <string name="overview_overview_this_week">Tuần này</string>
     <string name="overview_overview_total_spent">Tổng chi</string>
-    <string name="overview_overview_transactions">Thu chi</string>
+    <string name="overview_overview_transactions">Giao dịch</string>
     <string name="overview_overview_transactions2">thu chi</string>
     <string name="overview_overview_upcoming_due_items">Khoản sắp tới</string>
     <string name="overview_overview_value_days_left">Còn %1$s ngày</string>

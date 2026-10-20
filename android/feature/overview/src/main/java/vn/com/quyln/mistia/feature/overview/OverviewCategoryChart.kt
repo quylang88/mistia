@@ -11,14 +11,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -31,6 +35,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.math.BigDecimal
@@ -39,6 +44,7 @@ import java.math.RoundingMode
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlin.math.atan2
+import vn.com.quyln.mistia.core.designsystem.CategoryIcon
 import vn.com.quyln.mistia.core.designsystem.categoryColorFromHex
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.designsystem.R
@@ -69,6 +75,7 @@ import vn.com.quyln.mistia.core.model.*
     val locale=LocalConfiguration.current.locales[0]
     val monthPattern=remember(locale) {android.text.format.DateFormat.getBestDateTimePattern(locale,"yMMMM")}
     val haptic=LocalHapticFeedback.current
+    val dark=MaterialTheme.colorScheme.background.luminance()<0.5f
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalArrangement=Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.overview_overview_spending_by_category),fontSize=16.sp,fontWeight=FontWeight.Bold)
@@ -91,7 +98,7 @@ import vn.com.quyln.mistia.core.model.*
             }+7.dp*(visible.size-1).coerceAtLeast(0)
             val backHeight=if(drilldown==null) 0.dp else {
                 val nameHeight=with(density) {measurer.measure(categoryChartName(drilldown),categoryBackStyle,maxLines=1).size.height.toDp()}
-                maxOf(16.dp,nameHeight)+12.dp+10.dp
+                maxOf(18.dp,nameHeight)+12.dp+10.dp
             }
             val chartHeight=20.dp+backHeight+(if(active.totalMinor==null || visible.isEmpty()) 150.dp else if(stacked) 150.dp+14.dp+legendHeight else maxOf(150.dp,legendHeight))
             HorizontalPager(pager,Modifier.fillMaxWidth().height(chartHeight).testTag("overview.category.pager"),key={pages[it].month.toString()}) {index ->
@@ -101,17 +108,21 @@ import vn.com.quyln.mistia.core.model.*
                 val slices=if(isActive) visible else overviewCategoryChartSlices(page.slices,"root-${page.month}")
                 Column(Modifier.fillMaxSize().padding(vertical=10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     if(pageDrilldown!=null) {
-                        Row(Modifier.testTag("overview.category.back").background(MaterialTheme.colorScheme.onSurface.copy(alpha=0.05f),RoundedCornerShape(50))
+                        Row(Modifier.testTag("overview.category.back").background(Color.White.copy(alpha=if(dark) 0.05f else 0.62f),RoundedCornerShape(50))
                             .clickable {drilldownId=null}.padding(horizontal=10.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack,contentDescription=null,Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft,contentDescription=null,Modifier.size(12.dp))
+                            CategoryIcon(pageDrilldown.iconSymbolName,null,pageDrilldown.colorHex,Modifier.size(18.dp).testTag("overview.category.back.icon"))
                             Text(categoryChartName(pageDrilldown),style=categoryBackStyle,maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
                     }
                     if(page.totalMinor==null) Box(Modifier.fillMaxWidth().height(150.dp),contentAlignment=Alignment.Center) {
                         Text(stringResource(R.string.overview_overview_reporting_amount_unavailable),Modifier.testTag("overview.category.unavailable"),color=MaterialTheme.colorScheme.onSurfaceVariant)
                     } else if(slices.isEmpty()) Column(Modifier.fillMaxWidth().height(150.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PieChart,contentDescription=null,Modifier.size(32.dp).testTag("overview.category.empty.icon"),tint=MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.6f))
+                        Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.core_ui_mistiacategoryspendingchart_no_spending_yet),fontSize=15.sp,fontWeight=FontWeight.Bold)
-                        Text(stringResource(R.string.core_ui_mistiacategoryspendingchart_change_the_time_range_to_see_more),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(4.dp))
+                        Text(stringResource(R.string.core_ui_mistiacategoryspendingchart_change_the_time_range_to_see_more),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=2,textAlign=TextAlign.Center)
                     } else {
                         val onSelect:(OverviewCategoryChartSlice)->Unit={slice ->if(isActive && slice.canSelect) {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove);drilldownId=slice.id
@@ -137,9 +148,12 @@ import vn.com.quyln.mistia.core.model.*
     val ratios=slices.map {BigDecimal(it.amountMinor).divide(BigDecimal(total),24,RoundingMode.HALF_UP).toFloat()}
     val colors=slices.map {categoryColorFromHex(it.colorHex)}
     val prominent=slices.indices.maxByOrNull {slices[it].amountMinor}
-    val background=MaterialTheme.colorScheme.onSurface.copy(alpha=0.045f)
+    val dark=MaterialTheme.colorScheme.background.luminance()<0.5f
+    val background=MaterialTheme.colorScheme.onSurface.copy(alpha=if(dark) 0.08f else 0.045f)
+    val outline=MaterialTheme.colorScheme.onSurface.copy(alpha=if(dark) 0.10f else 0.06f)
+    val shadow=colors.getOrNull(prominent ?: -1)?.copy(alpha=if(dark) 0.28f else 0.18f) ?: Color.Transparent
     val description=stringResource(R.string.overview_overview_spending_by_category)
-    Canvas(Modifier.size(150.dp).testTag("overview.category.pie").semantics {contentDescription=description}.pointerInput(slices) {
+    Canvas(Modifier.size(150.dp).dropShadow(CircleShape,Shadow(radius=12.dp,color=shadow,offset=DpOffset(0.dp,5.dp))).testTag("overview.category.pie").semantics {contentDescription=description}.pointerInput(slices) {
         detectTapGestures {position ->
             val x=position.x-size.width/2f;val y=position.y-size.height/2f
             if(x*x+y*y<=size.width*size.width/4f) {
@@ -153,13 +167,28 @@ import vn.com.quyln.mistia.core.model.*
         }
     }) {
         drawCircle(background)
+        drawCircle(outline,radius=(size.minDimension-1.dp.toPx())/2f,style=androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
         var start=-90f
         for(index in slices.indices) {
             val sweep=if(index==slices.lastIndex) 270f-start else ratios[index]*360
-            val radius=size.minDimension/2f*(if(index==prominent) 1f else 0.92f)
+            val radius=(size.minDimension/2f-2.dp.toPx())*(if(index==prominent) 1f else 0.92f)
             val gap=if(slices.size==1) 0f else minOf(1.8f,sweep/2)
-            drawArc(colors[index].copy(alpha=if(index==prominent) 1f else 0.9f),start+gap/2,(sweep-gap).coerceAtLeast(0f),true,
-                topLeft=Offset(center.x-radius,center.y-radius),size=Size(radius*2,radius*2))
+            val brush=Brush.linearGradient(listOf(lerp(colors[index],Color.White,0.18f),lerp(colors[index],Color.Black,0.08f)),Offset.Zero,Offset(0f,size.height))
+            val opacity=if(index==prominent) 1f else 0.9f
+            if(slices.size==1) drawCircle(brush,radius=radius,alpha=opacity)
+            else {
+                val angle=start+gap/2
+                val radians=Math.toRadians(angle.toDouble())
+                val path=Path().apply {
+                    moveTo(center.x,center.y)
+                    lineTo(center.x+radius*kotlin.math.cos(radians).toFloat(),center.y+radius*kotlin.math.sin(radians).toFloat())
+                    arcTo(androidx.compose.ui.geometry.Rect(center.x-radius,center.y-radius,center.x+radius,center.y+radius),angle,(sweep-gap).coerceAtLeast(0f),false)
+                    close()
+                }
+                val paint=Paint().apply {pathEffect=PathEffect.cornerPathEffect((if(index==prominent) 7.dp else 4.dp).toPx())}
+                brush.applyTo(size,paint,opacity)
+                drawContext.canvas.drawPath(path,paint)
+            }
             start+=sweep
         }
     }

@@ -22311,24 +22311,24 @@
       }
     },
     "overview.overview.transactions" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cashflow"
+            "value" : "Transactions"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "収支"
+            "value" : "取引件数"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thu chi"
+            "value" : "Giao dịch"
           }
         }
       }

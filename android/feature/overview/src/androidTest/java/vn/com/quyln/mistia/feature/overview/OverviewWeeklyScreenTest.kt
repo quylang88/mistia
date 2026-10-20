@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -88,6 +88,29 @@ class OverviewWeeklyScreenTest {
         val range="${monday.minusWeeks(2).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))} - ${monday.minusWeeks(2).plusDays(6).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))}"
         compose.onNodeWithTag("overview.chart.range").assertTextEquals(range)
         bar(monday.minusWeeks(2)).assertIsDisplayed()
+    }
+    @Test fun rapidHistoryPrependRemovalAndScreenDetachKeepWeekIdentityAndDoNotWrite() {
+        val original=expense(100,monday.minusWeeks(2));val current=expense(200);val older=expense(50,monday.minusWeeks(3))
+        val feed=MutableStateFlow(listOf(original,current));var mounted by mutableStateOf(true)
+        val source=object:FinanceRepository by repo {
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION && ownerUserId==owner) feed else repo.observe(entity,ownerUserId)
+        }
+        compose.setContent {if(mounted) Screen(source=source)}
+        repeat(12) {
+            compose.waitUntil(5000) {compose.onAllNodes(hasTestTag("overview.chart.day.$monday") and hasContentDescription(formatMinorUnits(200,"JPY"),substring=true)).fetchSemanticsNodes().isNotEmpty()}
+            repeat(2) {compose.onNodeWithTag("overview.chart.pager").performScrollTo().performTouchInput {swipeRight()}}
+            select(monday.minusWeeks(2));selected(100,"JPY")
+            compose.runOnIdle {feed.value=listOf(older,original,current)}
+            bar(monday.minusWeeks(2)).assertIsDisplayed()
+            compose.onNodeWithTag("overview.chart.pager").performTouchInput {swipeRight()}
+            select(monday.minusWeeks(3));selected(50,"JPY")
+            compose.runOnIdle {feed.value=listOf(original,current)}
+            compose.waitUntil(5000) {compose.onAllNodes(hasTestTag("overview.chart.day.$monday") and hasContentDescription(formatMinorUnits(200,"JPY"),substring=true)).fetchSemanticsNodes().isNotEmpty()}
+            compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist()
+            compose.runOnIdle {mounted=false};compose.onNodeWithTag("overview.chart.pager").assertDoesNotExist()
+            compose.runOnIdle {mounted=true}
+        }
+        Assert.assertTrue(rows().isEmpty());Assert.assertTrue(pending().isEmpty())
     }
     @Test fun livePrimaryRatesAndRemovedSelectedDayNeverShowStaleSourceOrSnapshotAmounts() {
         val original=expense(3).with("reporting_currency_code" to JsonPrimitive("VND"),"reporting_amount_minor" to JsonPrimitive(999));seed(original)

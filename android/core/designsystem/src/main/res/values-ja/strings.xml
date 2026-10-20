@@ -971,7 +971,7 @@
     <string name="overview_overview_the_permission_request_was_sent_to_the">権限リクエストをデータ所有者へ送信しました。</string>
     <string name="overview_overview_this_week">今週</string>
     <string name="overview_overview_total_spent">合計支出</string>
-    <string name="overview_overview_transactions">収支</string>
+    <string name="overview_overview_transactions">取引件数</string>
     <string name="overview_overview_transactions2">収支</string>
     <string name="overview_overview_upcoming_due_items">今後の項目</string>
     <string name="overview_overview_value_days_left">あと %1$s 日</string>

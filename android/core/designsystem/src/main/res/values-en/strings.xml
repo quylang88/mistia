@@ -971,7 +971,7 @@
     <string name="overview_overview_the_permission_request_was_sent_to_the">The permission request was sent to the data owner.</string>
     <string name="overview_overview_this_week">This week</string>
     <string name="overview_overview_total_spent">Total spent</string>
-    <string name="overview_overview_transactions">Cashflow</string>
+    <string name="overview_overview_transactions">Transactions</string>
     <string name="overview_overview_transactions2">cashflow items</string>
     <string name="overview_overview_upcoming_due_items">Upcoming items</string>
     <string name="overview_overview_value_days_left">%1$s days left</string>

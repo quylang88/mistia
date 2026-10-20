@@ -32,7 +32,7 @@ fun CategoryIcon(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            categoryIcon(symbolName, kind, iconCatalog.option(symbolName)?.fallbackIcon),
+            categoryIcon(symbolName, kind, iconCatalog.option(symbolName)?.fallbackIcon ?: symbolName),
             contentDescription = null,
             tint = categoryColorFromHex(colorHex),
             modifier = Modifier.size(24.dp),
