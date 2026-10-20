@@ -87,7 +87,6 @@ private fun OwnedOverviewScreen(
     val channels by repository.observe(CloudEntity.INVESTMENT_CHANNEL,ownerUserId).collectAsStateWithLifecycle(emptyList())
     val investmentAssets by repository.observe(CloudEntity.INVESTMENT_ASSET,ownerUserId).collectAsStateWithLifecycle(emptyList())
     val trades by repository.observe(CloudEntity.INVESTMENT_TRADE,ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val financial=remember(ownerUserId,transactions,wallets) {overviewFinancialInputs(ownerUserId,transactions,wallets)}
     val inventory=remember(ownerUserId,channels,investmentAssets,trades) {vn.com.quyln.mistia.core.model.overviewInventoryCost(ownerUserId,channels,investmentAssets,trades)}
     val assetBalance=remember(ownerUserId,transactions,wallets,inventory,primaryCurrencyCode,rates) {
         val accounting=vn.com.quyln.mistia.core.model.overviewInventoryAccountingCurrency(ownerUserId,wallets,primaryCurrencyCode)
@@ -107,8 +106,8 @@ private fun OwnedOverviewScreen(
     val language=androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language
     val categoryCatalog=remember(context.applicationContext) {vn.com.quyln.mistia.core.designsystem.systemCategoryCatalog(context)}
     val categoryCurrency=primaryCurrencyCode.trim().uppercase(java.util.Locale.ROOT).takeIf {it in vn.com.quyln.mistia.core.model.CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
-    val categoryMonths=remember(ownerUserId,financial,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone) {
-        vn.com.quyln.mistia.core.model.overviewCategorySpendingMonths(ownerUserId,financial.records,financial.wallets,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone)
+    val categoryMonths=remember(ownerUserId,transactions,wallets,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone) {
+        overviewRawCategorySpendingMonths(ownerUserId,transactions,wallets,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone)
     }
     val status by syncStatus.collectAsStateWithLifecycle()
     val countMap = counts.associate { it.entity to it.count }

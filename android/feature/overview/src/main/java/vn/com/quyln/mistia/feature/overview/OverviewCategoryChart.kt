@@ -108,7 +108,7 @@ import vn.com.quyln.mistia.core.model.*
                         }
                     }
                     if(page.totalMinor==null) Box(Modifier.fillMaxWidth().height(150.dp),contentAlignment=Alignment.Center) {
-                        Text(stringResource(R.string.overview_overview_conversion_unavailable),Modifier.testTag("overview.category.unavailable"),color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.overview_overview_reporting_amount_unavailable),Modifier.testTag("overview.category.unavailable"),color=MaterialTheme.colorScheme.onSurfaceVariant)
                     } else if(slices.isEmpty()) Column(Modifier.fillMaxWidth().height(150.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.core_ui_mistiacategoryspendingchart_no_spending_yet),fontSize=15.sp,fontWeight=FontWeight.Bold)
                         Text(stringResource(R.string.core_ui_mistiacategoryspendingchart_change_the_time_range_to_see_more),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)

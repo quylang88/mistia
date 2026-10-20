@@ -21,9 +21,33 @@ data class OverviewCategoryChartSlice(val id:String,val name:String?,val iconSym
 
 fun overviewCategorySpendingMonths(owner:UserId,records:List<LedgerTransactionRecord>,wallets:List<LedgerWalletRecord>,categories:List<TransactionCategoryRecord>,currency:String,
     rates:List<ExchangeRateSnapshot> = emptyList(),language:String="vi",catalog:SystemCategoryCatalog?=null,reference:Instant,zone:ZoneId):List<OverviewCategorySpendingMonth> {
-    val current=YearMonth.from(reference.atZone(zone))
     val target=currency.overviewCurrencyCode() ?: "JPY"
     val ownedWallets=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null}.associateBy {it.id}
+    val ownedCategories=categories.filter {it.ownerUserId==owner.value}.associateBy {it.id}
+    val effects=records.mapNotNull {record ->
+        if(record.ownerUserId!=owner.value || record.deletedAt!=null || record.isArchived || record.entryStatus!=TransactionEntryStatus.POSTED || record.primaryKind==null ||
+            record.settlementRoleWireValue?.startsWith("investment")==true) return@mapNotNull null
+        val wallet=ownedWallets[record.sourceWalletId]
+        if(!isOverviewCategorySpending(record,wallet?.kind,ownedCategories.containsKey(record.categoryId))) return@mapNotNull null
+        val occurred=runCatching {Instant.parse(record.occurredAt)}.getOrNull() ?: return@mapNotNull null
+        val source=record.sourceCurrencyCode?.takeIf(String::isNotBlank) ?: wallet?.currencyCode ?: "JPY"
+        OverviewCategoryExpenseEffect(occurred,record.categoryId,source,record.reportingExpenseMinor ?: record.amountMinor)
+    }
+    return overviewCategorySpendingEffects(owner,effects,categories,target,rates,language,catalog,reference,zone)
+}
+
+/** Category admission differs from general reporting: original paid-for transfers need category metadata. */
+fun isOverviewCategorySpending(record:LedgerTransactionRecord,walletKind:WalletKind?,categoryAvailable:Boolean):Boolean =
+    record.reportingExpenseMinor?.let {it!=0L} ?: (isOverviewExpenseSpending(record,walletKind) &&
+        (record.primaryKind!=TransactionPrimaryKind.TRANSFER || categoryAvailable))
+
+/** Null amount/currency/calendar and unreadable grouping preserve required category dependencies. */
+data class OverviewCategoryExpenseEffect(val occurredAt:Instant?,val categoryId:String?,val sourceCurrencyCode:String?,val amountMinor:Long?,val groupingKnown:Boolean=true)
+
+fun overviewCategorySpendingEffects(owner:UserId,effects:List<OverviewCategoryExpenseEffect>,categories:List<TransactionCategoryRecord>,currency:String,
+    rates:List<ExchangeRateSnapshot> = emptyList(),language:String="vi",catalog:SystemCategoryCatalog?=null,reference:Instant,zone:ZoneId):List<OverviewCategorySpendingMonth> {
+    val current=YearMonth.from(reference.atZone(zone))
+    val target=currency.overviewCurrencyCode() ?: "JPY"
     // Metadata retains historical soft-deleted labels, independently of active edit eligibility.
     val ownedCategories=categories.filter {it.ownerUserId==owner.value}.associateBy {it.id}
     val definitions=catalog?.definitions?.associateBy {it.key}.orEmpty()
@@ -35,19 +59,20 @@ fun overviewCategorySpendingMonths(owner:UserId,records:List<LedgerTransactionRe
     }
     data class Entry(val category:TransactionCategoryRecord?,val parent:TransactionCategoryRecord?,val amount:BigInteger?)
     val byMonth=mutableMapOf<YearMonth,MutableList<Entry>>()
-    for(record in records) {
-        if(record.ownerUserId!=owner.value || record.deletedAt!=null || record.isArchived || record.entryStatus!=TransactionEntryStatus.POSTED || record.primaryKind==null ||
-            record.settlementRoleWireValue?.startsWith("investment")==true) continue
-        val wallet=ownedWallets[record.sourceWalletId]
-        val category=ownedCategories[record.categoryId]
-        val eligible=record.reportingExpenseMinor?.let {it!=0L} ?: (isOverviewExpenseSpending(record,wallet?.kind) &&
-            (record.primaryKind!=TransactionPrimaryKind.TRANSFER || category!=null))
-        if(!eligible) continue
-        val month=runCatching {YearMonth.from(Instant.parse(record.occurredAt).atZone(zone))}.getOrNull() ?: continue
+    var unplacedExpense=false
+    for(effect in effects) {
+        val month=runCatching {effect.occurredAt?.let {YearMonth.from(it.atZone(zone))}}.getOrNull()
+        if(month==null) {if(effect.amountMinor!=0L) unplacedExpense=true;continue}
+        if(month>current) continue
+        val entries=byMonth.getOrPut(month) {mutableListOf()}
+        val category=ownedCategories[effect.categoryId]
         val parent=ownedCategories[category?.parentCategoryId]?.takeIf {it.id!=category?.id}
-        val source=record.sourceCurrencyCode?.takeIf(String::isNotBlank) ?: wallet?.currencyCode ?: "JPY"
-        val amount=overviewMoneyMinorExact(record.reportingExpenseMinor ?: record.amountMinor,source,target,rates)
-        byMonth.getOrPut(month) {mutableListOf()}+=Entry(category,parent,amount)
+        val amount=when {
+            effect.amountMinor==0L -> BigInteger.ZERO
+            effect.amountMinor==null || effect.sourceCurrencyCode==null || !effect.groupingKnown -> null
+            else -> overviewMoneyMinorExact(effect.amountMinor,effect.sourceCurrencyCode,target,rates)
+        }
+        entries+=Entry(category,parent,amount)
     }
     val collator=Collator.getInstance(locale).apply {strength=Collator.SECONDARY;decomposition=Collator.CANONICAL_DECOMPOSITION}
     val sort=Comparator<OverviewCategorySpendingSlice> {a,b ->
@@ -61,7 +86,7 @@ fun overviewCategorySpendingMonths(owner:UserId,records:List<LedgerTransactionRe
     var month=(byMonth.keys.minOrNull() ?: current).coerceAtMost(current)
     while(month<=current) {
         val entries=byMonth[month].orEmpty()
-        if(entries.any {it.amount==null}) pages+=OverviewCategorySpendingMonth(month,target,emptyList(),null)
+        if(unplacedExpense || entries.any {it.amount==null}) pages+=OverviewCategorySpendingMonth(month,target,emptyList(),null)
         else {
             val slices=entries.groupBy {categoryNameKey(name(it.parent) ?: name(it.category))}.values.map {branch ->
                 val template=branch.first()
