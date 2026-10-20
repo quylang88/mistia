@@ -4,7 +4,7 @@ import java.time.Instant
 import kotlinx.serialization.json.*
 import vn.com.quyln.mistia.core.model.*
 
-/** Validate raw financial inputs before permissive legacy typed decoders can substitute values. */
+/** Reporting-only snapshots. Wallet openings are unused zero placeholders, never balance inputs. */
 internal data class OverviewFinancialInputs(val records:List<LedgerTransactionRecord>,val wallets:List<LedgerWalletRecord>)
 
 internal fun overviewFinancialInputs(owner:UserId,records:List<CloudRecord>,wallets:List<CloudRecord>):OverviewFinancialInputs {
@@ -25,10 +25,11 @@ internal fun overviewFinancialInputs(owner:UserId,records:List<CloudRecord>,wall
     val ownedWallets=wallets.mapNotNull {raw ->
         if(raw.entity!=CloudEntity.LEDGER_WALLET.table || raw.ownerUserId!=owner.value || raw.deletedAt!=null) null
         else {
-            if((raw.payload["opening_balance_minor"] as? JsonPrimitive)?.longOrNull==null) return@mapNotNull null
             val archived=raw.payload["is_archived"]
             if(archived!=null && (archived as? JsonPrimitive)?.booleanOrNull==null) return@mapNotNull null
-            runCatching {LedgerWalletRecord.fromCloudRecord(raw)}.getOrNull()?.takeIf {it.id==raw.id && it.ownerUserId==owner.value && it.deletedAt==null && it.kind!=null}
+            // Currency/kind metadata does not depend on cash opening readability. This copy is never persisted.
+            val metadata=raw.copy(payload=JsonObject(raw.payload+("opening_balance_minor" to JsonPrimitive(0))))
+            runCatching {LedgerWalletRecord.fromCloudRecord(metadata)}.getOrNull()?.takeIf {it.id==raw.id && it.ownerUserId==owner.value && it.deletedAt==null && it.kind!=null}
         }
     }
     return OverviewFinancialInputs(ownedRecords,ownedWallets)
