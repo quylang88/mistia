@@ -100,7 +100,7 @@ class OverviewAssetsScreenTest {
         compose.setContent {Screen(subject,source)};assets(123456789,"JPY");compose.runOnIdle {subject=other};assets(0,"JPY")
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())
     }
-    @Test fun malformedOrForeignRawWalletAndTransactionLegsCannotBecomeFallbackBalances() {
+    @Test fun unreadableCashHoldsWhileUnusedDestinationDoesNotDiscardKnownLegs() {
         val good=wallet(opening=10)
         val wallets=MutableStateFlow(listOf(good,wallet(opening=1000).copy(ownerUserId=other.value),wallet(opening=1000).with("user_id" to JsonPrimitive(other.value)),
             wallet(opening=1000).with("opening_balance_minor" to JsonPrimitive("broken")),wallet(opening=1000).with("is_archived" to JsonPrimitive("broken"))))
@@ -110,7 +110,10 @@ class OverviewAssetsScreenTest {
                 CloudEntity.LEDGER_WALLET -> wallets;CloudEntity.LEDGER_TRANSACTION -> tx;else -> repo.observe(entity,ownerUserId)
             }
         }
-        compose.setContent {Screen(source=source)};assets(7,"JPY");Assert.assertTrue(rows().isEmpty());Assert.assertTrue(pendingAll().isEmpty())
+        compose.setContent {Screen(source=source)};assets(null,"JPY")
+        compose.runOnIdle {wallets.value=listOf(good)};assets(-93,"JPY")
+        compose.runOnIdle {tx.value=tx.value.take(1)};assets(7,"JPY")
+        Assert.assertTrue(rows().isEmpty());Assert.assertTrue(pendingAll().isEmpty())
     }
     @Test fun liveLatestInventoryPositionAndArchivedChannelRecomputeWithoutResurrectingPriorSnapshot() {
         seed(wallet(opening=9));val channel=investment(CloudEntity.INVESTMENT_CHANNEL);val asset=investment(CloudEntity.INVESTMENT_ASSET,buildJsonObject {put("channel_id",channel.id)})
@@ -137,12 +140,14 @@ class OverviewAssetsScreenTest {
         }
     }
     @Test fun inventoryAccountingCurrencyDoesNotDependOnParsingUnrelatedWalletOpeningAmount() {
-        seed(wallet(investmentSystemWalletId(owner),0,"VND","investment").with("opening_balance_minor" to JsonPrimitive("broken")))
+        val system=wallet(investmentSystemWalletId(owner),0,"VND","investment")
+        seed(system.with("opening_balance_minor" to JsonPrimitive("broken")))
         val channel=investment(CloudEntity.INVESTMENT_CHANNEL);val asset=investment(CloudEntity.INVESTMENT_ASSET,buildJsonObject {put("channel_id",channel.id)})
         val trade=investment(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",7)})
         listOf(channel,asset,trade).forEach(::seed)
         rateRows.value=listOf(ExchangeRateSnapshot("JPY","VND","2.5","test",0,null))
-        val queue=pendingAll();compose.setContent {Screen()};assets(3,"JPY");Assert.assertEquals(queue,pendingAll())
+        val queue=pendingAll();compose.setContent {Screen()};assets(null,"JPY");Assert.assertEquals(queue,pendingAll())
+        seed(system);val repaired=pendingAll();assets(3,"JPY");Assert.assertEquals(repaired,pendingAll())
     }
     private fun capture(name:String) {
         compose.waitForIdle();val automation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation

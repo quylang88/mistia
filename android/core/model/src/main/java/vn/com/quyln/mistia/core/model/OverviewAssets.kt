@@ -26,6 +26,14 @@ fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:Li
             TransactionPrimaryKind.INCOME -> apply(record.sourceWalletId,record.amountMinor,false)
             TransactionPrimaryKind.TRANSFER -> when(record.transferSubtype) {
                 TransactionTransferSubtype.INTERNAL_TRANSFER -> {
+                    if(record.destinationWalletId in balances && record.destinationAmountMinor==null && record.amountMinor!=0L) {
+                        val sourceWallet=wallets.firstOrNull {it.id==record.sourceWalletId && it.ownerUserId==owner.value && it.deletedAt==null && !it.isArchived}
+                        val explicit=record.sourceCurrencyCode?.takeIf(String::isNotBlank)
+                        val sourceCode=(explicit ?: sourceWallet?.currencyCode)?.overviewCurrencyCode()
+                        val sourceWalletCode=sourceWallet?.currencyCode?.overviewCurrencyCode()
+                        val destinationCode=active.last {it.id==record.destinationWalletId}.currencyCode.overviewCurrencyCode()
+                        if(sourceCode==null || sourceCode!=destinationCode || (explicit!=null && sourceWalletCode!=null && sourceCode!=sourceWalletCode)) return null
+                    }
                     apply(record.sourceWalletId,record.amountMinor,true)
                     apply(record.destinationWalletId,record.destinationAmountMinor ?: record.amountMinor,false)
                 }

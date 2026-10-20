@@ -89,9 +89,9 @@ private fun OwnedOverviewScreen(
     val trades by repository.observe(CloudEntity.INVESTMENT_TRADE,ownerUserId).collectAsStateWithLifecycle(emptyList())
     val financial=remember(ownerUserId,transactions,wallets) {overviewFinancialInputs(ownerUserId,transactions,wallets)}
     val inventory=remember(ownerUserId,channels,investmentAssets,trades) {vn.com.quyln.mistia.core.model.overviewInventoryCost(ownerUserId,channels,investmentAssets,trades)}
-    val assetBalance=remember(ownerUserId,financial,wallets,inventory,primaryCurrencyCode,rates) {
+    val assetBalance=remember(ownerUserId,transactions,wallets,inventory,primaryCurrencyCode,rates) {
         val accounting=vn.com.quyln.mistia.core.model.overviewInventoryAccountingCurrency(ownerUserId,wallets,primaryCurrencyCode)
-        vn.com.quyln.mistia.core.model.overviewTotalAssets(ownerUserId,financial.wallets,financial.records,primaryCurrencyCode,rates,inventory,accounting)
+        overviewAssetBalance(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,inventory,accounting)
     }
     val monthly=remember(ownerUserId,financial,primaryCurrencyCode,rates,reference,zone,knownTitles) {
         vn.com.quyln.mistia.core.model.overviewMonthlyCashflow(ownerUserId,financial.records,financial.wallets,primaryCurrencyCode,rates,knownTitles,reference,zone)
