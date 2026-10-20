@@ -947,6 +947,7 @@
     <string name="overview_overview_daily_spending">Daily spending</string>
     <string name="overview_overview_day">Day</string>
     <string name="overview_overview_day_details">Day details</string>
+    <string name="overview_overview_day_entries_unavailable">Some expense details are unavailable.</string>
     <string name="overview_overview_due_today">To pay today</string>
     <string name="overview_overview_edit_request_sent">Edit request sent</string>
     <string name="overview_overview_expense">Expense</string>

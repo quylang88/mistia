@@ -8,6 +8,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
 import kotlinx.coroutines.flow.*
 import org.junit.*
 import org.junit.rules.ExternalResource
@@ -98,6 +99,31 @@ class StoredTransactionEditorRouteTest {
         compose.waitUntil(5000) {records().single().title=="Edited from day details" && selected==null}
         val saved=records().single();Assert.assertEquals(original.amountMinor,saved.amountMinor);Assert.assertEquals(original.id,saved.id)
         Assert.assertEquals(saved.toPayload(),runBlocking {store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single()}.mutation.payload)
+    }
+    @Test fun unreadableOriginalDayRowOpensUnavailableStoredEditorWithoutWritingZero() {
+        val original=seed("Unreadable original",7)
+        val damaged=original.toCloudRecord().let {it.copy(payload=JsonObject(it.payload+mapOf("amount_minor" to JsonPrimitive("broken"),"reporting_expense_minor" to JsonPrimitive(3))))}
+        runBlocking {store.commitMutation(damaged,PendingMutation(CloudEntity.LEDGER_TRANSACTION,damaged.id,owner.value,MutationKind.UPSERT,damaged.payload,time,0,device))}
+        fun snapshot()=runBlocking {listOf(owner,other).associateWith {subject ->listOf(CloudEntity.LEDGER_TRANSACTION,CloudEntity.LEDGER_WALLET,CloudEntity.TRANSACTION_CATEGORY).associateWith {repo.observe(it,subject).first() to store.pendingMutations(subject,it,Long.MAX_VALUE)}}}
+        val before=snapshot();var selected by mutableStateOf<String?>(null)
+        compose.setContent {MistiaTheme(darkTheme=false) {
+            OverviewScreen(owner,repo,MutableStateFlow(SyncStatus.Idle),primaryCurrencyCode="VND",onOpenTransaction={selected=it},overlayPresented=selected!=null)
+            selected?.let {id -> StoredTransactionEditorRoute(owner,id,repo,exchange,Receipts(),{device},"VND",onDismiss={selected=null})}
+        }}
+        val day=java.time.Instant.parse(time).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        val monday=java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)
+        val weeks=java.time.temporal.ChronoUnit.WEEKS.between(day.with(monday),java.time.LocalDate.now().with(monday)).toInt().coerceAtLeast(0)
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.chart.pager").fetchSemanticsNodes().isNotEmpty()}
+        repeat(weeks) {compose.onNodeWithTag("overview.chart.pager").performScrollTo().performTouchInput {swipeRight()}}
+        val bar=hasTestTag("overview.chart.day.$day") and hasContentDescription(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(3,"VND"),substring=true)
+        compose.waitUntil(5000) {compose.onAllNodes(bar).fetchSemanticsNodes().isNotEmpty()}
+        compose.onNode(bar).performScrollTo().performTouchInput {down(center);advanceEventTime(400);up()}
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.day.row.${original.id}").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("overview.day.amount.${original.id}",useUnmergedTree=true).assertTextEquals("\u2014")
+        compose.onNodeWithTag("overview.day.row.${original.id}").performScrollTo().performTouchInput {click()}
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("transaction.stored.unavailable").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist();compose.onNodeWithTag("transaction.amount").assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.common_save)).assertDoesNotExist();Assert.assertEquals(original.id,selected);Assert.assertEquals(before,snapshot())
     }
     @Test fun switchingRecordClosesOldCalculatorAndLoadsOnlySelectedOwnedAmount() {
         val first=seed("First",123);val second=seed("Second",456);var id by mutableStateOf(first.id)

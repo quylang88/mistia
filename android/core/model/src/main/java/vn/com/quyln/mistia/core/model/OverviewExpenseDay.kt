@@ -5,8 +5,8 @@ import java.time.ZoneId
 import java.time.Instant
 import java.math.BigInteger
 
-data class OverviewExpenseDayRow(val transaction:LedgerTransactionRecord,val money:Money?)
-data class OverviewExpenseDay(val day:LocalDate,val currencyCode:String,val rows:List<OverviewExpenseDayRow>,val totalMinor:BigInteger?)
+data class OverviewExpenseDayRow(val transaction:LedgerTransactionRecord,val money:Money?,val originalMinor:Long?=transaction.amountMinor)
+data class OverviewExpenseDay(val day:LocalDate,val currencyCode:String,val rows:List<OverviewExpenseDayRow>,val totalMinor:BigInteger?,val hasUncertainEntries:Boolean=false)
 
 fun overviewExpenseDay(owner:UserId,records:List<LedgerTransactionRecord>,wallets:List<LedgerWalletRecord>,day:LocalDate,currency:String,
     rates:List<ExchangeRateSnapshot> = emptyList(),knownTitles:Map<GeneratedTransactionTitle,Collection<String>> = emptyMap(),zone:ZoneId):OverviewExpenseDay {
@@ -25,11 +25,17 @@ fun overviewExpenseDay(owner:UserId,records:List<LedgerTransactionRecord>,wallet
         val money=source.overviewCurrencyCode()?.let {Money(record.amountMinor,it)}
         DatedRow(OverviewExpenseDayRow(record,money),occurred,created)
     }.sortedWith(compareByDescending<DatedRow> {it.occurred}.thenByDescending {it.created}).map {it.row}
+    return OverviewExpenseDay(day,target,rows,overviewExpenseDayTotal(rows,target,rates))
+}
+
+/** Nullable original amounts must never use a display transaction's placeholder zero. */
+fun overviewExpenseDayTotal(rows:List<OverviewExpenseDayRow>,currency:String,rates:List<ExchangeRateSnapshot>):BigInteger? {
     var total:BigInteger?=BigInteger.ZERO
     for(row in rows) {
-        if(row.transaction.amountMinor==0L) continue
-        val converted=row.money?.let {overviewMoneyMinorExact(it.minor,it.currencyCode,target,rates)}
+        if(row.originalMinor==null) return null
+        if(row.originalMinor==0L) continue
+        val converted=row.money?.let {overviewMoneyMinorExact(it.minor,it.currencyCode,currency,rates)}
         total=total?.let {subtotal ->converted?.let(subtotal::plus)}
     }
-    return OverviewExpenseDay(day,target,rows,total)
+    return total
 }

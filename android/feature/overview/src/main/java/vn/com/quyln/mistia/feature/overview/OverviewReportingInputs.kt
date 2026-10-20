@@ -21,11 +21,11 @@ internal fun overviewRawReportingEffects(owner:UserId,records:List<CloudRecord>,
         val source=payload.overviewRawReference("source_wallet_id")
         val wallet=metadata[source.id]
         val sourceCode=when {
-            payload.present("source_currency_code") -> payload.overviewRawString("source_currency_code")?.reportingCode()
+            payload.present("source_currency_code") -> payload.overviewRawString("source_currency_code")?.overviewReportingCode()
             !source.readable -> null
             wallet==null -> "JPY"
             wallet.overviewRawDeleted()==null -> null
-            else -> wallet.payload.overviewRawString("currency_code")?.reportingCode()
+            else -> wallet.payload.overviewRawString("currency_code")?.overviewReportingCode()
         }
         val kind=wallet?.payload?.overviewRawString("kind_raw_value")?.let(WalletKind::fromWireValue)
         val kindKnown=source.readable && (wallet==null || (wallet.overviewRawDeleted()==false && kind!=null))
@@ -37,8 +37,8 @@ internal fun overviewRawReportingEffects(owner:UserId,records:List<CloudRecord>,
     return effects
 }
 
-private fun String.reportingCode()=trim().uppercase(Locale.ROOT).takeIf {it.matches(Regex("[A-Z]{3}"))}
-private fun JsonObject.present(key:String)=get(key).let {it!=null && it!=JsonNull}
+internal fun String.overviewReportingCode()=trim().uppercase(Locale.ROOT).takeIf {it.matches(Regex("[A-Z]{3}"))}
+internal fun JsonObject.present(key:String)=get(key).let {it!=null && it!=JsonNull}
 
 /** Compare the existing classifier's effects over unreadable classification dependencies, never wire defaults. */
 private fun reportingAmounts(raw:CloudRecord,walletKind:WalletKind?,kindKnown:Boolean,titles:Map<GeneratedTransactionTitle,Collection<String>>):Pair<Long?,Long?> {
@@ -61,10 +61,22 @@ private fun reportingAmounts(raw:CloudRecord,walletKind:WalletKind?,kindKnown:Bo
     val expenseResult=ReportingConsensus(if(expensePresent) expense else null,expensePresent)
     val incomeFixed=primary!=TransactionPrimaryKind.INCOME && !incomePresent
     val incomeResult=ReportingConsensus(0L,incomeFixed)
-    val subtypes=payload.enumChoices("transfer_subtype_raw_value",TransactionTransferSubtype::fromWireValue,listOf(TransactionTransferSubtype.INTERNAL_TRANSFER,TransactionTransferSubtype.FAMILY_TRANSFER,TransactionTransferSubtype.DEBT))
-    val intents=payload.enumChoices("debt_intent_raw_value",TransactionDebtIntent::fromWireValue,TransactionDebtIntent.entries)
     val unknownSubtype=payload.present("transfer_subtype_raw_value") && payload.overviewRawString("transfer_subtype_raw_value")?.let(TransactionTransferSubtype::fromWireValue)==null
     if(primary==TransactionPrimaryKind.TRANSFER && unknownSubtype && !expensePresent && original!=0L) expenseResult.unknown()
+    for((candidate,kindValue) in overviewClassificationCandidates(raw,primary,walletKind,kindKnown,titles,expensePresent,incomePresent)) {
+        if(expenseResult.settled && incomeResult.settled) break
+        expenseResult.add(value(overviewExpenseSource(candidate,kindValue,titles)))
+        incomeResult.add(value(overviewIncomeSource(candidate,titles)))
+    }
+    return incomeResult.value to expenseResult.value
+}
+
+/** Ephemeral classifier equivalence classes; callers must never use these placeholder amounts as money. */
+internal fun overviewClassificationCandidates(raw:CloudRecord,primary:TransactionPrimaryKind,walletKind:WalletKind?,kindKnown:Boolean,
+    titles:Map<GeneratedTransactionTitle,Collection<String>>,expensePresent:Boolean=false,incomePresent:Boolean=false):Sequence<Pair<LedgerTransactionRecord,WalletKind?>> = sequence {
+    val payload=raw.payload
+    val subtypes=payload.enumChoices("transfer_subtype_raw_value",TransactionTransferSubtype::fromWireValue,listOf(TransactionTransferSubtype.INTERNAL_TRANSFER,TransactionTransferSubtype.FAMILY_TRANSFER,TransactionTransferSubtype.DEBT))
+    val intents=payload.enumChoices("debt_intent_raw_value",TransactionDebtIntent::fromWireValue,TransactionDebtIntent.entries)
     val source=payload.overviewRawReference("source_wallet_id")
     val category=payload.overviewRawReference("category_id")
     val sourceIds=if(source.readable) listOf(source.id) else listOf(null,REPORTING_OTHER_ID)
@@ -86,14 +98,9 @@ private fun reportingAmounts(raw:CloudRecord,walletKind:WalletKind?,kindKnown:Bo
         if(expensePresent) put("reporting_expense_minor",0)
         if(incomePresent) put("reporting_income_minor",0)
     },deletedAt=null))
-    // All domains are finite classifier equivalence classes. Normal readable records take exactly one path.
-    loop@ for(subtype in subtypes) for(intent in intents) for(roleValue in roles) for(title in titleChoices) for(categoryId in categoryIds) for(sourceId in sourceIds) for(kindValue in kinds) {
-        if(expenseResult.settled && incomeResult.settled) break@loop
-        val candidate=base.copy(transferSubtypeWireValue=subtype?.wireValue,debtIntentWireValue=intent?.wireValue,settlementRoleWireValue=roleValue,title=title,categoryId=categoryId,sourceWalletId=sourceId)
-        expenseResult.add(value(overviewExpenseSource(candidate,kindValue,titles)))
-        incomeResult.add(value(overviewIncomeSource(candidate,titles)))
+    for(subtype in subtypes) for(intent in intents) for(roleValue in roles) for(title in titleChoices) for(categoryId in categoryIds) for(sourceId in sourceIds) for(kindValue in kinds) {
+        yield(base.copy(transferSubtypeWireValue=subtype?.wireValue,debtIntentWireValue=intent?.wireValue,settlementRoleWireValue=roleValue,title=title,categoryId=categoryId,sourceWalletId=sourceId) to kindValue)
     }
-    return incomeResult.value to expenseResult.value
 }
 
 private const val REPORTING_OTHER_ID="00000000-0000-0000-0000-000000000001"

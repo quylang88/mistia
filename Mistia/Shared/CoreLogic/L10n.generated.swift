@@ -2386,6 +2386,8 @@ nonisolated enum L10n {
             static func day(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.day", vi: "Ngày", en: "Day", ja: "日", language: language) }
             static var dayDetails: String { L10n.tr("overview.overview.dayDetails", vi: "Chi tiết ngày", en: "Day details", ja: "日別詳細") }
             static func dayDetails(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.dayDetails", vi: "Chi tiết ngày", en: "Day details", ja: "日別詳細", language: language) }
+            static var dayEntriesUnavailable: String { L10n.tr("overview.overview.dayEntriesUnavailable", vi: "Chưa có đủ thông tin về một số khoản chi.", en: "Some expense details are unavailable.", ja: "一部の支出の詳細が不明です。") }
+            static func dayEntriesUnavailable(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.dayEntriesUnavailable", vi: "Chưa có đủ thông tin về một số khoản chi.", en: "Some expense details are unavailable.", ja: "一部の支出の詳細が不明です。", language: language) }
             static var dueToday: String { L10n.tr("overview.overview.dueToday", vi: "Cần trả hôm nay", en: "To pay today", ja: "本日支払いが必要") }
             static func dueToday(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.dueToday", vi: "Cần trả hôm nay", en: "To pay today", ja: "本日支払いが必要", language: language) }
             static var editRequestSent: String { L10n.tr("overview.overview.editRequestSent", vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み") }

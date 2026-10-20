@@ -48,7 +48,8 @@ import vn.com.quyln.mistia.core.model.*
         CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides context,
             LocalConfiguration provides configuration,androidx.compose.ui.platform.LocalResources provides context.resources,
             androidx.compose.ui.platform.LocalDensity provides density) {
-        val conversionUnavailable=stringResource(R.string.overview_overview_conversion_unavailable)
+        val conversionUnavailable=stringResource(R.string.overview_overview_reporting_amount_unavailable)
+        val entriesUnavailable=stringResource(R.string.overview_overview_day_entries_unavailable)
         Column(Modifier.fillMaxWidth().heightIn(min=height*0.5f,max=height*0.9f)) {
             Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
                 IconButton(onClick=onDismiss) {Icon(Icons.Default.Close,stringResource(R.string.common_close))}
@@ -71,13 +72,14 @@ import vn.com.quyln.mistia.core.model.*
                             }
                             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                                 Text(stringResource(R.string.overview_overview_transactions),fontSize=11.sp,fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(day.rows.size.toString(),Modifier.testTag("overview.day.count"),fontSize=16.sp,fontWeight=FontWeight.Bold)
+                                Text(if(day.hasUncertainEntries) "\u2014" else day.rows.size.toString(),Modifier.testTag("overview.day.count").semantics {if(day.hasUncertainEntries) stateDescription=entriesUnavailable},fontSize=16.sp,fontWeight=FontWeight.Bold)
                             }
                         }
                     }
                 }
-                if(day.rows.isEmpty()) Text(stringResource(R.string.transactions_transactions_no_transactions_yet),color=MaterialTheme.colorScheme.onSurfaceVariant)
-                else MistiaGlassCard {padding ->
+                if(day.hasUncertainEntries) Text(entriesUnavailable,Modifier.testTag("overview.day.entries.unavailable"),color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(day.rows.isEmpty() && !day.hasUncertainEntries) Text(stringResource(R.string.transactions_transactions_no_transactions_yet),color=MaterialTheme.colorScheme.onSurfaceVariant)
+                else if(day.rows.isNotEmpty()) MistiaGlassCard {padding ->
                     Column(Modifier.fillMaxWidth().padding(padding)) {
                         day.rows.forEachIndexed {index,row ->
                             val record=row.transaction

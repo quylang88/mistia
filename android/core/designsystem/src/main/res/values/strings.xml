@@ -947,6 +947,7 @@
     <string name="overview_overview_daily_spending">Chi tiêu theo ngày</string>
     <string name="overview_overview_day">Ngày</string>
     <string name="overview_overview_day_details">Chi tiết ngày</string>
+    <string name="overview_overview_day_entries_unavailable">Chưa có đủ thông tin về một số khoản chi.</string>
     <string name="overview_overview_due_today">Cần trả hôm nay</string>
     <string name="overview_overview_edit_request_sent">Đã gửi yêu cầu chỉnh sửa</string>
     <string name="overview_overview_expense">Chi tiêu</string>

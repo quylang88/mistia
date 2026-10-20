@@ -114,8 +114,8 @@ private fun OwnedOverviewScreen(
     val countMap = counts.associate { it.entity to it.count }
     var selectedDay by remember {mutableStateOf<java.time.LocalDate?>(null)}
     androidx.compose.runtime.LaunchedEffect(overlayPresented) {if(overlayPresented) selectedDay=null}
-    fun expenseDay(day:java.time.LocalDate)=vn.com.quyln.mistia.core.model.overviewExpenseDay(ownerUserId,financial.records,financial.wallets,day,primaryCurrencyCode,rates,knownTitles,zone)
-    val dayDetails=remember(selectedDay,ownerUserId,financial,primaryCurrencyCode,rates,knownTitles,zone) {selectedDay?.let(::expenseDay)}
+    fun expenseDay(day:java.time.LocalDate)=overviewRawExpenseDay(ownerUserId,transactions,wallets,day,primaryCurrencyCode,rates,knownTitles,zone)
+    val dayDetails=remember(selectedDay,ownerUserId,transactions,wallets,primaryCurrencyCode,rates,knownTitles,zone) {selectedDay?.let(::expenseDay)}
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -143,7 +143,7 @@ private fun OwnedOverviewScreen(
             }
         }
         item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,categoryMonths,overlayPresented || selectedDay!=null) {day ->
-            if(!overlayPresented && expenseDay(day).rows.isNotEmpty()) selectedDay=day
+            if(!overlayPresented && expenseDay(day).let {it.rows.isNotEmpty() || it.hasUncertainEntries}) selectedDay=day
         }}
         item {
             MistiaSectionCard(title = stringResource(R.string.family_family_wallets_cards)) {
@@ -182,7 +182,7 @@ private fun OwnedOverviewScreen(
         item { Spacer(Modifier.height(92.dp)) }
     }
     dayDetails?.let {day -> key(day.day) {
-        OverviewDayTransactionsSheet(day,financial.wallets.associateBy {it.id},titleCategoriesById,zone,onDismiss={selectedDay=null},onSelect={id ->
+        OverviewDayTransactionsSheet(day,overviewDayWalletMetadata(ownerUserId,wallets),titleCategoriesById,zone,onDismiss={selectedDay=null},onSelect={id ->
             if(day.rows.any {it.transaction.id==id}) {selectedDay=null;onOpenTransaction(id)}
         })
     }}

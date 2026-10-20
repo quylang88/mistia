@@ -945,6 +945,7 @@
   "overview.overview.dailySpending": "overview_overview_daily_spending",
   "overview.overview.day": "overview_overview_day",
   "overview.overview.dayDetails": "overview_overview_day_details",
+  "overview.overview.dayEntriesUnavailable": "overview_overview_day_entries_unavailable",
   "overview.overview.dueToday": "overview_overview_due_today",
   "overview.overview.editRequestSent": "overview_overview_edit_request_sent",
   "overview.overview.expense": "overview_overview_expense",

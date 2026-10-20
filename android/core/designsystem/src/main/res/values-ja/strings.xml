@@ -947,6 +947,7 @@
     <string name="overview_overview_daily_spending">日別支出</string>
     <string name="overview_overview_day">日</string>
     <string name="overview_overview_day_details">日別詳細</string>
+    <string name="overview_overview_day_entries_unavailable">一部の支出の詳細が不明です。</string>
     <string name="overview_overview_due_today">本日支払いが必要</string>
     <string name="overview_overview_edit_request_sent">編集リクエスト送信済み</string>
     <string name="overview_overview_expense">支出</string>

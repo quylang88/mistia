@@ -21735,6 +21735,29 @@
         }
       }
     },
+    "overview.overview.dayEntriesUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some expense details are unavailable."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の支出の詳細が不明です。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa có đủ thông tin về một số khoản chi."
+          }
+        }
+      }
+    },
     "overview.overview.dayDetails" : {
       "extractionState" : "stale",
       "localizations" : {
