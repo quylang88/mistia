@@ -25,7 +25,7 @@ import vn.com.quyln.mistia.core.designsystem.*
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.model.*
 
-@Composable internal fun OverviewHeroMetrics(months:List<OverviewMonthlyCashflow>,currency:String,assetBalance:Long,weeks:List<OverviewWeekSpending>,categoryPages:List<OverviewCategorySpendingMonth>,overlayPresented:Boolean,onOpenExpenseDay:(java.time.LocalDate)->Unit) {
+@Composable internal fun OverviewHeroMetrics(months:List<OverviewMonthlyCashflow>,currency:String,assetBalance:java.math.BigInteger?,weeks:List<OverviewWeekSpending>,categoryPages:List<OverviewCategorySpendingMonth>,overlayPresented:Boolean,onOpenExpenseDay:(java.time.LocalDate)->Unit) {
     val code=currency.trim().uppercase(java.util.Locale.ROOT).takeIf {it in CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
     var dismissToken by remember {mutableIntStateOf(0)}
     var categoryMode by remember {mutableStateOf(false)}
@@ -45,9 +45,13 @@ import vn.com.quyln.mistia.core.model.*
         Column(Modifier.padding(padding).fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(18.dp)) {
             Column(Modifier.pointerInput(Unit) {detectTapGestures {dismissToken++}},verticalArrangement=Arrangement.spacedBy(7.dp)) {
                 Text(stringResource(R.string.overview_overview_available_assets),fontSize=15.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                BasicText(formatMinorUnits(assetBalance,code),Modifier.fillMaxWidth().testTag("overview.assets"),
+                val assetHint=stringResource(R.string.overview_overview_assets_unavailable)
+                BasicText(assetBalance?.let {formatMinorUnits(it,code)} ?: "\u2014",Modifier.fillMaxWidth().testTag("overview.assets")
+                    .then(if(assetBalance==null) Modifier.semantics {stateDescription=assetHint} else Modifier),
                     style=MaterialTheme.typography.headlineLarge.copy(color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.Bold),
                     maxLines=1,softWrap=false,autoSize=TextAutoSize.StepBased(minFontSize=14.sp,maxFontSize=34.sp,stepSize=1.sp))
+                if(assetBalance==null) Text(assetHint,Modifier.fillMaxWidth().testTag("overview.assets.unavailable"),
+                    style=TextStyle(fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant))
             }
             FlowRow(Modifier.fillMaxWidth().pointerInput(Unit) {detectTapGestures {dismissToken++}},horizontalArrangement=Arrangement.spacedBy(14.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
                 for((kind,amount) in listOf("income" to month.incomeMinor,"expense" to month.expenseMinor)) {

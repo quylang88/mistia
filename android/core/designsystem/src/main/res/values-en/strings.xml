@@ -933,6 +933,7 @@
     <string name="notifications_notificationcenter_value_value_your_value">%1$s %2$s your %3$s.</string>
     <string name="notifications_notificationcenter_value_value_your_value_request">%1$s %2$s your %3$s request.</string>
     <string name="notifications_notificationcenter_value_value_your_value_value_request">%1$s %2$s your %3$s %4$s request.</string>
+    <string name="overview_overview_assets_unavailable">Some asset values cannot be calculated yet.</string>
     <string name="overview_overview_available_assets">Available assets</string>
     <string name="overview_overview_budget_watchlist">Budget watchlist</string>
     <string name="overview_overview_cashflow_conversion_unavailable">Some amounts cannot be converted to your primary currency yet.</string>

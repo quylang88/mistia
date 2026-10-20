@@ -10,7 +10,7 @@ import kotlinx.serialization.json.*
 
 /** Read-only exact report; financial mutations keep their existing validation/balance contracts. */
 fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:List<LedgerTransactionRecord>,currency:String,
-    rates:List<ExchangeRateSnapshot> = emptyList(),inventoryCost:BigInteger=BigInteger.ZERO,inventoryCurrency:String=currency):Long {
+    rates:List<ExchangeRateSnapshot> = emptyList(),inventoryCost:BigInteger?=BigInteger.ZERO,inventoryCurrency:String?=currency):BigInteger? {
     val active=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null && !it.isArchived && it.kind!=null && it.kind!=WalletKind.CREDIT_CARD}
     val balances=active.associate {it.id to BigInteger.valueOf(it.openingBalanceMinor)}.toMutableMap()
     fun apply(id:String?,amount:Long,outgoing:Boolean) {
@@ -46,26 +46,31 @@ fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:Li
             null -> Unit
         }
     }
-    var total=planningMoneyMinorExact(inventoryCost,inventoryCurrency,currency,rates)
-    for(wallet in active) total+=planningMoneyMinorExact(balances.getValue(wallet.id),wallet.currencyCode,currency,rates)
-    return total.max(BigInteger.valueOf(Long.MIN_VALUE)).min(BigInteger.valueOf(Long.MAX_VALUE)).toLong()
+    val cost=inventoryCost ?: return null
+    var total=if(cost.signum()==0) BigInteger.ZERO else {
+        val code=inventoryCurrency ?: return null
+        overviewMoneyMinorExact(cost,code,currency,rates) ?: return null
+    }
+    for(wallet in active) total+=overviewMoneyMinorExact(balances.getValue(wallet.id),wallet.currencyCode,currency,rates) ?: return null
+    return total
 }
 
 /** Current inventory position snapshots, not trade gross amounts or realized gains. */
-fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>):BigInteger {
+fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>):BigInteger? {
     val activeChannels=channels.filter {it.ownedOverviewEnvelope(owner,CloudEntity.INVESTMENT_CHANNEL,true)}.map {it.id}.toSet()
     val activeAssets=assets.filter {it.ownedOverviewEnvelope(owner,CloudEntity.INVESTMENT_ASSET,true) && it.payload.investmentString("channel_id") in activeChannels}
     val byAsset=trades.filter {it.ownedOverviewEnvelope(owner,CloudEntity.INVESTMENT_TRADE,false)}.groupBy {it.payload.investmentString("asset_id")}
     var total=BigInteger.ZERO
     for(asset in activeAssets) {
         val candidates=byAsset[asset.id].orEmpty()
-        // A corrupt calendar cannot establish which snapshot is current; hold this asset.
-        if(candidates.any {runCatching {Instant.parse(it.payload.investmentString("occurred_at"));Instant.parse(it.payload.investmentString("created_at"))}.isFailure}) continue
+        // A corrupt calendar cannot establish which snapshot is current; hold the portfolio.
+        if(candidates.any {runCatching {Instant.parse(it.payload.investmentString("occurred_at"));Instant.parse(it.payload.investmentString("created_at"))}.isFailure}) return null
         val latest=candidates.maxWithOrNull(compareBy<CloudRecord> {Instant.parse(it.payload.investmentString("occurred_at"))}
             .thenBy {Instant.parse(it.payload.investmentString("created_at"))}.thenBy {it.id.lowercase(Locale.ROOT)}) ?: continue
-        val quantity=latest.payload.investmentString("position_quantity_after_decimal_string")?.toBigDecimalOrNull() ?: continue
-        val cost=(latest.payload["position_cost_basis_after_minor"] as? JsonPrimitive)?.longOrNull ?: continue
-        if(quantity.signum()>0) total+=BigInteger.valueOf(maxOf(cost,0))
+        val quantity=(latest.payload["position_quantity_after_decimal_string"] as? JsonPrimitive)?.takeIf {it.isString}?.content?.toBigDecimalOrNull() ?: return null
+        if(quantity.signum()<=0) continue
+        val cost=(latest.payload["position_cost_basis_after_minor"] as? JsonPrimitive)?.takeIf {!it.isString}?.longOrNull ?: return null
+        total+=BigInteger.valueOf(maxOf(cost,0))
     }
     return total
 }

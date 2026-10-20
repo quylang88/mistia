@@ -21,25 +21,26 @@ class OverviewAssetsTest {
     }))
     private fun total(wallets:List<LedgerWalletRecord>,records:List<LedgerTransactionRecord> = emptyList(),currency:String="JPY",rates:List<ExchangeRateSnapshot> = emptyList(),inventory:BigInteger=BigInteger.ZERO,inventoryCode:String=currency)=
         overviewTotalAssets(owner,wallets,records,currency,rates,inventory,inventoryCode)
+    private fun money(expected:Long,actual:BigInteger?)=assertEquals(BigInteger.valueOf(expected),actual)
     @Test fun `owned active noncredit wallets contribute current balances without including credit liability`() {
         val cash=wallet(opening=9007199254740993L);val bank=wallet(WalletKind.BANK,opening=500)
         val hidden=listOf(wallet().copy(ownerUserId=other),wallet().copy(isArchived=true),wallet().copy(deletedAt=time),wallet(WalletKind.CREDIT_CARD,opening=Long.MAX_VALUE))
         val rows=listOf(record(cash),record(bank,"income",25),record(cash).copy(entryStatusWireValue="draft"),record(cash).copy(isArchived=true),record(cash).copy(deletedAt=time))
-        assertEquals(9007199254741418L,total(listOf(cash,bank)+hidden,rows))
+        money(9007199254741418L,total(listOf(cash,bank)+hidden,rows))
     }
     @Test fun `cross currency transfer applies original source and explicit destination leg before wallet conversion`() {
         val cash=wallet();val vnd=wallet(currency="VND",opening=0)
         val row=record(cash,"transfer").copy(transferSubtypeWireValue="internalTransfer",destinationWalletId=vnd.id,destinationAmountMinor=16500,
             reportingCurrencyCode="VND",reportingAmountMinor=1)
         val rate=ExchangeRateSnapshot("JPY","VND","165","test",0,null)
-        assertEquals(1000L,total(listOf(cash,vnd),listOf(row),rates=listOf(rate)))
-        assertEquals(165000L,total(listOf(cash,vnd),listOf(row),"VND",listOf(rate)))
+        money(1000L,total(listOf(cash,vnd),listOf(row),rates=listOf(rate)))
+        money(165000L,total(listOf(cash,vnd),listOf(row),"VND",listOf(rate)))
         val same=wallet(opening=0)
-        assertEquals(1000L,total(listOf(cash,same),listOf(row.copy(destinationWalletId=same.id,destinationAmountMinor=null))))
+        money(1000L,total(listOf(cash,same),listOf(row.copy(destinationWalletId=same.id,destinationAmountMinor=null))))
     }
     @Test fun `future posted balance applies regardless of reporting month while foreign records cannot affect wallet`() {
         val cash=wallet();val row=record(cash).copy(occurredAt="2030-01-01T00:00:00Z")
-        assertEquals(900L,total(listOf(cash),listOf(row,row.copy(ownerUserId=other),row.copy(entryStatusWireValue="unknown"))))
+        money(900L,total(listOf(cash),listOf(row,row.copy(ownerUserId=other),row.copy(entryStatusWireValue="unknown"))))
     }
     @Test fun `family and debt legs match wallet cash while shared principal is neutral and resale uses cost`() {
         val cash=wallet();val row=record(cash,"transfer")
@@ -49,32 +50,32 @@ class OverviewAssetsTest {
         val collect=lend.copy(debtIntentWireValue="collect")
         val shared=lend.copy(settlementRoleWireValue="sharedExpenseReceivable")
         val resale=lend.copy(settlementRoleWireValue="resaleReceivable",reportingExpenseMinor=30)
-        assertEquals(970L,total(listOf(cash),listOf(outgoing,incoming,lend,collect,shared,shared.copy(settlementRoleWireValue="sharedExpensePayable"),resale)))
+        money(970L,total(listOf(cash),listOf(outgoing,incoming,lend,collect,shared,shared.copy(settlementRoleWireValue="sharedExpensePayable"),resale)))
     }
-    @Test fun `wallet currency conversion is per final wallet balance and missing rate contributes zero`() {
+    @Test fun `wallet currency conversion is per final balance and missing rate holds reporting`() {
         val cash=wallet(opening=3);val vnd=wallet(opening=-1,currency="VND")
         val rate=ExchangeRateSnapshot("JPY","VND","2.5","test",0,null)
-        assertEquals(-1L,total(listOf(cash,vnd),currency="VND"))
-        assertEquals(7L,total(listOf(cash,vnd),currency="VND",rates=listOf(rate)))
-        assertEquals(3L,total(listOf(cash,vnd),rates=listOf(rate)))
+        assertNull(total(listOf(cash,vnd),currency="VND"))
+        money(7L,total(listOf(cash,vnd),currency="VND",rates=listOf(rate)))
+        money(3L,total(listOf(cash,vnd),rates=listOf(rate)))
     }
     @Test fun `intermediate wallet balance conversion and totals retain overflow until final cancellation`() {
         val cash=wallet(opening=Long.MAX_VALUE);val row=record(cash,"income",Long.MAX_VALUE)
         val expense=record(cash,amount=Long.MAX_VALUE)
-        for(rows in listOf(listOf(row,expense),listOf(expense,row))) assertEquals(Long.MAX_VALUE,total(listOf(cash),rows))
+        for(rows in listOf(listOf(row,expense),listOf(expense,row))) money(Long.MAX_VALUE,total(listOf(cash),rows))
         val negative=wallet(opening=-Long.MAX_VALUE)
-        assertEquals(0L,total(listOf(cash,negative),listOf(row,expense)))
+        money(0L,total(listOf(cash,negative),listOf(row,expense)))
         val rate=ExchangeRateSnapshot("JPY","VND","2","test",0,null)
-        assertEquals(0L,total(listOf(cash,negative),listOf(row,expense),"VND",listOf(rate)))
-        assertEquals(Long.MAX_VALUE,total(listOf(cash),listOf(record(cash,amount=Long.MIN_VALUE))))
+        money(0L,total(listOf(cash,negative),listOf(row,expense),"VND",listOf(rate)))
+        assertEquals(BigInteger.valueOf(Long.MAX_VALUE)-BigInteger.valueOf(Long.MIN_VALUE),total(listOf(cash),listOf(record(cash,amount=Long.MIN_VALUE))))
     }
-    @Test fun `inventory is converted in accounting currency and summed before final display clamp`() {
+    @Test fun `inventory is converted in accounting currency and combined without display saturation`() {
         val cash=wallet(opening=-Long.MAX_VALUE,currency="VND")
         val inventory=BigInteger.valueOf(Long.MAX_VALUE).multiply(BigInteger.TWO)
-        assertEquals(Long.MAX_VALUE,total(listOf(cash),currency="VND",inventory=inventory))
+        money(Long.MAX_VALUE,total(listOf(cash),currency="VND",inventory=inventory))
         val rate=ExchangeRateSnapshot("JPY","VND","2.5","test",0,null)
-        assertEquals(8L,total(emptyList(),currency="VND",rates=listOf(rate),inventory=BigInteger.valueOf(3),inventoryCode="JPY"))
-        assertEquals(0L,total(emptyList(),currency="VND",inventory=BigInteger.valueOf(3),inventoryCode="JPY"))
+        money(8L,total(emptyList(),currency="VND",rates=listOf(rate),inventory=BigInteger.valueOf(3),inventoryCode="JPY"))
+        assertNull(total(emptyList(),currency="VND",inventory=BigInteger.valueOf(3),inventoryCode="JPY"))
     }
     private fun channel()=raw(CloudEntity.INVESTMENT_CHANNEL)
     private fun asset(channel:CloudRecord)=raw(CloudEntity.INVESTMENT_ASSET,buildJsonObject {put("channel_id",channel.id)})
@@ -93,7 +94,7 @@ class OverviewAssetsTest {
         val channel=channel();val asset=asset(channel);val old=trade(asset,100,occurred="2026-10-15T00:00:00Z");val latest=trade(asset)
         assertEquals(BigInteger.valueOf(500),overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(old,latest)))
         for(bad in listOf(latest.with("position_cost_basis_after_minor" to JsonPrimitive("broken")),latest.with("position_quantity_after_decimal_string" to JsonPrimitive("broken"))))
-            assertEquals(BigInteger.ZERO,overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(old,bad)))
+            assertNull(overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(old,bad)))
         for(bad in listOf(channel.copy(ownerUserId=other),channel.with("user_id" to JsonPrimitive(other)),channel.with("is_archived" to JsonPrimitive(true)),channel.copy(deletedAt=time)))
             assertEquals(BigInteger.ZERO,overviewInventoryCost(owner,listOf(bad),listOf(asset),listOf(latest)))
         for(bad in listOf(asset.copy(ownerUserId=other),asset.with("is_archived" to JsonPrimitive(true)),asset.with("id" to JsonPrimitive(UUID.randomUUID().toString()))))
@@ -117,13 +118,13 @@ class OverviewAssetsTest {
         val channel=channel();val asset=asset(channel);val old=trade(asset,100)
         val latest=trade(asset,500,occurred="2026-10-16T09:00:00+09:00",created="2026-10-16T00:00:01Z")
         assertEquals(BigInteger.valueOf(500),overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(latest,old)))
-        assertEquals(BigInteger.ZERO,overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(old,latest.with("occurred_at" to JsonPrimitive("broken")))))
+        assertNull(overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(old,latest.with("occurred_at" to JsonPrimitive("broken")))))
     }
     @Test fun `wallet balances above Long range retain exact conversion until cross wallet cancellation`() {
         val positive=wallet(opening=Long.MAX_VALUE);val negative=wallet(opening=-Long.MAX_VALUE)
         val rows=listOf(record(positive,"income",Long.MAX_VALUE),record(negative,"income",-Long.MAX_VALUE))
         val rate=ExchangeRateSnapshot("JPY","VND","2","test",0,null)
-        assertEquals(0L,total(listOf(positive,negative),rows,"VND",listOf(rate)))
+        money(0L,total(listOf(positive,negative),rows,"VND",listOf(rate)))
     }
     @Test fun `inventory accounting currency uses independent owned metadata and holds malformed currency`() {
         val system=raw(CloudEntity.LEDGER_WALLET,buildJsonObject {put("currency_code"," vnd ");put("opening_balance_minor","broken")},investmentSystemWalletId(owner))

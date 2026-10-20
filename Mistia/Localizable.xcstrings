@@ -21436,6 +21436,29 @@
         }
       }
     },
+    "overview.overview.assetsUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some asset values cannot be calculated yet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の資産額をまだ計算できません。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa thể tính đầy đủ giá trị tài sản."
+          }
+        }
+      }
+    },
     "overview.overview.availableAssets" : {
       "extractionState" : "stale",
       "localizations" : {

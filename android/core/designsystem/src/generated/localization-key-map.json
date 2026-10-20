@@ -931,6 +931,7 @@
   "notifications.notificationcenter.valueValueYourValue": "notifications_notificationcenter_value_value_your_value",
   "notifications.notificationcenter.valueValueYourValueRequest": "notifications_notificationcenter_value_value_your_value_request",
   "notifications.notificationcenter.valueValueYourValueValueRequest": "notifications_notificationcenter_value_value_your_value_value_request",
+  "overview.overview.assetsUnavailable": "overview_overview_assets_unavailable",
   "overview.overview.availableAssets": "overview_overview_available_assets",
   "overview.overview.budgetWatchlist": "overview_overview_budget_watchlist",
   "overview.overview.cashflowConversionUnavailable": "overview_overview_cashflow_conversion_unavailable",

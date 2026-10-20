@@ -2358,6 +2358,8 @@ nonisolated enum L10n {
     nonisolated enum overview {
 
         nonisolated enum overview {
+            static var assetsUnavailable: String { L10n.tr("overview.overview.assetsUnavailable", vi: "Chưa thể tính đầy đủ giá trị tài sản.", en: "Some asset values cannot be calculated yet.", ja: "一部の資産額をまだ計算できません。") }
+            static func assetsUnavailable(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.assetsUnavailable", vi: "Chưa thể tính đầy đủ giá trị tài sản.", en: "Some asset values cannot be calculated yet.", ja: "一部の資産額をまだ計算できません。", language: language) }
             static var availableAssets: String { L10n.tr("overview.overview.availableAssets", vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産") }
             static func availableAssets(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.availableAssets", vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産", language: language) }
             static var budgetWatchlist: String { L10n.tr("overview.overview.budgetWatchlist", vi: "Ngân sách cần chú ý", en: "Budget watchlist", ja: "注意が必要な予算") }

@@ -933,6 +933,7 @@
     <string name="notifications_notificationcenter_value_value_your_value">%1$s %2$s %3$s của bạn.</string>
     <string name="notifications_notificationcenter_value_value_your_value_request">%1$s %2$s yêu cầu %3$s của bạn.</string>
     <string name="notifications_notificationcenter_value_value_your_value_value_request">%1$s %2$s yêu cầu %3$s %4$s của bạn.</string>
+    <string name="overview_overview_assets_unavailable">Chưa thể tính đầy đủ giá trị tài sản.</string>
     <string name="overview_overview_available_assets">Tài sản khả dụng</string>
     <string name="overview_overview_budget_watchlist">Ngân sách cần chú ý</string>
     <string name="overview_overview_cashflow_conversion_unavailable">Chưa thể quy đổi đầy đủ số tiền sang tiền tệ chính.</string>

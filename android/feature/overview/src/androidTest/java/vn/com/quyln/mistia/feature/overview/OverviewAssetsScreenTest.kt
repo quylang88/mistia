@@ -69,7 +69,10 @@ class OverviewAssetsScreenTest {
         return CloudRecord(entity.table,id,owner.value,JsonObject(buildJsonObject {put("id",id);put("user_id",owner.value);put("is_archived",false);put("created_at",time);put("occurred_at",time)}+fields),time,null,0)
     }
     private fun pendingAll()=runBlocking {CloudEntity.entries.flatMap {store.pendingMutations(owner,it,Long.MAX_VALUE)}}
-    private fun assets(amount:Long,code:String) {compose.onNodeWithTag("overview.assets").performScrollTo().assertTextEquals(formatMinorUnits(amount,code))}
+    private fun assets(amount:Long?,code:String) {
+        compose.onNodeWithTag("overview.assets").performScrollTo().assertTextEquals(amount?.let {formatMinorUnits(it,code)} ?: "\u2014")
+        if(amount==null) compose.onNodeWithTag("overview.assets.unavailable").assertExists()
+    }
     @Test fun realRoomWalletCashAndRemainingInventoryAppearTogetherWithoutChangingStoredRowsOrOutbox() {
         val cash=wallet(opening=9007199254740993L,code="VND");seed(cash)
         seed(wallet(opening=Long.MAX_VALUE,kind="creditCard"));seed(wallet(opening=99999).with("is_archived" to JsonPrimitive(true)))
@@ -83,7 +86,7 @@ class OverviewAssetsScreenTest {
     }
     @Test fun livePrimaryAndRatesRecomputeWalletAssetsFromOriginalBalances() {
         seed(wallet());var primary by mutableStateOf("JPY");compose.setContent {Screen(primary=primary)};assets(3,"JPY")
-        compose.runOnIdle {primary="VND"};assets(0,"VND")
+        compose.runOnIdle {primary="VND"};assets(null,"VND")
         compose.runOnIdle {rateRows.value=listOf(ExchangeRateSnapshot("JPY","VND","2.5","test",0,null))};assets(8,"VND")
         compose.runOnIdle {rateRows.value=listOf(ExchangeRateSnapshot("JPY","VND","3","test",0,null))};assets(9,"VND")
         compose.runOnIdle {primary="JPY"};assets(3,"JPY")
