@@ -95,7 +95,8 @@ fun requiresInvestmentWalletDomain(owner:UserId,id:String,payload:JsonObject?):B
 }
 
 /** Exact Foundation whitespacesAndNewlines set; Java also includes unrelated controls. */
-fun normalizedInvestmentChannelName(value:String):String=value.trim{
-    it in '\u0009'..'\u000d' || it==' ' || it=='\u0085' || it=='\u00a0' || it=='\u1680' ||
-        it in '\u2000'..'\u200b' || it=='\u2028' || it=='\u2029' || it=='\u202f' || it=='\u205f' || it=='\u3000'
+fun normalizedInvestmentChannelName(value:String):String=value.trim{it.isInvestmentWhitespace()}
+internal fun Char.isInvestmentWhitespace():Boolean=run{
+    this in '\u0009'..'\u000d' || this==' ' || this=='\u0085' || this=='\u00a0' || this=='\u1680' ||
+        this in '\u2000'..'\u200b' || this=='\u2028' || this=='\u2029' || this=='\u202f' || this=='\u205f' || this=='\u3000'
 }

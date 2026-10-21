@@ -14,6 +14,11 @@ on:
       - "Scripts/generate-android-finance-icons.cjs"
       - "Scripts/tests/android-finance-icons.test.cjs"
       - "docs/android/finance-icon-assets.generated.json"
+      - "Mistia/Shared/CoreLogic/InvestmentLogic.swift"
+      - "Scripts/generate-android-investment-unit-fold.swift"
+      - "Scripts/tests/test_android_investment_unit_fold.py"
+      - "docs/android/investment-unit-fold.generated.json"
+      - "Tests/MistiaCoreLogicTests/InvestmentAccountingParityVectorTests.swift"
       - ".github/workflows/android.yml"
   push:
     branches: [main]
@@ -29,6 +34,11 @@ on:
       - "Scripts/generate-android-finance-icons.cjs"
       - "Scripts/tests/android-finance-icons.test.cjs"
       - "docs/android/finance-icon-assets.generated.json"
+      - "Mistia/Shared/CoreLogic/InvestmentLogic.swift"
+      - "Scripts/generate-android-investment-unit-fold.swift"
+      - "Scripts/tests/test_android_investment_unit_fold.py"
+      - "docs/android/investment-unit-fold.generated.json"
+      - "Tests/MistiaCoreLogicTests/InvestmentAccountingParityVectorTests.swift"
 
 jobs:
   verify:
@@ -52,11 +62,17 @@ jobs:
           Scripts/generate-android-l10n.swift --check
       - name: Check shared finance icon artwork
         run: node Scripts/generate-android-finance-icons.cjs --check
+      - name: Check Swift investment unit folding
+        run: |
+          swift Scripts/generate-android-investment-unit-fold.swift --check
+          python3 Scripts/tests/test_android_investment_unit_fold.py
+      - name: Verify Swift investment accounting vectors
+        run: swift test --filter InvestmentAccountingParityVectorTests
       - name: Check cross-platform contracts
         run: Scripts/check-android-contracts.swift
       - name: Test and assemble APK 0
         working-directory: android
-        run: ./gradlew testDebugUnitTest :app:assembleDebug
+        run: ./gradlew testDebugUnitTest :core:model:compileDebugAndroidTestKotlin :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: mistia-apk0-debug
