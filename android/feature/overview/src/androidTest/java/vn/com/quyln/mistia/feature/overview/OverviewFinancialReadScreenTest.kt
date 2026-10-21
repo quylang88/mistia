@@ -43,15 +43,19 @@ class OverviewFinancialReadScreenTest {
         androidx.compose.material3.Scaffold {padding ->OverviewScreen(subject,source,sync,androidx.compose.ui.Modifier.padding(padding))}
     }}
     private fun metric(value:String){compose.onNodeWithTag("overview.monthly.expense").performScrollTo().assertTextEquals(value)}
+    private fun revealRecent(tag:String){
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasTestTag(tag))
+        compose.onNodeWithTag(tag).assertExists()
+    }
     @Test fun withheldFirstReadIsUnavailableUntilActuallyLoadedEmpty(){
         val values=MutableStateFlow<OverviewFinancialReadSnapshot?>(null)
         val source=object:FinanceRepository by repo {override fun observeOverviewFinancialReadSnapshot(owner:UserId)=values.filterNotNull()}
         compose.setContent {Screen(source=source)};metric("—")
         compose.onNodeWithTag("overview.financial.loading").assertExists()
-        compose.onNodeWithTag("overview.recent.unavailable").performScrollTo().assertExists()
+        revealRecent("overview.recent.unavailable")
         compose.runOnIdle {values.value=OverviewFinancialReadSnapshot(owner,emptyList())};metric(formatMinorUnits(0,"JPY"))
         compose.onNodeWithTag("overview.financial.loading").assertDoesNotExist()
-        compose.onNodeWithTag("overview.recent.empty").performScrollTo().assertExists()
+        revealRecent("overview.recent.empty")
     }
     @Test fun errorAfterLoadedClearsPrivateMoneyAndRetryStartsFreshRead(){
         val crash=MutableStateFlow(false);var attempts=0
@@ -81,7 +85,7 @@ class OverviewFinancialReadScreenTest {
         val values=MutableStateFlow(OverviewFinancialReadSnapshot(owner,listOf(damaged)))
         val source=object:FinanceRepository by repo {override fun observeOverviewFinancialReadSnapshot(owner:UserId)=values}
         compose.setContent {Screen(source=source)}
-        compose.onNodeWithTag("overview.recent.unavailable").performScrollTo().assertExists()
+        revealRecent("overview.recent.unavailable")
         compose.onNodeWithText("Owned expense").assertDoesNotExist();compose.onNodeWithTag("overview.recent.empty").assertDoesNotExist()
         compose.runOnIdle {values.value=snapshot()}
         compose.onNodeWithText("Owned expense").assertExists();compose.onNodeWithTag("overview.recent.unavailable").assertDoesNotExist()

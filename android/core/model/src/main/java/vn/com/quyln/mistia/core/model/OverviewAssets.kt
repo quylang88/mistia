@@ -64,7 +64,14 @@ fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:Li
 }
 
 /** Current inventory position snapshots, not trade gross amounts or realized gains. */
-fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>):BigInteger? {
+fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>):BigInteger? =
+    overviewInventoryCostRead(owner,channels,assets,trades,null,false)
+
+/** Required accounting denomination is checked only for a nonzero current cost. */
+fun overviewInventoryCostInCurrency(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>,accountingCurrency:String?):BigInteger? =
+    overviewInventoryCostRead(owner,channels,assets,trades,accountingCurrency,true)
+
+private fun overviewInventoryCostRead(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>,accountingCurrency:String?,checkCurrency:Boolean):BigInteger? {
     val possibleChannels=channels.filter {it.financeRawIdentity(owner,CloudEntity.INVESTMENT_CHANNEL,true) && it.financeRawDeleted()!=true && it.payload.financeRawArchived()!=true}.associateBy {financeRawUuid(it.id)}
     val possibleAssets=assets.filter {it.financeRawIdentity(owner,CloudEntity.INVESTMENT_ASSET,true) && it.financeRawDeleted()!=true && it.payload.financeRawArchived()!=true}
         .filter {it.payload.financeRawReference("channel_id").let {reference -> !reference.readable && possibleChannels.isNotEmpty() || reference.id in possibleChannels}}
@@ -88,6 +95,10 @@ fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<Cl
         if(!channelRef.readable || channel==null || channel.financeRawDeleted()==null || channel.payload.financeRawArchived()==null ||
             asset.financeRawDeleted()==null || asset.payload.financeRawArchived()==null) return null
         val cost=(latest.payload["position_cost_basis_after_minor"] as? JsonPrimitive)?.takeIf {!it.isString}?.longOrNull ?: return null
+        if(checkCurrency && cost>0) {
+            val source=latest.payload.financeRawString("accounting_currency_code")?.investmentAccountingCode()
+            if(source==null || accountingCurrency==null || source!=accountingCurrency) return null
+        }
         total+=BigInteger.valueOf(maxOf(cost,0))
     }
     return total

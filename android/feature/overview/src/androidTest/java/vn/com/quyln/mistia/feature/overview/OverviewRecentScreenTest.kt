@@ -50,7 +50,7 @@ class OverviewRecentScreenTest {
         OverviewScreen(subject,repository,sync,modifier=androidx.compose.ui.Modifier.padding(padding),primaryCurrencyCode=primary)
     }}}
     private fun rows(subject:UserId=owner)=runBlocking {repo.observe(CloudEntity.LEDGER_TRANSACTION,subject).first()}
-    private fun section(index:Int)=compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToIndex(index)
+    private fun section()=compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasText(ApplicationProvider.getApplicationContext<Context>().getString(vn.com.quyln.mistia.core.designsystem.R.string.overview_overview_recent_transactions)))
     private fun queue(subject:UserId=owner)=runBlocking {store.pendingMutations(subject,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE)}
     @Test fun recentRowsFilterHiddenDomainStatusAndKeepOnlyFiveInOccurredOrderWithoutWrites() {
         (1..7).forEach {seed(row(it,occurred="2026-10-${10+it}T00:00:00Z"))}
@@ -60,7 +60,7 @@ class OverviewRecentScreenTest {
         seed(row(23,"Malformed").with("amount_minor" to JsonPrimitive("broken")))
         seed(row(24,"Deleted").with("deleted_at" to JsonPrimitive(time)).copy(deletedAt=time))
         val before=rows();val pending=queue()
-        compose.setContent {Screen()};section(3)
+        compose.setContent {Screen()};section()
         compose.waitUntil(5000) {compose.onAllNodesWithText("Row 7").fetchSemanticsNodes().isNotEmpty()}
         for(title in listOf("Archived","Draft","Investment","Malformed","Deleted","Row 1","Row 2")) compose.onNodeWithText(title).assertDoesNotExist()
         // Measure layout order before scrolling; clipped offscreen semantics bounds collapse to zero.
@@ -75,14 +75,14 @@ class OverviewRecentScreenTest {
             override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) mixed else repo.observe(entity,ownerUserId)
         }
-        compose.setContent {Screen(repository=source)};section(3)
+        compose.setContent {Screen(repository=source)};section()
         compose.onNodeWithText("Public").assertExists()
         for(title in listOf("Private","Wrong payload","Wrong ID")) compose.onNodeWithText(title).assertDoesNotExist()
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(queue().isEmpty())
     }
     @Test fun legacyMissingSourceCurrencyUsesCurrentPrimaryWithoutReportingOrDestinationRelabeling() {
         seed(row(1,"Legacy").with("source_currency_code" to JsonNull,"reporting_currency_code" to JsonPrimitive("USD"),"reporting_amount_minor" to JsonPrimitive(1),"destination_currency_code" to JsonPrimitive("JPY")))
-        compose.setContent {Screen(primary=" vnd ")};section(3)
+        compose.setContent {Screen(primary=" vnd ")};section()
         compose.onNodeWithText(formatMinorUnits(9007199254740993L,"VND"),substring=true).assertExists()
         Assert.assertEquals(9007199254740993L,(rows().single().payload["amount_minor"] as JsonPrimitive).long)
     }
@@ -90,7 +90,7 @@ class OverviewRecentScreenTest {
         val wallet=runBlocking {repo.saveWallet(owner,WalletDraft(name="Cash VND",kind=WalletKind.CASH,currencyCode="VND"),device,time).getOrThrow()}
         seed(row(1,"Source").with("source_currency_code" to JsonNull,"source_wallet_id" to JsonPrimitive(wallet.id),"reporting_currency_code" to JsonPrimitive("JPY"),"reporting_amount_minor" to JsonPrimitive(1)))
         val before=rows();val pending=queue()
-        compose.setContent {Screen()};section(3)
+        compose.setContent {Screen()};section()
         compose.onNodeWithText(formatMinorUnits(9007199254740993L,"VND"),substring=true).assertExists()
         Assert.assertEquals(before,rows());Assert.assertEquals(pending,queue())
     }
@@ -105,9 +105,9 @@ class OverviewRecentScreenTest {
             }
         }
         compose.setContent {Screen(subject,source)}
-        section(3);compose.onNodeWithText("Private old owner").assertExists()
+        section();compose.onNodeWithText("Private old owner").assertExists()
         compose.runOnIdle {subject=other}
-        section(3);compose.onNodeWithText("Private old owner").assertDoesNotExist()
+        section();compose.onNodeWithText("Private old owner").assertDoesNotExist()
         compose.onNodeWithTag("overview.recent.unavailable").assertExists()
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())
     }

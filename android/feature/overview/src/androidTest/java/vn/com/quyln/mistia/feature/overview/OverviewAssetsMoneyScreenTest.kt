@@ -46,10 +46,10 @@ class OverviewAssetsMoneyScreenTest {
         put("name","Private asset wallet");put("kind_raw_value","cash");put("opening_balance_minor",amount);put("currency_code",code)
     },id)
     private data class Position(val channel:CloudRecord,val asset:CloudRecord,val latest:CloudRecord)
-    private fun position(cost:Long=7):Position {
+    private fun position(cost:Long=7,code:String="JPY"):Position {
         val channel=raw(CloudEntity.INVESTMENT_CHANNEL)
         val asset=raw(CloudEntity.INVESTMENT_ASSET,buildJsonObject {put("channel_id",channel.id)})
-        val latest=raw(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",cost)})
+        val latest=raw(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",cost);put("accounting_currency_code",code);put("realized_profit_loss_minor",0)})
         listOf(channel,asset,latest).forEach(::seed);return Position(channel,asset,latest)
     }
     private fun CloudRecord.with(key:String,value:JsonElement)=copy(payload=JsonObject(payload+(key to value)))
@@ -72,7 +72,7 @@ class OverviewAssetsMoneyScreenTest {
     private fun withoutWrites(action:()->Unit) {val before=snapshot();action();Assert.assertEquals(before,snapshot())}
     private fun n(value:Long)=BigInteger.valueOf(value)
     @Test fun realRoomCashPlusInventoryKeepsExactTwiceMaximumAndOriginalRecordsWithoutWrites() {
-        repeat(2){seed(wallet(Long.MAX_VALUE,"VND"))};seed(wallet(0,"VND",investmentSystemWalletId(owner)));position(5)
+        repeat(2){seed(wallet(Long.MAX_VALUE,"VND"))};seed(wallet(0,"VND",investmentSystemWalletId(owner)));position(5,code="VND")
         withoutWrites {compose.setContent {Screen(primary="VND")};assets(n(Long.MAX_VALUE)*BigInteger.TWO+n(5),"VND")}
     }
     @Test fun missingFxNeverShowsPartialAssetsAndLiveRatePrimaryRepairStaysReadOnly() {
@@ -94,7 +94,8 @@ class OverviewAssetsMoneyScreenTest {
         seed(wallet(9));val system=wallet(0,"??",investmentSystemWalletId(owner));seed(system);val position=position()
         withoutWrites {compose.setContent {Screen()};unavailable()}
         seed(system.with("currency_code",JsonPrimitive("JPY")));withoutWrites {assets(n(16))}
-        seed(system.with("currency_code",JsonPrimitive("VND")));withoutWrites {unavailable();compose.runOnIdle {rateRows.value=listOf(rate)};assets(n(12));compose.runOnIdle {rateRows.value=emptyList()};unavailable()}
+        seed(system.with("currency_code",JsonPrimitive("VND")));withoutWrites {unavailable();compose.runOnIdle {rateRows.value=listOf(rate)};unavailable()}
+        seed(position.latest.with("accounting_currency_code",JsonPrimitive("VND")));withoutWrites {assets(n(12));compose.runOnIdle {rateRows.value=emptyList()};unavailable()}
         seed(position.latest.with("position_quantity_after_decimal_string",JsonPrimitive("0")));seed(system.with("currency_code",JsonNull));withoutWrites {assets(n(9))}
     }
     @Test fun malformedLatestPositionHoldsWholeAssetsUntilRepairSoldOrArchivedChannel() {

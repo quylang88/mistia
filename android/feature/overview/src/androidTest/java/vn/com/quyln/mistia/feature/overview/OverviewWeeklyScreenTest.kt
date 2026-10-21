@@ -210,9 +210,12 @@ class OverviewWeeklyScreenTest {
             val density=androidx.compose.ui.platform.LocalDensity.current
             CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density,1.3f)) {Screen(primary="VND")}
         }
+        compose.waitUntil(5000) {
+            compose.onAllNodes(hasTestTag("overview.chart.day.$monday") and hasContentDescription(formatMinorUnits(Long.MAX_VALUE,"VND"),substring=true)).fetchSemanticsNodes().isNotEmpty()
+        }
         for(text in listOf("Mon","Tue","Wed","Thu","Fri","Sat","Sun")) {
             val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-            compose.onNodeWithText(text).performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) {it(layouts)}
+            compose.onNodeWithText(text,useUnmergedTree=true).performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) {it(layouts)}
             val layout=layouts.single();Assert.assertEquals("$text complete visible end",text.length,layout.getLineEnd(0,true));Assert.assertFalse(layout.isLineEllipsized(0))
             for(i in text.indices) {val box=layout.getBoundingBox(i);Assert.assertTrue("Weekday $text glyph $i outside $box / ${layout.size}",box.left>=-1 && box.right<=layout.size.width+1 && box.top>=-1 && box.bottom<=layout.size.height+1)}
         }

@@ -273,6 +273,7 @@ private fun SignedInRoot(
                         modifier,
                         onOpenTransaction={id -> upcomingPaymentToken=null;notificationActionKey=null;overviewEditor=overviewEditor.copy(recordId=id)},
                         onOpenRecurringDue={target -> overviewEditor=overviewEditor.copy(recordId=null);notificationActionKey=null;upcomingPaymentToken=target.navigationToken()},
+                        onOpenInvestment={navController.navigate("investment") {launchSingleTop=true}},
                         overlayPresented=overviewEditor.recordId!=null || notificationActionKey!=null || upcomingPaymentTarget!=null,
                         exchangeRates=exchangeRateRepository,
                         primaryCurrencyCode=currencySettings.primaryCurrencyCode,

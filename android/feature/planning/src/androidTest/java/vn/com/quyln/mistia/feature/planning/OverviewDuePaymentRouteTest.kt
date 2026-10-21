@@ -60,6 +60,7 @@ class OverviewDuePaymentRouteTest {
     }
     private fun open(kind:DueSourceKind,id:String,prefix:String) {
         val tag="overview.due.row.${kind.wireValue}-$id-$month"
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasTestTag("overview.due.section"))
         compose.waitUntil(5000) {compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
         compose.onNodeWithTag(tag).performScrollTo().performClick()
         compose.waitUntil(5000) {compose.onAllNodesWithTag("$prefix.paymentSheet").fetchSemanticsNodes().isNotEmpty()}
@@ -159,6 +160,7 @@ class OverviewDuePaymentRouteTest {
         val bill=bill();seed(wallet.toCloudRecord().let {it.copy(payload=JsonObject(it.payload+("currency_code" to JsonPrimitive(1375))))})
         val before=rowsAndQueue();compose.setContent {Screen()}
         val tag="overview.due.row.recurringBill-${bill.id}-$month"
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasTestTag("overview.due.section"))
         compose.waitUntil(5000) {compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
         compose.onNodeWithTag(tag).performScrollTo().performClick()
         compose.waitUntil(5000) {compose.onAllNodesWithTag("upcoming.paymentRetry").fetchSemanticsNodes().isNotEmpty()}

@@ -61,7 +61,7 @@ class OverviewRecurringDueScreenTest {
     }
     private fun id(bill:RecurringBillPlanRecord)="recurringBill-${bill.id}-$month"
     private fun reveal() {
-        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.due.section").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasTestTag("overview.due.section"))
         compose.onNodeWithTag("overview.due.section").performScrollTo()
     }
     private fun amount(bill:RecurringBillPlanRecord,minor:Long) {

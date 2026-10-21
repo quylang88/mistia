@@ -71,7 +71,7 @@ class OverviewBudgetFocusScreenTest {
     }
     private fun money()="overview.budget.money.${parent.id}"
     private fun reveal() {
-        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.budget.focus").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasTestTag("overview.budget.focus"))
         compose.onNodeWithTag("overview.budget.focus").performScrollTo()
     }
     private fun known(amount:Long,limit:Long=1000) {

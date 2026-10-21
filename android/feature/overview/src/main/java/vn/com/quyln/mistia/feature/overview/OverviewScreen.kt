@@ -55,11 +55,12 @@ fun OverviewScreen(
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?=null,
     overlayPresented:Boolean=false,
     onOpenRecurringDue:(UpcomingDuePaymentTarget)->Unit={},
+    onOpenInvestment:()->Unit={},
 ) {
     val reportingCurrency=primaryCurrencyCode.trim().uppercase(java.util.Locale.ROOT)
         .takeIf {it in vn.com.quyln.mistia.core.model.CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
     key(ownerUserId.value) {
-        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, reportingCurrency, onOpenTransaction, exchangeRates, overlayPresented, onOpenRecurringDue)
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, reportingCurrency, onOpenTransaction, exchangeRates, overlayPresented, onOpenRecurringDue, onOpenInvestment)
     }
 }
 
@@ -76,6 +77,7 @@ private fun OwnedOverviewScreen(
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?,
     overlayPresented:Boolean,
     onOpenRecurringDue:(UpcomingDuePaymentTarget)->Unit,
+    onOpenInvestment:()->Unit,
 ) {
     val reference=rememberOverviewReferenceTime()
     val rates=exchangeRates?.rates?.collectAsStateWithLifecycle()?.value.orEmpty()
@@ -88,13 +90,11 @@ private fun OwnedOverviewScreen(
     val financialSnapshot=(financialLoad as? OverviewFinancialReadLoad.Loaded)?.snapshot
     val transactions=financialSnapshot?.records(CloudEntity.LEDGER_TRANSACTION).orEmpty()
     val wallets=financialSnapshot?.records(CloudEntity.LEDGER_WALLET).orEmpty()
-    val channels=financialSnapshot?.records(CloudEntity.INVESTMENT_CHANNEL).orEmpty()
-    val investmentAssets=financialSnapshot?.records(CloudEntity.INVESTMENT_ASSET).orEmpty()
-    val trades=financialSnapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty()
-    val inventory=remember(ownerUserId,financialSnapshot) {if(financialSnapshot==null) null else overviewInventoryCost(ownerUserId,channels,investmentAssets,trades)}
-    val assetBalance=remember(ownerUserId,financialSnapshot,inventory,primaryCurrencyCode,rates) {
+    val investmentSummary=remember(ownerUserId,financialSnapshot,primaryCurrencyCode) {overviewInvestmentSummary(ownerUserId,financialSnapshot,primaryCurrencyCode)}
+    val inventory=investmentSummary.capitalMinor
+    val assetBalance=remember(ownerUserId,financialSnapshot,investmentSummary,primaryCurrencyCode,rates) {
         if(financialSnapshot==null) return@remember null
-        val accounting=vn.com.quyln.mistia.core.model.overviewInventoryAccountingCurrency(ownerUserId,wallets,primaryCurrencyCode)
+        val accounting=investmentSummary.currencyCode
         overviewAssetBalance(ownerUserId,transactions,wallets,primaryCurrencyCode,rates,inventory,accounting)
     }
     val monthly=remember(ownerUserId,financialSnapshot,primaryCurrencyCode,rates,reference,zone,knownTitles) {
@@ -183,6 +183,10 @@ private fun OwnedOverviewScreen(
                     if(financialSnapshot!=null && !overlayPresented && expenseDay(day).let {it.rows.isNotEmpty() || it.hasUncertainEntries}) selectedDay=day
                 }
             }
+        }
+        item(key="overview.investment.section") {
+            OverviewInvestmentCard(investmentSummary,financialSnapshot!=null && !overlayPresented,financialLoad==OverviewFinancialReadLoad.Failed,
+                onRetry={financialRetry++},onOpen={if(financialSnapshot!=null && !overlayPresented) onOpenInvestment()})
         }
         if(budgetAlerts==null || budgetAlerts.isNotEmpty()) item(key="overview.budget.focus") {
             OverviewBudgetFocus(budgetAlerts,budgetLoad==OverviewBudgetReadLoad.Failed,onRetry={budgetRetry++})

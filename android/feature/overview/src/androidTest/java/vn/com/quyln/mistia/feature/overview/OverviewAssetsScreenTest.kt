@@ -66,7 +66,7 @@ class OverviewAssetsScreenTest {
     },time,null,0)
     private fun investment(entity:CloudEntity,fields:JsonObject=JsonObject(emptyMap())):CloudRecord {
         val id=UUID.randomUUID().toString()
-        return CloudRecord(entity.table,id,owner.value,JsonObject(buildJsonObject {put("id",id);put("user_id",owner.value);put("is_archived",false);put("created_at",time);put("occurred_at",time)}+fields),time,null,0)
+        return CloudRecord(entity.table,id,owner.value,JsonObject(buildJsonObject {put("id",id);put("user_id",owner.value);put("is_archived",false);put("created_at",time);put("occurred_at",time);if(entity==CloudEntity.INVESTMENT_TRADE) {put("accounting_currency_code","JPY");put("realized_profit_loss_minor",0)}}+fields),time,null,0)
     }
     private fun pendingAll()=runBlocking {CloudEntity.entries.flatMap {store.pendingMutations(owner,it,Long.MAX_VALUE)}}
     private fun assets(amount:Long?,code:String) {
@@ -79,7 +79,7 @@ class OverviewAssetsScreenTest {
         seed(wallet(investmentSystemWalletId(owner),0,"VND","investment"))
         seed(row(3).with("source_currency_code" to JsonPrimitive("VND"),"source_wallet_id" to JsonPrimitive(cash.id)))
         val channel=investment(CloudEntity.INVESTMENT_CHANNEL);val asset=investment(CloudEntity.INVESTMENT_ASSET,buildJsonObject {put("channel_id",channel.id)})
-        val trade=investment(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",5)})
+        val trade=investment(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",5);put("accounting_currency_code","VND")})
         listOf(channel,asset,trade).forEach(::seed)
         val before=rows();val queue=pendingAll();compose.setContent {Screen(primary="VND")};assets(9007199254740995L,"VND")
         Assert.assertEquals(before,rows());Assert.assertEquals(queue,pendingAll())
@@ -145,7 +145,7 @@ class OverviewAssetsScreenTest {
         val system=wallet(investmentSystemWalletId(owner),0,"VND","investment")
         seed(system.with("opening_balance_minor" to JsonPrimitive("broken")))
         val channel=investment(CloudEntity.INVESTMENT_CHANNEL);val asset=investment(CloudEntity.INVESTMENT_ASSET,buildJsonObject {put("channel_id",channel.id)})
-        val trade=investment(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",7)})
+        val trade=investment(CloudEntity.INVESTMENT_TRADE,buildJsonObject {put("channel_id",channel.id);put("asset_id",asset.id);put("position_quantity_after_decimal_string","1");put("position_cost_basis_after_minor",7);put("accounting_currency_code","VND")})
         listOf(channel,asset,trade).forEach(::seed)
         rateRows.value=listOf(ExchangeRateSnapshot("JPY","VND","2.5","test",0,null))
         val queue=pendingAll();compose.setContent {Screen()};assets(null,"JPY");Assert.assertEquals(queue,pendingAll())
