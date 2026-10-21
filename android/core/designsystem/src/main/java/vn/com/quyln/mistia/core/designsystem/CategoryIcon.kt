@@ -14,9 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import vn.com.quyln.mistia.core.model.TransactionCategoryKind
 
 @Composable
@@ -25,17 +27,20 @@ fun CategoryIcon(
     kind: TransactionCategoryKind?,
     colorHex: String,
     modifier: Modifier = Modifier,
+    shape:Shape=CircleShape,
+    glyphSize:Dp=24.dp,
+    backgroundAlpha:Float=0.18f,
 ) {
     val iconCatalog = CategoryIconCatalog.load(LocalContext.current)
     Box(
-        modifier = modifier.clip(CircleShape).background(categoryColorFromHex(colorHex).copy(alpha = 0.18f)),
+        modifier = modifier.clip(shape).background(categoryColorFromHex(colorHex).copy(alpha = backgroundAlpha)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             categoryIcon(symbolName, kind, iconCatalog.option(symbolName)?.fallbackIcon ?: symbolName),
             contentDescription = null,
             tint = categoryColorFromHex(colorHex),
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(glyphSize),
         )
     }
 }

@@ -1,0 +1,13 @@
+# Overview budget watchlist design — next slice122
+
+Goal: render iOS Overview budget alerts from the same truthful owner-scoped budget snapshot as Planning. Replace the APK0 wallet/category count placeholder with the real watchlist section. Other missing investment/preparing/due/config sections stay explicit subsequent work, not fabricated placeholders.
+
+Authority: original user TXT/full APK1–4 parity; Swift OverviewLogic1093–1154 and OverviewView793–796/2298–2377; accepted single-currency budget branches. User requests uninterrupted autonomous slices; no redundant design approval handoff.
+
+Share the existing raw budget read projection in core:model with thin Planning wrappers, preserving all121 vectors/editor identity. Do not introduce a feature-to-feature dependency or copy financial math. Compose read lifecycle belongs to each owned screen or an existing appropriate common module; state must reset on owner/repository/retry changes and failures.
+
+Core alert selection consumes BudgetProjection and does not convert currencies again: one alert per parent/only-child branch, no child double count. Exclude known stable rows, rank exceeded before caution, descending exact signed spent/positive limit ratio then locale name, maximum3. Required unknown money/health must remain visibly unavailable rather than be classified stable/empty; conservative whole-projection unavailability renders generic existing hint/retry as applicable. Known empty/stable-only watchlists are hidden like Swift. No financial mutation/tap action for BudgetRow, matching Swift.
+
+Native UI uses existing catalog Budget watchlist/day-count/unavailable copy, shared symbol icon, rounded card, icon/label/percentage, exact formatted spent/limit, bounded progress and days-left tint. Unknown values show dash/neutral and no progress. En/vi/ja light/dark 130% font must preserve full money even above2^53/Long aggregate; no new static copy outside catalog. Existing hero/recent editor/day-sheet remain intact.
+
+TDD: actual missing watchlist baseline screen fails for exceeded1,200/1,000 while stable hidden control passes. Pure selection vectors prove rank/max3/exact ratio/locale/unknown/parent identity. Real Room screen covers add/repair/archive/live spend/FX, snapshot withheld/error/retry/owner-late emissions and read-only bytes/outbox; all use real repository, not screen-supplied fake projections. Share extraction must leave prior budget tests green. Run full host/appropriate native Overview+budget/direct Swift review, existing scripts/Swift610; archive122/install-r/cold/hash/visual/evidence/commit then continue due/investment/config.

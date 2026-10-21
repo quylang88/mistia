@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vn.com.quyln.mistia.core.designsystem.MistiaSectionCard
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.model.*
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.FinanceRepository
 import vn.com.quyln.mistia.core.model.SyncStatus
@@ -79,7 +80,6 @@ private fun OwnedOverviewScreen(
     val context=androidx.compose.ui.platform.LocalContext.current
     val knownTitles=remember(context) {vn.com.quyln.mistia.core.designsystem.knownTransactionTitles(context)}
     val zone=ZoneId.systemDefault()
-    val counts by repository.observeEntityCounts(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observe(CloudEntity.LEDGER_TRANSACTION, ownerUserId)
         .collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observe(CloudEntity.LEDGER_WALLET, ownerUserId)
@@ -110,11 +110,21 @@ private fun OwnedOverviewScreen(
         overviewRawCategorySpendingMonths(ownerUserId,transactions,wallets,titleCategories,categoryCurrency,rates,language,categoryCatalog,reference,zone)
     }
     val status by syncStatus.collectAsStateWithLifecycle()
-    val countMap = counts.associate { it.entity to it.count }
     var selectedDay by remember {mutableStateOf<java.time.LocalDate?>(null)}
     androidx.compose.runtime.LaunchedEffect(overlayPresented) {if(overlayPresented) selectedDay=null}
     fun expenseDay(day:java.time.LocalDate)=overviewRawExpenseDay(ownerUserId,transactions,wallets,day,primaryCurrencyCode,rates,knownTitles,zone)
     val dayDetails=remember(selectedDay,ownerUserId,transactions,wallets,primaryCurrencyCode,rates,knownTitles,zone) {selectedDay?.let(::expenseDay)}
+
+    var budgetRetry by remember(repository) {androidx.compose.runtime.mutableIntStateOf(0)}
+    val budgetLoad by overviewBudgetReadLoad(ownerUserId,repository,budgetRetry)
+    val budgetSnapshot=(budgetLoad as? OverviewBudgetReadLoad.Loaded)?.snapshot
+    val budgetLanguage=when(language) {"vi" -> CategoryNameLanguage.VIETNAMESE;"ja" -> CategoryNameLanguage.JAPANESE;else -> CategoryNameLanguage.ENGLISH}
+    val budgetDeletedName=stringResource(R.string.planning_planning_deleted_category)
+    val budgetLocale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val budgetAlerts=remember(budgetSnapshot,reference,zone,rates,budgetLanguage,knownTitles,primaryCurrencyCode,budgetDeletedName,budgetLocale) {
+        overviewBudgetAlerts(projectRawBudgetReadSnapshot(ownerUserId,budgetSnapshot,java.time.YearMonth.from(reference.atZone(zone)),reference,zone,rates,
+            budgetLanguage,knownTitles[GeneratedTransactionTitle.BALANCE_ADJUSTMENT].orEmpty().toSet(),primaryCurrencyCode,budgetDeletedName),locale=budgetLocale)
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -144,23 +154,8 @@ private fun OwnedOverviewScreen(
         item {OverviewHeroMetrics(monthly,primaryCurrencyCode,assetBalance,weeks,categoryMonths,overlayPresented || selectedDay!=null) {day ->
             if(!overlayPresented && expenseDay(day).let {it.rows.isNotEmpty() || it.hasUncertainEntries}) selectedDay=day
         }}
-        item {
-            MistiaSectionCard(title = stringResource(R.string.family_family_wallets_cards)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(stringResource(R.string.management_management_wallets))
-                    Text((countMap[CloudEntity.LEDGER_WALLET.table] ?: 0).toString())
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(stringResource(R.string.management_management_categories))
-                    Text((countMap[CloudEntity.TRANSACTION_CATEGORY.table] ?: 0).toString())
-                }
-            }
+        if(budgetAlerts==null || budgetAlerts.isNotEmpty()) item(key="overview.budget.focus") {
+            OverviewBudgetFocus(budgetAlerts,budgetLoad==OverviewBudgetReadLoad.Failed,onRetry={budgetRetry++})
         }
         item {
             MistiaSectionCard(title = stringResource(R.string.overview_overview_recent_transactions)) {

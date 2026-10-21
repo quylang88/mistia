@@ -1,8 +1,7 @@
-package vn.com.quyln.mistia.feature.planning
+package vn.com.quyln.mistia.core.model
 
 import java.time.Instant
 import kotlinx.serialization.json.*
-import vn.com.quyln.mistia.core.model.*
 
 /** Read-only category facts; normalization here never reaches an editor or a stored payload. */
 internal data class BudgetCategoryReadMetadata(

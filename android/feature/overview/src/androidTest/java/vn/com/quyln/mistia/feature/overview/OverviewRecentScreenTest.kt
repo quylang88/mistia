@@ -93,7 +93,7 @@ class OverviewRecentScreenTest {
         compose.onNodeWithText(formatMinorUnits(9007199254740993L,"VND"),substring=true).assertExists()
         Assert.assertEquals(before,rows());Assert.assertEquals(pending,queue())
     }
-    @Test fun ownerSwitchClearsPriorRowsAndCountsWhileReplacementFlowsHaveNotEmitted() {
+    @Test fun ownerSwitchClearsPriorRowsWhileReplacementFlowHasNotEmitted() {
         var subject by mutableStateOf(owner)
         val source=object:FinanceRepository by repo {
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = when {
@@ -101,13 +101,10 @@ class OverviewRecentScreenTest {
                 ownerUserId==owner -> MutableStateFlow(listOf(row(1,"Private old owner")))
                 else -> emptyFlow()
             }
-            override fun observeEntityCounts(ownerUserId:UserId):Flow<List<EntityCount>> = if(ownerUserId==owner) MutableStateFlow(listOf(EntityCount(CloudEntity.LEDGER_WALLET.table,12345))) else emptyFlow()
         }
         compose.setContent {Screen(subject,source)}
-        section(2);compose.onNodeWithText("12345").assertExists()
         section(3);compose.onNodeWithText("Private old owner").assertExists()
         compose.runOnIdle {subject=other}
-        section(2);compose.onNodeWithText("12345").assertDoesNotExist()
         section(3);compose.onNodeWithText("Private old owner").assertDoesNotExist()
         compose.onNodeWithText(ApplicationProvider.getApplicationContext<Context>().getString(vn.com.quyln.mistia.core.designsystem.R.string.overview_overview_no_transactions_have_been_recorded_recently)).assertExists()
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())

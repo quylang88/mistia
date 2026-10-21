@@ -238,7 +238,8 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("goal.current").performTextReplacement("123456")
         compose.onNodeWithTag("goal.current").assertTextContains("123,456")
         capture("goal.editor","goal-editor-light.png")
-        compose.onNodeWithTag("goal.save").performScrollTo().performClick()
+        // Exercise the exposed save action for the CRUD/outbox round trip.
+        compose.onNodeWithTag("goal.save").performScrollTo().assertIsEnabled().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
         compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().size==1 } }
         val goal=runBlocking { repo.observeSavingsGoals(owner).first().single() }
         Assert.assertEquals(1000,goal.targetMinor)
@@ -247,7 +248,8 @@ class BudgetWorkflowTest {
         compose.onNodeWithTag("goal.target").assertTextContains("1,000")
         compose.onNodeWithTag("goal.current").assertTextContains("123,456")
         compose.onNodeWithTag("goal.current").performTextReplacement("200")
-        compose.onNodeWithTag("goal.save").performScrollTo().performClick()
+        compose.onNodeWithTag("goal.current").assertTextContains("200")
+        compose.onNodeWithTag("goal.save").performScrollTo().assertIsEnabled().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
         compose.waitUntil(5000) { runBlocking { repo.observeSavingsGoals(owner).first().single().currentSavedMinor==200L } }
         capture("budget.screen","goal-list-light.png")
         compose.onNodeWithTag("goal.edit.${goal.id}").performScrollTo().performClick()
