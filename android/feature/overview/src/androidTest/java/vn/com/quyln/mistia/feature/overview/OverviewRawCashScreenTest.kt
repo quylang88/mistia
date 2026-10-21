@@ -118,9 +118,11 @@ class OverviewRawCashScreenTest {
         seed(damaged.with("kind_raw_value",JsonPrimitive("creditCard")))
         seed(damaged.copy(id=UUID.randomUUID().toString(),deletedAt=time))
         var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         withoutWrites {compose.setContent {Screen(subject,source=source)};assets(n(123456789))}
-        seed(cash.with("opening_balance_minor",JsonPrimitive("broken")));withoutWrites {unavailable();compose.runOnIdle {subject=other};assets(BigInteger.ZERO);compose.onAllNodesWithText(formatMinorUnits(123456789,"JPY")).assertCountEquals(0)}
+        seed(cash.with("opening_balance_minor",JsonPrimitive("broken")));withoutWrites {unavailable();compose.runOnIdle {subject=other};unavailable();compose.onAllNodesWithText(formatMinorUnits(123456789,"JPY")).assertCountEquals(0)}
     }
     @Test fun unavailableRawCashHintAndRepairedExactMoneyStayCompleteAtActual130InThreeLanguagesLightDark() {
         val first=wallet(Long.MAX_VALUE,"VND");val second=wallet(Long.MAX_VALUE,"VND");seed(first.with("opening_balance_minor",JsonPrimitive("broken")));seed(second)

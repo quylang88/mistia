@@ -93,14 +93,16 @@ class OverviewMonthlyMoneyScreenTest {
         val old=YearMonth.from(today).minusMonths(1).atDay(15)
         listOf(row(3,date=old,category=cat.id),row(70,"income","VND",old),row(20,code="VND",category=cat.id)).forEach(::seed)
         var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         val before=snapshot();compose.setContent {Screen(subject,primary="VND",source=source)};amount("expense",20,"VND")
         compose.onNodeWithTag("overview.chart.mode.category").performScrollTo().performClick()
         compose.onNodeWithTag("overview.category.pager").performScrollTo().performTouchInput {swipeRight()};unavailable("expense");amount("income",70,"VND")
         compose.onNodeWithTag("overview.chart.mode.day").performScrollTo().performClick();amount("expense",20,"VND");compose.onNodeWithTag("overview.monthly.expense.unavailable").assertDoesNotExist()
         compose.runOnIdle {rateRows.value=listOf(rate)}
         compose.onNodeWithTag("overview.chart.mode.category").performScrollTo().performClick();amount("expense",8,"VND")
-        compose.runOnIdle {subject=other};amount("expense",0,"VND");amount("income",0,"VND");compose.onNodeWithTag("overview.monthly.expense.unavailable").assertDoesNotExist();Assert.assertEquals(before,snapshot())
+        compose.runOnIdle {subject=other};unavailable("expense");unavailable("income");Assert.assertEquals(before,snapshot())
     }
     @Test fun unsupportedPrimaryUsesOneValidatedDisplayCurrencyAndNeverRelabelsImportedMoney() {
         seed(row(1375,code="USD"));seed(row(100,"income","JPY"))

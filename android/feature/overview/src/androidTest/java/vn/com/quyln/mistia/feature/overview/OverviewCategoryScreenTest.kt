@@ -128,7 +128,9 @@ class OverviewCategoryScreenTest {
     @Test fun removedHistoricalMonthResetsCurrentAndReappearingHistoryDoesNotRestoreStaleDrilldown() {
         val food=category("Food");val old=row(100,food.id,month.minusMonths(1).atDay(15));val current=row(200,food.id)
         val raw=MutableStateFlow(listOf(old,current))
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)}
         val before=snapshot();compose.setContent {Screen(source=source)};openCategory();amount("category-${food.id}",200)
         compose.onNodeWithTag("overview.category.pager").performScrollTo().performTouchInput {swipeRight()};amount("category-${food.id}",100);tap("category-${food.id}")
         compose.runOnIdle {raw.value=listOf(current)};amount("category-${food.id}",200);compose.onNodeWithTag("overview.category.back").assertDoesNotExist()
@@ -146,7 +148,9 @@ class OverviewCategoryScreenTest {
     }
     @Test fun ownerReplacementBeforeNextFlowEmitsClearsPrivateBranchAndDrilldown() {
         val food=category("Private Branch");seed(row(123456789,food.id));var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         val before=snapshot();compose.setContent {Screen(subject,source)};openCategory();amount("category-${food.id}",123456789);tap("category-${food.id}")
         compose.runOnIdle {subject=other};compose.onAllNodesWithText("Private Branch").assertCountEquals(0);compose.onNodeWithTag("overview.category.back").assertDoesNotExist();legend("category-${food.id}").assertDoesNotExist();Assert.assertEquals(before,snapshot())
     }
@@ -198,7 +202,9 @@ class OverviewCategoryScreenTest {
     @Test fun removedAndReappearingMonthWhileDayModeDoesNotRestoreHistoricalMonth() {
         val food=category("Food");val old=row(100,food.id,month.minusMonths(1).atDay(15));val current=row(200,food.id)
         val raw=MutableStateFlow(listOf(old,current))
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)}
         val before=snapshot();compose.setContent {Screen(source=source)};openCategory()
         compose.onNodeWithTag("overview.category.pager").performScrollTo().performTouchInput {swipeRight()};amount("category-${food.id}",100)
         compose.onNodeWithTag("overview.chart.mode.day").performScrollTo().performClick()
@@ -209,7 +215,9 @@ class OverviewCategoryScreenTest {
     @Test fun removedAndReappearingWeekWhileCategoryModeDoesNotRestoreHistoricalWeek() {
         val food=category("Food");val oldMonday=monday.minusWeeks(5);val old=row(100,food.id,oldMonday);val current=row(200,food.id)
         val raw=MutableStateFlow(listOf(old,current))
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)}
         val before=snapshot();compose.setContent {Screen(source=source)}
         compose.waitUntil(5000) {compose.onAllNodes(hasTestTag("overview.chart.day.$today") and hasContentDescription(formatMinorUnits(200,"JPY"),substring=true)).fetchSemanticsNodes().isNotEmpty()}
         repeat(5) {compose.onNodeWithTag("overview.chart.pager").performScrollTo().performTouchInput {swipeRight()}}

@@ -74,4 +74,18 @@ class OverviewRecentTransactionsTest {
         for(key in listOf("occurred_at","created_at")) assertTrue(project(listOf(row(1).with(key to JsonPrimitive("invalid")))).isEmpty())
         assertEquals(Long.MAX_VALUE,project(listOf(row(1).with("amount_minor" to JsonPrimitive(Long.MAX_VALUE)))).single().money.minor)
     }
+    @Test fun `inclusive damaged deletion cannot resurrect rows or consume the five live slots`() {
+        val live=(20..25).map {row(it,"2026-10-15T00:00:00Z")}
+        for(bad in listOf(buildJsonObject {put("bad",true)},JsonArray(emptyList()),JsonPrimitive(5),JsonPrimitive(""))) {
+            val hidden=row(1).with("deleted_at" to bad)
+            assertEquals(live.take(5).map {it.id},project(listOf(hidden)+live).map {it.transaction.id})
+        }
+    }
+    @Test fun `uncertain source wallet deletion cannot supply currency or relabel its original minor`() {
+        val wallet=row(80).copy(entity=CloudEntity.LEDGER_WALLET.table).with("name" to JsonPrimitive("Cash"),"kind_raw_value" to JsonPrimitive("cash"),"currency_code" to JsonPrimitive("USD"),"deleted_at" to buildJsonObject {put("bad",true)})
+        val tx=row(1).with("source_wallet_id" to JsonPrimitive(wallet.id),"source_currency_code" to JsonNull)
+        assertTrue(project(listOf(tx),listOf(wallet)).isEmpty())
+        assertEquals("VND",project(listOf(tx.with("source_currency_code" to JsonPrimitive("VND"))),listOf(wallet)).single().money.currencyCode)
+    }
+
 }

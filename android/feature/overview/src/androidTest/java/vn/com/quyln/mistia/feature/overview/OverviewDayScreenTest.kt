@@ -108,10 +108,12 @@ class OverviewDayScreenTest {
     }
     @Test fun ownerReplacementBeforeNextFlowEmitsClosesPrivateDayAndRemovesRows() {
         val original=row(123456789);seed(original);var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         compose.setContent {Screen(subject,source)};openDay(123456789);total(123456789,"JPY")
         compose.runOnIdle {subject=other};compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist();compose.onNodeWithTag("overview.day.row.${original.id}").assertDoesNotExist()
-        awaitBar(0,"JPY")
+        compose.onNodeWithTag("overview.chart.unavailable").assertExists()
     }
     @Test fun externalOverlayClosesDayBeforeOpeningAnotherOwnedRoute() {
         seed(row());compose.setContent {Screen()};openDay();compose.runOnIdle {overlay=true};compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist()

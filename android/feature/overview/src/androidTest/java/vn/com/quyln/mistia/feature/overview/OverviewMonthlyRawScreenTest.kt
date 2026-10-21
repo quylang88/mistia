@@ -85,12 +85,14 @@ class OverviewMonthlyRawScreenTest {
     @Test fun unknownEligibilityAndOwnerReplacementCannotPublishPartialOrPrivateTotals() {
         val original=row();seed(original.with("entry_status_raw_value",JsonPrimitive("broken")))
         var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         withoutWrites {compose.setContent {Screen(subject,source=source)};unavailable("expense");amount("income",0)}
         seed(original);withoutWrites {amount("expense",7)}
         seed(original.with("is_archived",JsonPrimitive("false")));withoutWrites {unavailable("expense")}
         seed(original.with("primary_kind_raw_value",JsonPrimitive("futureKind")));withoutWrites {unavailable("expense");unavailable("income")
-            compose.runOnIdle {subject=other};amount("expense",0);amount("income",0);compose.onNodeWithTag("overview.monthly.expense.unavailable").assertDoesNotExist()}
+            compose.runOnIdle {subject=other};unavailable("expense");unavailable("income")}
     }
     @Test fun rawMonthlyAvailabilityHintsStayCompleteAtActual130LightAndDarkWithoutWrites() {
         listOf(row(),row(kind="income")).map {it.with("amount_minor",JsonPrimitive("broken"))}.forEach(::seed)

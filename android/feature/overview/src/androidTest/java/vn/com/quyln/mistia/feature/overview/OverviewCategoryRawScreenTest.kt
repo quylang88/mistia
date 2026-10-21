@@ -113,10 +113,12 @@ class OverviewCategoryRawScreenTest {
     @Test fun walletCurrencyIgnoresUnusedKindOpeningAndOwnerReplacementClearsPrivateChart() {
         val wallet=wallet();val original=row(165).with("source_wallet_id",JsonPrimitive(wallet.id)).with("source_currency_code",JsonNull);listOf(wallet,original).forEach(::seed)
         var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         withoutWrites {compose.setContent {Screen(subject,source=source)};category();amount(1)}
         seed(wallet.with("currency_code",JsonPrimitive("???")));withoutWrites {held()}
-        seed(wallet);withoutWrites {amount(1);compose.runOnIdle {subject=other};compose.onNodeWithTag("overview.category.amount.uncategorized-expense",useUnmergedTree=true).assertDoesNotExist();compose.onNodeWithTag("overview.category.unavailable").assertDoesNotExist()}
+        seed(wallet);withoutWrites {amount(1);compose.runOnIdle {subject=other};compose.onNodeWithTag("overview.category.amount.uncategorized-expense",useUnmergedTree=true).assertDoesNotExist();compose.onNodeWithTag("overview.monthly.expense").assertTextEquals("—")}
     }
     @Test fun unreadableCategoryRelationshipAndDomainRoleCannotInventANeutralOrOrdinaryChart() {
         val category=runBlocking {repo.saveCategory(owner,CategoryDraft(name="Paid for",kind=TransactionCategoryKind.EXPENSE,hierarchyRole=CategoryHierarchyRole.PARENT),device,time).getOrThrow()}

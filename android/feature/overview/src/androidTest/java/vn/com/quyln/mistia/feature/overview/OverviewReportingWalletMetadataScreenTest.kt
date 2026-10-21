@@ -71,11 +71,13 @@ class OverviewReportingWalletMetadataScreenTest {
     @Test fun monthlyBothDirectionsRetainCurrencyWhileAssetsWaitForOpeningRepairAndOwnerClears() {
         val wallet=wallet();listOf(wallet,row(wallet),row(wallet,330,"income")).forEach(::seed)
         var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         withoutWrites {compose.setContent {Screen(subject,source)};amount("overview.monthly.expense",1);amount("overview.monthly.income",2);value("overview.assets","\u2014")}
         seed(wallet.with("opening_balance_minor",JsonPrimitive(0)))
         withoutWrites {amount("overview.assets",1);amount("overview.monthly.expense",1);amount("overview.monthly.income",2)
-            compose.runOnIdle {subject=other};amount("overview.assets",0);amount("overview.monthly.expense",0);amount("overview.monthly.income",0)}
+            compose.runOnIdle {subject=other};value("overview.assets","—");value("overview.monthly.expense","—");value("overview.monthly.income","—")}
     }
     @Test fun weeklyCalloutAndRealDayHoldKeepConvertedTotalAndOriginalCurrencyAcrossLiveMetadataChanges() {
         val wallet=wallet();val row=row(wallet);listOf(wallet,row).forEach(::seed)

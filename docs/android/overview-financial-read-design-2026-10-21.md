@@ -1,0 +1,13 @@
+# Overview financial read lifecycle (slice126)
+
+The existing personal hero, cashflow, weekly/category charts and recent list collect independent wallet/transaction/inventory/category flows with empty-list initial values. These can display known zero before reads finish and mix two states of a single atomic finance commit. Swift Overview uses the current model context for these inputs; its financial calculations remain the reference.
+
+Use an owner-scoped raw OverviewFinancialReadSnapshot spanning wallet, transaction, category, investment channel/asset/trade in one Room SELECT. Retain tombstones and damaged financial fields; apply the established strict finance envelope scope in the repository. No schema or write contract changes. Unsupported implementations fail explicitly, never synthesize loaded empty. Budget and due already have their own consistent domain readsets and stay independent.
+
+The actual screen observes this source with lifecycle STARTED, owner/repository/retry keys and cancellation propagation. Until an owned snapshot arrives, hero monetary values and chart values are unavailable, recent list states unavailable instead of no transactions, and day drilldown is disabled. Read exceptions and foreign snapshot fail visibly with retry; retry and owner changes clear previous private money immediately. A loaded empty snapshot legitimately displays zero and no recent transactions. Existing calculation models, reporting currency, source-leg recent money and interactions remain intact once loaded. Category history comes from the same snapshot.
+
+An inclusive source must not turn uncertain investment archive/deletion/reference dependencies into known zero. Tighten inventory intake only where a potentially included active position or accounting currency is uncertain. Known archived/deleted/foreign positions remain neutral. Keep field independence: closed quantity does not require unused cost, accounting currency does not require cash balance, known excluded dependencies do not poison totals.
+
+Acceptance: real screen withheld/read-error/retry/account replacement/late owner emissions; atomic six-entity Room generation observations; raw damage/tombstone/scope retention and no read writes; inventory uncertainty regressions; existing exact money/report/chart/day/recent native cases. Preserve all ten cloud gates false and no production writes. Investment card is a following complete feature slice, not claimed here.
+
+User TXT authorizes autonomous design, local implementation and separate commits without repeated approval. Existing codex branch/workspace is suitable; no new worktree or branch switch.

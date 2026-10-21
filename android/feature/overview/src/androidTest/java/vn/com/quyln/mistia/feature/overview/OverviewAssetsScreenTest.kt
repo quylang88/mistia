@@ -94,10 +94,11 @@ class OverviewAssetsScreenTest {
     @Test fun accountReplacementClearsWalletAndInventoryTotalsWhileNextOwnersFlowsHaveNotEmitted() {
         var subject by mutableStateOf(owner);val owned=MutableStateFlow(listOf(wallet(opening=123456789)))
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId!=owner) emptyFlow()
                 else if(entity==CloudEntity.LEDGER_WALLET) owned else repo.observe(entity,ownerUserId)
         }
-        compose.setContent {Screen(subject,source)};assets(123456789,"JPY");compose.runOnIdle {subject=other};assets(0,"JPY")
+        compose.setContent {Screen(subject,source)};assets(123456789,"JPY");compose.runOnIdle {subject=other};assets(null,"JPY")
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())
     }
     @Test fun unreadableCashHoldsWhileUnusedDestinationDoesNotDiscardKnownLegs() {
@@ -106,6 +107,7 @@ class OverviewAssetsScreenTest {
             wallet(opening=1000).with("opening_balance_minor" to JsonPrimitive("broken")),wallet(opening=1000).with("is_archived" to JsonPrimitive("broken"))))
         val tx=MutableStateFlow(listOf(row(3).with("source_wallet_id" to JsonPrimitive(good.id)),row(100).with("source_wallet_id" to JsonPrimitive(good.id),"destination_amount_minor" to JsonPrimitive("broken"))))
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = when(entity) {
                 CloudEntity.LEDGER_WALLET -> wallets;CloudEntity.LEDGER_TRANSACTION -> tx;else -> repo.observe(entity,ownerUserId)
             }

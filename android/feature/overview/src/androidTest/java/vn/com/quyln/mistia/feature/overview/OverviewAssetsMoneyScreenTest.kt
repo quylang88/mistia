@@ -109,8 +109,10 @@ class OverviewAssetsMoneyScreenTest {
     }
     @Test fun ownerReplacementBeforeNewFlowsEmitClearsCashAndInventoryAndUnavailableState() {
         seed(wallet(123456789));position();var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
-        withoutWrites {compose.setContent {Screen(subject,source=source)};assets(n(123456796));compose.runOnIdle {subject=other};assets(BigInteger.ZERO)
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        withoutWrites {compose.setContent {Screen(subject,source=source)};assets(n(123456796));compose.runOnIdle {subject=other};unavailable()
             compose.onAllNodesWithText(formatMinorUnits(123456796,"JPY")).assertCountEquals(0)}
     }
     @Test fun unsupportedImportedWalletCurrencyNeverBecomesJPYEvenWithUnsupportedRequestedPrimary() {

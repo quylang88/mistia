@@ -61,6 +61,7 @@ class OverviewMonthlyScreenTest {
         }}
     }
     private fun metric(kind:String,amount:Long,code:String) {compose.onNodeWithTag("overview.monthly.$kind").performScrollTo().assertTextEquals(formatMinorUnits(amount,code))}
+    private fun metricUnavailable(){for(kind in listOf("expense","income")) compose.onNodeWithTag("overview.monthly.$kind").assertTextEquals("—")}
     @Test fun realRoomOverviewMonthlyMetricsUseAllRowsAndRetainExactAmountWithoutWrites() {
         repeat(7) {seed(row(9007199254740993L))};seed(row(42,"income"))
         val before=rows();val queue=pending()
@@ -80,11 +81,12 @@ class OverviewMonthlyScreenTest {
         var subject by mutableStateOf(owner)
         val owned=MutableStateFlow(listOf(row(123456789)))
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity!=CloudEntity.LEDGER_TRANSACTION) repo.observe(entity,ownerUserId)
                 else if(ownerUserId==owner) owned else emptyFlow()
         }
         compose.setContent {Screen(subject,source)};metric("expense",123456789,"JPY")
-        compose.runOnIdle {subject=other};metric("expense",0,"JPY");metric("income",0,"JPY")
+        compose.runOnIdle {subject=other};metricUnavailable();
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())
     }
     @Test fun unreadableRawEffectsHoldUntilRepairAndUnusedCalendarDoesNotDropKnownMoney() {
@@ -94,6 +96,7 @@ class OverviewMonthlyScreenTest {
             row().copy(ownerUserId=other.value),row().with("entry_status_raw_value" to JsonPrimitive("draft")),row().with("is_archived" to JsonPrimitive(true)),row().copy(deletedAt=time))
         val raw=MutableStateFlow(invalid+row(7))
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)
         }
         compose.setContent {Screen(source=source)}

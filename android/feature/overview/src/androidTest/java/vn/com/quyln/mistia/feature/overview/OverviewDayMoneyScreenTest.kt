@@ -108,13 +108,15 @@ class OverviewDayMoneyScreenTest {
     @Test fun ownedWalletFallbackLiveCurrencyAndOwnerReplacementNeverReuseStaleBarOrCallout() {
         val wallet=runBlocking {repo.saveWallet(owner,WalletDraft(name="Private VND",kind=WalletKind.CASH,currencyCode="VND"),device,time).getOrThrow()}
         seed(row(100,code=null,wallet=wallet.id));var primary by mutableStateOf("VND");var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         val before=snapshot();compose.setContent {Screen(subject,primary=primary,source=source)};awaitAmount(BigInteger.valueOf(100),"VND");reveal("overview.chart.day.$today");bar().performClick();value("overview.chart.selection",formatMinorUnits(100,"VND"));Assert.assertEquals(before,snapshot())
         seed(wallet.copy(currencyCode="JPY").toCloudRecord());val changed=snapshot()
         compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.chart.unavailable").fetchSemanticsNodes().isNotEmpty()};compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist()
         compose.runOnIdle {rateRows.value=listOf(rate)};awaitAmount(BigInteger.valueOf(250),"VND")
         compose.runOnIdle {primary="JPY"};awaitAmount(BigInteger.valueOf(100));compose.runOnIdle {subject=other}
-        awaitAmount(BigInteger.ZERO);compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist();compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist();Assert.assertEquals(changed,snapshot())
+        compose.onNodeWithTag("overview.chart.unavailable").assertExists();compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist();compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist();Assert.assertEquals(changed,snapshot())
     }
     @Test fun legacyMissingOriginalSourceKeepsJPYAmountAndConvertedDayTotalConsistentWithBar() {
         val original=row(100,code=null);seed(original);rateRows.value=listOf(rate);val before=snapshot();compose.setContent {Screen(primary="VND")};awaitAmount(BigInteger.valueOf(250),"VND");holdAvailableDay()

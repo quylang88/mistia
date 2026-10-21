@@ -59,6 +59,15 @@ class OfflineFirstFinanceRepository(
     vn.com.quyln.mistia.core.model.RecurringBillRepository by OfflineRecurringBillRepository(localStore, {budgetZoneId ?: ZoneId.systemDefault()}),
     vn.com.quyln.mistia.core.model.SystemCategoryBootstrapRepository by OfflineSystemCategoryBootstrapRepository(localStore) {
     private fun canonicalFinanceId(value: String): String = java.util.UUID.fromString(value.trim()).toString()
+    override fun observeOverviewFinancialReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.OverviewFinancialReadSnapshot> =
+        localStore.observeOverviewFinancialReadSnapshot(owner).map {snapshot ->
+            require(snapshot.owner==owner) {"Overview financial snapshot owner changed"}
+            snapshot.copy(rows=snapshot.rows.filter {row ->
+                val entity=CloudEntity.fromTable(row.entity)
+                entity!=null && entity in vn.com.quyln.mistia.core.model.OverviewFinancialReadSnapshot.entities &&
+                    row.matchesFinanceReadScope(owner,entity,includingDeleted=true)
+            })
+        }
     override fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.UpcomingDueReadSnapshot> =
         localStore.observeUpcomingDueReadSnapshot(owner).map {snapshot ->
             require(snapshot.owner==owner) {"Upcoming due snapshot owner changed"}

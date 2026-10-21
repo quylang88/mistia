@@ -72,6 +72,7 @@ class OverviewRecentScreenTest {
     @Test fun foreignAndMismatchedRawEnvelopeNeverExposePrivateTitlesOrMoney() {
         val mixed=MutableStateFlow(listOf(row(1,"Public"),row(2,"Private",other),row(3,"Wrong payload").with("user_id" to JsonPrimitive(other.value)),row(4,"Wrong ID").with("id" to JsonPrimitive(id(99)))))
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) mixed else repo.observe(entity,ownerUserId)
         }
         compose.setContent {Screen(repository=source)};section(3)
@@ -96,6 +97,7 @@ class OverviewRecentScreenTest {
     @Test fun ownerSwitchClearsPriorRowsWhileReplacementFlowHasNotEmitted() {
         var subject by mutableStateOf(owner)
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = when {
                 entity!=CloudEntity.LEDGER_TRANSACTION -> repo.observe(entity,ownerUserId)
                 ownerUserId==owner -> MutableStateFlow(listOf(row(1,"Private old owner")))
@@ -106,7 +108,7 @@ class OverviewRecentScreenTest {
         section(3);compose.onNodeWithText("Private old owner").assertExists()
         compose.runOnIdle {subject=other}
         section(3);compose.onNodeWithText("Private old owner").assertDoesNotExist()
-        compose.onNodeWithText(ApplicationProvider.getApplicationContext<Context>().getString(vn.com.quyln.mistia.core.designsystem.R.string.overview_overview_no_transactions_have_been_recorded_recently)).assertExists()
+        compose.onNodeWithTag("overview.recent.unavailable").assertExists()
         Assert.assertTrue(rows().isEmpty());Assert.assertTrue(rows(other).isEmpty())
     }
     @Test fun originalRecentMoneyRendersUnbrokenLightDarkAtFont130() {

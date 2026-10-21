@@ -65,18 +65,28 @@ fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:Li
 
 /** Current inventory position snapshots, not trade gross amounts or realized gains. */
 fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<CloudRecord>,trades:List<CloudRecord>):BigInteger? {
-    val activeChannels=channels.filter {it.ownedOverviewEnvelope(owner,CloudEntity.INVESTMENT_CHANNEL,true)}.map {it.id}.toSet()
-    val activeAssets=assets.filter {it.ownedOverviewEnvelope(owner,CloudEntity.INVESTMENT_ASSET,true) && it.payload.investmentString("channel_id") in activeChannels}
-    val byAsset=trades.filter {it.ownedOverviewEnvelope(owner,CloudEntity.INVESTMENT_TRADE,false)}.groupBy {it.payload.investmentString("asset_id")}
+    val possibleChannels=channels.filter {it.financeRawIdentity(owner,CloudEntity.INVESTMENT_CHANNEL,true) && it.financeRawDeleted()!=true && it.payload.financeRawArchived()!=true}.associateBy {financeRawUuid(it.id)}
+    val possibleAssets=assets.filter {it.financeRawIdentity(owner,CloudEntity.INVESTMENT_ASSET,true) && it.financeRawDeleted()!=true && it.payload.financeRawArchived()!=true}
+        .filter {it.payload.financeRawReference("channel_id").let {reference -> !reference.readable && possibleChannels.isNotEmpty() || reference.id in possibleChannels}}
+    if(possibleAssets.isEmpty()) return BigInteger.ZERO
+    val ownedTrades=trades.filter {it.financeRawIdentity(owner,CloudEntity.INVESTMENT_TRADE,true) && it.financeRawDeleted()!=true}
+    if(ownedTrades.any {!it.payload.financeRawReference("asset_id").readable}) return null
+    val byAsset=ownedTrades.groupBy {it.payload.financeRawReference("asset_id").id}
     var total=BigInteger.ZERO
-    for(asset in activeAssets) {
-        val candidates=byAsset[asset.id].orEmpty()
+    for(asset in possibleAssets) {
+        val candidates=byAsset[financeRawUuid(asset.id)].orEmpty()
+        if(candidates.isEmpty()) continue
+        if(candidates.any {it.financeRawDeleted()==null}) return null
         // A corrupt calendar cannot establish which snapshot is current; hold the portfolio.
         if(candidates.any {runCatching {Instant.parse(it.payload.investmentString("occurred_at"));Instant.parse(it.payload.investmentString("created_at"))}.isFailure}) return null
         val latest=candidates.maxWithOrNull(compareBy<CloudRecord> {Instant.parse(it.payload.investmentString("occurred_at"))}
             .thenBy {Instant.parse(it.payload.investmentString("created_at"))}.thenBy {it.id.lowercase(Locale.ROOT)}) ?: continue
         val quantity=(latest.payload["position_quantity_after_decimal_string"] as? JsonPrimitive)?.takeIf {it.isString}?.content?.toBigDecimalOrNull() ?: return null
         if(quantity.signum()<=0) continue
+        val channelRef=asset.payload.financeRawReference("channel_id")
+        val channel=possibleChannels[channelRef.id]
+        if(!channelRef.readable || channel==null || channel.financeRawDeleted()==null || channel.payload.financeRawArchived()==null ||
+            asset.financeRawDeleted()==null || asset.payload.financeRawArchived()==null) return null
         val cost=(latest.payload["position_cost_basis_after_minor"] as? JsonPrimitive)?.takeIf {!it.isString}?.longOrNull ?: return null
         total+=BigInteger.valueOf(maxOf(cost,0))
     }
@@ -86,9 +96,10 @@ fun overviewInventoryCost(owner:UserId,channels:List<CloudRecord>,assets:List<Cl
 /** Currency metadata is independent of wallet cash parsing; null holds an invalid existing dependency. */
 fun overviewInventoryAccountingCurrency(owner:UserId,wallets:List<CloudRecord>,primaryCurrency:String):String? {
     val systemId=investmentSystemWalletId(owner)
-    val owned=wallets.filter {it.id==systemId && it.ownedOverviewEnvelope(owner,CloudEntity.LEDGER_WALLET,false)}
+    val owned=wallets.filter {financeRawUuid(it.id)==systemId && it.financeRawIdentity(owner,CloudEntity.LEDGER_WALLET,true) && it.financeRawDeleted()!=true}
     if(owned.isEmpty()) return primaryCurrency
     val wallet=owned.singleOrNull() ?: return null
+    if(wallet.financeRawDeleted()==null) return null
     val value=(wallet.payload["currency_code"] as? JsonPrimitive)?.takeIf {it.isString}?.contentOrNull ?: return null
     return value.trim().uppercase(Locale.ROOT).takeIf {it.matches(Regex("[A-Z]{3}"))}
 }
@@ -100,11 +111,4 @@ fun investmentSystemWalletId(owner:UserId):String {
     val buffer=ByteBuffer.wrap(bytes);return UUID(buffer.long,buffer.long).toString()
 }
 
-private fun CloudRecord.ownedOverviewEnvelope(owner:UserId,entity:CloudEntity,active:Boolean):Boolean {
-    if(this.entity!=entity.table || ownerUserId!=owner.value || deletedAt!=null || payload.investmentString("id")!=id || payload.investmentString("user_id")!=owner.value) return false
-    if(payload["deleted_at"]!=null && payload["deleted_at"]!=JsonNull) return false
-    if(!runCatching {UUID.fromString(id).toString()==id.lowercase(Locale.ROOT)}.getOrDefault(false)) return false
-    if(active && payload["is_archived"]!=null && (payload["is_archived"] as? JsonPrimitive)?.booleanOrNull!=false) return false
-    return true
-}
 private fun JsonObject.investmentString(key:String)=(get(key) as? JsonPrimitive)?.contentOrNull

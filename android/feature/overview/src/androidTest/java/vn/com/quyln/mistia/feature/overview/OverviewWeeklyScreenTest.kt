@@ -93,6 +93,7 @@ class OverviewWeeklyScreenTest {
         val original=expense(100,monday.minusWeeks(2));val current=expense(200);val older=expense(50,monday.minusWeeks(3))
         val feed=MutableStateFlow(listOf(original,current));var mounted by mutableStateOf(true)
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION && ownerUserId==owner) feed else repo.observe(entity,ownerUserId)
         }
         compose.setContent {if(mounted) Screen(source=source)}
@@ -129,10 +130,11 @@ class OverviewWeeklyScreenTest {
     @Test fun ownerReplacementBeforeNextFlowEmitsClearsPrivateSelectionAndBarAmounts() {
         seed(expense(123456789));var subject by mutableStateOf(owner)
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()
         }
         compose.setContent {Screen(subject,source)};select(monday);selected(123456789,"JPY")
-        compose.runOnIdle {subject=other};compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist();bar(monday).assert(hasContentDescription(formatMinorUnits(0,"JPY"),substring=true))
+        compose.runOnIdle {subject=other};compose.onNodeWithTag("overview.chart.selection").assertDoesNotExist();compose.onNodeWithTag("overview.chart.unavailable").assertExists()
         Assert.assertTrue(rows(other).isEmpty())
     }
     @Test fun overlayPauseAndHeroHeadingTapClearPrivateSelectedCallout() {
@@ -219,6 +221,7 @@ class OverviewWeeklyScreenTest {
         val old=expense(100,monday.minusWeeks(2));val current=expense(200)
         val raw=MutableStateFlow(listOf(old,current))
         val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
             override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(entity==CloudEntity.LEDGER_TRANSACTION) raw else repo.observe(entity,ownerUserId)
         }
         compose.setContent {Screen(source=source)}

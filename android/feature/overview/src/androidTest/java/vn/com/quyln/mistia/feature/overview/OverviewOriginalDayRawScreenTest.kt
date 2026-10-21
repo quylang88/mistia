@@ -112,7 +112,9 @@ class OverviewOriginalDayRawScreenTest {
     @Test fun originalCurrencyAndWalletNameSurviveUnusedWalletDamageAndOwnerClosesSheet() {
         val wallet=wallet();val original=row(165).with("source_wallet_id",JsonPrimitive(wallet.id)).with("source_currency_code",JsonNull);listOf(wallet,original).forEach(::seed)
         var subject by mutableStateOf(owner)
-        val source=object:FinanceRepository by repo {override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
+        val source=object:FinanceRepository by repo {
+            override fun observeOverviewFinancialReadSnapshot(owner:UserId)=injectedOverviewReadFixture(owner,::observe)
+            override fun observe(entity:CloudEntity,ownerUserId:UserId):Flow<List<CloudRecord>> = if(ownerUserId==owner) repo.observe(entity,ownerUserId) else emptyFlow()}
         withoutWrites {compose.setContent {Screen(subject,source=source)};hold();value("overview.day.total",formatMinorUnits(1,"JPY"));expand()
             compose.onNodeWithTag("overview.day.amount.${original.id}",useUnmergedTree=true).performScrollTo().assertTextEquals("-"+formatMinorUnits(165,"VND"))
             compose.onNodeWithText("Day VND",substring=true).assertExists();compose.runOnIdle {subject=other};compose.onNodeWithTag("overview.day.sheet").assertDoesNotExist()}

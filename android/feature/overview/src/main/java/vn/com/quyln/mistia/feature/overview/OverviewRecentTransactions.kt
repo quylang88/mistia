@@ -10,6 +10,21 @@ import vn.com.quyln.mistia.core.model.*
 
 internal data class OverviewRecentRow(val transaction: LedgerTransactionRecord, val money: Money)
 
+/** Only eligibility dependencies are inspected; an explicit source currency needs no wallet fallback. */
+internal fun overviewRecentHasUncertainDeletion(owner:UserId,records:List<CloudRecord>,wallets:List<CloudRecord>):Boolean =
+    records.any {raw ->
+        if(!raw.financeRawIdentity(owner,CloudEntity.LEDGER_TRANSACTION,true) || raw.financeRawDeleted()==true ||
+            raw.payload.financeRawArchived()==true || raw.payload.financeRawString("entry_status_raw_value")=="draft" ||
+            raw.payload.financeRawString("settlement_role_raw_value")?.startsWith("investment")==true) false
+        else raw.financeRawDeleted()==null || recentWalletDeletionUncertain(owner,raw,wallets)
+    }
+
+private fun recentWalletDeletionUncertain(owner:UserId,raw:CloudRecord,wallets:List<CloudRecord>):Boolean {
+    if(!raw.payload.financeRawString("source_currency_code").isNullOrBlank()) return false
+    val source=raw.payload.financeRawReference("source_wallet_id").id ?: return false
+    return wallets.any {it.financeRawIdentity(owner,CloudEntity.LEDGER_WALLET,true) && financeRawUuid(it.id)==source && it.financeRawDeleted()==null}
+}
+
 /** Swift OverviewLogic.recentTransactions uses the original source leg, never the reporting pair. */
 internal fun overviewRecentTransactions(
     owner: UserId,
@@ -19,14 +34,14 @@ internal fun overviewRecentTransactions(
 ): List<OverviewRecentRow> {
     val primary = primaryCurrency.code()?.takeIf { it in CurrencyPreferences.supportedCurrencyCodes } ?: "JPY"
     val walletCurrencies = wallets.mapNotNull { raw ->
-        if (raw.entity != CloudEntity.LEDGER_WALLET.table || raw.ownerUserId != owner.value || raw.deletedAt != null) null
+        if (!raw.financeRawIdentity(owner,CloudEntity.LEDGER_WALLET,true) || raw.financeRawDeleted()!=false) null
         else runCatching { LedgerWalletRecord.fromCloudRecord(raw) }.getOrNull()
             ?.takeIf { it.ownerUserId == owner.value && it.id == raw.id && it.deletedAt == null }
             ?.let { wallet -> wallet.currencyCode.code()?.let { wallet.id to it } }
     }.toMap()
     data class DatedRow(val row: OverviewRecentRow, val occurredAt: Instant, val createdAt: Instant)
     return records.mapNotNull { raw ->
-        if (raw.entity != CloudEntity.LEDGER_TRANSACTION.table || raw.ownerUserId != owner.value || raw.deletedAt != null) return@mapNotNull null
+        if (!raw.financeRawIdentity(owner,CloudEntity.LEDGER_TRANSACTION,true) || raw.financeRawDeleted()!=false || recentWalletDeletionUncertain(owner,raw,wallets)) return@mapNotNull null
         val amount = (raw.payload["amount_minor"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
         val archived = raw.payload["is_archived"]
         if (archived != null && (archived as? JsonPrimitive)?.booleanOrNull != false) return@mapNotNull null

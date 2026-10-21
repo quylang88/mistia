@@ -114,4 +114,29 @@ class OverviewAssetsMoneyTest {
         minor(n(Long.MAX_VALUE)*BigInteger.TWO,overviewInventoryCost(owner,listOf(channel),listOf(first,second),own+foreign))
         minor(BigInteger.ZERO,overviewInventoryCost(owner,listOf(channel.with("is_archived",JsonPrimitive(true))),listOf(first,second),own))
     }
+    @Test fun `uncertain inventory membership cannot become a loaded zero`() {
+        val channel=channel();val asset=asset(channel);val trade=trade(asset)
+        for(field in listOf("is_archived","deleted_at")) {
+            val bad=buildJsonObject {put("unreadable",true)}
+            assertNull("channel $field",overviewInventoryCost(owner,listOf(channel.with(field,bad)),listOf(asset),listOf(trade)))
+            assertNull("asset $field",overviewInventoryCost(owner,listOf(channel),listOf(asset.with(field,bad)),listOf(trade)))
+        }
+        assertNull(overviewInventoryCost(owner,listOf(channel),listOf(asset.with("channel_id",JsonPrimitive(5))),listOf(trade)))
+        assertNull(overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(trade.with("deleted_at",buildJsonObject {put("bad",true)}))))
+        assertNull(overviewInventoryCost(owner,listOf(channel),listOf(asset),listOf(trade.with("asset_id",JsonPrimitive(5)))))
+    }
+    @Test fun `known exclusion and no positions remain neutral despite unused damaged membership`() {
+        val channel=channel();val asset=asset(channel);val trade=trade(asset).with("position_cost_basis_after_minor",JsonPrimitive("bad"))
+        for(excluded in listOf(channel.with("is_archived",JsonPrimitive(true)),channel.copy(deletedAt=time)))
+            minor(BigInteger.ZERO,overviewInventoryCost(owner,listOf(excluded),listOf(asset.with("is_archived",JsonPrimitive("bad"))),listOf(trade)))
+        minor(BigInteger.ZERO,overviewInventoryCost(owner,listOf(channel.with("is_archived",JsonPrimitive("bad"))),listOf(asset),emptyList()))
+    }
+    @Test fun `uncertain canonical investment wallet deletion holds currency instead of primary fallback`() {
+        val id=investmentSystemWalletId(owner)
+        val wallet=raw(CloudEntity.LEDGER_WALLET).copy(id=id).with("id",JsonPrimitive(id)).with("currency_code",JsonPrimitive("USD"))
+        assertNull(overviewInventoryAccountingCurrency(owner,listOf(wallet.with("deleted_at",buildJsonObject {put("bad",true)})),"JPY"))
+        assertEquals("USD",overviewInventoryAccountingCurrency(owner,listOf(wallet.with("is_archived",JsonPrimitive(true))),"JPY"))
+        assertEquals("JPY",overviewInventoryAccountingCurrency(owner,listOf(wallet.copy(deletedAt=time)),"JPY"))
+    }
+
 }

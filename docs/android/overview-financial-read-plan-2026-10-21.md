@@ -1,0 +1,5 @@
+# Slice126 implementation plan
+
+1. Add explicit snapshot contract and failing repository/Room integration tests. Exercise all six entities, transaction generations, tombstones/damage/owner boundaries and no writes. Confirm runtime RED before one-query implementation, then GREEN.
+2. Add failing actual Overview lifecycle tests for withheld first read, loaded empty, exceptions after success, retry, owner replacement/late emission. Implement lifecycle collector and truthful unavailable projections/recent state. Adapt existing injected test sources to the new public read contract while retaining assertions; fix observed inventory unknown-admission regressions with focused runtime TDD.
+3. Run focused and full JVM, Room/native Overview, lint/build, shared Swift/contracts/localization/SQLite/icon checks. Directly review Swift and diff, request isolated slice review, repair findings, record exact evidence/limits, package/install/cold start as appropriate, update progress, separate local commit then continue investment Overview card. No live cloud writes/deployment/migration.
