@@ -9,6 +9,8 @@ data class BillPaymentRequest(
     val walletId: RecordId? = null,
     val amountMinorOverride: Long? = null,
     val automatic: Boolean = false,
+    val expectedBill: RecurringBillPlanRecord? = null,
+    val expectedDueAmountMinor: Long? = expectedBill?.amountMinor,
 )
 
 data class BillAutomaticPaymentText(val transactionTitle:String,val successTitle:String,val successBody:String,val emitNotification:Boolean=true)
@@ -113,4 +115,17 @@ fun BillMoneySnapshot.requireUnchanged(current: Map<CloudEntity, List<CloudRecor
     require(recordsByEntity.all { (entity, expected) -> expected.sortedBy { it.id }==current.getValue(entity).sortedBy { it.id } }) {
         "Bill money dependencies changed during operation"
     }
+}
+
+/** ACK metadata does not change consent; the visible source fields do. */
+fun RecurringBillPlanRecord.matchesBillPaymentSource(expected:RecurringBillPlanRecord):Boolean {
+    fun normalized(source:RecurringBillPlanRecord)=source.copy(createdAt=java.time.Instant.parse(source.createdAt).toString(),
+        updatedAt="",syncVersion=0,lastModifiedByDeviceId=null)
+    return runCatching {normalized(this)==normalized(expected)}.getOrDefault(false)
+}
+
+fun BillPaymentRequest.matchesBillPaymentConsent(other:BillPaymentRequest?):Boolean {
+    if(other==null || copy(expectedBill=null)!=other.copy(expectedBill=null)) return false
+    val source=expectedBill;val next=other.expectedBill
+    return if(source==null || next==null) source==null && next==null else source.matchesBillPaymentSource(next)
 }

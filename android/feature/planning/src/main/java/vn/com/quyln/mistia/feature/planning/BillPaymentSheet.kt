@@ -18,6 +18,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.CategoryIcon
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
@@ -37,6 +39,9 @@ import vn.com.quyln.mistia.core.model.*
     var discard by remember {mutableStateOf(false)}
     var confirmedRequest by remember {mutableStateOf<BillPaymentRequest?>(null)}
     val scope=rememberCoroutineScope()
+    val currentPay by rememberUpdatedState(onPay)
+    val currentUndo by rememberUpdatedState(onUndo)
+    val currentDismiss by rememberUpdatedState(onDismiss)
     val changed=!undo && state!=initial
     fun close() {if(!busy) {if(changed) discard=true else onDismiss()}}
     val sheet=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={
@@ -47,11 +52,15 @@ import vn.com.quyln.mistia.core.model.*
     val request=runCatching {state.request(row,wallets)}.getOrNull()
     fun execute(payment:BillPaymentRequest?) {
         if(busy) return
+        if(!undo && (payment==null || !payment.matchesBillPaymentConsent(request))) {
+            confirmedRequest=null;error=R.string.planning_duepayment_could_not_find_the_due_item;return
+        }
         busy=true;error=null
         scope.launch {
             try {
-                val result=if(undo) onUndo() else onPay(requireNotNull(payment)).map {Unit}
-                result.fold(onSuccess={onDismiss()},onFailure={error=billPaymentErrorResource(it)})
+                val result=if(undo) currentUndo() else currentPay(requireNotNull(payment)).map {Unit}
+                currentCoroutineContext().ensureActive()
+                result.fold(onSuccess={currentDismiss()},onFailure={error=billPaymentErrorResource(it)})
             } catch(cancelled:CancellationException) {throw cancelled}
               catch(failure:Exception) {error=billPaymentErrorResource(failure)}
               finally {busy=false;confirmedRequest=null}
@@ -101,10 +110,10 @@ import vn.com.quyln.mistia.core.model.*
             TextButton(onClick={state=state.copy(walletId=wallet.id);error=null;chooseWallet=false},modifier=Modifier.testTag("bill.payWallet.${wallet.id}")) {Text("${wallet.name} · ${wallet.currencyCode}")}
         }}},confirmButton={TextButton(onClick={chooseWallet=false}) {Text(stringResource(R.string.common_close))}})
     confirmedRequest?.let {payment ->
-        AlertDialog(onDismissRequest={if(!busy) confirmedRequest=null},title={Text(stringResource(R.string.planning_duepayment_pay_bill))},
-            text={Column {Text(row.bill.name);Text(formatMinorUnits(requireNotNull(payment.amountMinorOverride),state.currency));
+        AlertDialog(onDismissRequest={if(!busy) confirmedRequest=null},modifier=Modifier.testTag("bill.paymentConfirmation"),title={Text(stringResource(R.string.planning_duepayment_pay_bill))},
+            text={Column {Text(row.bill.name);Text(formatMinorUnits(requireNotNull(payment.amountMinorOverride),state.currency),Modifier.testTag("bill.confirmationAmount"));
                 Text(wallets.firstOrNull {it.id==payment.walletId?.value}?.name.orEmpty())}},
-            confirmButton={TextButton(enabled=!busy && request!=null,onClick={execute(payment)},modifier=Modifier.testTag("bill.confirmPayment")) {Text(stringResource(R.string.planning_duepayment_pay_now))}},
+            confirmButton={TextButton(enabled=!busy && payment.matchesBillPaymentConsent(request),onClick={execute(payment)},modifier=Modifier.testTag("bill.confirmPayment")) {Text(stringResource(R.string.planning_duepayment_pay_now))}},
             dismissButton={TextButton(enabled=!busy,onClick={confirmedRequest=null}) {Text(stringResource(R.string.common_cancel))}})
     }
     if(discard) AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.planning_budget_editor_discard_title))},

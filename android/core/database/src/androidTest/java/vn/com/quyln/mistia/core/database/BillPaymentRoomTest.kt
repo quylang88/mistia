@@ -111,7 +111,7 @@ class BillPaymentRoomTest {
                 val initial=listOf(reminder(bill),reminder(bill,"2026-09"),success)
                 assertTrue(store.commitLocalNotifications(owner,emptyList(),initial))
                 when(operation) {
-                    "pay" -> repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).getOrThrow()
+                    "pay" -> repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,expectedBill=bill),device,now).getOrThrow()
                     "skip" -> repo.skipRecurringBill(owner,RecordId(bill.id),month,device,now).getOrThrow()
                     else -> repo.pauseRecurringBill(owner,RecordId(bill.id),device,now).getOrThrow()
                 }
@@ -136,7 +136,7 @@ class BillPaymentRoomTest {
                 db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_resolution BEFORE INSERT ON local_app_notifications
                     BEGIN SELECT RAISE(ABORT,'simulated resolution failure'); END""")
                 val result=when(operation) {
-                    "pay" -> repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now)
+                    "pay" -> repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,expectedBill=bill),device,now)
                     "skip" -> repo.skipRecurringBill(owner,RecordId(bill.id),month,device,now)
                     else -> repo.pauseRecurringBill(owner,RecordId(bill.id),device,now)
                 }
@@ -174,7 +174,7 @@ class BillPaymentRoomTest {
             var store=RoomLocalStore(db)
             var repo=OfflineFirstFinanceRepository(store,zone,catalog)
             val bill=prepare(repo)
-            val paid=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).getOrThrow()
+            val paid=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,expectedBill=bill),device,now).getOrThrow()
             db.close()
             db=Room.databaseBuilder(context,MistiaDatabase::class.java,name).build()
             store=RoomLocalStore(db);repo=OfflineFirstFinanceRepository(store,zone,catalog)
@@ -186,7 +186,7 @@ class BillPaymentRoomTest {
             assertEquals(MutationKind.DELETE,store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single().mutation.kind)
             assertEquals(MutationKind.DELETE,store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).single().mutation.kind)
             val sentUndo=store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).single()
-            val repayment=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).getOrThrow()
+            val repayment=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,expectedBill=bill),device,now).getOrThrow()
             assertEquals(paid.transaction.id,repayment.transaction.id)
             assertEquals(paid.occurrences.single().id,repayment.occurrences.single().id)
             assertFalse(store.acknowledgeMutation(sentUndo,LedgerTransactionRecord.fromCloudRecord(
@@ -206,7 +206,7 @@ class BillPaymentRoomTest {
             val bill=prepare(repo)
             db.openHelper.writableDatabase.execSQL("""CREATE TRIGGER reject_paid_occurrence BEFORE INSERT ON sync_outbox
                 WHEN NEW.entity='due_occurrence_records' BEGIN SELECT RAISE(ABORT,'simulated occurrence outbox failure'); END""")
-            assertTrue(repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).isFailure)
+            assertTrue(repo.payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,expectedBill=bill),device,now).isFailure)
             assertTrue(repo.observeTransactions(owner).first().isEmpty())
             assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
             assertTrue(store.pendingMutations(owner,CloudEntity.LEDGER_TRANSACTION,Long.MAX_VALUE).isEmpty())
@@ -227,7 +227,7 @@ class BillPaymentRoomTest {
                     store.commitBillMoneyMutations(snapshot,mutations)
                 }
             }
-            assertTrue(OfflineFirstFinanceRepository(racing,zone,catalog).payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month),device,now).isFailure)
+            assertTrue(OfflineFirstFinanceRepository(racing,zone,catalog).payRecurringBill(owner,BillPaymentRequest(RecordId(bill.id),month,expectedBill=bill),device,now).isFailure)
             assertTrue(repo.observeTransactions(owner).first().isEmpty())
             assertTrue(repo.observeDueOccurrences(owner).first().isEmpty())
         } finally {db.close()}

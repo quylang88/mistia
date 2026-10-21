@@ -21,6 +21,12 @@ class BillPaymentStateTest {
             null,"2026-09-30T15:00:00Z",true,null,false,null,null,1,walletId,currency,false,false,null,null,now,now,null,0,id)
         return recurringBillDueRows(UserId(owner),listOf(bill),emptyList(),month,zone).single()
     }
+    @Test fun `request carries visible bill and effective cycle amount independently of default`() {
+        val due=row().copy(amountMinor=6000)
+        val request=BillPaymentState.initial(owner,due,month,listOf(wallet())).request(due,listOf(wallet()))
+        assertEquals(due.bill,request.expectedBill);assertEquals(6000L,request.expectedDueAmountMinor)
+        assertEquals(6000L,request.amountMinorOverride)
+    }
     @Test fun `known amount uses default and captures cycle month across month end`() {
         val row=row(9007199254740993L)
         val state=BillPaymentState.initial(owner,row,month,listOf(wallet()))

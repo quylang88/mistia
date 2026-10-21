@@ -24,7 +24,7 @@ data class BillPaymentState(val owner:String,val billId:String,val month:String,
                 .setScale(0,RoundingMode.UNNECESSARY).longValueExact()
         }.getOrElse {throw BillPaymentException(BillPaymentError.MISSING_AMOUNT)}
         if((amount ?: row.amountMinor ?: 0)<=0) throw BillPaymentException(BillPaymentError.MISSING_AMOUNT)
-        return BillPaymentRequest(RecordId(billId),YearMonth.parse(month),RecordId(wallet.id),amount ?: row.amountMinor)
+        return BillPaymentRequest(RecordId(billId),YearMonth.parse(month),RecordId(wallet.id),amount ?: row.amountMinor,expectedBill=row.bill,expectedDueAmountMinor=row.amountMinor)
     }
     companion object {
         fun initial(owner:String,row:RecurringBillDueRow,month:YearMonth,wallets:List<LedgerWalletRecord>) =

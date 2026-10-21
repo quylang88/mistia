@@ -33,7 +33,51 @@ class BillPaymentRepositoryTest {
         return repo.saveRecurringBill(owner, RecurringBillDraft("Internet", category.id, amount,
             wallet.id, "JPY", paymentStartDay=10, zoneId=zone), device, now).getOrThrow()
     }
-    private fun request(bill: RecurringBillPlanRecord) = BillPaymentRequest(RecordId(bill.id), month)
+    @Test fun `manual source guard rejects stale visible amount even when local version is unchanged`()=runTest {
+        val visible=prepare();val changed=visible.copy(amountMinor=6000)
+        store.commitMutation(changed.toCloudRecord(),changed.pendingMutation())
+        val before=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)};val outbox=store.outboxRows(owner.value)
+        val result=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,amountMinorOverride=5000,expectedBill=visible),device,now)
+        assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.SOURCE_CHANGED,reason(result))
+        assertEquals(before,CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)})
+        assertEquals(outbox,store.outboxRows(owner.value))
+    }
+    @Test fun `manual source guard rejects missing or foreign source proof without writes`()=runTest {
+        val visible=prepare();val before=store.outboxRows(owner.value)
+        for(expected in listOf(null,visible.copy(ownerUserId=other.value))) {
+            val result=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,amountMinorOverride=5000,expectedBill=expected),device,now)
+            assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.SOURCE_CHANGED,reason(result))
+            assertEquals(before,store.outboxRows(owner.value));assertTrue(repo.observeTransactions(owner).first().isEmpty())
+        }
+    }
+    @Test fun `manual source guard accepts metadata acknowledgement without changing payment intent`()=runTest {
+        val visible=prepare();val ack=visible.copy(updatedAt="2026-10-13T00:01:00Z",syncVersion=1,lastModifiedByDeviceId=other.value)
+        store.commitMutation(ack.toCloudRecord(),ack.pendingMutation())
+        val paid=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,amountMinorOverride=5000,expectedBill=visible),device,now).getOrThrow()
+        assertEquals(5000L,paid.transaction.amountMinor)
+    }
+    @Test fun `manual source guard keeps intentional variable amount exact`()=runTest {
+        val visible=prepare(amount=null)
+        val paid=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,amountMinorOverride=1375,expectedBill=visible),device,now).getOrThrow()
+        assertEquals(1375L,paid.transaction.amountMinor)
+    }
+    @Test fun `manual source guard does not freeze automatic payment to an old visible source`()=runTest {
+        val visible=autoBill();val changed=visible.copy(amountMinor=6000)
+        store.commitMutation(changed.toCloudRecord(),changed.pendingMutation())
+        val paid=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,automatic=true,expectedBill=visible),device,now).getOrThrow()
+        assertEquals(6000L,paid.transaction.amountMinor)
+    }
+
+    @Test fun `manual source guard rejects a changed effective cycle amount even when the bill is unchanged`()=runTest {
+        val visible=prepare()
+        val pending=DueOccurrenceRecord("88888888-8888-8888-8888-888888888888",owner.value,"recurringBill",visible.id,month.toString(),now,6000,"pending",null,null,now,now,null,0,device)
+        store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+        val before=store.outboxRows(owner.value)
+        val result=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,amountMinorOverride=5000,expectedBill=visible),device,now)
+        assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.SOURCE_CHANGED,reason(result))
+        assertEquals(before,store.outboxRows(owner.value));assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
+    private fun request(bill: RecurringBillPlanRecord) = BillPaymentRequest(RecordId(bill.id), month,expectedBill=bill)
     private fun reason(result: Result<*>) = (result.exceptionOrNull() as? BillPaymentException)?.reason
 
     private suspend fun autoBill(enabled:Boolean=true,day:Int=13):RecurringBillPlanRecord {
@@ -160,7 +204,7 @@ class BillPaymentRepositoryTest {
         store.commitMutation(bill.toCloudRecord(),bill.pendingMutation())
         val raced=object:BillPaymentRepository by repo {
             override suspend fun payRecurringBill(owner:UserId,request:BillPaymentRequest,deviceId:String,now:String):Result<SavedBillPayment> {
-                repo.payRecurringBill(owner,request.copy(automatic=false),deviceId,now).getOrThrow()
+                repo.payRecurringBill(owner,request.copy(automatic=false,expectedBill=bill,expectedDueAmountMinor=bill.amountMinor),deviceId,now).getOrThrow()
                 return repo.payRecurringBill(owner,request,deviceId,now)
             }
         }
@@ -476,7 +520,8 @@ class BillPaymentRepositoryTest {
         assertEquals(BillPaymentError.NOT_SCHEDULED,
             reason(repo.payRecurringBill(owner, request(bill).copy(month=month.minusMonths(1)), device, now)))
         repo.pauseRecurringBill(owner, RecordId(bill.id), device, now).getOrThrow()
-        assertEquals(BillPaymentError.NOT_SCHEDULED, reason(repo.payRecurringBill(owner, request(bill), device, now)))
+        val paused=repo.observeRecurringBills(owner).first().single()
+        assertEquals(BillPaymentError.NOT_SCHEDULED, reason(repo.payRecurringBill(owner, request(paused), device, now)))
         assertTrue(repo.observeTransactions(owner).first().isEmpty())
     }
     @Test fun `undo tombstones ledger and every paid duplicate atomically retaining large versions`() = runTest {
@@ -612,7 +657,7 @@ class BillPaymentRepositoryTest {
             iconSymbolName="custom.bill.icon"), device, now).getOrThrow()
         val customBill = bill.copy(categoryId=custom.id, iconSymbolName=custom.iconSymbolName)
         store.commitMutation(customBill.toCloudRecord(), customBill.pendingMutation())
-        val paid = repo.payRecurringBill(owner, request(bill), device, now).getOrThrow()
+        val paid = repo.payRecurringBill(owner, request(customBill), device, now).getOrThrow()
         assertEquals(4, store.batches.last().size)
         val fallback = store.recordsIncludingDeleted(owner, CloudEntity.TRANSACTION_CATEGORY.table)
             .map(TransactionCategoryRecord::fromCloudRecord).single { it.systemKey=="billing" }

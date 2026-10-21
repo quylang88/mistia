@@ -26,6 +26,10 @@ internal class OfflineBillPaymentRepository(
         val zone=currentZone()
         val snapshot = snapshot(owner, request.billId, request.month)
         val bill = ScheduledExpenseSource(snapshot.bill, sourceKind)
+        if(sourceKind==DueSourceKind.RECURRING_BILL && !request.automatic) {
+            val expected=request.expectedBill ?: fail(BillPaymentError.SOURCE_CHANGED)
+            if(bill.bill?.matchesBillPaymentSource(expected)!=true) fail(BillPaymentError.SOURCE_CHANGED)
+        }
         if(request.automatic) {
             if(request.walletId!=null || request.amountMinorOverride!=null) fail(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE)
             if(bill.autoPayEnabled!=true || bill.isPaused) fail(BillPaymentError.AUTO_PAY_NOT_DUE)
@@ -54,6 +58,8 @@ internal class OfflineBillPaymentRepository(
         }
         val due = bill.due(owner, occurrences.filter { it.deletedAt == null }, request.month, zone)
             ?: fail(BillPaymentError.NOT_SCHEDULED)
+        if(sourceKind==DueSourceKind.RECURRING_BILL && !request.automatic && due.amountMinor!=request.expectedDueAmountMinor)
+            fail(BillPaymentError.SOURCE_CHANGED)
         if(request.automatic && due.autoPayDate?.atZone(zone)?.toLocalDate()!=Instant.parse(now).atZone(zone).toLocalDate())
             fail(BillPaymentError.AUTO_PAY_NOT_DUE)
         val wallets = owned(snapshot, CloudEntity.LEDGER_WALLET).map(LedgerWalletRecord::fromCloudRecord).filter { it.deletedAt==null }
