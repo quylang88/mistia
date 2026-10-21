@@ -432,8 +432,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideInvestmentRepository(localStore: LocalStore): InvestmentRepository =
-        OfflineFirstInvestmentRepository(localStore)
+    fun provideInvestmentRepository(localStore: LocalStore,@ApplicationContext context:Context): InvestmentRepository =
+        OfflineFirstInvestmentRepository(localStore) {context.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_wallet_name)}
 
     @Provides
     @Singleton

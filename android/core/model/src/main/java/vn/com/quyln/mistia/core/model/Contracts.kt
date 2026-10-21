@@ -242,11 +242,20 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    fun observeChannelSnapshot(owner:UserId):Flow<InvestmentChannelSnapshot> = throw UnsupportedOperationException("Consistent investment channel snapshot unavailable")
+    suspend fun saveChannel(owner:UserId,draft:InvestmentChannelDraft,primaryCurrency:String,deviceId:String,now:String):Result<InvestmentChannelRecord> = Result.failure(UnsupportedOperationException("Investment channel save unavailable"))
+    suspend fun archiveChannel(owner:UserId,expected:InvestmentChannelRecord,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment channel archive unavailable"))
+    suspend fun restoreChannel(owner:UserId,expected:InvestmentChannelRecord,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment channel restore unavailable"))
+
     fun observeAssets(ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeTrades(ownerUserId: UserId): Flow<List<CloudRecord>>
 }
 
 interface LocalStore {
+    fun observeInvestmentChannelSnapshot(owner:UserId):Flow<InvestmentChannelSnapshot> = throw UnsupportedOperationException("Consistent investment channel snapshot unavailable")
+    suspend fun investmentChannelSnapshot(owner:UserId):InvestmentChannelSnapshot = throw UnsupportedOperationException("Atomic investment channel snapshot unavailable")
+    suspend fun commitInvestmentChannels(expected:InvestmentChannelSnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>):Boolean = throw UnsupportedOperationException("Conditional investment channel writes unavailable")
+
     fun observeOverviewFinancialReadSnapshot(owner:UserId):Flow<OverviewFinancialReadSnapshot> =
         throw UnsupportedOperationException("Consistent Overview financial snapshot unavailable")
     fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<UpcomingDueReadSnapshot> =

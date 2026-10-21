@@ -453,10 +453,10 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
     ) { rows -> rows.flatMap { it } }
 }
 
-class OfflineFirstInvestmentRepository(private val localStore: LocalStore) : InvestmentRepository {
+class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
     override fun observeAssets(ownerUserId: UserId): Flow<List<CloudRecord>> =
-        localStore.observe(CloudEntity.INVESTMENT_ASSET.table, ownerUserId)
+        localStore.observeOwnedFinanceRows(CloudEntity.INVESTMENT_ASSET, ownerUserId)
 
     override fun observeTrades(ownerUserId: UserId): Flow<List<CloudRecord>> =
-        localStore.observe(CloudEntity.INVESTMENT_TRADE.table, ownerUserId)
+        localStore.observeOwnedFinanceRows(CloudEntity.INVESTMENT_TRADE, ownerUserId)
 }

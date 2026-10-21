@@ -284,6 +284,9 @@ class SupabasePostgrestRemoteStore(
 
     private fun requireWriteEnabled(entity: CloudEntity, payload: JsonObject, creating: Boolean = false) {
         check(entity in writableEntities) { "Cloud writes are disabled for ${entity.table}" }
+        check(!entity.table.startsWith("investment_")) {"Investment entities require their dedicated write pipeline"}
+        if(entity==CloudEntity.LEDGER_WALLET) check(!vn.com.quyln.mistia.core.model.requiresInvestmentWalletDomain(
+            UserId(payload.string("user_id").orEmpty()),payload.string("id").orEmpty(),payload)) {"Investment wallets require their dedicated write pipeline"}
         if (entity == CloudEntity.DUE_OCCURRENCE_RECORD) {
             if (payload.string("source_kind_raw_value") == "installment") {
                 val skip = payload.string("status_raw_value") == "skipped"

@@ -141,6 +141,18 @@ class WalletPushCoordinatorTest {
         assertSame(original, local.queued)
     }
 
+    @Test fun `ordinary wallet push defers reserved investment queues without any remote call or failure bookkeeping`()=runTest {
+        val canonical=vn.com.quyln.mistia.core.model.investmentSystemWalletId(UserId(OWNER))
+        for((id,fields) in listOf(canonical to emptyMap(),WALLET_ID to mapOf("kind_raw_value" to JsonPrimitive("investment")),WALLET_ID to mapOf("system_purpose_raw_value" to JsonPrimitive("investmentProfit")))) {
+            val raw=localRecord(0).copy(id=id,payload=JsonObject(localRecord(0).payload+fields+("id" to JsonPrimitive(id))))
+            val queue=queued(0).let{it.copy(mutation=it.mutation.copy(recordId=id,payload=raw.payload))}
+            val local=FakeLocalStore(raw,queue);val remote=FakeRemoteStore().apply{createdResult=raw.copy(syncVersion=1)}
+            val result=coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)
+            assertEquals(0,remote.fetchCalls);assertEquals(0,remote.writeCalls);assertEquals(DomainPushSummary(),result)
+            assertSame(queue,local.queued);assertEquals(raw,local.record)
+        }
+    }
+
     private fun coordinator(local: LocalStore, remote: RemoteMutationStore) =
         WalletPushCoordinator(local, remote, writesEnabled = true) { NOW_MILLIS }
 

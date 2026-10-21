@@ -363,6 +363,8 @@ private fun SignedInRoot(
                 ownerUserId = authState.session.userId,
                 repository = investmentRepository,
                 onBack = { navController.popBackStack() },
+                primaryCurrencyCode=currencySettings.primaryCurrencyCode,
+                deviceIdProvider={deviceIdStore.getOrCreate()},
             )
         }
     }

@@ -186,6 +186,12 @@ interface CloudRecordDao {
     fun observeActive(ownerUserId: String, entity: String): Flow<List<CloudRecordEntity>>
 
     @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
+    fun observeInvestmentChannelRows(ownerUserId:String,entities:List<String>):Flow<List<CloudRecordEntity>>
+
+    @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
+    suspend fun investmentChannelRows(ownerUserId:String,entities:List<String>):List<CloudRecordEntity>
+
+    @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
     fun observeOverviewFinancialRows(ownerUserId:String,entities:List<String>):Flow<List<CloudRecordEntity>>
 
     @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
@@ -737,6 +743,31 @@ class RoomLocalStore(
 
     override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
+
+    override fun observeInvestmentChannelSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot> =
+        database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot.entities.map {it.table})
+            .map {rows ->vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot(owner,rows.map {it.toCloudRecord()})}
+
+    override suspend fun investmentChannelSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val rows=database.cloudRecordDao().investmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot.entities.map {it.table})
+        ensureCurrentFinanceOwner(owner)
+        vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot(owner,rows.map {it.toCloudRecord()})
+    }
+
+    override suspend fun commitInvestmentChannels(expected:vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>):Boolean {
+        expected.requireValidMutations(mutations)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current=investmentChannelSnapshot(expected.owner)
+            if(runCatching {expected.requireUnchanged(current)}.isFailure) return@withTransaction false
+            if(mutations.any {(row,_) ->expected.rows.none {it.entity==row.entity && it.id==row.id} &&
+                database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)!=null}) return@withTransaction false
+            mutations.forEach {(record,mutation) ->commitMutationRows(record,mutation)}
+            ensureCurrentFinanceOwner(expected.owner)
+            true
+        }
+    }
 
     override fun observeBudgetReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.BudgetReadSnapshot> =
         database.cloudRecordDao().observeBudgetRows(owner.value,vn.com.quyln.mistia.core.model.BudgetReadSnapshot.entities.map {it.table})

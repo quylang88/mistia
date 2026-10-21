@@ -23,6 +23,7 @@ import vn.com.quyln.mistia.core.model.UserId
 class WalletPostgrestMutationTest {
     private lateinit var server: MockWebServer
     private lateinit var store: SupabasePostgrestRemoteStore
+    private lateinit var testClient:OkHttpClient
 
     @Before
     fun setUp() {
@@ -37,12 +38,10 @@ class WalletPostgrestMutationTest {
             useHttps(serverCertificates.sslSocketFactory(), false)
             start()
         }
+        testClient = OkHttpClient.Builder().sslSocketFactory(clientCertificates.sslSocketFactory(),clientCertificates.trustManager).build()
         store = SupabasePostgrestRemoteStore(
             config = SupabaseConfig(server.url("/").toString().removeSuffix("/"), "publishable-key"),
-            client = OkHttpClient.Builder().sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager,
-            ).build(),
+            client = testClient,
             writableEntities = setOf(CloudEntity.LEDGER_WALLET),
         )
     }
@@ -130,6 +129,30 @@ class WalletPostgrestMutationTest {
 
         assertTrue(failure is IllegalStateException)
         assertEquals(0, server.requestCount)
+    }
+
+    @Test fun `ordinary wallet permission never authorizes the investment system identity kind or purpose`()=runTest {
+        val canonical=vn.com.quyln.mistia.core.model.investmentSystemWalletId(UserId(OWNER))
+        for(fields in listOf(mapOf("id" to JsonPrimitive(canonical)),mapOf("kind_raw_value" to JsonPrimitive("investment")),mapOf("system_purpose_raw_value" to JsonPrimitive("investmentProfit")))) {
+            val payload=JsonObject(walletPayload(1)+fields)
+            server.enqueue(MockResponse().setResponseCode(400).setBody("{}"))
+            val create=runCatching{store.createRecord(CloudEntity.LEDGER_WALLET,TOKEN,UserId(OWNER),payload)}.exceptionOrNull()
+            assertTrue("Investment wallet must be refused before HTTP",create is IllegalStateException)
+            assertEquals(0,server.requestCount)
+            val update=runCatching{store.conditionalUpdate(CloudEntity.LEDGER_WALLET,(payload.getValue("id") as JsonPrimitive).content,TOKEN,UserId(OWNER),0,payload)}.exceptionOrNull()
+            assertTrue(update is IllegalStateException);assertEquals(0,server.requestCount)
+        }
+    }
+
+    @Test fun `generic table writer cannot bypass the dedicated investment pipeline by allowlisting its tables`()=runTest {
+        val raw=SupabasePostgrestRemoteStore(config=SupabaseConfig(server.url("/").toString().removeSuffix("/"),"publishable-key"),client=testClient,
+            writableEntities=setOf(CloudEntity.INVESTMENT_CHANNEL,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_TRADE))
+        for(entity in listOf(CloudEntity.INVESTMENT_CHANNEL,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_TRADE)) {
+            server.enqueue(MockResponse().setResponseCode(400).setBody("{}"))
+            val failure=runCatching{raw.createRecord(entity,TOKEN,UserId(OWNER),walletPayload(1))}.exceptionOrNull()
+            assertTrue("Investment generic table $entity must be refused before HTTP: $failure",failure is IllegalStateException)
+            assertEquals(0,server.requestCount)
+        }
     }
 
     private fun walletPayload(version: Long): JsonObject = JsonObject(

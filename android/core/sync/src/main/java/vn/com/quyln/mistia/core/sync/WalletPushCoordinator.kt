@@ -19,6 +19,18 @@ class WalletPushCoordinator(
         remoteStore = remoteStore,
         writesEnabled = writesEnabled,
         nowEpochMillis = nowEpochMillis,
+        preflight = {queued,local,owner,_ ->
+            if(vn.com.quyln.mistia.core.model.requiresInvestmentWalletDomain(owner,local.id,local.payload) ||
+                vn.com.quyln.mistia.core.model.requiresInvestmentWalletDomain(owner,queued.mutation.recordId,queued.mutation.payload)) MutationPreflight.Deferred
+            else MutationPreflight.Continue
+        },
+        beforeRemoteWrite = {queued,local,owner,_ ->
+            val current=localStore.record(owner,CloudEntity.LEDGER_WALLET.table,local.id)
+            if(current==null) MutationPreflight.Stale
+            else if(vn.com.quyln.mistia.core.model.requiresInvestmentWalletDomain(owner,current.id,current.payload) ||
+                vn.com.quyln.mistia.core.model.requiresInvestmentWalletDomain(owner,queued.mutation.recordId,queued.mutation.payload)) MutationPreflight.Deferred
+            else MutationPreflight.Continue
+        },
     )
 
     override val entity: CloudEntity = CloudEntity.LEDGER_WALLET
