@@ -181,6 +181,9 @@ interface AuthRepository {
 }
 
 interface FinanceRepository : InstallmentPaymentRepository, InstallmentRepository, AppNotificationRepository, BillMaintenanceRepository, BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
+    /** A consistent raw read set; implementations must not fabricate partial loaded snapshots. */
+    fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<UpcomingDueReadSnapshot> =
+        throw UnsupportedOperationException("Consistent upcoming due snapshot unavailable")
     fun observe(entity: CloudEntity, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeWallets(ownerUserId: UserId): Flow<List<LedgerWalletRecord>>
     fun observeCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
@@ -242,6 +245,8 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<UpcomingDueReadSnapshot> =
+        throw UnsupportedOperationException("Consistent upcoming due snapshot unavailable")
     suspend fun walletReminderSnapshot(owner:UserId):WalletReminderSnapshot =
         throw UnsupportedOperationException("Wallet reminder snapshot unavailable")
     suspend fun commitWalletReminders(expected:WalletReminderSnapshot,replacement:List<AppNotificationRecord>):Boolean =

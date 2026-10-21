@@ -29,7 +29,7 @@ internal data class InstallmentPaymentState(val owner: String, val planId: Strin
         val amount = input.takeIf { Regex("[0-9,]+").matches(it) }?.replace(",", "")?.toLongOrNull()?.takeIf { it > 0 }
             ?: throw BillPaymentException(BillPaymentError.MISSING_AMOUNT)
         if (amount != row.amountMinor) throw BillPaymentException(BillPaymentError.SOURCE_CHANGED)
-        return InstallmentPaymentRequest(row.plan, YearMonth.parse(month), RecordId(wallet.id), amount)
+        return InstallmentPaymentRequest(row.plan, YearMonth.parse(month), RecordId(wallet.id), amount,expectedDueAmountMinor=row.amountMinor)
     }
     companion object {
         fun initial(owner: String, row: InstallmentDueRow, wallets: List<LedgerWalletRecord>): InstallmentPaymentState {
@@ -83,5 +83,5 @@ private fun paymentUuid(value: String): Boolean = Regex("[0-9a-f]{8}-[0-9a-f]{4}
 
 internal fun installmentPaymentTargetIsCurrent(frozen: InstallmentDueRow, current: InstallmentDueRow?): Boolean =
     current != null && current.plan.ownerUserId == frozen.plan.ownerUserId && current.plan.id == frozen.plan.id &&
-        current.month == frozen.month && current.status == frozen.status && current.amountMinor == frozen.amountMinor &&
+        current.plan.matchesInstallmentPaymentSource(frozen.plan) && current.month == frozen.month && current.status == frozen.status && current.amountMinor == frozen.amountMinor &&
         current.dueDate == frozen.dueDate && current.linkedTransactionId == frozen.linkedTransactionId

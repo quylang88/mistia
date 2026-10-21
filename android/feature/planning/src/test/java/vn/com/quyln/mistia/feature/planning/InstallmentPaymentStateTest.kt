@@ -19,6 +19,12 @@ class InstallmentPaymentStateTest {
     private fun wallet(currency: String = "JPY") = LedgerWalletRecord.fromCloudRecord(WalletDraft(id = walletId, name = "Cash", kind = WalletKind.CASH, currencyCode = currency).toMutation(UserId(owner), null, id, time).record)
     private fun state(currency: String = "JPY") = InstallmentPaymentState.initial(owner, row(currency), listOf(wallet(currency)))
     private fun rejects(block: () -> Unit) { assertTrue(runCatching(block).isFailure) }
+    @Test fun `request carries visible effective cycle amount independently of plan default`() {
+        val due=row().copy(amountMinor=6000)
+        val request=InstallmentPaymentState.initial(owner,due,listOf(wallet())).request(due,listOf(wallet()))
+        assertEquals(due.plan,request.expected);assertEquals(6000L,request.expectedDueAmountMinor)
+        assertEquals(6000L,request.amountMinorOverride)
+    }
     @Test fun `form keeps exact source amount and Long version without converting major units`() {
         for (currency in listOf("JPY", "VND", "USD")) {
             val state = state(currency); val request = state.request(row(currency), listOf(wallet(currency)))
@@ -75,6 +81,11 @@ class InstallmentPaymentStateTest {
         rejects { InstallmentPaymentNavigation.open(owner, row().copy(status = DueStatus.SKIPPED)) }
         assertNull(InstallmentPaymentNavigation(owner, month.toString(), "not-json", 100, time, "pending").row())
         assertNull(InstallmentPaymentNavigation.closed(owner, month).row())
+    }
+    @Test fun `confirmation cannot retain a changed source currency or schedule under equal cycle amount`() {
+        val frozen=row()
+        for(source in listOf(frozen.plan.copy(currencyCode="USD"),frozen.plan.copy(frequencyMonths=3),frozen.plan.copy(paymentWalletId=other)))
+            assertFalse(source.toString(),installmentPaymentTargetIsCurrent(frozen,frozen.copy(plan=source)))
     }
     @Test fun `confirmation target rejects missing or changed frozen cycle but accepts metadata only ACK`() {
         val frozen = row().copy(status = DueStatus.PAID, linkedTransactionId = other)

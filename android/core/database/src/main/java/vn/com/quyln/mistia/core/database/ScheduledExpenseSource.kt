@@ -1,6 +1,5 @@
 package vn.com.quyln.mistia.core.database
 
-import java.time.Duration
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -28,11 +27,7 @@ internal class ScheduledExpenseSource(val raw: CloudRecord, val kind: DueSourceK
         } } ?: installment?.let { source -> installmentDueRows(owner, listOf(source), occurrences, month, zone).singleOrNull()?.let {
             ScheduledExpenseDue(it.amountMinor, it.dueDate, null)
         } }
-    fun matchesExpected(expected: InstallmentPlanRecord): Boolean {
-        val current = installment ?: return false
-        if (Duration.between(Instant.parse(current.createdAt), Instant.parse(expected.createdAt)).abs() >= Duration.ofNanos(1000)) return false
-        return current.copy(createdAt = expected.createdAt, updatedAt = expected.updatedAt, syncVersion = expected.syncVersion,
-            lastModifiedByDeviceId = expected.lastModifiedByDeviceId) == expected
-    }
+    fun matchesExpected(expected: InstallmentPlanRecord): Boolean = installment?.matchesInstallmentPaymentSource(expected)==true
+
 }
 internal data class ScheduledExpenseDue(val amountMinor: Long?, val dueDate: Instant, val autoPayDate: Instant?)

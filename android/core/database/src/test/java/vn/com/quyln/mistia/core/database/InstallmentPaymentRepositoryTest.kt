@@ -36,6 +36,23 @@ class InstallmentPaymentRepositoryTest {
     }
     private fun request(plan: InstallmentPlanRecord, wallet: String? = null, amount: Long? = null) = InstallmentPaymentRequest(plan, month, wallet?.let(::RecordId), amount)
     private fun reason(result: Result<*>) = (result.exceptionOrNull() as? BillPaymentException)?.reason
+    @Test fun `changed effective cycle cannot accept old amount under an unchanged plan`()=runTest {
+        val visible=prepare()
+        val pending=DueOccurrenceRecord(other.value,owner.value,"installment",visible.id,month.toString(),now,6000,"pending",null,null,now,now,null,0,device)
+        store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+        val before=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)};val queue=store.outboxRows(owner.value)
+        val result=repo.payInstallment(owner,request(visible,amount=5000),device,now)
+        assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.SOURCE_CHANGED,reason(result))
+        assertEquals(before,CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)})
+        assertEquals(queue,store.outboxRows(owner.value))
+    }
+    @Test fun `fresh effective cycle baseline permits its exact snapshot amount`()=runTest {
+        val visible=prepare()
+        val pending=DueOccurrenceRecord(other.value,owner.value,"installment",visible.id,month.toString(),now,6000,"pending",null,null,now,now,null,0,device)
+        store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+        val paid=repo.payInstallment(owner,request(visible,amount=6000).copy(expectedDueAmountMinor=6000),device,now).getOrThrow()
+        assertEquals(6000L,paid.transaction.amountMinor);assertEquals(6000L,paid.occurrences.single().amountMinorSnapshot)
+    }
     @Test fun `native installment payment atomically posts loan repayment expense and owned paid cycle`() = runTest {
         val plan = prepare(); val saved = repo.payInstallment(owner, request(plan), device, now).getOrThrow()
         assertEquals(TransactionPrimaryKind.EXPENSE, saved.transaction.primaryKind); assertEquals(5000L, saved.transaction.amountMinor); assertEquals("JPY", saved.transaction.sourceCurrencyCode)

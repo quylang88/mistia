@@ -35,6 +35,14 @@ internal class OfflineBillPaymentRepository(
             if(bill.autoPayEnabled!=true || bill.isPaused) fail(BillPaymentError.AUTO_PAY_NOT_DUE)
         }
         val occurrences = owned(snapshot, CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
+        val knownKinds=DueSourceKind.entries.map {it.wireValue}.toSet()
+        val knownStatuses=DueStatus.entries.map {it.wireValue}.toSet()
+        occurrences.filter {it.deletedAt==null && it.sourceId==bill.id &&
+            (it.sourceKindWireValue==sourceKind.wireValue || it.sourceKindWireValue !in knownKinds)}.forEach {occurrence ->
+            val selected=runCatching {YearMonth.parse(occurrence.selectedMonthKey)}.getOrElse {fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)}
+            if(selected==request.month && (occurrence.sourceKindWireValue !in knownKinds || occurrence.statusWireValue !in knownStatuses))
+                fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
+        }
         val cycle = occurrences.filter { it.deletedAt==null && it.sourceKindWireValue==sourceKind.wireValue && it.sourceId==bill.id && it.selectedMonthKey==request.month.toString() }
         if (cycle.any { it.status!=DueStatus.PENDING || it.linkedTransactionId!=null }) fail(BillPaymentError.CYCLE_NOT_PENDING)
         // Reuse the prior payment identity when undo is followed by repayment.
@@ -58,7 +66,7 @@ internal class OfflineBillPaymentRepository(
         }
         val due = bill.due(owner, occurrences.filter { it.deletedAt == null }, request.month, zone)
             ?: fail(BillPaymentError.NOT_SCHEDULED)
-        if(sourceKind==DueSourceKind.RECURRING_BILL && !request.automatic && due.amountMinor!=request.expectedDueAmountMinor)
+        if(!request.automatic && due.amountMinor!=request.expectedDueAmountMinor)
             fail(BillPaymentError.SOURCE_CHANGED)
         if(request.automatic && due.autoPayDate?.atZone(zone)?.toLocalDate()!=Instant.parse(now).atZone(zone).toLocalDate())
             fail(BillPaymentError.AUTO_PAY_NOT_DUE)

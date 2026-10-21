@@ -81,4 +81,22 @@ class BillPaymentSourceRoomTest {
             assertEquals(1,repo.observeTransactions(owner).first().size)
         } finally {db.close();context.deleteDatabase(name)}
     }
+    @Test fun unreadableCurrentCycleAuthorityCannotDefaultToPendingAndWriteMoney()=runTest {
+        for(field in listOf("status","kind","month")) {
+            val db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(),MistiaDatabase::class.java).build()
+            try {
+                val store=RoomLocalStore(db);val repo=OfflineFirstFinanceRepository(store,zone,catalog);val visible=prepare(repo)
+                val cycle=DueOccurrenceRecord(UUID.randomUUID().toString(),owner.value,if(field=="kind") "futureKind" else "recurringBill",visible.id,
+                    if(field=="month") "broken" else month.toString(),now,9007199254740993L,if(field=="status") "futureStatus" else "pending",null,null,now,now,null,0,device)
+                store.commitMutation(cycle.toCloudRecord(),cycle.pendingMutation())
+                val before=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)}
+                val queue=CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)}
+                val result=repo.payRecurringBill(owner,BillPaymentRequest(RecordId(visible.id),month,expectedBill=visible),device,now)
+                assertEquals(field,BillPaymentError.UNSUPPORTED_LINKED_STATE,(result.exceptionOrNull() as? BillPaymentException)?.reason)
+                assertEquals(before,CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)})
+                assertEquals(queue,CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)})
+            } finally {db.close()}
+        }
+    }
+
 }

@@ -16,7 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import vn.com.quyln.mistia.core.model.*
 
-/** Compiled and packaged only until an Android device is available. */
+/** Synthetic local Room financial mutations; no cloud writes. */
 @RunWith(AndroidJUnit4::class)
 class InstallmentPaymentRoomTest {
     private val context get() = ApplicationProvider.getApplicationContext<Context>()
@@ -149,6 +149,23 @@ class InstallmentPaymentRoomTest {
             assertTrue(OfflineFirstFinanceRepository(incomplete, zone, catalog).undoInstallmentPayment(owner, plan, month, device, later).isFailure)
             assertEquals(before, CloudEntity.entries.associateWith { initial.recordsIncludingDeleted(owner, it.table) })
         } finally { db.close() }
+    }
+
+    @Test fun changedPendingAmountBeforeRepositoryReadRequiresTheFreshVisibleCycleBaseline() = runTest {
+        val db = Room.inMemoryDatabaseBuilder(context, MistiaDatabase::class.java).build()
+        try {
+            val store=RoomLocalStore(db);val repo=OfflineFirstFinanceRepository(store,zone,catalog);val plan=prepare(repo)
+            val pending=DueOccurrenceRecord(UUID.randomUUID().toString(),owner.value,"installment",plan.id,month.toString(),now,6000,"pending",null,null,now,now,null,0,device)
+            store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+            val before=CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)}
+            val queue=CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)}
+            val stale=repo.payInstallment(owner,InstallmentPaymentRequest(plan,month,amountMinorOverride=5000,expectedDueAmountMinor=5000),device,now)
+            assertEquals(BillPaymentError.SOURCE_CHANGED,(stale.exceptionOrNull() as? BillPaymentException)?.reason)
+            assertEquals(before,CloudEntity.entries.associateWith {store.recordsIncludingDeleted(owner,it.table)})
+            assertEquals(queue,CloudEntity.entries.associateWith {store.pendingMutations(owner,it,Long.MAX_VALUE)})
+            val fresh=repo.payInstallment(owner,InstallmentPaymentRequest(plan,month,amountMinorOverride=6000,expectedDueAmountMinor=6000),device,now).getOrThrow()
+            assertEquals(6000L,fresh.transaction.amountMinor);assertEquals(6000L,fresh.occurrences.single().amountMinorSnapshot)
+        } finally {db.close()}
     }
 
 }

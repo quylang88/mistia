@@ -236,6 +236,11 @@ private fun SignedInRoot(
         financeRepository.observeAppNotifications(authState.session.userId).collect {value=it}
     }
     var notificationActionKey by rememberSaveable(authState.session.userId.value) {mutableStateOf<String?>(null)}
+    var upcomingPaymentToken by rememberSaveable(authState.session.userId.value) {mutableStateOf<String?>(null)}
+    val upcomingPaymentTarget=vn.com.quyln.mistia.core.model.UpcomingDuePaymentTarget.restore(authState.session.userId,upcomingPaymentToken)
+    LaunchedEffect(authState.session.userId,upcomingPaymentToken) {
+        if(upcomingPaymentToken!=null && upcomingPaymentTarget==null) upcomingPaymentToken=null
+    }
     val unreadNotifications=vn.com.quyln.mistia.core.model.notificationGroups(authState.session.userId,notificationRows.orEmpty(),java.time.Instant.now()).sumOf {it.unreadCount}
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -266,12 +271,13 @@ private fun SignedInRoot(
                         financeRepository,
                         syncEngine.status,
                         modifier,
-                        onOpenTransaction={id -> overviewEditor=overviewEditor.copy(recordId=id)},
-                        overlayPresented=overviewEditor.recordId!=null || notificationActionKey!=null,
+                        onOpenTransaction={id -> upcomingPaymentToken=null;notificationActionKey=null;overviewEditor=overviewEditor.copy(recordId=id)},
+                        onOpenRecurringDue={target -> overviewEditor=overviewEditor.copy(recordId=null);notificationActionKey=null;upcomingPaymentToken=target.navigationToken()},
+                        overlayPresented=overviewEditor.recordId!=null || notificationActionKey!=null || upcomingPaymentTarget!=null,
                         exchangeRates=exchangeRateRepository,
                         primaryCurrencyCode=currencySettings.primaryCurrencyCode,
                         unreadNotificationCount=unreadNotifications,
-                        onOpenNotifications={navController.navigate("notifications")},
+                        onOpenNotifications={upcomingPaymentToken=null;overviewEditor=overviewEditor.copy(recordId=null);navController.navigate("notifications")},
                     )
                     RootTab.TRANSACTIONS -> TransactionsScreen(
                         ownerUserId = authState.session.userId,
@@ -341,7 +347,7 @@ private fun SignedInRoot(
         composable("notifications") {
             vn.com.quyln.mistia.feature.notifications.NotificationCenterScreen(authState.session.userId,financeRepository,
                 onBack={navController.popBackStack()},onRefresh={syncEngine.syncNow()},onOpenNotification={row ->
-                    if(row.kind in setOf("billPaymentRequired","billOverdue","billAutoPaymentFailed")) notificationActionKey=row.key
+                    if(row.kind in setOf("billPaymentRequired","billOverdue","billAutoPaymentFailed")) {upcomingPaymentToken=null;overviewEditor=overviewEditor.copy(recordId=null);notificationActionKey=row.key}
                 })
         }
         composable("family") {
@@ -362,6 +368,11 @@ private fun SignedInRoot(
     overviewEditor.recordId?.takeIf {overviewEditor.owner==authState.session.userId.value}?.let {id ->
         vn.com.quyln.mistia.feature.transactions.StoredTransactionEditorRoute(authState.session.userId,id,financeRepository,exchangeRateRepository,
             receiptImageRepository,{deviceIdStore.getOrCreate()},currencySettings.primaryCurrencyCode,onDismiss={overviewEditor=overviewEditor.copy(recordId=null)})
+    }
+    upcomingPaymentTarget?.let {target ->
+        val openedToken=upcomingPaymentToken
+        vn.com.quyln.mistia.feature.planning.UpcomingRecurringPaymentSheet(authState.session.userId,target,financeRepository,
+            {deviceIdStore.getOrCreate()},onDismiss={if(upcomingPaymentToken==openedToken) upcomingPaymentToken=null})
     }
     if(notificationActionKey!=null && notificationRows!=null) {
         val row=notificationRows!!.singleOrNull {it.key==notificationActionKey}

@@ -29,7 +29,7 @@ import vn.com.quyln.mistia.core.model.*
 @Composable internal fun BillPaymentSheet(
     owner:String,row:RecurringBillDueRow,month:YearMonth,wallets:List<LedgerWalletRecord>,undo:Boolean,
     onPay:suspend (BillPaymentRequest)->Result<SavedBillPayment>,onUndo:suspend ()->Result<Unit>,onDismiss:()->Unit,
-    category:TransactionCategoryRecord?=null,
+    category:TransactionCategoryRecord?=null,dataReady:Boolean=true,loadFailed:Boolean=false,targetCurrent:Boolean=true,onRetryLoad:()->Unit={},
 ) {
     val initial=remember(owner,row.bill.id,month) {BillPaymentState.initial(owner,row,month,wallets)}
     var state by rememberSaveable(owner,row.bill.id,month,stateSaver=BillPaymentState.saver(owner,row.bill.id,month.toString())) {mutableStateOf(initial)}
@@ -49,9 +49,9 @@ import vn.com.quyln.mistia.core.model.*
     })
     val choices=eligibleBillPaymentWallets(owner,row.bill.currencyCode,wallets)
     val selected=choices.firstOrNull {it.id==state.walletId}
-    val request=runCatching {state.request(row,wallets)}.getOrNull()
+    val request=if(dataReady && targetCurrent) runCatching {state.request(row,wallets)}.getOrNull() else null
     fun execute(payment:BillPaymentRequest?) {
-        if(busy) return
+        if(busy || !dataReady || !targetCurrent) return
         if(!undo && (payment==null || !payment.matchesBillPaymentConsent(request))) {
             confirmedRequest=null;error=R.string.planning_duepayment_could_not_find_the_due_item;return
         }
@@ -81,24 +81,30 @@ import vn.com.quyln.mistia.core.model.*
                 }
             }
             if(undo) {
-                row.amountMinor?.let {Text(formatMinorUnits(it,row.bill.currencyCode))}
+                row.amountMinor?.let {Text(if(dataReady && targetCurrent) formatMinorUnits(it,row.bill.currencyCode) else "—")}
                 Text(stringResource(R.string.planning_duepayment_undo_payment_message))
             } else {
                 if(row.amountMinor==null) {
                     Text(stringResource(R.string.planning_duepayment_this_bill_has_no_default_amount))
                     OutlinedTextField(state.amountText,onValueChange={state=state.copy(amountText=it);error=null},
                         label={Text(stringResource(R.string.planning_duepayment_enter_amount))},suffix={Text(row.bill.currencyCode)},
-                        keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy,
+                        keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy && dataReady && targetCurrent,
                         modifier=Modifier.fillMaxWidth().testTag("bill.paymentAmount"))
-                } else Text(formatMinorUnits(requireNotNull(row.amountMinor),row.bill.currencyCode),style=MaterialTheme.typography.headlineSmall)
-                TextButton(enabled=!busy,onClick={chooseWallet=true},modifier=Modifier.fillMaxWidth().testTag("bill.paymentWallet")) {
+                } else Text(if(dataReady && targetCurrent) formatMinorUnits(requireNotNull(row.amountMinor),row.bill.currencyCode) else "—",Modifier.testTag("bill.knownPaymentAmount"),style=MaterialTheme.typography.headlineSmall)
+                TextButton(enabled=!busy && dataReady && targetCurrent,onClick={chooseWallet=true},modifier=Modifier.fillMaxWidth().testTag("bill.paymentWallet")) {
                     Text("${stringResource(R.string.planning_duepayment_payment_wallet)}: ${selected?.name ?: stringResource(R.string.planning_duepayment_choose_wallet)}")
                 }
-                if(choices.isEmpty()) Text(stringResource(R.string.planning_bill_payment_currency_mismatch),color=MaterialTheme.colorScheme.error)
+                if(dataReady && choices.isEmpty()) Text(stringResource(R.string.planning_bill_payment_currency_mismatch),color=MaterialTheme.colorScheme.error)
             }
+            if(!dataReady && !loadFailed) CircularProgressIndicator(Modifier.testTag("bill.paymentLoading"))
+            if(loadFailed) {
+                Text(stringResource(R.string.planning_installment_load_error),color=MaterialTheme.colorScheme.error)
+                TextButton(enabled=!busy,onClick=onRetryLoad,modifier=Modifier.testTag("bill.paymentRetry")) {Text(stringResource(R.string.planning_installment_retry))}
+            }
+            if(dataReady && !targetCurrent) Text(stringResource(R.string.planning_duepayment_could_not_find_the_due_item),Modifier.testTag("bill.paymentStale"),color=MaterialTheme.colorScheme.error)
             error?.let {Text(stringResource(it),color=MaterialTheme.colorScheme.error,modifier=Modifier.testTag("bill.paymentError"))}
             if(busy) CircularProgressIndicator(Modifier.testTag("bill.paymentBusy"))
-            Button(enabled=!busy && if(undo) row.status==DueStatus.PAID else request!=null,
+            Button(enabled=!busy && dataReady && targetCurrent && (if(undo) row.status==DueStatus.PAID else request!=null),
                 onClick={if(undo) execute(null) else confirmedRequest=request},modifier=Modifier.fillMaxWidth().testTag("bill.submitPayment")) {
                 Text(stringResource(if(undo) R.string.planning_duepayment_undo_payment else R.string.planning_duepayment_pay_now))
             }
@@ -111,9 +117,9 @@ import vn.com.quyln.mistia.core.model.*
         }}},confirmButton={TextButton(onClick={chooseWallet=false}) {Text(stringResource(R.string.common_close))}})
     confirmedRequest?.let {payment ->
         AlertDialog(onDismissRequest={if(!busy) confirmedRequest=null},modifier=Modifier.testTag("bill.paymentConfirmation"),title={Text(stringResource(R.string.planning_duepayment_pay_bill))},
-            text={Column {Text(row.bill.name);Text(formatMinorUnits(requireNotNull(payment.amountMinorOverride),state.currency),Modifier.testTag("bill.confirmationAmount"));
+            text={Column {Text(row.bill.name);Text(if(dataReady && targetCurrent) formatMinorUnits(requireNotNull(payment.amountMinorOverride),state.currency) else "—",Modifier.testTag("bill.confirmationAmount"));
                 Text(wallets.firstOrNull {it.id==payment.walletId?.value}?.name.orEmpty())}},
-            confirmButton={TextButton(enabled=!busy && payment.matchesBillPaymentConsent(request),onClick={execute(payment)},modifier=Modifier.testTag("bill.confirmPayment")) {Text(stringResource(R.string.planning_duepayment_pay_now))}},
+            confirmButton={TextButton(enabled=!busy && dataReady && targetCurrent && payment.matchesBillPaymentConsent(request),onClick={execute(payment)},modifier=Modifier.testTag("bill.confirmPayment")) {Text(stringResource(R.string.planning_duepayment_pay_now))}},
             dismissButton={TextButton(enabled=!busy,onClick={confirmedRequest=null}) {Text(stringResource(R.string.common_cancel))}})
     }
     if(discard) AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.planning_budget_editor_discard_title))},

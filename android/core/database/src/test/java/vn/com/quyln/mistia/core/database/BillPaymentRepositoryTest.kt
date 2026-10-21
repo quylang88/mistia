@@ -77,6 +77,33 @@ class BillPaymentRepositoryTest {
         assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.SOURCE_CHANGED,reason(result))
         assertEquals(before,store.outboxRows(owner.value));assertTrue(repo.observeTransactions(owner).first().isEmpty())
     }
+    @Test fun `unknown target cycle status cannot authorize a new payment`()=runTest {
+        val visible=prepare()
+        val pending=DueOccurrenceRecord(other.value,owner.value,"recurringBill",visible.id,month.toString(),now,5000,"futureStatus",null,null,now,now,null,0,device)
+        store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+        val before=store.outboxRows(owner.value)
+        val result=repo.payRecurringBill(owner,request(visible),device,now)
+        assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.UNSUPPORTED_LINKED_STATE,reason(result))
+        assertEquals(before,store.outboxRows(owner.value));assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
+    @Test fun `unknown target cycle source kind cannot be ignored as an unrelated pending cycle`()=runTest {
+        val visible=prepare()
+        val pending=DueOccurrenceRecord(other.value,owner.value,"futureKind",visible.id,month.toString(),now,5000,"pending",null,null,now,now,null,0,device)
+        store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+        val before=store.outboxRows(owner.value)
+        val result=repo.payRecurringBill(owner,request(visible),device,now)
+        assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.UNSUPPORTED_LINKED_STATE,reason(result))
+        assertEquals(before,store.outboxRows(owner.value));assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
+    @Test fun `unknown target cycle month cannot silently disappear before payment`()=runTest {
+        val visible=prepare()
+        val pending=DueOccurrenceRecord(other.value,owner.value,"recurringBill",visible.id,"broken",now,5000,"pending",null,null,now,now,null,0,device)
+        store.commitMutation(pending.toCloudRecord(),pending.pendingMutation())
+        val before=store.outboxRows(owner.value)
+        val result=repo.payRecurringBill(owner,request(visible),device,now)
+        assertEquals("paid=${result.getOrNull()?.transaction?.amountMinor}",BillPaymentError.UNSUPPORTED_LINKED_STATE,reason(result))
+        assertEquals(before,store.outboxRows(owner.value));assertTrue(repo.observeTransactions(owner).first().isEmpty())
+    }
     private fun request(bill: RecurringBillPlanRecord) = BillPaymentRequest(RecordId(bill.id), month,expectedBill=bill)
     private fun reason(result: Result<*>) = (result.exceptionOrNull() as? BillPaymentException)?.reason
 

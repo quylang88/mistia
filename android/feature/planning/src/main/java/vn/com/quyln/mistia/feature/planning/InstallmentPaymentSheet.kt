@@ -70,7 +70,7 @@ internal fun InstallmentPaymentSheet(owner: String, row: InstallmentDueRow, wall
                 Text(formatMinorUnits(row.amountMinor, row.plan.currencyCode), Modifier.testTag("installment.undoAmount"))
                 Text(stringResource(R.string.planning_duepayment_undo_payment_message))
             } else {
-                Text(formatMinorUnits(row.amountMinor, row.plan.currencyCode), Modifier.testTag("installment.paymentAmount"),
+                Text(if(dataReady && targetCurrent) formatMinorUnits(row.amountMinor, row.plan.currencyCode) else "—", Modifier.testTag("installment.paymentAmount"),
                     style = MaterialTheme.typography.headlineSmall)
                 TextButton(enabled = !busy && dataReady, onClick = { choosing = true }, modifier = Modifier.fillMaxWidth().testTag("installment.paymentWallet")) {
                     Text("${stringResource(R.string.planning_duepayment_payment_wallet)}: ${selected?.let { "${it.name} · ${it.currencyCode}" } ?: stringResource(R.string.planning_duepayment_choose_wallet)}")
@@ -101,7 +101,7 @@ internal fun InstallmentPaymentSheet(owner: String, row: InstallmentDueRow, wall
         } } }, confirmButton = { TextButton(onClick = { choosing = false }) { Text(stringResource(R.string.common_close)) } })
     confirmation?.let { frozen ->
         AlertDialog(onDismissRequest = { if (!busy) confirmation = null }, title = { Text(stringResource(R.string.planning_duepayment_pay_now)) },
-            text = { Column { Text(row.plan.name); Text(formatMinorUnits(requireNotNull(frozen.amountMinorOverride), row.plan.currencyCode)); Text(selected?.name.orEmpty()) } },
+            text = { Column { Text(row.plan.name); Text(if(dataReady && targetCurrent) formatMinorUnits(requireNotNull(frozen.amountMinorOverride), row.plan.currencyCode) else "—"); Text(selected?.name.orEmpty()) } },
             confirmButton = { TextButton(enabled = !busy && dataReady && targetCurrent && request == frozen, onClick = { execute(frozen) }, modifier = Modifier.testTag("installment.confirmPayment")) {
                 Text(stringResource(R.string.planning_duepayment_pay_now))
             } }, dismissButton = { TextButton(enabled = !busy, onClick = { confirmation = null }) { Text(stringResource(R.string.common_cancel)) } })

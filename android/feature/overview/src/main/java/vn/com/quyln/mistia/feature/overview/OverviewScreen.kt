@@ -53,11 +53,12 @@ fun OverviewScreen(
     onOpenTransaction:(String)->Unit={},
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?=null,
     overlayPresented:Boolean=false,
+    onOpenRecurringDue:(UpcomingDuePaymentTarget)->Unit={},
 ) {
     val reportingCurrency=primaryCurrencyCode.trim().uppercase(java.util.Locale.ROOT)
         .takeIf {it in vn.com.quyln.mistia.core.model.CurrencyPreferences.supportedCurrencyCodes} ?: "JPY"
     key(ownerUserId.value) {
-        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, reportingCurrency, onOpenTransaction, exchangeRates, overlayPresented)
+        OwnedOverviewScreen(ownerUserId, repository, syncStatus, modifier, unreadNotificationCount, onOpenNotifications, reportingCurrency, onOpenTransaction, exchangeRates, overlayPresented, onOpenRecurringDue)
     }
 }
 
@@ -73,6 +74,7 @@ private fun OwnedOverviewScreen(
     onOpenTransaction: (String) -> Unit,
     exchangeRates:vn.com.quyln.mistia.core.model.ExchangeRateRepository?,
     overlayPresented:Boolean,
+    onOpenRecurringDue:(UpcomingDuePaymentTarget)->Unit,
 ) {
     val reference=rememberOverviewReferenceTime()
     val rates=exchangeRates?.rates?.collectAsStateWithLifecycle()?.value.orEmpty()
@@ -126,6 +128,13 @@ private fun OwnedOverviewScreen(
             budgetLanguage,knownTitles[GeneratedTransactionTitle.BALANCE_ADJUSTMENT].orEmpty().toSet(),primaryCurrencyCode,budgetDeletedName),locale=budgetLocale)
     }
 
+    var dueRetry by remember(repository) {androidx.compose.runtime.mutableIntStateOf(0)}
+    val dueLoad by overviewDueReadLoad(ownerUserId,repository,dueRetry)
+    val dueSnapshot=(dueLoad as? OverviewDueReadLoad.Loaded)?.snapshot
+    val dueAlerts=remember(dueSnapshot,reference,zone,budgetLocale) {
+        projectUpcomingRecurringDues(ownerUserId,dueSnapshot,reference,zone,budgetLocale)
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -156,6 +165,10 @@ private fun OwnedOverviewScreen(
         }}
         if(budgetAlerts==null || budgetAlerts.isNotEmpty()) item(key="overview.budget.focus") {
             OverviewBudgetFocus(budgetAlerts,budgetLoad==OverviewBudgetReadLoad.Failed,onRetry={budgetRetry++})
+        }
+        if(dueAlerts==null || dueAlerts.isNotEmpty()) item(key="overview.due.section") {
+            OverviewUpcomingDues(dueAlerts,dueLoad==OverviewDueReadLoad.Failed || (dueSnapshot!=null && dueAlerts==null),
+                onRetry={dueRetry++},onSelect={if(!overlayPresented) onOpenRecurringDue(it.paymentTarget())},enabled=!overlayPresented,zone=zone)
         }
         item {
             MistiaSectionCard(title = stringResource(R.string.overview_overview_recent_transactions)) {
