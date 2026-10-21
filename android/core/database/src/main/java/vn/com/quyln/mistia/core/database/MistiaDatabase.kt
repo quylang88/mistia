@@ -185,6 +185,9 @@ interface CloudRecordDao {
     )
     fun observeActive(ownerUserId: String, entity: String): Flow<List<CloudRecordEntity>>
 
+    @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
+    fun observeBudgetRows(ownerUserId:String,entities:List<String>):Flow<List<CloudRecordEntity>>
+
     @Query(
         """
         SELECT entity, COUNT(*) AS count FROM cloud_records
@@ -728,6 +731,10 @@ class RoomLocalStore(
 
     override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
+
+    override fun observeBudgetReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.BudgetReadSnapshot> =
+        database.cloudRecordDao().observeBudgetRows(owner.value,vn.com.quyln.mistia.core.model.BudgetReadSnapshot.entities.map {it.table})
+            .map {rows ->vn.com.quyln.mistia.core.model.BudgetReadSnapshot(owner,rows.map {it.toCloudRecord()})}
 
     override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
         database.cloudRecordDao().observeActive(ownerUserId.value, entity).map { rows ->

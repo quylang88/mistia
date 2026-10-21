@@ -86,7 +86,7 @@ fun isOverviewExpenseSpending(record:LedgerTransactionRecord,walletKind:WalletKi
     val paidFor=record.primaryKind==TransactionPrimaryKind.TRANSFER && record.transferSubtype==TransactionTransferSubtype.DEBT &&
         record.debtIntent==TransactionDebtIntent.BORROW && record.sourceWalletId==null && record.categoryId!=null
     if(paidFor && !adjustment && !installment) return true
-    val payment=walletKind!=WalletKind.CREDIT_CARD && listOf("card payment","thanh toan the","thanh toán thẻ","カード支払い").any {record.title.lowercase(Locale.ROOT).contains(it)}
+    val payment=walletKind!=WalletKind.CREDIT_CARD && isFinanceCreditCardPaymentTitle(record.title)
     return record.primaryKind==TransactionPrimaryKind.EXPENSE && !adjustment && !installment && !payment
 }
 
@@ -104,4 +104,4 @@ private fun reportedOverviewIncome(record:LedgerTransactionRecord,titles:Map<Gen
 private fun LedgerTransactionRecord.isOverviewAdjustment(titles:Map<GeneratedTransactionTitle,Collection<String>>)=
     categoryId in setOf(TransactionCategoryRecord.BALANCE_ADJUSTMENT_EXPENSE_ID,TransactionCategoryRecord.BALANCE_ADJUSTMENT_INCOME_ID) ||
         title.matchesOverviewTitle(titles[GeneratedTransactionTitle.BALANCE_ADJUSTMENT].orEmpty())
-private fun String.matchesOverviewTitle(titles:Collection<String>)=trim().isNotEmpty() && titles.any {it.trim().equals(trim(),ignoreCase=true)}
+private fun String.matchesOverviewTitle(titles:Collection<String>)=financeTitleKey(this).isNotEmpty() && titles.any {financeTitleKey(it)==financeTitleKey(this)}

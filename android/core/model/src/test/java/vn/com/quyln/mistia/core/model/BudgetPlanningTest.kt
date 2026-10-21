@@ -154,6 +154,14 @@ class BudgetPlanningTest {
         assertEquals("Food",frozen.copy(categoryPathEnglishSnapshot=null,categoryPathSnapshot=null).localizedBudgetPath(CategoryNameLanguage.ENGLISH))
     }
 
+    @Test fun `recent picker ignores unreadable recency while retaining known category usage`() {
+        val food=category(CATEGORY_ID,"Food",PARENT_ID)
+        val known=transactionRecord().copy(occurredAt="2026-10-12T00:00:00Z")
+        val broken=known.copy(id=TX2,occurredAt="broken")
+        assertEquals(listOf(food.id),budgetQuickCategories(UserId(OWNER_ID),listOf(food),listOf(broken,known),false,reference,zone).map {it.id})
+        assertTrue(budgetQuickCategories(UserId(OWNER_ID),listOf(food),listOf(broken),false,reference,zone).isEmpty())
+    }
+
     @Test fun `picker favorites exclude parents and recent ranks usage within ninety local days`() {
         val parent=category(PARENT_ID,"Living",null).copy(isFavorite=true)
         val food=category(CATEGORY_ID,"Food",PARENT_ID).copy(isFavorite=true)

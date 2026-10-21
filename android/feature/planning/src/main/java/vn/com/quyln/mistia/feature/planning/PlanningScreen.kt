@@ -78,9 +78,10 @@ fun PlanningScreen(
         mutableStateOf(SavingsGoalNavigationState(ownerUserId.value,false,null))
     }
     val budgets by repository.observeBudgets(ownerUserId).collectAsStateWithLifecycle(emptyList())
-    val rawBudgets by key(repository,ownerUserId.value) {
-        repository.observeBudgetReadRows(ownerUserId).collectAsStateWithLifecycle(initialValue=null)
-    }
+    var budgetRetry by remember(repository,ownerUserId.value) {mutableIntStateOf(0)}
+    val budgetLoad by budgetReadLoad(ownerUserId,repository,budgetRetry)
+    val budgetSnapshot=(budgetLoad as? BudgetReadLoad.Loaded)?.snapshot
+    val rawBudgets=budgetSnapshot?.records(CloudEntity.BUDGET_PLAN)
     val categories by repository.observeBudgetCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categoryMetadata by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
@@ -103,7 +104,7 @@ fun PlanningScreen(
             .getString(R.string.transactions_generated_title_balance_adjustment)
     }.toSet() }
     // Historical spending retains source currency/kind after its wallet is archived.
-    val projection = projectRawBudgetPlans(ownerUserId,rawBudgets,categoryMetadata,transactions,historicalWallets,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
+    val projection = projectRawBudgetReadSnapshot(ownerUserId,budgetSnapshot,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
         stringResource(R.string.planning_planning_deleted_category))
     LazyColumn(
         modifier = modifier.testTag("budget.screen").fillMaxSize(),
@@ -134,6 +135,9 @@ fun PlanningScreen(
                 BudgetSummaryMoney(projection.totalSpentMinor,reportingCurrency,"budget.summary.spent",stringResource(R.string.planning_planning_spent))
                 BudgetSummaryMoney(projection.remainingMinor,reportingCurrency,"budget.summary.remaining",stringResource(R.string.planning_planning_remaining))
                 if(projection.totalLimitMinor==null || projection.totalSpentMinor==null || projection.remainingMinor==null) Text(stringResource(R.string.overview_overview_reporting_amount_unavailable),Modifier.testTag("budget.summary.unavailable"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(budgetLoad==BudgetReadLoad.Failed) TextButton(onClick={budgetRetry++},modifier=Modifier.testTag("budget.retry")) {
+                    Text(stringResource(R.string.planning_installment_retry))
+                }
             }
         }
         if (projection.branches.isEmpty() && projection.totalLimitMinor!=null) item { Text(stringResource(R.string.planning_planning_no_budgets_yet)) }

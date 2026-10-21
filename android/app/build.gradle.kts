@@ -45,7 +45,7 @@ android {
         applicationId = "vn.com.quyln.mistia"
         minSdk = 26
         targetSdk = 36
-        versionCode = 120
+        versionCode = 121
         versionName = "0.2.0-apk2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

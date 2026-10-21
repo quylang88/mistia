@@ -17,6 +17,15 @@ internal class OfflineBudgetRepository(private val store: LocalStore, private va
     constructor(store:LocalStore,zoneId:ZoneId):this(store,{zoneId})
     private val mutex = Mutex()
 
+    override fun observeBudgetReadSnapshot(owner:UserId):Flow<BudgetReadSnapshot> =
+        store.observeBudgetReadSnapshot(owner).map {snapshot ->
+            require(snapshot.owner==owner) {"Budget read snapshot owner changed"}
+            snapshot.copy(rows=snapshot.rows.filter {row ->
+                val entity=CloudEntity.fromTable(row.entity)
+                entity!=null && entity in BudgetReadSnapshot.entities && row.matchesFinanceReadScope(owner,entity,includingDeleted=true)
+            })
+        }
+
     override fun observeBudgetReadRows(ownerUserId:UserId):Flow<List<CloudRecord>> =
         store.observe(CloudEntity.BUDGET_PLAN.table,ownerUserId).map {rows ->
             // Keep uncertain body deletion/money for the reader, retaining the same owner/identity boundary.

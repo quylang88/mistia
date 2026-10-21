@@ -4,11 +4,12 @@ import java.math.BigInteger
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.Collator
-import java.text.Normalizer
 import java.util.Locale
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
+
+private fun Char.isCategoryWhitespace():Boolean=isWhitespace() || this=='\u0085'
 
 data class OverviewCategorySpendingSlice(val id:String,val categoryId:String?,val name:String?,val iconSymbolName:String,val colorHex:String,
     val amountMinor:BigInteger,val childSlices:List<OverviewCategorySpendingSlice>) {
@@ -110,15 +111,4 @@ fun overviewCategoryChartSlices(source:List<OverviewCategorySpendingSlice>,overf
 fun overviewCategoryPercentage(amount:BigInteger,total:BigInteger):Int = if(amount.signum()<=0 || total.signum()<=0) 0 else
     BigDecimal(amount).multiply(BigDecimal("100")).divide(BigDecimal(total),0,RoundingMode.HALF_UP).min(BigDecimal("100")).intValueExact()
 
-private fun categoryNameKey(name:String?):String {
-    val compact=buildString {
-        var gap=false
-        for(character in name.orEmpty()) {
-            if(character.isCategoryWhitespace()) {if(isNotEmpty()) gap=true}
-            else {if(gap) append(' ');append(character);gap=false}
-        }
-    }
-    return Normalizer.normalize(compact.lowercase(Locale.ROOT),Normalizer.Form.NFC)
-}
-
-private fun Char.isCategoryWhitespace():Boolean=isWhitespace() || this=='\u0085'
+private fun categoryNameKey(name:String?):String=financeGroupingName(name)

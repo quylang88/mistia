@@ -119,9 +119,20 @@ fun projectBudgets(
     adjustmentTitles: Set<String>,
     reportingCurrency: String,
     deletedCategoryName: String = "",
+    expenseEffects:List<BudgetExpenseEffect>?=null,
 ): BudgetProjection {
     val index = CategoryIdentityIndex(owner, categories)
     val walletById = wallets.filter { it.ownerUserId == owner.value && it.deletedAt==null }.associateBy { it.id }
+    val expenses=expenseEffects ?: transactions.asSequence()
+        .filter {it.ownerUserId==owner.value && it.entryStatus!=TransactionEntryStatus.DRAFT && !it.isArchived && it.deletedAt==null}
+        .map {record ->
+            val wallet=walletById[record.sourceWalletId]
+            val expense=reportedBudgetExpense(record,index.category(record.categoryId),wallet,adjustmentTitles)
+            val code=if(record.sourceCurrencyCode!=null) record.sourceCurrencyCode.overviewCurrencyCode()
+                else if(wallet!=null) wallet.currencyCode.overviewCurrencyCode() else "JPY"
+            BudgetExpenseEffect(record.id,record.ownerUserId,record.categoryId,runCatching {Instant.parse(record.occurredAt)}.getOrNull(),code,
+                if(record.entryStatus==TransactionEntryStatus.POSTED || expense==0L) expense else null)
+        }.toList()
     val active = activeBudgetPlans(owner, plans, selectedMonth, zone, categories)
     val monthStart = selectedMonth.atDay(1).atStartOfDay(zone).toInstant()
     val monthEnd = selectedMonth.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant()
@@ -147,19 +158,19 @@ fun projectBudgets(
         val targetName=groupingKey(name(plan,parent=branch && !snapshot.categoryIsParent))
         val start=if(plan.rolloverEnabled) minOf(budgetMonth(plan.monthAnchor,zone).atDay(1).atStartOfDay(zone).toInstant(),monthStart) else monthStart
         var total:BigInteger?=BigInteger.ZERO
-        for(record in transactions.asSequence().filter {it.ownerUserId==owner.value && it.entryStatus!=TransactionEntryStatus.DRAFT && !it.isArchived && it.deletedAt==null}.distinctBy {it.id}) {
-            val category=index.category(record.categoryId)
-            val identity=index.logical(if(branch) category?.parentCategoryId ?: record.categoryId else record.categoryId)
+        for(effect in expenses.asSequence().filter {it.ownerUserId==owner.value}.distinctBy {it.id}) {
+            if(effect.expenseMinor==0L) continue
+            val category=index.category(effect.categoryId)
+            val identity=index.logical(if(branch) category?.parentCategoryId ?: effect.categoryId else effect.categoryId)
             val names=if(branch) listOf(category?.localizedBudgetName(language),index.category(category?.parentCategoryId)?.localizedBudgetName(language)) else listOf(category?.localizedBudgetName(language))
-            if(!((targetId!=null && identity==targetId) || (targetName.isNotEmpty() && names.any {it!=null && groupingKey(it)==targetName}))) continue
-            val wallet=walletById[record.sourceWalletId]
-            val expense=reportedBudgetExpense(record,category,wallet,adjustmentTitles)
-            if(expense==0L) continue
-            val occurred=runCatching {Instant.parse(record.occurredAt)}.getOrNull()
+            val idMatch=targetId!=null && identity==targetId && (!branch || effect.branchIdentityKnown)
+            val nameMatch=targetName.isNotEmpty() && names.any {it!=null && groupingKey(it)==targetName}
+            val uncertain=effect.categoryMayBeUnknown || (branch && effect.branchMayBeUnknown)
+            if(!idMatch && !nameMatch && !uncertain) continue
+            val occurred=effect.occurredAt
             if(occurred!=null && (occurred<start || occurred>=monthEnd)) continue
-            val source=if(record.sourceCurrencyCode!=null) record.sourceCurrencyCode.overviewCurrencyCode()
-                else if(wallet!=null) wallet.currencyCode.overviewCurrencyCode() else "JPY"
-            val amount=if(record.entryStatus!=TransactionEntryStatus.POSTED || occurred==null) null else convert(expense?.big(),source,plan.currencyCode.overviewCurrencyCode())
+            val amount=if(occurred==null || (!idMatch && !nameMatch)) null
+                else convert(effect.expenseMinor?.big(),effect.sourceCurrencyCode,plan.currencyCode.overviewCurrencyCode())
             total=total?.let {subtotal ->amount?.let(subtotal::plus)}
         }
         return total
@@ -209,19 +220,23 @@ private fun reportedBudgetExpense(record: LedgerTransactionRecord, category: Tra
     record.reportingExpenseMinor?.let { return it }
     if(record.amountMinor==0L) return 0
     if (category?.isBalanceAdjustmentSystemCategory == true || record.categoryId == TransactionCategoryRecord.BALANCE_ADJUSTMENT_EXPENSE_ID ||
-        record.categoryId == TransactionCategoryRecord.BALANCE_ADJUSTMENT_INCOME_ID || adjustmentTitles.any { it.trim().equals(record.title.trim(), ignoreCase = true) }) return 0
+        record.categoryId == TransactionCategoryRecord.BALANCE_ADJUSTMENT_INCOME_ID || adjustmentTitles.any { financeTitleKey(it)==financeTitleKey(record.title) }) return 0
     if (category?.systemKey == "loan_repayment" || record.categoryId == "d872b8af-d28a-5b90-8822-839dfa097b23") return 0
     val primary=record.primaryKind?.let(::listOf) ?: TransactionPrimaryKind.entries
     fun <T> choices(wire:String?,parsed:T?,all:List<T>):List<T?> = if(wire==null) listOf(null) else parsed?.let(::listOf) ?: (listOf(null)+all)
     val subtypes=choices(record.transferSubtypeWireValue,record.transferSubtype,TransactionTransferSubtype.entries)
     val intents=choices(record.debtIntentWireValue,record.debtIntent,TransactionDebtIntent.entries)
     val kinds=if(wallet!=null && wallet.kind==null) listOf(null,WalletKind.CREDIT_CARD) else listOf(wallet?.kind)
-    val titles=mapOf(GeneratedTransactionTitle.BALANCE_ADJUSTMENT to adjustmentTitles)
     var seen=false;var result:Long?=null
     // Finite equivalence classes use the existing core expense classifier; no future enum becomes a neutral default.
     for(kind in primary) for(subtype in subtypes) for(intent in intents) for(walletKind in kinds) {
         val candidate=record.copy(primaryKindWireValue=kind.wireValue,transferSubtypeWireValue=subtype?.wireValue,debtIntentWireValue=intent?.wireValue)
-        val amount=if(isOverviewExpenseSpending(candidate,walletKind,titles)) record.amountMinor else 0L
+        val amount=when(budgetExpenseSource(candidate,category?.systemKey,walletKind,adjustmentTitles)) {
+            OverviewReportingSource.NONE -> 0L
+            OverviewReportingSource.ORIGINAL -> record.amountMinor
+            OverviewReportingSource.EXPENSE_OVERRIDE -> record.reportingExpenseMinor
+            OverviewReportingSource.INCOME_OVERRIDE -> null
+        }
         if(!seen) {seen=true;result=amount} else if(result!=amount) return null
     }
     return result
@@ -229,7 +244,7 @@ private fun reportedBudgetExpense(record: LedgerTransactionRecord, category: Tra
 
 private fun currency(value: String?): String = value?.trim()?.uppercase(Locale.ROOT)?.takeIf { it == "JPY" || it == "VND" } ?: "JPY"
 private fun sumBudgetExact(values:List<BigInteger?>):BigInteger?=values.fold<BigInteger?,BigInteger?>(BigInteger.ZERO) {sum,value ->sum?.let {subtotal ->value?.let(subtotal::plus)}}
-private fun groupingKey(value: String): String = value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
+private fun groupingKey(value:String):String=financeGroupingName(value)
 private fun String?.nonblank(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 private fun Long.big(): BigInteger = BigInteger.valueOf(this)
 private fun Int.big(): BigInteger = toLong().big()
@@ -269,7 +284,7 @@ fun budgetQuickCategories(
         .sortedWith(compareBy(TransactionCategoryRecord::sortOrder, TransactionCategoryRecord::name, TransactionCategoryRecord::id))
     val cutoff = reference.atZone(zone).minusDays(90).toInstant()
     val usage = transactions.filter { it.ownerUserId == owner.value && !it.isArchived && it.deletedAt == null &&
-        it.entryStatus == TransactionEntryStatus.POSTED && Instant.parse(it.occurredAt) >= cutoff }.groupBy { it.categoryId }
+        it.entryStatus == TransactionEntryStatus.POSTED && runCatching {Instant.parse(it.occurredAt) >= cutoff}.getOrDefault(false) }.groupBy { it.categoryId }
     return allowed.filter { it.id in usage }.sortedWith(
         compareByDescending<TransactionCategoryRecord> { usage[it.id]!!.size }
             .thenByDescending { usage[it.id]!!.maxOf { row -> Instant.parse(row.occurredAt) } }

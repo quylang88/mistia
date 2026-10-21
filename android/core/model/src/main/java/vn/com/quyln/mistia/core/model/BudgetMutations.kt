@@ -12,6 +12,8 @@ interface BudgetRepository {
     fun observeBudgetCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeBudgetCategoryMetadata(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>> = observeBudgetCategories(ownerUserId)
     fun observeBudgets(ownerUserId: UserId): Flow<List<BudgetPlanRecord>>
+    fun observeBudgetReadSnapshot(owner:UserId):Flow<BudgetReadSnapshot> =
+        throw UnsupportedOperationException("Budget read snapshot unavailable")
     /** Read-only raw templates; production retains parse failures for consumer availability. */
     fun observeBudgetReadRows(ownerUserId:UserId):Flow<List<CloudRecord>> =
         observeBudgets(ownerUserId).map {plans ->plans.map(BudgetPlanRecord::toCloudRecord)}

@@ -12,6 +12,7 @@ import vn.com.quyln.mistia.core.model.*
 internal fun projectRawBudgetPlans(owner:UserId,rawPlans:List<CloudRecord>?,categories:List<TransactionCategoryRecord>,
     transactions:List<LedgerTransactionRecord>,wallets:List<LedgerWalletRecord>,month:YearMonth,reference:Instant,zone:ZoneId,
     rates:List<ExchangeRateSnapshot>,language:CategoryNameLanguage,adjustmentTitles:Set<String>,currency:String,deletedCategoryName:String="",
+    expenseEffects:List<BudgetExpenseEffect>?=null,
 ):BudgetProjection {
     fun unavailable()=BudgetProjection(emptyList(),null,null,null)
     if(rawPlans==null) return unavailable()
@@ -34,7 +35,7 @@ internal fun projectRawBudgetPlans(owner:UserId,rawPlans:List<CloudRecord>?,cate
         if(plan.limitMinor<=0 || plan.logicalAllocation(index).branchCategoryId==null) return unavailable()
         plans+=plan
     }
-    return projectBudgets(owner,plans,categories,transactions,wallets,month,reference,zone,rates,language,adjustmentTitles,currency,deletedCategoryName)
+    return projectBudgets(owner,plans,categories,transactions,wallets,month,reference,zone,rates,language,adjustmentTitles,currency,deletedCategoryName,expenseEffects)
 }
 
 /** Reload the exact strict read row; a delayed typed stream must never turn Edit into Create. */

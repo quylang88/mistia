@@ -1,0 +1,23 @@
+# Truthful raw budget spending and consistent read inputs — slice121
+
+The user requires exact native Android money, account isolation, direct Swift parity review and continuous TDD implementation of the original APK1–4/RC scope. Scope/currency decisions are already supplied; there is no new product choice. Base `fa05c73e`, current feature branch. This changes the existing personal-budget reader; it does not enable cloud writes or alter persistence/wire money.
+
+## Outcome
+
+A matching posted transaction with unreadable required original/override amount, eligibility, calendar, currency or classifier input must hold the affected budget spending/remaining/health, never become an omitted row or default0. Parent/child limits that are independently known stay known. Known0, unrelated categories, drafts/deleted/archived/out-of-window records and proved neutral income/debt/adjustments remain neutral even when unused fields are bad. Valid overrides remove dependence on original money; unused destination/income/created fields must not suppress known spending. Archive keeps source wallet currency/kind; unreadable unused wallet opening/name/clock must not affect those fields. Unknown required metadata holds rather than impersonating legacyJPY/non-credit defaults. Existing exact aggregation, per-record rounding, rollover/month filtering, saved identities and category snapshots remain.
+
+One owner-scoped Room query reads plan, ledger, wallet and historical category rows together, including tombstones needed by metadata. It prevents a committed wallet+ledger pair appearing as a mixed version with false converted spending. Loading, mismatched owner or failed reads are unavailable; a failed read offers the existing localized planning Retry label. Owner/repository/retry changes reset the read state and cancel the old collection. Strict stored-plan opening continues from the same raw snapshot; typed editor/candidate flows stay on their existing mutation paths.
+
+## Selected approach
+
+Use a `BudgetReadSnapshot` and read-only `BudgetExpenseEffect` inputs to the current exact core projector. The typed projector remains source-compatible and derives equivalent effects for current callers. Raw classification enumerates only uncertain required dependencies and reuses the existing expense classifier/source selection. Extract the existing Overview raw classification candidates into core unchanged and keep Overview wrappers, rather than creating a second card/debt/title classifier. No ephemeral classifier marker amount is used as money, serialized, or sent to an editor.
+
+Alternatives considered: holding all budget money for any bad ledger field loses known independent/neutral results; duplicating Overview classification creates divergent business rules. Both were rejected. A single Room snapshot is chosen over combining independent entity flows because a source wallet and legacy-currency transaction may change in one transaction.
+
+Category metadata stays owner-scoped and tombstone-aware. Unreadable category references/relationships cannot be treated as a proved mismatch; potentially matching nonzero spending remains unavailable. The implementation must not crash on unreadable metadata. This slice must document any conservative metadata holds that still require more granular dependency work; it must not certify family spending, independently usable damaged plan fields, all legacy/import continuity or the entire financial domain.
+
+## Verification and review boundaries
+
+Use actual RED→GREEN for numeric-string/invalid/missing money, unreadable required status/archive/deletion/calendar/classifier/source metadata, live repair, fixed overrides, current/past rollover and owner replacement. Prove known neutral/unused-field controls independently. Assert exact2MAX/cancellation/per-record FX/imported same-ISO behavior. A real Room producer test alternates atomic JPY100 and VND16500 wallet+ledger pairs at165; every emitted derived amount must stay100JPY. If the old combine does not reproduce an intermediate emission, record it as a control, not an invented RED.
+
+Native tests must cover whole unavailable spending with known limit, raw repair without read writes, raw snapshot loading/failure/retry, owner changes and strict stored edit. Existing budget workflows/calculator/currency/130% en/vi/ja and Overview reporting suites guard shared extraction. Full JVM/lint/build/Room compile, Swift610, contract/localization/SQLite/assets checks; final APK121/install-r/cold/SHA evidence and an independent local commit. No Samsung/live Supabase/production-write claim from emulator tests. Whole APK1–4/RC remains active.

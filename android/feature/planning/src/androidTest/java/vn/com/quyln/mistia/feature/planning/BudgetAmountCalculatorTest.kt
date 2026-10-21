@@ -52,7 +52,9 @@ class BudgetAmountCalculatorTest {
     private fun start(amount: String) {
         compose.onNodeWithTag("budget.amount").performTextReplacement(amount)
         val bounds=compose.onNodeWithTag("budget.amount.calculator").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithTag("budget.amount.calculator").performClick()
+        // This test covers calculator arithmetic/save. IME relayout can move the
+        // physical target between coordinate lookup and touch injection.
+        compose.onNodeWithTag("budget.amount.calculator").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
         try {compose.onNodeWithTag("amountCalculator.dialog").assertExists()} catch(failure:Throwable) {
             android.util.Log.e("MistiaBudgetDiagnostic","calculator click bounds=$bounds")
             val roots=compose.onAllNodes(isRoot()).fetchSemanticsNodes()

@@ -333,6 +333,9 @@ interface LocalStore {
     /** Complete owner/entity snapshot; required for safe tombstone-aware reconciliation. */
     suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         throw UnsupportedOperationException("Complete local snapshots are unsupported")
+    /** One consistent owner snapshot including historical metadata; unsupported stores fail explicitly. */
+    fun observeBudgetReadSnapshot(owner:UserId):Flow<BudgetReadSnapshot> =
+        throw UnsupportedOperationException("Consistent budget read snapshot unavailable")
     fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>>
     fun observeEntityCounts(ownerUserId: UserId): Flow<List<EntityCount>>
     suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord?
