@@ -66,13 +66,23 @@ class OwnedBudgetEditorTest {
     ) {MistiaTheme(darkTheme=false) {BudgetEditorSheet(subject.value,original,selected,categories,plans(subject),emptyList(),CategoryNameLanguage.ENGLISH,
         onSave=save,onArchive={repo.archiveBudget(subject,RecordId(it),device,now())},onDelete=delete,onDismiss=dismiss)}}
     private fun tag(name:String)=compose.onNodeWithTag(name)
+    private fun openBudget(id:String) {
+        val node="budget.edit.$id"
+        // Room emissions are outside Compose idling; wait for the actual merged action.
+        compose.waitUntil(5000) {compose.onAllNodes(hasTestTag(node) and hasClickAction()).fetchSemanticsNodes().size==1}
+        tag(node).performScrollTo().performClick()
+    }
+    private fun saveBudget() {
+        // These cases assert exact financial persistence; physical IME hit testing is separate.
+        tag("budget.save").performScrollTo().assertIsEnabled().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {it()}
+    }
     private fun amount(text:String) {tag("budget.amount").performScrollTo().performTextReplacement(text)}
     private fun currency(code:String) {compose.onNode(hasText(code) and hasAnyAncestor(hasTestTag("budget.amount")),useUnmergedTree=true).assertExists()}
     private fun choose(category:TransactionCategoryRecord=child) {tag("budget.category").performScrollTo().performClick();tag("budget.category.${category.id}").performClick()}
     private fun key(value:String) {tag("amountCalculator.key.$value").performClick()}
     @Test fun realPlanningCreatesExactVndBudgetAndMatchingOutbox() {
         compose.setContent {Screen(" vnd ")};tag("budget.add").performScrollTo().performClick()
-        choose();amount("9007199254740993");currency("VND");tag("budget.save").performScrollTo().performClick()
+        choose();amount("9007199254740993");currency("VND");tag("budget.amount").assertTextContains("9,007,199,254,740,993");saveBudget()
         compose.waitUntil(5000) {plans().size==1};val saved=plans().single()
         Assert.assertEquals("VND",saved.currencyCode);Assert.assertEquals(9007199254740993L,saved.limitMinor)
         Assert.assertEquals(saved.toPayload(),runBlocking {store.pendingMutations(owner,CloudEntity.BUDGET_PLAN,Long.MAX_VALUE).single()}.mutation.payload)
@@ -83,13 +93,13 @@ class OwnedBudgetEditorTest {
         compose.setContent {Screen("JPY")};tag("budget.add").performScrollTo().performClick()
         amount("9007199254740993");currency("JPY");choose();compose.onNodeWithText("VND").assertIsSelected()
         tag("budget.amount").assert(hasText("9,007,199,254,740,993",substring=true).not())
-        compose.onNodeWithText("JPY").assertIsNotEnabled();amount("100");currency("VND");tag("budget.save").performScrollTo().performClick()
+        compose.onNodeWithText("JPY").assertIsNotEnabled();amount("100");currency("VND");tag("budget.amount").assertTextContains("100");saveBudget()
         compose.waitUntil(5000) {plans().size==2};Assert.assertTrue(plans().all {it.currencyCode=="VND"})
         Assert.assertEquals(100L,plans().single {it.categoryId==child.id}.limitMinor)
     }
     @Test fun existingJpyBudgetKeepsMoneyIdentityAndUnsavedDraftAcrossPrimaryChange() {
         val original=seed();var primary by mutableStateOf("VND")
-        compose.setContent {Screen(primary)};tag("budget.edit.${original.id}").performScrollTo().performClick()
+        compose.setContent {Screen(primary)};openBudget(original.id)
         currency("JPY");tag("budget.amount").assertTextContains("9,007,199,254,740,993")
         amount("9007199254740995");compose.runOnIdle {primary="JPY"};tag("budget.amount").assertTextContains("9,007,199,254,740,995")
         tag("budget.save").performScrollTo().performClick();compose.waitUntil(5000) {plans().single().limitMinor==9007199254740995L}
@@ -97,7 +107,7 @@ class OwnedBudgetEditorTest {
     }
     @Test fun importedUsdBudgetRetainsDecimalMinorMeaningUnderVndPrimary() {
         val original=seed("USD",1375)
-        compose.setContent {Screen("VND")};tag("budget.edit.${original.id}").performScrollTo().performClick()
+        compose.setContent {Screen("VND")};openBudget(original.id)
         currency("USD");tag("budget.amount").assertTextContains("13.75");amount("14.25");tag("budget.save").performScrollTo().performClick()
         compose.waitUntil(5000) {plans().single().limitMinor==1425L};Assert.assertEquals("USD",plans().single().currencyCode)
     }

@@ -31,6 +31,7 @@ fun CategoryIcon(
     glyphSize:Dp=24.dp,
     backgroundAlpha:Float=0.18f,
 ) {
+    if(financeIconAsset(symbolName)!=null) {FinanceIcon(symbolName,modifier);return}
     val iconCatalog = CategoryIconCatalog.load(LocalContext.current)
     Box(
         modifier = modifier.clip(shape).background(categoryColorFromHex(colorHex).copy(alpha = backgroundAlpha)),

@@ -25,6 +25,9 @@ internal val goalIcons=listOf(
 )
 
 @Composable internal fun SavingsGoalIcon(symbol:String,modifier:Modifier=Modifier) {
+    if(vn.com.quyln.mistia.core.designsystem.financeIconAsset(symbol)!=null) {
+        vn.com.quyln.mistia.core.designsystem.FinanceIcon(symbol,modifier.size(44.dp));return
+    }
     val color=categoryColorFromHex(goalIcons.firstOrNull { it.first==symbol }?.third ?: "#2DAA9E")
     val icon=when(symbol) {
         "mistia.goal.travel","airplane" -> Icons.Default.Flight

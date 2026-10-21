@@ -9,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -129,20 +131,32 @@ class OverviewCategoryVisualTest {
             capture("overview-day-count-caption-$code-${if(theme) "dark" else "light"}-font130.png")
         }
     }
-    @Test fun legacyCategorySymbolRendersTheSameMeaningAsItsCanonicalCatalogIcon() {
+    @Test fun legacyFoodKeepsItsFallbackWhileCanonicalGroceryUsesTheOriginalCarrotArtwork() {
+        val reference=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
+            .open("finance-icon-reference/ic_fluent_food_carrot_24_filled.png").use(android.graphics.BitmapFactory::decodeStream)
+        val bitmap=reference.asImageBitmap()
         compose.setContent {Environment {Surface {Row(Modifier.padding(40.dp)) {
             vn.com.quyln.mistia.core.designsystem.CategoryIcon("fork.knife",null,"#FF8A4C",Modifier.size(32.dp).testTag("legacy.icon"))
+            Box(Modifier.size(32.dp).testTag("legacy.reference").background(androidx.compose.ui.graphics.Color(0xFFFF8A4C).copy(alpha=0.18f),androidx.compose.foundation.shape.CircleShape),contentAlignment=androidx.compose.ui.Alignment.Center) {
+                Icon(androidx.compose.material.icons.Icons.Default.Restaurant,null,Modifier.size(24.dp),tint=androidx.compose.ui.graphics.Color(0xFFFF8A4C))
+            }
             vn.com.quyln.mistia.core.designsystem.CategoryIcon("mistia.category.expense.food.grocery",null,"#FF8A4C",Modifier.size(32.dp).testTag("canonical.icon"))
+            Box(Modifier.size(32.dp).testTag("canonical.reference"),contentAlignment=androidx.compose.ui.Alignment.Center) {
+                androidx.compose.foundation.Image(bitmap,null,Modifier.fillMaxSize(0.86f),colorFilter=androidx.compose.ui.graphics.ColorFilter.tint(androidx.compose.ui.graphics.Color(0xFFFF8A4C)))
+            }
         }}}}
-        val legacy=compose.onNodeWithTag("legacy.icon",useUnmergedTree=true).captureToImage().toPixelMap()
-        val canonical=compose.onNodeWithTag("canonical.icon",useUnmergedTree=true).captureToImage().toPixelMap()
-        Assert.assertEquals(canonical.width,legacy.width);Assert.assertEquals(canonical.height,legacy.height)
-        var different=0
-        for(x in 0 until canonical.width) for(y in 0 until canonical.height) {
-            val a=legacy[x,y];val b=canonical[x,y]
-            if(kotlin.math.abs(a.red-b.red)+kotlin.math.abs(a.green-b.green)+kotlin.math.abs(a.blue-b.blue)>0.03f) different++
+        fun same(actualTag:String,expectedTag:String) {
+            val actual=compose.onNodeWithTag(actualTag,useUnmergedTree=true).captureToImage().toPixelMap()
+            val expected=compose.onNodeWithTag(expectedTag,useUnmergedTree=true).captureToImage().toPixelMap()
+            Assert.assertEquals(expected.width,actual.width);Assert.assertEquals(expected.height,actual.height)
+            var different=0
+            for(x in 0 until expected.width) for(y in 0 until expected.height) {
+                val a=actual[x,y];val b=expected[x,y]
+                if(kotlin.math.abs(a.red-b.red)+kotlin.math.abs(a.green-b.green)+kotlin.math.abs(a.blue-b.blue)>0.03f) different++
+            }
+            Assert.assertTrue("$actualTag differs from its intended source ($different pixels)",different<=4)
         }
-        Assert.assertTrue("Legacy food icon changed meaning ($different pixels)",different<=4)
+        same("legacy.icon","legacy.reference");same("canonical.icon","canonical.reference")
     }
     private fun assertComplete(node:SemanticsNodeInteraction) {
         val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>();node.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) {it(layouts)}

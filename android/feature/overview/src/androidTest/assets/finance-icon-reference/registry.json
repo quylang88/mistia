@@ -1,0 +1,1966 @@
+{
+  "formatVersion": 1,
+  "pixelSize": 256,
+  "sources": {
+    "Mistia/Core/UI/MistiaFinanceIcons.swift": "6877e5b75be4e429bc13e50a2331adfe31ea29994751b09d74edf4d1d2ed318a",
+    "Mistia/Shared/CoreLogic/MistiaSystemCategories.json": "b75369ce47a35e01019f32b183dfbaa93f2d205f8ac1159eed1c960b54bd40b2"
+  },
+  "catalogSHA256": "2d21549e18e8dc42c0397a2e75ad1f51838d165e872e008a2e599d589588046e",
+  "descriptors": [
+    {
+      "token": "mistia.category.expense.cost_of_goods.goods_sourcing",
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.cost_of_goods.import_goods",
+      "assetName": "ic_fluent_arrow_square_down_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.cost_of_goods.marketing_ads",
+      "assetName": "ic_fluent_megaphone_loud_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.cost_of_goods.other_sales_cost",
+      "assetName": "ic_fluent_receipt_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.cost_of_goods.packaging",
+      "assetName": "ic_fluent_ribbon_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.cost_of_goods.platform_fee",
+      "assetName": "ic_fluent_globe_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.cost_of_goods.shipping_fee",
+      "assetName": "ic_fluent_fast_forward_circle_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.books_music",
+      "assetName": "ic_fluent_headphones_sound_wave_24_filled",
+      "primaryHex": "#57B7FF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.charity",
+      "assetName": "ic_fluent_clipboard_heart_24_filled",
+      "primaryHex": "#2DAA9E",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.coffee_friends",
+      "assetName": "ic_fluent_drink_coffee_24_filled",
+      "primaryHex": "#C46A6A",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.games_apps",
+      "assetName": "ic_fluent_games_24_filled",
+      "primaryHex": "#A76BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.gifts_ceremonies",
+      "assetName": "ic_fluent_gift_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.hobbies",
+      "assetName": "ic_fluent_paint_brush_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.movies_leisure",
+      "assetName": "ic_fluent_filmstrip_play_24_filled",
+      "primaryHex": "#F59B3F",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.parties_gatherings",
+      "assetName": "ic_fluent_chat_multiple_24_color",
+      "primaryHex": "#FF7A59",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.subscriptions",
+      "assetName": "ic_fluent_calendar_play_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.entertainment_social.travel",
+      "assetName": "ic_fluent_beach_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.baby_food",
+      "assetName": "ic_fluent_bowl_salad_24_filled",
+      "primaryHex": "#FFB347",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.family_children.baby_gear",
+      "assetName": "ic_fluent_cube_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.family_children.child_extracurricular",
+      "assetName": "ic_fluent_flag_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.child_medical",
+      "assetName": "ic_fluent_patient_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.child_medicine",
+      "assetName": "ic_fluent_molecule_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.child_supplies",
+      "assetName": "ic_fluent_backpack_24_filled",
+      "primaryHex": "#FF6D8A",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.family_children.child_toys",
+      "assetName": "ic_fluent_board_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.child_tuition",
+      "assetName": "ic_fluent_building_people_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.childcare",
+      "assetName": "ic_fluent_calendar_checkmark_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.diapers_milk",
+      "assetName": "ic_fluent_teddy_bear_24_color",
+      "primaryHex": "#FF9AB5",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.family_other",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_children.school_books_supplies",
+      "assetName": "ic_fluent_book_star_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_relations.family_support",
+      "assetName": "ic_fluent_people_sync_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.family_relations.gifts",
+      "assetName": "ic_fluent_gift_open_24_filled",
+      "primaryHex": "#FF8A4C",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.family_relations.parents_support",
+      "assetName": "ic_fluent_book_contacts_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.banking_fees",
+      "assetName": "ic_fluent_building_bank_toolbox_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.fines_fees",
+      "assetName": "ic_fluent_document_edit_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.insurance",
+      "assetName": "ic_fluent_lock_shield_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.loan_interest",
+      "assetName": "ic_fluent_data_trending_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.loan_repayment",
+      "assetName": "ic_fluent_credit_card_clock_24_filled",
+      "primaryHex": "#7C85A3",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.other_obligations",
+      "assetName": "ic_fluent_document_folder_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.financial_obligations.taxes_fees",
+      "assetName": "ic_fluent_building_government_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.food.business_meals",
+      "assetName": "ic_fluent_people_chat_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.food.cafe_tea",
+      "assetName": "ic_fluent_drink_to_go_24_filled",
+      "primaryHex": "#C46A6A",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.food.daily_supplies",
+      "assetName": "ic_fluent_cart_24_filled",
+      "primaryHex": "#A76BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.food.delivery",
+      "assetName": "ic_fluent_send_24_color",
+      "primaryHex": "#FF7A59",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.food.dine_out",
+      "assetName": "ic_fluent_food_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.food.grocery",
+      "assetName": "ic_fluent_food_carrot_24_filled",
+      "primaryHex": "#FF8A4C",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.food.small_appliances",
+      "assetName": "ic_fluent_lightbulb_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.food.snacks",
+      "assetName": "ic_fluent_reward_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.checkup",
+      "assetName": "ic_fluent_calendar_checkmark_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.dental",
+      "assetName": "ic_fluent_tooth_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.fitness_gym",
+      "assetName": "ic_fluent_sport_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.hospital",
+      "assetName": "ic_fluent_building_people_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.insurance",
+      "assetName": "ic_fluent_document_heart_pulse_24_filled",
+      "primaryHex": "#7C85A3",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.health.lab_tests",
+      "assetName": "ic_fluent_clipboard_task_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.medicine",
+      "assetName": "ic_fluent_molecule_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.health.supplements",
+      "assetName": "ic_fluent_pill_24_filled",
+      "primaryHex": "#2DAA9E",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.home_bills.condo_fee",
+      "assetName": "ic_fluent_clock_bill_24_filled",
+      "primaryHex": "#7C85A3",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.home_bills.electricity",
+      "assetName": "ic_fluent_lightbulb_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.furniture_appliance",
+      "assetName": "ic_fluent_home_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.gas",
+      "assetName": "ic_fluent_lightbulb_filament_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.home_repair",
+      "assetName": "ic_fluent_wrench_screwdriver_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.internet",
+      "assetName": "ic_fluent_wifi_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.mortgage_installment",
+      "assetName": "ic_fluent_vault_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.phone",
+      "assetName": "ic_fluent_phone_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.rent",
+      "assetName": "ic_fluent_building_home_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.home_bills.water",
+      "assetName": "ic_fluent_drop_24_filled",
+      "primaryHex": "#57B7FF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.other.expense",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.personal_shopping.accessories",
+      "assetName": "ic_fluent_reward_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.personal_shopping.clothes",
+      "assetName": "ic_fluent_clothes_hanger_24_filled",
+      "primaryHex": "#A76BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.personal_shopping.cosmetics_skincare",
+      "assetName": "ic_fluent_paint_brush_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.personal_shopping.footwear",
+      "assetName": "ic_fluent_person_walking_24_filled",
+      "primaryHex": "#FF8A4C",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.personal_shopping.personal_care",
+      "assetName": "ic_fluent_person_heart_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.personal_shopping.personal_supplies",
+      "assetName": "ic_fluent_cart_24_filled",
+      "primaryHex": "#7C85A3",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.pet_care.pet_food",
+      "assetName": "ic_fluent_animal_dog_24_filled",
+      "primaryHex": "#57B7FF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.pet_care.pet_grooming",
+      "assetName": "ic_fluent_paint_brush_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.pet_care.pet_medical",
+      "assetName": "ic_fluent_patient_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.pet_care.pet_other",
+      "assetName": "ic_fluent_animal_paw_print_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.pet_care.pet_supplies",
+      "assetName": "ic_fluent_animal_cat_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.car_wash",
+      "assetName": "ic_fluent_broom_24_filled",
+      "primaryHex": "#57B7FF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.fuel",
+      "assetName": "ic_fluent_gas_pump_24_filled",
+      "primaryHex": "#2DAA9E",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.grab_taxi",
+      "assetName": "ic_fluent_vehicle_cab_24_filled",
+      "primaryHex": "#2DAA9E",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.insurance",
+      "assetName": "ic_fluent_shield_checkmark_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.maintenance",
+      "assetName": "ic_fluent_toolbox_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.parking",
+      "assetName": "ic_fluent_vehicle_car_parking_24_filled",
+      "primaryHex": "#4C8DFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.public_transport",
+      "assetName": "ic_fluent_vehicle_subway_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.registration",
+      "assetName": "ic_fluent_building_government_search_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.repair",
+      "assetName": "ic_fluent_vehicle_car_collision_24_filled",
+      "primaryHex": "#7C85A3",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.transport_vehicle.tolls",
+      "assetName": "ic_fluent_road_24_filled",
+      "primaryHex": "#F59B3F",
+      "template": true
+    },
+    {
+      "token": "mistia.category.expense.work_study.business_travel",
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.work_study.client_entertainment",
+      "assetName": "ic_fluent_people_chat_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.work_study.courses",
+      "assetName": "ic_fluent_book_open_lightbulb_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.work_study.exams_certificates",
+      "assetName": "ic_fluent_certificate_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.work_study.professional_books",
+      "assetName": "ic_fluent_book_database_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.work_study.software",
+      "assetName": "ic_fluent_phone_laptop_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.expense.work_study.tools",
+      "assetName": "ic_fluent_toolbox_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.business.business_profit",
+      "assetName": "ic_fluent_data_area_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.business.online_collaborator_income",
+      "assetName": "ic_fluent_link_multiple_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.business.other_business_income",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.business.sales",
+      "assetName": "ic_fluent_building_store_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.business.service_revenue",
+      "assetName": "ic_fluent_people_chat_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.investment_finance.bank_interest",
+      "assetName": "ic_fluent_building_bank_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.income.investment_finance.dividends",
+      "assetName": "ic_fluent_data_pie_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.investment_finance.investment_gain",
+      "assetName": "ic_fluent_data_line_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.investment_finance.loan_interest_received",
+      "assetName": "ic_fluent_coin_multiple_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.investment_finance.other_financial_income",
+      "assetName": "ic_fluent_data_scatter_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.liquidation.liquidate_household",
+      "assetName": "ic_fluent_home_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.liquidation.other_liquidation_income",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.liquidation.sell_used_items",
+      "assetName": "ic_fluent_arrow_square_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.other.income",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.refund_adjustment.cashback",
+      "assetName": "ic_fluent_reward_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.refund_adjustment.expense_recovery",
+      "assetName": "ic_fluent_arrow_sync_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.refund_adjustment.insurance_payout",
+      "assetName": "ic_fluent_shield_checkmark_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.refund_adjustment.people_repayment",
+      "assetName": "ic_fluent_people_sync_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.refund_adjustment.refund",
+      "assetName": "ic_fluent_arrow_clockwise_dashes_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.refund_adjustment.reimbursement",
+      "assetName": "ic_fluent_document_add_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.allowance",
+      "assetName": "ic_fluent_gift_card_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.bonus",
+      "assetName": "ic_fluent_trophy_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.commission",
+      "assetName": "ic_fluent_chart_multiple_24_color",
+      "primaryHex": "#FF7A59",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.freelance",
+      "assetName": "ic_fluent_phone_laptop_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.overtime",
+      "assetName": "ic_fluent_clock_alarm_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.salary",
+      "assetName": "ic_fluent_coin_multiple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.salary_work.side_salary",
+      "assetName": "ic_fluent_coin_multiple_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.support_gift.child_allowance",
+      "assetName": "ic_fluent_people_home_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.support_gift.family_support",
+      "assetName": "ic_fluent_people_sync_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.support_gift.gift",
+      "assetName": "ic_fluent_gift_open_24_filled",
+      "primaryHex": "#FF6D8A",
+      "template": true
+    },
+    {
+      "token": "mistia.category.income.support_gift.maternity_allowance",
+      "assetName": "ic_fluent_person_heart_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.support_gift.subsidy",
+      "assetName": "ic_fluent_building_people_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.income.support_gift.support_received",
+      "assetName": "ic_fluent_book_open_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.billing",
+      "assetName": "ic_fluent_building_home_24_color",
+      "primaryHex": "#FF9F1C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.education",
+      "assetName": "ic_fluent_briefcase_24_color",
+      "primaryHex": "#9A67FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.entertainment",
+      "assetName": "ic_fluent_apps_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.food",
+      "assetName": "ic_fluent_food_24_color",
+      "primaryHex": "#FF9F1C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.health",
+      "assetName": "ic_fluent_patient_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.housing",
+      "assetName": "ic_fluent_building_home_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.investment",
+      "assetName": "ic_fluent_data_pie_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.shopping",
+      "assetName": "ic_fluent_gift_card_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.legacy.transportation",
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.cost_of_goods",
+      "assetName": "ic_fluent_briefcase_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.entertainment_social",
+      "assetName": "ic_fluent_apps_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.family_children",
+      "assetName": "ic_fluent_people_home_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.family_relations",
+      "assetName": "ic_fluent_people_team_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.financial_obligations",
+      "assetName": "ic_fluent_contact_card_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.food",
+      "assetName": "ic_fluent_food_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.health",
+      "assetName": "ic_fluent_patient_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.home_bills",
+      "assetName": "ic_fluent_building_home_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.other",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.personal_shopping",
+      "assetName": "ic_fluent_clothes_hanger_24_filled",
+      "primaryHex": "#A76BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.category.parent.expense.pet_care",
+      "assetName": "ic_fluent_animal_paw_print_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.transport_vehicle",
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.expense.work_study",
+      "assetName": "ic_fluent_briefcase_24_color",
+      "primaryHex": "#4C8DFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.business",
+      "assetName": "ic_fluent_building_store_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.investment_finance",
+      "assetName": "ic_fluent_chart_multiple_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.liquidation",
+      "assetName": "ic_fluent_arrow_square_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.other",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.refund_adjustment",
+      "assetName": "ic_fluent_arrow_clockwise_dashes_24_color",
+      "primaryHex": "#57B7FF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.salary_work",
+      "assetName": "ic_fluent_briefcase_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.income.support_gift",
+      "assetName": "ic_fluent_heart_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.legacy.living",
+      "assetName": "ic_fluent_building_home_24_color",
+      "primaryHex": "#FF9F1C",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.legacy.mobility_travel",
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.category.parent.legacy.personal_lifestyle",
+      "assetName": "ic_fluent_gift_card_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.debt.borrow",
+      "assetName": "ic_fluent_arrow_square_down_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.debt.collect",
+      "assetName": "ic_fluent_arrow_square_down_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.debt.lend",
+      "assetName": "ic_fluent_send_24_color",
+      "primaryHex": "#FF7A59",
+      "template": false
+    },
+    {
+      "token": "mistia.debt.repay",
+      "assetName": "ic_fluent_send_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.flow.expense",
+      "assetName": "ic_fluent_arrow_square_down_24_color",
+      "primaryHex": "#FF7A59",
+      "template": false
+    },
+    {
+      "token": "mistia.flow.income",
+      "assetName": "ic_fluent_coin_multiple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.flow.transfer",
+      "assetName": "ic_fluent_arrow_sync_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.flow.transfer.debt",
+      "assetName": "ic_fluent_people_sync_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.flow.transfer.family",
+      "assetName": "ic_fluent_data_pie_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.flow.transfer.internal",
+      "assetName": "ic_fluent_arrow_sync_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.goal.education",
+      "assetName": "ic_fluent_book_open_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.goal.family",
+      "assetName": "ic_fluent_people_home_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.goal.home",
+      "assetName": "ic_fluent_home_24_color",
+      "primaryHex": "#FF8A4C",
+      "template": false
+    },
+    {
+      "token": "mistia.goal.savings",
+      "assetName": "ic_fluent_savings_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.goal.travel",
+      "assetName": "ic_fluent_beach_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.goal.vehicle",
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.plan.bill",
+      "assetName": "ic_fluent_calendar_clock_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.plan.card_bill",
+      "assetName": "ic_fluent_credit_card_clock_24_filled",
+      "primaryHex": "#A76BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.plan.installment",
+      "assetName": "ic_fluent_calendar_sync_24_color",
+      "primaryHex": "#7C85A3",
+      "template": false
+    },
+    {
+      "token": "mistia.plan.loan",
+      "assetName": "ic_fluent_vault_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.plan.payment",
+      "assetName": "ic_fluent_calendar_clock_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.settlement.event",
+      "assetName": "ic_fluent_people_team_24_color",
+      "primaryHex": "#A76BFF",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.bank",
+      "assetName": "ic_fluent_building_bank_24_filled",
+      "primaryHex": "#5B7BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.wallet.cash",
+      "assetName": "ic_fluent_coin_multiple_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.credit_card",
+      "assetName": "ic_fluent_card_ui_24_filled",
+      "primaryHex": "#7C85A3",
+      "template": true
+    },
+    {
+      "token": "mistia.wallet.credit_card_premium",
+      "assetName": "ic_fluent_card_ui_portrait_flip_24_filled",
+      "primaryHex": "#A76BFF",
+      "template": true
+    },
+    {
+      "token": "mistia.wallet.credit_card_rewards",
+      "assetName": "ic_fluent_gift_card_money_24_filled",
+      "primaryHex": "#FFB347",
+      "template": true
+    },
+    {
+      "token": "mistia.wallet.crypto",
+      "assetName": "ic_fluent_vault_24_color",
+      "primaryHex": "#F59B3F",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.e_wallet",
+      "assetName": "ic_fluent_scan_type_24_color",
+      "primaryHex": "#F26A5A",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.emergency",
+      "assetName": "ic_fluent_vault_24_color",
+      "primaryHex": "#F45C7E",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.family",
+      "assetName": "ic_fluent_people_home_24_color",
+      "primaryHex": "#FF6D8A",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.investment",
+      "assetName": "ic_fluent_vault_24_color",
+      "primaryHex": "#9A67FF",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.other",
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "primaryHex": "#8A8A8E",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.paypay",
+      "assetName": "ic_fluent_scan_type_24_color",
+      "primaryHex": "#FF7A59",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.prepaid",
+      "assetName": "ic_fluent_contact_card_24_color",
+      "primaryHex": "#FFB347",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.savings",
+      "assetName": "ic_fluent_savings_24_color",
+      "primaryHex": "#2DAA9E",
+      "template": false
+    },
+    {
+      "token": "mistia.wallet.travel",
+      "assetName": "ic_fluent_beach_24_color",
+      "primaryHex": "#5B7BFF",
+      "template": false
+    }
+  ],
+  "assets": [
+    {
+      "assetName": "ic_fluent_animal_cat_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_animal_cat_24_filled.imageset/ic_fluent_animal_cat_24_filled.svg",
+      "sourceSHA256": "3c967d47d96f0b17252b86aa60d4eac2bf72be18daeba52fce90f0ea8f6f3bed",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_animal_cat_24_filled.png",
+      "pngSHA256": "f0683a94843ea512aca70aedd46f0201a55e946d04788ca79243f3f82f8edc77"
+    },
+    {
+      "assetName": "ic_fluent_animal_dog_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_animal_dog_24_filled.imageset/ic_fluent_animal_dog_24_filled.svg",
+      "sourceSHA256": "a11c5d1331bf2450e59851e79533de34fdb78ef60abffe551c265320302e3609",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_animal_dog_24_filled.png",
+      "pngSHA256": "f0c004bd6334b3f6671a94cee4184ceb57d8d3d7c8b483520ea490a373f7d5b7"
+    },
+    {
+      "assetName": "ic_fluent_animal_paw_print_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_animal_paw_print_24_color.imageset/ic_fluent_animal_paw_print_24_color.svg",
+      "sourceSHA256": "7c74512e116c68739de26b2a57263b79224e4313306f003937deb47690bb59ba",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_animal_paw_print_24_color.png",
+      "pngSHA256": "83db719aec0765c358f33c88f40f71e0b05dee418d0d689d3fb5bc2048016d3f"
+    },
+    {
+      "assetName": "ic_fluent_apps_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_apps_24_color.imageset/ic_fluent_apps_24_color.svg",
+      "sourceSHA256": "481ba3bb599932a37a40c5784bda8dadeeb42cae60f03cfcd9f1f66aac4cc291",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_apps_24_color.png",
+      "pngSHA256": "2041b2d66638b10eefc60d074019de7c3640f82ebe6e8c378a7fe982835fa554"
+    },
+    {
+      "assetName": "ic_fluent_apps_list_detail_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_apps_list_detail_24_color.imageset/ic_fluent_apps_list_detail_24_color.svg",
+      "sourceSHA256": "4414fddab5e6ba1af29d026bbb2c0d9ea0aa21c6c62895dde1c33ae1d93833f2",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_apps_list_detail_24_color.png",
+      "pngSHA256": "eb59899f38258c68ad44048d41e6733c03bcc329807fb64cfdb68bf200d921a2"
+    },
+    {
+      "assetName": "ic_fluent_arrow_clockwise_dashes_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_arrow_clockwise_dashes_24_color.imageset/ic_fluent_arrow_clockwise_dashes_24_color.svg",
+      "sourceSHA256": "908843ab99647e44a83e78a976d9b7bd1cf30681b033273d70d6c6e7dda9d627",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_arrow_clockwise_dashes_24_color.png",
+      "pngSHA256": "10c82e3cb9b848d67386095eda329e7e396a2d5d5149b48355995731b488a5a2"
+    },
+    {
+      "assetName": "ic_fluent_arrow_square_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_arrow_square_24_color.imageset/ic_fluent_arrow_square_24_color.svg",
+      "sourceSHA256": "075ca36bcea2d37b8600dbdaba887ea20288a99e487b2b246d73a8182966cc85",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_arrow_square_24_color.png",
+      "pngSHA256": "4677429bb2130ec295399e724f02a0bf2135d6c3e61a39f2166425d754458bf7"
+    },
+    {
+      "assetName": "ic_fluent_arrow_square_down_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_arrow_square_down_24_color.imageset/ic_fluent_arrow_square_down_24_color.svg",
+      "sourceSHA256": "075ca36bcea2d37b8600dbdaba887ea20288a99e487b2b246d73a8182966cc85",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_arrow_square_down_24_color.png",
+      "pngSHA256": "4677429bb2130ec295399e724f02a0bf2135d6c3e61a39f2166425d754458bf7"
+    },
+    {
+      "assetName": "ic_fluent_arrow_sync_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_arrow_sync_24_color.imageset/ic_fluent_arrow_sync_24_color.svg",
+      "sourceSHA256": "bb5b3763ca57b2dd31b31e309dd186886be05d38f1a29ad4e41284eb62289171",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_arrow_sync_24_color.png",
+      "pngSHA256": "71be6946756e8a7067e625b6bc98c2d5bdd0ccae22ac5364d409896d2b2c6781"
+    },
+    {
+      "assetName": "ic_fluent_backpack_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_backpack_24_filled.imageset/ic_fluent_backpack_24_filled.svg",
+      "sourceSHA256": "30826908803e1c679bfb5ff8348b4c64ffd7224308595c1bf05debe967b47b91",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_backpack_24_filled.png",
+      "pngSHA256": "2b4379a1dc160a8cffd745f55a9e0418a0f5cecadbf9e9af0e7d9a3edf17da67"
+    },
+    {
+      "assetName": "ic_fluent_beach_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_beach_24_color.imageset/ic_fluent_beach_24_color.svg",
+      "sourceSHA256": "25358bdfc586e9d4bf38f354542b6891a5d23604e6b6ff0b588ff7459ccf15d7",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_beach_24_color.png",
+      "pngSHA256": "621003cd91cd0792ecfae24f8c7edf98d67acb5c7b82debce3286b3523298840"
+    },
+    {
+      "assetName": "ic_fluent_board_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_board_24_color.imageset/ic_fluent_board_24_color.svg",
+      "sourceSHA256": "69a524179fa84dfe0aa417228d876fa7283da9f07fab7ac9e864328336cb864e",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_board_24_color.png",
+      "pngSHA256": "a8741f93add3b767120ec528f4b7c083ae405976f04825925b6973263d6549e6"
+    },
+    {
+      "assetName": "ic_fluent_book_contacts_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_book_contacts_24_color.imageset/ic_fluent_book_contacts_24_color.svg",
+      "sourceSHA256": "102fa80ae7d01925318afb3dd1d23e98140b4e35b1ab6d093079aef62d696fba",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_book_contacts_24_color.png",
+      "pngSHA256": "91d3c54f05d6de50e98d780cc4990d04b8970125d989c3cf0d0750b8ffe79c4e"
+    },
+    {
+      "assetName": "ic_fluent_book_database_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_book_database_24_color.imageset/ic_fluent_book_database_24_color.svg",
+      "sourceSHA256": "79f2763c19f1e753079563fd99eab5c74c0a00cea3f71bb4f40de500cf6447da",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_book_database_24_color.png",
+      "pngSHA256": "02412e5bf2e906c5e78b7897a0b4117ffa7f88db4cb91d5491813d06fb704d56"
+    },
+    {
+      "assetName": "ic_fluent_book_open_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_book_open_24_color.imageset/ic_fluent_book_open_24_color.svg",
+      "sourceSHA256": "ab555183ecc7171af583febccd397e53c09f83f22b9fa46d460bde8b3552a932",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_book_open_24_color.png",
+      "pngSHA256": "5c7ca8ef34e190e9a5b0424ed88bae9cfd3c3e7a17da1469023c8f37194827fd"
+    },
+    {
+      "assetName": "ic_fluent_book_open_lightbulb_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_book_open_lightbulb_24_color.imageset/ic_fluent_book_open_lightbulb_24_color.svg",
+      "sourceSHA256": "f30fa22f81320b5a1ee86eb074b7338d0cf4555dbdd4797747cc687e59a9c31f",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_book_open_lightbulb_24_color.png",
+      "pngSHA256": "98eb3b5d5b9d9e513435d27d688dba6149f1762e0feb9add2727ea6c86f648d9"
+    },
+    {
+      "assetName": "ic_fluent_book_star_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_book_star_24_color.imageset/ic_fluent_book_star_24_color.svg",
+      "sourceSHA256": "31fd741ac122c21abb77f7fb78979ac08238a9f8eb5f82e69bc28eb3c554aba6",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_book_star_24_color.png",
+      "pngSHA256": "071d3ef002a3835cc0844e6d85d27fb9db809cd0a8a985dee0e23ce75263ff25"
+    },
+    {
+      "assetName": "ic_fluent_bowl_salad_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_bowl_salad_24_filled.imageset/ic_fluent_bowl_salad_24_filled.svg",
+      "sourceSHA256": "be5422cccc37852b413e403a80e019a4cbf8c3cd2c914070578cec859154d730",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_bowl_salad_24_filled.png",
+      "pngSHA256": "2f21ee46efeb5a25b91271be0f32fc467d70a3b0a9388b5e8f342a71a9b8c622"
+    },
+    {
+      "assetName": "ic_fluent_briefcase_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_briefcase_24_color.imageset/ic_fluent_briefcase_24_color.svg",
+      "sourceSHA256": "65359a5cfded8babe9a402c533ee977a976e49935ed5c6b565bb80f45ad04a19",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_briefcase_24_color.png",
+      "pngSHA256": "8b9c54559e37bfacf687df23a19e31df832d09bbfdf1febbdb2cb8b5a1338160"
+    },
+    {
+      "assetName": "ic_fluent_broom_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_broom_24_filled.imageset/ic_fluent_broom_24_filled.svg",
+      "sourceSHA256": "4abc1d9bd2dbecfa870d55aefbf5381699cb5f7d21bc90a17975a026e0f93467",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_broom_24_filled.png",
+      "pngSHA256": "9b144ed2d4143537a9e74d3803aa6a150538cd12a08b5efe791608468a71130b"
+    },
+    {
+      "assetName": "ic_fluent_building_bank_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_bank_24_filled.imageset/ic_fluent_building_bank_24_filled.svg",
+      "sourceSHA256": "06f61dab10434b48b7bbd8c1fe85b043dcc082b766776dd149ea70f0d5d9ca1f",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_bank_24_filled.png",
+      "pngSHA256": "723339e12d91b1f5d3ace8ffa0dd0a630aa8c760fb1dc6b3fc33c0a27b88a0de"
+    },
+    {
+      "assetName": "ic_fluent_building_bank_toolbox_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_bank_toolbox_24_filled.imageset/ic_fluent_building_bank_toolbox_24_filled.svg",
+      "sourceSHA256": "f1d073006050fa324a43dde450258b07546d34e5cb82b2528dae217fee87cb15",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_bank_toolbox_24_filled.png",
+      "pngSHA256": "33f2f2709af62074b608954bf94d4d1e4f6ab1c51dedbd62275d6253ab09e0cd"
+    },
+    {
+      "assetName": "ic_fluent_building_government_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_government_24_color.imageset/ic_fluent_building_government_24_color.svg",
+      "sourceSHA256": "9bdc06aed0fd52853ba3b7005d542a68a88ebb337722e965ac7efd1df7625fc1",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_government_24_color.png",
+      "pngSHA256": "350c065d9246750e95d70b574419d7550ac16824a30b1ce809aacd687821470b"
+    },
+    {
+      "assetName": "ic_fluent_building_government_search_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_government_search_24_color.imageset/ic_fluent_building_government_search_24_color.svg",
+      "sourceSHA256": "5f221f544f46b2d9a92b6dcbf8c4856744c37d905462d5d678e593f212db9cea",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_government_search_24_color.png",
+      "pngSHA256": "9d277f2372d2598a9b4ed666ffd5e0e023af4f5fc7371777f9a7f93d66425999"
+    },
+    {
+      "assetName": "ic_fluent_building_home_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_home_24_color.imageset/ic_fluent_building_home_24_color.svg",
+      "sourceSHA256": "69d31b9f42d959f35de54c4489fd6b07f279961ac1d1ee0776bcba81110a58cd",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_home_24_color.png",
+      "pngSHA256": "1bd8aa79c64da55d16171fb2700930f9c468ddade46a3c00e27bd29c4624e7df"
+    },
+    {
+      "assetName": "ic_fluent_building_people_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_people_24_color.imageset/ic_fluent_building_people_24_color.svg",
+      "sourceSHA256": "28db2d2e732cb52b39bd11127e99830b51aea04efdc2dc4845e1f2eb9636f351",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_people_24_color.png",
+      "pngSHA256": "c02b4cb2520d41ef3456c4a9f6f21505902730349a260d7c43ea3bd032531cad"
+    },
+    {
+      "assetName": "ic_fluent_building_store_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_building_store_24_color.imageset/ic_fluent_building_store_24_color.svg",
+      "sourceSHA256": "f858116680d1bd917ae995d01d3f61e6712a8fe85a9ef55270dc00ce305d6919",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_building_store_24_color.png",
+      "pngSHA256": "aa560da18f2486d6e40fed68ece4b9968f368dcd97a4ecbb2cf2b2f05494ffb7"
+    },
+    {
+      "assetName": "ic_fluent_calendar_checkmark_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_calendar_checkmark_24_color.imageset/ic_fluent_calendar_checkmark_24_color.svg",
+      "sourceSHA256": "9bf6d7b8fa3410619447b0ebc5506675baefcefcec2092d260179492978a80af",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_calendar_checkmark_24_color.png",
+      "pngSHA256": "5cca22a4da3cf8cfe31e39bd629d55fb0d943837f17444318377b22032aa5df0"
+    },
+    {
+      "assetName": "ic_fluent_calendar_clock_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_calendar_clock_24_color.imageset/ic_fluent_calendar_clock_24_color.svg",
+      "sourceSHA256": "9ef1b7f1038adf6f1b8f4267283edf7aac0d3eb4cc80f1da0242cec5c77504ec",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_calendar_clock_24_color.png",
+      "pngSHA256": "7bb7e93ed66fb02c28d5f59c34bb722ab9304d907a339ce43b540fb56c61d791"
+    },
+    {
+      "assetName": "ic_fluent_calendar_play_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_calendar_play_24_filled.imageset/ic_fluent_calendar_play_24_filled.svg",
+      "sourceSHA256": "326a1814c535bd9cb0038cd77b54ee9e7ad5ac30da83f1ce121d3c6ed33ab7b7",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_calendar_play_24_filled.png",
+      "pngSHA256": "46a3c9a808e0b6cf67a9827887b801d05e28ff738c7a0239f5ab40f7b61138b8"
+    },
+    {
+      "assetName": "ic_fluent_calendar_sync_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_calendar_sync_24_color.imageset/ic_fluent_calendar_sync_24_color.svg",
+      "sourceSHA256": "598679a3b8d552b289234ca8afe0b04e9a11f2cf98e2debb022c32f0d1eada20",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_calendar_sync_24_color.png",
+      "pngSHA256": "546dd8209bef100f78038e7ba956a28d7e210bbb21020a493932dc8e181bbc57"
+    },
+    {
+      "assetName": "ic_fluent_card_ui_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_card_ui_24_filled.imageset/ic_fluent_card_ui_24_filled.svg",
+      "sourceSHA256": "3b24caddc819f3b67b12877e824230833648343ea3af3a161c7d8f1e2124a47d",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_card_ui_24_filled.png",
+      "pngSHA256": "c61043d8b8ed2c1eca50b08fd539d08b5214d1132bd38f6940cc1427e0831a86"
+    },
+    {
+      "assetName": "ic_fluent_card_ui_portrait_flip_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_card_ui_portrait_flip_24_filled.imageset/ic_fluent_card_ui_portrait_flip_24_filled.svg",
+      "sourceSHA256": "9e1a342b8ec844e1727876d484c5cd536220f8770ac9faf8afdf8d809e347ea0",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_card_ui_portrait_flip_24_filled.png",
+      "pngSHA256": "04dfb80e162a19b9b66715b9f511d746a9fa3b50b1138e5a882cedaa8493d99b"
+    },
+    {
+      "assetName": "ic_fluent_cart_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_cart_24_filled.imageset/ic_fluent_cart_24_filled.svg",
+      "sourceSHA256": "7da8bf50e7ce0c62f90ef903b7ba571523d70d4b04d18a65d0ee32693da0dddb",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_cart_24_filled.png",
+      "pngSHA256": "e6d944885653e98db39a82ccfb218c785aecc7db0e3f21b04cda546e7954ba71"
+    },
+    {
+      "assetName": "ic_fluent_certificate_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_certificate_24_color.imageset/ic_fluent_certificate_24_color.svg",
+      "sourceSHA256": "05fa11423d4b8bed54b7aa06cd723272ffdf3f39c88e9b7959ea5285ea280af3",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_certificate_24_color.png",
+      "pngSHA256": "c7c1084161150b283512b7ac9015738fdca2cb1b972c8f87ac8375973deb1b0f"
+    },
+    {
+      "assetName": "ic_fluent_chart_multiple_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_chart_multiple_24_color.imageset/ic_fluent_chart_multiple_24_color.svg",
+      "sourceSHA256": "9b7560bc1774ddbf587af71535e008f4517aa8dca3a95b4f5a0ecb96cfdd6ce8",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_chart_multiple_24_color.png",
+      "pngSHA256": "ff44a9ccc7f8abbff69113a4dd1764c9aaa8cb17cd41e8a4b7b9bfa8c30e7d21"
+    },
+    {
+      "assetName": "ic_fluent_chat_multiple_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_chat_multiple_24_color.imageset/ic_fluent_chat_multiple_24_color.svg",
+      "sourceSHA256": "b4e6a9d72ca52c1c6b6a3f44636e0714aaa288f6f9f49932430b8fc2afcaf968",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_chat_multiple_24_color.png",
+      "pngSHA256": "31f8b450763e55152b6993042ca874cb777caec1c8d09972579c6315bb9f2ecd"
+    },
+    {
+      "assetName": "ic_fluent_clipboard_heart_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_clipboard_heart_24_filled.imageset/ic_fluent_clipboard_heart_24_filled.svg",
+      "sourceSHA256": "776af8acec3beb454796940ee1393987f7fd95930415c5c9ce6aecaa0ff92477",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_clipboard_heart_24_filled.png",
+      "pngSHA256": "bbee5fc109e9fc3123c3d5cdfc51b21c7760708428a15e393541a25483e3fe17"
+    },
+    {
+      "assetName": "ic_fluent_clipboard_task_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_clipboard_task_24_color.imageset/ic_fluent_clipboard_task_24_color.svg",
+      "sourceSHA256": "c81cab69d8fdf02ac921dc31b66f46ec4388ba1dc85818fe9488de4dea0ca831",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_clipboard_task_24_color.png",
+      "pngSHA256": "4986e178aaec9b94b210490d9932351c948269ad8d524874d24d4b7e05e15022"
+    },
+    {
+      "assetName": "ic_fluent_clock_alarm_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_clock_alarm_24_color.imageset/ic_fluent_clock_alarm_24_color.svg",
+      "sourceSHA256": "23e2fef07d85a6c0b58a3b6a910b1904d6a5609ba1f73964a7ca16c6b2b4cc7c",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_clock_alarm_24_color.png",
+      "pngSHA256": "f7f3cb327f9991254cbf51990e37d64dd31d657b6e1973d23e7adf8b9f2f52f3"
+    },
+    {
+      "assetName": "ic_fluent_clock_bill_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_clock_bill_24_filled.imageset/ic_fluent_clock_bill_24_filled.svg",
+      "sourceSHA256": "44f074d8441a5a7a1406f7f74c1612d9c195fefa86ee3d110ccd3416fe702a06",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_clock_bill_24_filled.png",
+      "pngSHA256": "50f4ed67bff526b0afa958f152f812baf6aed57d0c5be5ed3adae9e27b9cd837"
+    },
+    {
+      "assetName": "ic_fluent_clothes_hanger_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_clothes_hanger_24_filled.imageset/ic_fluent_clothes_hanger_24_filled.svg",
+      "sourceSHA256": "7fd26d1fc3ac767dd4cecab902beb2e554443d8d6888660f932ce494d07a268a",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_clothes_hanger_24_filled.png",
+      "pngSHA256": "2856d25ec270f40731ec6a3cc80f32e769db2c295f2849995b87fede852d5b63"
+    },
+    {
+      "assetName": "ic_fluent_coin_multiple_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_coin_multiple_24_color.imageset/ic_fluent_coin_multiple_24_color.svg",
+      "sourceSHA256": "c070c12c2cfba787b28e9c0d0b997b1eed1439d9265a1eee1451a56c0b59c020",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_coin_multiple_24_color.png",
+      "pngSHA256": "76b7c209ac2de5d49c52e89f253a4aee546485c7d9f288080d85796843a0c24a"
+    },
+    {
+      "assetName": "ic_fluent_contact_card_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_contact_card_24_color.imageset/ic_fluent_contact_card_24_color.svg",
+      "sourceSHA256": "d4cc99895eb3fd4e63eb09a067ed1f5f73c6cdae9061580a86642751a7d71684",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_contact_card_24_color.png",
+      "pngSHA256": "591723319290ac38a1c916f81a4836ba3180c3904ee3b56019fd76e9201bd877"
+    },
+    {
+      "assetName": "ic_fluent_credit_card_clock_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_credit_card_clock_24_filled.imageset/ic_fluent_credit_card_clock_24_filled.svg",
+      "sourceSHA256": "20b8ab5a3438f30214746f5842d1348e755f52d1629829d7d8d93be8e6ad1e7b",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_credit_card_clock_24_filled.png",
+      "pngSHA256": "6ed248dd6edac3ef9aef02246a315c02451b304a1bcdeb61ef83003e4a642ef5"
+    },
+    {
+      "assetName": "ic_fluent_cube_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_cube_24_filled.imageset/ic_fluent_cube_24_filled.svg",
+      "sourceSHA256": "833d400e76ca1566698db558e7f2c0eea6629c5daa62f7f006d64ef026c58c35",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_cube_24_filled.png",
+      "pngSHA256": "089d4abdeddd5829a61a529309c4360d9a129fda45b6a62a9d486b57810daa0f"
+    },
+    {
+      "assetName": "ic_fluent_data_area_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_data_area_24_color.imageset/ic_fluent_data_area_24_color.svg",
+      "sourceSHA256": "6facb9ee392226a2456a5acbf3d5b3e227af540f73d753aacbe69467f688586e",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_data_area_24_color.png",
+      "pngSHA256": "76f2ff0e24b3842394bd21a435718cca4b3ec4a61542164b943c9c64d16a2d83"
+    },
+    {
+      "assetName": "ic_fluent_data_line_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_data_line_24_color.imageset/ic_fluent_data_line_24_color.svg",
+      "sourceSHA256": "b322b9a8a9201f77bb0bc50915ab5654f51f644002214c679d94e87870e85670",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_data_line_24_color.png",
+      "pngSHA256": "21b7bfe64bc3e4f582480978ff7ee262fdf6ba43f41b8f6c4fdd920e9e40d852"
+    },
+    {
+      "assetName": "ic_fluent_data_pie_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_data_pie_24_color.imageset/ic_fluent_data_pie_24_color.svg",
+      "sourceSHA256": "2c02e858488a2190132ef056c032f9dfb76a63bba8640e107a480aa819e52349",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_data_pie_24_color.png",
+      "pngSHA256": "dbc01a0773a8ccdc1a1815cc45632c7d05c0019e672af35a8618cb46971c0318"
+    },
+    {
+      "assetName": "ic_fluent_data_scatter_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_data_scatter_24_color.imageset/ic_fluent_data_scatter_24_color.svg",
+      "sourceSHA256": "68e957c11efa2787b948813a9322877ddf7ed999409f2deb8c1def10d7fc31c4",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_data_scatter_24_color.png",
+      "pngSHA256": "fcffd393f2f9f48e2f978943ae61b19354530629eadfab14b46e4c288282ef44"
+    },
+    {
+      "assetName": "ic_fluent_data_trending_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_data_trending_24_color.imageset/ic_fluent_data_trending_24_color.svg",
+      "sourceSHA256": "997cc46a41f6fb8567113b1d6778dcaf681e379e230941babe8080208724fea5",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_data_trending_24_color.png",
+      "pngSHA256": "2d9e3d9c6e8a689313b5e40bc5e5f3f7b8909bd81c4d3622691ef974ebb2f0d7"
+    },
+    {
+      "assetName": "ic_fluent_document_add_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_document_add_24_color.imageset/ic_fluent_document_add_24_color.svg",
+      "sourceSHA256": "71fcbc99aa1ddca8b1554c496f75810715043f9612c27ed1087ac6ed0e396df8",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_document_add_24_color.png",
+      "pngSHA256": "c9d9fab53b3fe306eaf57ec7ff17053302272623b0ac577eaaa0b0af60e10edf"
+    },
+    {
+      "assetName": "ic_fluent_document_edit_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_document_edit_24_color.imageset/ic_fluent_document_edit_24_color.svg",
+      "sourceSHA256": "f700fc5e71212724b8cc447fc458bbbcdebee23bde60dff7606dffa14e57e388",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_document_edit_24_color.png",
+      "pngSHA256": "060999a8350aabd58e3e2d2afbcdc129af3abb1702fa2756916baa522a876aac"
+    },
+    {
+      "assetName": "ic_fluent_document_folder_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_document_folder_24_color.imageset/ic_fluent_document_folder_24_color.svg",
+      "sourceSHA256": "06f76f631718174c6bdafb0c6609166ddb78092ce55ab9b7bba272cd827ca14d",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_document_folder_24_color.png",
+      "pngSHA256": "c4a9b1e64ebcaf94c0c048de3163f16760bbae9b541933a95918867459365bdd"
+    },
+    {
+      "assetName": "ic_fluent_document_heart_pulse_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_document_heart_pulse_24_filled.imageset/ic_fluent_document_heart_pulse_24_filled.svg",
+      "sourceSHA256": "6649e1cdfa4b5d89b9d14bf0132448a984b30728065d7954db7042c24e29ec1d",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_document_heart_pulse_24_filled.png",
+      "pngSHA256": "4098e9c03a9f823930902b84a04dd1e4e1f24443ab73341919e8bcf0ebdc8931"
+    },
+    {
+      "assetName": "ic_fluent_drink_coffee_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_drink_coffee_24_filled.imageset/ic_fluent_drink_coffee_24_filled.svg",
+      "sourceSHA256": "330f9b07f290ca4c682d7e6ea8156618c0a81f2797ac749f0df72f2178dfb585",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_drink_coffee_24_filled.png",
+      "pngSHA256": "f9b1cc4ef2f5e1bfa35500e00d49d72194bc34d43b7cac6bd601eb8c5982a5c9"
+    },
+    {
+      "assetName": "ic_fluent_drink_to_go_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_drink_to_go_24_filled.imageset/ic_fluent_drink_to_go_24_filled.svg",
+      "sourceSHA256": "41a7b027d0b4af5c9a74abfc0a9973e15c5ffa351241bfa6aecebb6c5c1dbf26",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_drink_to_go_24_filled.png",
+      "pngSHA256": "5c41366086e272cd8bc7931d1e1bcb60fb5ebbd7a562d28cfdd16cdc8df72eb9"
+    },
+    {
+      "assetName": "ic_fluent_drop_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_drop_24_filled.imageset/ic_fluent_drop_24_filled.svg",
+      "sourceSHA256": "6d4cee2a94e0e03e8aa1a11d24f73b0c412187acd0bcac0bdd34ea6fb9279d95",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_drop_24_filled.png",
+      "pngSHA256": "c35892ef5b7bff64a948c0741f699e7bc073f6d583578a1150f6a729f7ff4c72"
+    },
+    {
+      "assetName": "ic_fluent_fast_forward_circle_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_fast_forward_circle_24_color.imageset/ic_fluent_fast_forward_circle_24_color.svg",
+      "sourceSHA256": "303d60e117e02b301ffece03dc9d4582dfdc3425217287fdb08e8ec089036308",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_fast_forward_circle_24_color.png",
+      "pngSHA256": "69cdbe57b0c0ae07b184e646c8a7bf56d0f2eaf91577b3189a59a424cf977b9c"
+    },
+    {
+      "assetName": "ic_fluent_filmstrip_play_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_filmstrip_play_24_filled.imageset/ic_fluent_filmstrip_play_24_filled.svg",
+      "sourceSHA256": "8080a70ef6d5b19d88beb4d6013bbe881cfc6b8dabe3d53254e4379c50f7a90a",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_filmstrip_play_24_filled.png",
+      "pngSHA256": "5ff3989d3759eeb8d2c6e5e17eb3991e79777c1b35fefb92012587ef10a05dd9"
+    },
+    {
+      "assetName": "ic_fluent_flag_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_flag_24_color.imageset/ic_fluent_flag_24_color.svg",
+      "sourceSHA256": "b87228f6e5a296358f4a2733d975a9f8520d0ba2724b44b3f79dcef597ed8cbd",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_flag_24_color.png",
+      "pngSHA256": "11da727b8e784f9735d942fbc6bc4c4b3045c7c6cbfc57efa0c74dcb8425205c"
+    },
+    {
+      "assetName": "ic_fluent_food_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_food_24_color.imageset/ic_fluent_food_24_color.svg",
+      "sourceSHA256": "591574815681b31e1f49c6f0d679f90fd7b097a2e356007513e29060f0e025c1",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_food_24_color.png",
+      "pngSHA256": "3b3794a6211f2b8977cd4aa4b2cca95bd4f86620847b3a36af2c39512b71bd44"
+    },
+    {
+      "assetName": "ic_fluent_food_carrot_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_food_carrot_24_filled.imageset/ic_fluent_food_carrot_24_filled.svg",
+      "sourceSHA256": "405b99d67bba99c2c8bb04e4b7cf0ceb060ac5f893ed0a1b2ceb0999ada7872a",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_food_carrot_24_filled.png",
+      "pngSHA256": "9068f4cb3f7965a95796cd2490f4498dc175236c82a8fa1583d931c353a93ba0"
+    },
+    {
+      "assetName": "ic_fluent_games_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_games_24_filled.imageset/ic_fluent_games_24_filled.svg",
+      "sourceSHA256": "954f9da7348e506853002a24d59c7318e9003c97eb89a3e3f0e4747ec0f8df84",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_games_24_filled.png",
+      "pngSHA256": "77ae98949cbe3151fd7faa53ac1709fee759de343f61a4119436b05d406f7d10"
+    },
+    {
+      "assetName": "ic_fluent_gas_pump_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_gas_pump_24_filled.imageset/ic_fluent_gas_pump_24_filled.svg",
+      "sourceSHA256": "7ecc16b3f808a4827634523fa1815fdf2146bb56e2486782a99f91c8bdf635bc",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_gas_pump_24_filled.png",
+      "pngSHA256": "c435c3940604b3032bf4a097ab3071445f934c2abc0a6097a539301ca4798b19"
+    },
+    {
+      "assetName": "ic_fluent_gift_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_gift_24_color.imageset/ic_fluent_gift_24_color.svg",
+      "sourceSHA256": "e0a15cfcfed3dc25d29287a9ffc5f3536c2baed243264e005dc13c0a45dc8428",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_gift_24_color.png",
+      "pngSHA256": "c5e50f615483665851324eadd388a7d529ae82a5a2b8cb492a798541911330b1"
+    },
+    {
+      "assetName": "ic_fluent_gift_card_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_gift_card_24_color.imageset/ic_fluent_gift_card_24_color.svg",
+      "sourceSHA256": "e5df2cb6cb5fb8f7ad231f367f4f88dbd51bd067076977002fa67978d26bbc47",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_gift_card_24_color.png",
+      "pngSHA256": "2a6dbf1a0261e8ca6679af4c002e6627832d8e8f1582a866e25cf74f69758a6e"
+    },
+    {
+      "assetName": "ic_fluent_gift_card_money_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_gift_card_money_24_filled.imageset/ic_fluent_gift_card_money_24_filled.svg",
+      "sourceSHA256": "dd4bf6b97f3b1cb0169b90480dc78713ba129276518e51d21a5c8a7bf8e305cc",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_gift_card_money_24_filled.png",
+      "pngSHA256": "bee5113299b90a809ad3d15f8f905b2334e6fd9d6bf68b5ee41f7ce4edd27081"
+    },
+    {
+      "assetName": "ic_fluent_gift_open_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_gift_open_24_filled.imageset/ic_fluent_gift_open_24_filled.svg",
+      "sourceSHA256": "33022d9106757eef1d2036500eed39eaed796fbd39442439261fe8e848cb1bb9",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_gift_open_24_filled.png",
+      "pngSHA256": "7c757686b76ac7430d6ddf67a064421b49847f2bb4f8e4f92bc394ec9973090f"
+    },
+    {
+      "assetName": "ic_fluent_globe_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_globe_24_color.imageset/ic_fluent_globe_24_color.svg",
+      "sourceSHA256": "b726489c1c3e0438b0d9f2d85495643c1e1d8dbaf44613290baf3efce115fd34",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_globe_24_color.png",
+      "pngSHA256": "78a4bf610b88db9ef8558de2c300b0f0e4f4f1b9d4f3873e364dea661b0c5258"
+    },
+    {
+      "assetName": "ic_fluent_headphones_sound_wave_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_headphones_sound_wave_24_filled.imageset/ic_fluent_headphones_sound_wave_24_filled.svg",
+      "sourceSHA256": "1173d926c06777b0a7d9a53e17017bb5a4a70120d922d46ee8a14fc810c2bbf7",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_headphones_sound_wave_24_filled.png",
+      "pngSHA256": "788d0e7aaac3fcc2d0a9b50210f3867a53aac5f70df0f993f2172aadbe3ad53d"
+    },
+    {
+      "assetName": "ic_fluent_heart_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_heart_24_color.imageset/ic_fluent_heart_24_color.svg",
+      "sourceSHA256": "24a1ec67cdc03330c8fcf50187fe91f3e03a89cb9c7c6bfa48d47d860e8c8f38",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_heart_24_color.png",
+      "pngSHA256": "f017aaae3ad726f9d8e6c7118a3d7b0063df872774b7b1e43d615086e2cf1cb7"
+    },
+    {
+      "assetName": "ic_fluent_home_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_home_24_color.imageset/ic_fluent_home_24_color.svg",
+      "sourceSHA256": "1b6a5c06d4c44ebe0f0b675fdbde99968a96ef5c22c6d8eb303bdbe0cf40a92f",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_home_24_color.png",
+      "pngSHA256": "1bde454935bd92de0ec233b4c5918d51dce53b2b4770f3d630d505149c0a469d"
+    },
+    {
+      "assetName": "ic_fluent_lightbulb_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_lightbulb_24_color.imageset/ic_fluent_lightbulb_24_color.svg",
+      "sourceSHA256": "b0b2d4c67ed1bc9cdcc883206deee84859ebf80c6c26400d66303a713bf9f6fb",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_lightbulb_24_color.png",
+      "pngSHA256": "2bd84725071fe7c1ace8ad585dd4d6e46f7d8928b09c5d720628a0249612211c"
+    },
+    {
+      "assetName": "ic_fluent_lightbulb_filament_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_lightbulb_filament_24_color.imageset/ic_fluent_lightbulb_filament_24_color.svg",
+      "sourceSHA256": "d8c9449d7345bd70501420b82b6fd1dee5a92b8165df0d884e78545cdad9c46b",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_lightbulb_filament_24_color.png",
+      "pngSHA256": "272944e64dddd427fa80a44072c4397bf8ecffdc18f7e1175d066582afa53b5c"
+    },
+    {
+      "assetName": "ic_fluent_link_multiple_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_link_multiple_24_color.imageset/ic_fluent_link_multiple_24_color.svg",
+      "sourceSHA256": "50083d0cdda60868eba2b83512077c960a752d8dbda57e00fd68cae3a8227e99",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_link_multiple_24_color.png",
+      "pngSHA256": "a117c87e99ce2fcf6ed2ba9e4659e60a2035e6bd824de09ac8995c8c06243917"
+    },
+    {
+      "assetName": "ic_fluent_location_ripple_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_location_ripple_24_color.imageset/ic_fluent_location_ripple_24_color.svg",
+      "sourceSHA256": "67e429323e08f81c65791e996458388749e93d1f18a813e76ebaca1280ede126",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_location_ripple_24_color.png",
+      "pngSHA256": "b4a68c9c7c083a4f89a1ebe8de7e21d6df4c0d98091c53ef813baac600e1f7da"
+    },
+    {
+      "assetName": "ic_fluent_lock_shield_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_lock_shield_24_color.imageset/ic_fluent_lock_shield_24_color.svg",
+      "sourceSHA256": "9362ccfde95c05739de016484f982d951854f4e8c602ae75ad0a767775e36fa0",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_lock_shield_24_color.png",
+      "pngSHA256": "450a754cfdad7e1e8e5c685a0296894fd98b0809d427971fe4ee9e97feabab2d"
+    },
+    {
+      "assetName": "ic_fluent_megaphone_loud_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_megaphone_loud_24_color.imageset/ic_fluent_megaphone_loud_24_color.svg",
+      "sourceSHA256": "ee1b04400e96664ee8f1c6fb2add3cce55ce6a60588abe5b6e39c5be3cb6dcff",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_megaphone_loud_24_color.png",
+      "pngSHA256": "fa42a672117ced2a3334fd0d86e85a6a6c6727b3f1314d0c24c723d3ae41f33a"
+    },
+    {
+      "assetName": "ic_fluent_molecule_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_molecule_24_color.imageset/ic_fluent_molecule_24_color.svg",
+      "sourceSHA256": "d196bc7de148176613f7f706da6eeb02d0109b5dc487e0fc3bcc61fbd1e1e5ab",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_molecule_24_color.png",
+      "pngSHA256": "711c802cdc2578db832100b28c743afcd9502f43adb9fc24b43f703acf507733"
+    },
+    {
+      "assetName": "ic_fluent_paint_brush_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_paint_brush_24_color.imageset/ic_fluent_paint_brush_24_color.svg",
+      "sourceSHA256": "48412b9d97b91d57df6f1b5bd122495b53d39a46957f4c1bff5c2daf270ce6b5",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_paint_brush_24_color.png",
+      "pngSHA256": "b87fb34241b8dce15ece4ce2821672ee68ed3a9388bb414626153a664a552b27"
+    },
+    {
+      "assetName": "ic_fluent_patient_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_patient_24_color.imageset/ic_fluent_patient_24_color.svg",
+      "sourceSHA256": "b0a4da3a7abe3129d5d1a441e2d5059871a76974fc723a4214a75d26378e3994",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_patient_24_color.png",
+      "pngSHA256": "1ad0e9e75a1a5888f8b2bed801e3fa0629acba5fa06426ca4bf4d8965310b4a1"
+    },
+    {
+      "assetName": "ic_fluent_people_chat_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_people_chat_24_color.imageset/ic_fluent_people_chat_24_color.svg",
+      "sourceSHA256": "195b2f80c566f182fee50954eda9605354a1daf7883e3bf505ee96ea76430631",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_people_chat_24_color.png",
+      "pngSHA256": "d33c384f696266edef0c5d1004393f790f116ef12d93d721b19af8f94845b8c9"
+    },
+    {
+      "assetName": "ic_fluent_people_home_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_people_home_24_color.imageset/ic_fluent_people_home_24_color.svg",
+      "sourceSHA256": "bc92926f89bb532452a4d9d47080b006a7145e8b99c75edc3be63057affcdfeb",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_people_home_24_color.png",
+      "pngSHA256": "09cb1814eae80ce7834fe4913cac7fc34ab8f43a751a42424fe16c90661a8041"
+    },
+    {
+      "assetName": "ic_fluent_people_sync_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_people_sync_24_color.imageset/ic_fluent_people_sync_24_color.svg",
+      "sourceSHA256": "a5a7df075d3e6fe60387fde3482af1c54b241d5bc3c3d686368489fa71d34bec",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_people_sync_24_color.png",
+      "pngSHA256": "889821dfe62f45762926411421c08ccb12e01c1c5f93bef2a9946fbba01c6074"
+    },
+    {
+      "assetName": "ic_fluent_people_team_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_people_team_24_color.imageset/ic_fluent_people_team_24_color.svg",
+      "sourceSHA256": "d95dde2a92e84873e0658f74b166522faf22fd68fb4c009a5d3ef00bc9dc4ed9",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_people_team_24_color.png",
+      "pngSHA256": "2eec5b34d264534f6ae38b050c9ec6ae932de0a5e2b47130d553aa8f001450b0"
+    },
+    {
+      "assetName": "ic_fluent_person_heart_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_person_heart_24_color.imageset/ic_fluent_person_heart_24_color.svg",
+      "sourceSHA256": "1f7e193e4d4519bd946b75a5f08efb030ac921ecc5072e5baca80e01e3938cd8",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_person_heart_24_color.png",
+      "pngSHA256": "fbfbfeadc57d0be5a5c1d46b7d1ba809b7b6d604bb3f8c2ec5bc80cf88777ff3"
+    },
+    {
+      "assetName": "ic_fluent_person_walking_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_person_walking_24_filled.imageset/ic_fluent_person_walking_24_filled.svg",
+      "sourceSHA256": "1bddf880f4a51c05c8b98e297bfb41a7a0fa01201b66490b44a8548eceeb4d5c",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_person_walking_24_filled.png",
+      "pngSHA256": "c17e17b36d5f3ae3024ada9e152f6e87f535d64425d11b55b8ed6e11bf40a35a"
+    },
+    {
+      "assetName": "ic_fluent_phone_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_phone_24_color.imageset/ic_fluent_phone_24_color.svg",
+      "sourceSHA256": "56e161979e92136aaaffacbcdd9f30cc09562e4d4f1f52f9b004c3f58be65edf",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_phone_24_color.png",
+      "pngSHA256": "3486667f6da9761b4850cc97e7d600740f66542235d033dfa14b2eddcb23772d"
+    },
+    {
+      "assetName": "ic_fluent_phone_laptop_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_phone_laptop_24_color.imageset/ic_fluent_phone_laptop_24_color.svg",
+      "sourceSHA256": "eccffe67e0ad1b53e29c96b65425e6d53fb8a0cb8eb6aad9fa0e591997aebdf4",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_phone_laptop_24_color.png",
+      "pngSHA256": "9b97bf71558236b77d7c43a1e86a44def88178692dcddb8984ce3ec7fd478304"
+    },
+    {
+      "assetName": "ic_fluent_pill_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_pill_24_filled.imageset/ic_fluent_pill_24_filled.svg",
+      "sourceSHA256": "204c35ee088aac23274ec2efec8e33b496b00555857baaff23618abb521832da",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_pill_24_filled.png",
+      "pngSHA256": "cd8feb57b2bc8de1c19eacf06f2ce9807bad4cbc0f353074676258cb8ad9803a"
+    },
+    {
+      "assetName": "ic_fluent_receipt_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_receipt_24_color.imageset/ic_fluent_receipt_24_color.svg",
+      "sourceSHA256": "eb27640a2d861b94073938820e69a725895333c58e42138f7336d922eff9f76b",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_receipt_24_color.png",
+      "pngSHA256": "b43bb404b744bd71f76e8842c8b8d708abb318e1cb8c61be1e489d621c9c1413"
+    },
+    {
+      "assetName": "ic_fluent_reward_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_reward_24_color.imageset/ic_fluent_reward_24_color.svg",
+      "sourceSHA256": "46841dc94d43ade817edfa4fbff0b259c291f3948c606b067992da3c5feb62f5",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_reward_24_color.png",
+      "pngSHA256": "6a6a5bc70bf0d7dc775a4afd5af4b78876b76ecfb1927af315a4bb8630e66d79"
+    },
+    {
+      "assetName": "ic_fluent_ribbon_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_ribbon_24_color.imageset/ic_fluent_ribbon_24_color.svg",
+      "sourceSHA256": "ee55eb1481183bebeaa36814a287d9137c96a8171ce1ee08fd20237e12b2e766",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_ribbon_24_color.png",
+      "pngSHA256": "6e1ab7813e3110aa895b575e26d6c770c92574edcd24f1959e3d1d2be30a6332"
+    },
+    {
+      "assetName": "ic_fluent_road_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_road_24_filled.imageset/ic_fluent_road_24_filled.svg",
+      "sourceSHA256": "a6d89694c6a2810c2c8446a7b27161442412e5ad7c06e9fbfb398b21171fa89c",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_road_24_filled.png",
+      "pngSHA256": "c84fcc6eec06d3d8c65ef7f5b8424c175f6fdd28618084cb4abb223fbf693f38"
+    },
+    {
+      "assetName": "ic_fluent_savings_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_savings_24_color.imageset/ic_fluent_savings_24_color.svg",
+      "sourceSHA256": "b2f5c5b3e6303d380311dab39f756b66c0cda5d2fd79d30471e485e6cff5512c",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_savings_24_color.png",
+      "pngSHA256": "d62b11cc5d918b5c6e4d1792dec7d0c0cf3c27ddaefb62483c6b5f8eae632598"
+    },
+    {
+      "assetName": "ic_fluent_scan_type_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_scan_type_24_color.imageset/ic_fluent_scan_type_24_color.svg",
+      "sourceSHA256": "4bbf78d0e358d5a1f9084210bd0b025ba85b61e5061b0b71cf423279b8ee2405",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_scan_type_24_color.png",
+      "pngSHA256": "23e3418fdeddf2ab4cd1f6e48763ecd82908c5d898f7cf1d8f8400c81838e9f2"
+    },
+    {
+      "assetName": "ic_fluent_send_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_send_24_color.imageset/ic_fluent_send_24_color.svg",
+      "sourceSHA256": "0156aaeeb3d0577cede3752dd3a80e01ef995627a12a5cbe07753693878bc477",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_send_24_color.png",
+      "pngSHA256": "43342f915308a3ab008fc36d110ff97b41c86b5595d72629b9d46d492672e331"
+    },
+    {
+      "assetName": "ic_fluent_shield_checkmark_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_shield_checkmark_24_color.imageset/ic_fluent_shield_checkmark_24_color.svg",
+      "sourceSHA256": "79974746d0aac9f6910cb86e4e673e32f3b9e36c2b02eaff9c084810c6e578dc",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_shield_checkmark_24_color.png",
+      "pngSHA256": "139b0f5a7b727c603ccd95753ec8dac00f23a90f574c32b59b4eaed8bfc2d440"
+    },
+    {
+      "assetName": "ic_fluent_sport_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_sport_24_color.imageset/ic_fluent_sport_24_color.svg",
+      "sourceSHA256": "5f72e3a56f004c08bf9c41219f30b1a4e6ece165155bf035620a4614252a6307",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_sport_24_color.png",
+      "pngSHA256": "0385c62ca68054dcbe400d3f35471347f7d35c54434fdb13822a83b4a2e400a3"
+    },
+    {
+      "assetName": "ic_fluent_teddy_bear_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_teddy_bear_24_color.imageset/ic_fluent_teddy_bear_24_color.svg",
+      "sourceSHA256": "83e2f3bd7cdeadade4be675ed238b8d1ba9e90e967ff1c10e8de8423043e568d",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_teddy_bear_24_color.png",
+      "pngSHA256": "5e737aa530c7c683cc6bde058615b3447c206ebd4081e1db0f08338931f9e24c"
+    },
+    {
+      "assetName": "ic_fluent_toolbox_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_toolbox_24_color.imageset/ic_fluent_toolbox_24_color.svg",
+      "sourceSHA256": "779aaaa9f41f34cdd24aa47e749001f5b79cef371cde354e91b62fad407156fa",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_toolbox_24_color.png",
+      "pngSHA256": "02e1220a3aff4403346d875d59aa78b31f4bd986f491f36203eb36f25d23a13d"
+    },
+    {
+      "assetName": "ic_fluent_tooth_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_tooth_24_color.imageset/ic_fluent_tooth_24_color.svg",
+      "sourceSHA256": "f1de4464be967269122cd98b458f662d858069a50c5d810498093c9ed65188cb",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_tooth_24_color.png",
+      "pngSHA256": "a9d3e232a86030ce68235024a328d383f56225a70af727401234505663cb4a0d"
+    },
+    {
+      "assetName": "ic_fluent_trophy_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_trophy_24_color.imageset/ic_fluent_trophy_24_color.svg",
+      "sourceSHA256": "ddaf5b56a77df4812902d7df2cafdb7ffc58aaf3cf8c9a8a1248983f4f3f142b",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_trophy_24_color.png",
+      "pngSHA256": "c9f8fa253cd4c1a128546f82e339253013e171fa706b752837f71812ceb32b50"
+    },
+    {
+      "assetName": "ic_fluent_vault_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_vault_24_color.imageset/ic_fluent_vault_24_color.svg",
+      "sourceSHA256": "1e6f9d44ca7b0af51e6603b984b0dba3b66aa2f0116bee524c0af4fd08aa0637",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_vault_24_color.png",
+      "pngSHA256": "14def83459e3db1a58753c523dcd054d5aa78b649ae6dd38813ceed873e594fe"
+    },
+    {
+      "assetName": "ic_fluent_vehicle_cab_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_vehicle_cab_24_filled.imageset/ic_fluent_vehicle_cab_24_filled.svg",
+      "sourceSHA256": "cda487bbefe07a53bdedaa12a5009b4a3ef1c371398a2b6559ca7cc757d9044d",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_vehicle_cab_24_filled.png",
+      "pngSHA256": "1082523bfa45c20fee6bea9803c3fbb92093dea51b4b58393a41018b89bed6e8"
+    },
+    {
+      "assetName": "ic_fluent_vehicle_car_collision_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_vehicle_car_collision_24_filled.imageset/ic_fluent_vehicle_car_collision_24_filled.svg",
+      "sourceSHA256": "3772f6c93296c4760f70f7881588a9931aab3db0d9189379f5f2ae18dcac97a9",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_vehicle_car_collision_24_filled.png",
+      "pngSHA256": "7ddc94a7c62dd8f6659d1d0756404af4f5e173a77cabad03dde941fd15991bbf"
+    },
+    {
+      "assetName": "ic_fluent_vehicle_car_parking_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_vehicle_car_parking_24_filled.imageset/ic_fluent_vehicle_car_parking_24_filled.svg",
+      "sourceSHA256": "7060ae72dbb0ca0b6475f08b4d40649d7ef5bd32bf87a995e756f7c135fba794",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_vehicle_car_parking_24_filled.png",
+      "pngSHA256": "05191774e6a68d1c5d68fa0b99d323a3b3dc892d3018a1163d7f08270210724b"
+    },
+    {
+      "assetName": "ic_fluent_vehicle_subway_24_filled",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_vehicle_subway_24_filled.imageset/ic_fluent_vehicle_subway_24_filled.svg",
+      "sourceSHA256": "07be3813ba1dbae6ea0062286e641bf64eaf980fa04f63457d5a36e09a1e11e7",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_vehicle_subway_24_filled.png",
+      "pngSHA256": "21b5b63c87c822ab649cf0b9c04486d88aa0a453180cda2a53547e47a7722ec9"
+    },
+    {
+      "assetName": "ic_fluent_wifi_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_wifi_24_color.imageset/ic_fluent_wifi_24_color.svg",
+      "sourceSHA256": "95c6ac7abf9ee00105c3b4a35d4a4fe106419399b47f3aaa5dd55056504fb4e1",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_wifi_24_color.png",
+      "pngSHA256": "cbe69783fd1d9b11d0685563fcbfdb4118a65e33cf66edf9b61d11cc22751ae5"
+    },
+    {
+      "assetName": "ic_fluent_wrench_screwdriver_24_color",
+      "sourcePath": "Mistia/Assets.xcassets/ic_fluent_wrench_screwdriver_24_color.imageset/ic_fluent_wrench_screwdriver_24_color.svg",
+      "sourceSHA256": "aeac054bf4596c7a6d45f961c322c441bbba85d9f366ba05ae229a69a1ea4232",
+      "resourcePath": "android/core/designsystem/src/main/res/drawable-nodpi/finance_art_ic_fluent_wrench_screwdriver_24_color.png",
+      "pngSHA256": "6296197ef952d6711f70b3a335df9ba63c2df23755ecd10b5c98f5b6518773d4"
+    }
+  ]
+}

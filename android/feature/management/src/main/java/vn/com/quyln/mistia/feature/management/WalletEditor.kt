@@ -588,6 +588,9 @@ internal fun WalletIcon(
     colorHex: String,
     modifier: Modifier = Modifier,
 ) {
+    if(vn.com.quyln.mistia.core.designsystem.financeIconAsset(symbolName)!=null) {
+        vn.com.quyln.mistia.core.designsystem.FinanceIcon(symbolName,modifier);return
+    }
     Box(
         modifier = modifier.clip(CircleShape).background(colorFromHex(colorHex).copy(alpha = 0.18f)),
         contentAlignment = Alignment.Center,

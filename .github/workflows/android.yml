@@ -8,6 +8,12 @@ on:
       - "Mistia/Localizable.xcstrings"
       - "Scripts/generate-android-l10n.swift"
       - "Scripts/check-android-contracts.swift"
+      - "Mistia/Core/UI/MistiaFinanceIcons.swift"
+      - "Mistia/Shared/CoreLogic/MistiaSystemCategories.json"
+      - "Mistia/Assets.xcassets/**"
+      - "Scripts/generate-android-finance-icons.cjs"
+      - "Scripts/tests/android-finance-icons.test.cjs"
+      - "docs/android/finance-icon-assets.generated.json"
       - ".github/workflows/android.yml"
   push:
     branches: [main]
@@ -17,6 +23,12 @@ on:
       - "Mistia/Localizable.xcstrings"
       - "Scripts/generate-android-l10n.swift"
       - "Scripts/check-android-contracts.swift"
+      - "Mistia/Core/UI/MistiaFinanceIcons.swift"
+      - "Mistia/Shared/CoreLogic/MistiaSystemCategories.json"
+      - "Mistia/Assets.xcassets/**"
+      - "Scripts/generate-android-finance-icons.cjs"
+      - "Scripts/tests/android-finance-icons.test.cjs"
+      - "docs/android/finance-icon-assets.generated.json"
 
 jobs:
   verify:
@@ -27,6 +39,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android SDK
@@ -35,6 +50,8 @@ jobs:
         run: |
           Scripts/generate-l10n.swift --input Mistia/Localizable.xcstrings --output Mistia/Shared/CoreLogic/L10n.generated.swift --check --strict-keys
           Scripts/generate-android-l10n.swift --check
+      - name: Check shared finance icon artwork
+        run: node Scripts/generate-android-finance-icons.cjs --check
       - name: Check cross-platform contracts
         run: Scripts/check-android-contracts.swift
       - name: Test and assemble APK 0

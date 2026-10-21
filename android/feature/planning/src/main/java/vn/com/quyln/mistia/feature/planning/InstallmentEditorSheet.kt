@@ -208,6 +208,9 @@ private fun OwnedInstallmentEditorSheet(
 }
 
 @Composable internal fun InstallmentIcon(token: String, color: Color? = null) {
+    if(vn.com.quyln.mistia.core.designsystem.financeIconAsset(token)!=null) {
+        vn.com.quyln.mistia.core.designsystem.FinanceIcon(token,Modifier.size(40.dp));return
+    }
     val tint = color ?: when (token) {
         "mistia.plan.loan" -> Color(0xFF5B7BFF)
         "mistia.plan.card_bill" -> Color(0xFFA76BFF)

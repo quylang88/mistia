@@ -40,9 +40,7 @@ import vn.com.quyln.mistia.core.model.TransactionCategoryRecord
         horizontalArrangement=Arrangement.SpaceBetween,verticalArrangement=Arrangement.spacedBy(8.dp),itemVerticalAlignment=Alignment.CenterVertically) {
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             val iconModifier=Modifier.size(36.dp).testTag("overview.recent.icon.${row.transaction.id}.$token")
-            if(token=="mistia.flow.transfer") Box(iconModifier.clip(CircleShape).background(color.copy(alpha=0.18f)),contentAlignment=Alignment.Center) {
-                Icon(Icons.Default.SyncAlt,contentDescription=null,tint=color,modifier=Modifier.size(24.dp))
-            } else CategoryIcon(token,category?.takeIf {it.ownerUserId==row.transaction.ownerUserId && it.id==row.transaction.categoryId}?.kind,
+            CategoryIcon(token,category?.takeIf {it.ownerUserId==row.transaction.ownerUserId && it.id==row.transaction.categoryId}?.kind,
                 String.format(Locale.ROOT,"#%06X",color.toArgb() and 0xffffff),iconModifier)
             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 Text(localizedTransactionTitle(row.transaction,category),fontSize=16.sp,fontWeight=FontWeight.SemiBold)
