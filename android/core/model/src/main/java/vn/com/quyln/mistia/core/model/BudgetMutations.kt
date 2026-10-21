@@ -6,11 +6,15 @@ import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 interface BudgetRepository {
     fun observeBudgetCategories(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>>
     fun observeBudgetCategoryMetadata(ownerUserId: UserId): Flow<List<TransactionCategoryRecord>> = observeBudgetCategories(ownerUserId)
     fun observeBudgets(ownerUserId: UserId): Flow<List<BudgetPlanRecord>>
+    /** Read-only raw templates; production retains parse failures for consumer availability. */
+    fun observeBudgetReadRows(ownerUserId:UserId):Flow<List<CloudRecord>> =
+        observeBudgets(ownerUserId).map {plans ->plans.map(BudgetPlanRecord::toCloudRecord)}
     suspend fun saveBudget(ownerUserId: UserId, draft: BudgetDraft, deviceId: String, now: String): Result<BudgetPlanRecord>
     suspend fun archiveBudget(ownerUserId: UserId, budgetId: RecordId, deviceId: String, now: String): Result<Unit>
     suspend fun deleteBudget(ownerUserId: UserId, budgetId: RecordId, deviceId: String, now: String): Result<Unit>

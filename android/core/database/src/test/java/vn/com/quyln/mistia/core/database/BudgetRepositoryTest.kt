@@ -32,6 +32,25 @@ class BudgetRepositoryTest {
     private val zone = ZoneId.of("Asia/Tokyo")
     private val repo = OfflineFirstFinanceRepository(store, zone)
 
+    @Test fun `raw budget read retains unreadable money and deletion without weakening owner identity or writing`()=runTest {
+        seedCategories();val saved=repo.saveBudget(owner,draft(),DEVICE,NOW).getOrThrow()
+        val money=saved.toCloudRecord().copy(payload=JsonObject(saved.toPayload()+("limit_minor" to JsonPrimitive("bad"))))
+        store.commitMutation(money,pending(saved).copy(payload=money.payload))
+        val before=store.outboxRows(OWNER)
+        assertEquals(listOf(money),repo.observeBudgetReadRows(owner).first())
+        assertTrue(repo.observeBudgets(owner).first().isEmpty())
+        val deletion=money.copy(payload=JsonObject(saved.toPayload()+("deleted_at" to JsonObject(mapOf("bad" to JsonPrimitive(true))))))
+        store.commitMutation(deletion,pending(saved).copy(payload=deletion.payload))
+        val deletionBefore=store.outboxRows(OWNER)
+        assertEquals(listOf(deletion),repo.observeBudgetReadRows(owner).first())
+        assertTrue(repo.observeBudgets(owner).first().isEmpty())
+        assertEquals(deletionBefore,store.outboxRows(OWNER));assertTrue(repo.observeBudgetReadRows(UserId(OTHER)).first().isEmpty())
+        val mismatched=money.copy(payload=JsonObject(money.payload+("user_id" to JsonPrimitive(OTHER))))
+        store.commitMutation(mismatched,pending(saved).copy(payload=mismatched.payload))
+        assertTrue(repo.observeBudgetReadRows(owner).first().isEmpty())
+        assertEquals(before.size,store.outboxRows(OWNER).size)
+    }
+
     @Test fun `default budget save accepts the device zone changed after repository construction`()=runTest {
         seedCategories();val original=java.util.TimeZone.getDefault()
         try {

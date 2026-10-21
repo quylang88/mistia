@@ -78,6 +78,9 @@ fun PlanningScreen(
         mutableStateOf(SavingsGoalNavigationState(ownerUserId.value,false,null))
     }
     val budgets by repository.observeBudgets(ownerUserId).collectAsStateWithLifecycle(emptyList())
+    val rawBudgets by key(repository,ownerUserId.value) {
+        repository.observeBudgetReadRows(ownerUserId).collectAsStateWithLifecycle(initialValue=null)
+    }
     val categories by repository.observeBudgetCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categoryMetadata by repository.observeBudgetCategoryMetadata(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val transactions by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
@@ -100,7 +103,7 @@ fun PlanningScreen(
             .getString(R.string.transactions_generated_title_balance_adjustment)
     }.toSet() }
     // Historical spending retains source currency/kind after its wallet is archived.
-    val projection = projectBudgets(ownerUserId,budgets,categoryMetadata,transactions,historicalWallets,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
+    val projection = projectRawBudgetPlans(ownerUserId,rawBudgets,categoryMetadata,transactions,historicalWallets,month,Instant.now(),zone,rates,language,adjustmentTitles,reportingCurrency,
         stringResource(R.string.planning_planning_deleted_category))
     LazyColumn(
         modifier = modifier.testTag("budget.screen").fillMaxSize(),
@@ -133,9 +136,12 @@ fun PlanningScreen(
                 if(projection.totalLimitMinor==null || projection.totalSpentMinor==null || projection.remainingMinor==null) Text(stringResource(R.string.overview_overview_reporting_amount_unavailable),Modifier.testTag("budget.summary.unavailable"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (projection.branches.isEmpty()) item { Text(stringResource(R.string.planning_planning_no_budgets_yet)) }
+        if (projection.branches.isEmpty() && projection.totalLimitMinor!=null) item { Text(stringResource(R.string.planning_planning_no_budgets_yet)) }
         items(projection.branches,key={ it.id }) { branch ->
-            BudgetBranchCard(branch) { id -> navigation=navigation.copy(editorId=id,editorOpen=true,editorPayload=budgets.firstOrNull { it.id==id }?.toPayload()?.toString()) }
+            BudgetBranchCard(branch) { id ->
+                val original=id?.let {storedBudgetReadPlan(ownerUserId,it,rawBudgets)}
+                if(id==null || original!=null) navigation=navigation.copy(editorId=id,editorOpen=true,editorPayload=original?.toPayload()?.toString())
+            }
         }
         item { Button(onClick={navigation=navigation.copy(editorId=null,editorOpen=true,editorPayload=null)},modifier=Modifier.fillMaxWidth().testTag("budget.add")) { Text(stringResource(R.string.planning_planning_add_budget)) } }
         }
