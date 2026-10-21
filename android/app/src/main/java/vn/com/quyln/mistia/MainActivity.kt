@@ -365,6 +365,7 @@ private fun SignedInRoot(
                 onBack = { navController.popBackStack() },
                 primaryCurrencyCode=currencySettings.primaryCurrencyCode,
                 deviceIdProvider={deviceIdStore.getOrCreate()},
+                enabledCurrencyCodes=currencySettings.enabledCurrencyCodes,
             )
         }
     }

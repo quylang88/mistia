@@ -69,4 +69,18 @@ class TransactionDeletePostgrestTest {
         catch (_:IllegalArgumentException) { }
         assertEquals(2,server.requestCount)
     }
+    @Test fun ordinaryTransactionPermissionCannotPublishInvestmentLedgerRolesThroughCreateOrUpdate()=runTest {
+        for(role in listOf("investmentFunding","investmentCapitalReturn","investmentRealizedProfit","investmentTransfer","investmentReconciliation",
+            "investmentReserveUse","investmentCashDeposit","investmentCashWithdrawal","investmentFutureRole")) {
+            val payload=JsonObject(patch()+("settlement_role_raw_value" to JsonPrimitive(role)))
+            server.enqueue(MockResponse().setResponseCode(400).setBody("{}"))
+            val create=runCatching{store.createRecord(CloudEntity.LEDGER_TRANSACTION,"token",owner,payload)}.exceptionOrNull()
+            assertTrue("Investment create role must be refused before HTTP: "+create,create is IllegalStateException)
+            assertEquals(0,server.requestCount)
+            val update=runCatching{store.conditionalUpdate(CloudEntity.LEDGER_TRANSACTION,id,"token",owner,version,payload)}.exceptionOrNull()
+            assertTrue("Investment update role must be refused before HTTP: "+update,update is IllegalStateException)
+            assertEquals(0,server.requestCount)
+        }
+    }
+
 }

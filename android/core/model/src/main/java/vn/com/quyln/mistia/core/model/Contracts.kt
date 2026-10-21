@@ -242,6 +242,11 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    fun observeAssetSnapshot(owner:UserId):Flow<InvestmentAssetSnapshot> = throw UnsupportedOperationException("Consistent investment asset snapshot unavailable")
+    suspend fun saveAsset(owner:UserId,draft:InvestmentAssetDraft,deviceId:String,now:String):Result<InvestmentAssetRecord> = Result.failure(UnsupportedOperationException("Investment asset save unavailable"))
+    suspend fun archiveAsset(owner:UserId,expected:InvestmentAssetRecord,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment asset archive unavailable"))
+    suspend fun restoreAsset(owner:UserId,expected:InvestmentAssetRecord,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment asset restore unavailable"))
+
     fun observeChannelSnapshot(owner:UserId):Flow<InvestmentChannelSnapshot> = throw UnsupportedOperationException("Consistent investment channel snapshot unavailable")
     suspend fun saveChannel(owner:UserId,draft:InvestmentChannelDraft,primaryCurrency:String,deviceId:String,now:String):Result<InvestmentChannelRecord> = Result.failure(UnsupportedOperationException("Investment channel save unavailable"))
     suspend fun archiveChannel(owner:UserId,expected:InvestmentChannelRecord,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment channel archive unavailable"))
@@ -252,6 +257,10 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    fun observeInvestmentAssetSnapshot(owner:UserId):Flow<InvestmentAssetSnapshot> = throw UnsupportedOperationException("Consistent investment asset snapshot unavailable")
+    suspend fun investmentAssetSnapshot(owner:UserId):InvestmentAssetSnapshot = throw UnsupportedOperationException("Atomic investment asset snapshot unavailable")
+    suspend fun commitInvestmentAssetMutation(expected:InvestmentAssetSnapshot,request:InvestmentAssetRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment asset mutation unavailable")
+
     fun observeInvestmentChannelSnapshot(owner:UserId):Flow<InvestmentChannelSnapshot> = throw UnsupportedOperationException("Consistent investment channel snapshot unavailable")
     suspend fun investmentChannelSnapshot(owner:UserId):InvestmentChannelSnapshot = throw UnsupportedOperationException("Atomic investment channel snapshot unavailable")
     suspend fun commitInvestmentChannels(expected:InvestmentChannelSnapshot,mutations:List<Pair<CloudRecord,PendingMutation>>):Boolean = throw UnsupportedOperationException("Conditional investment channel writes unavailable")

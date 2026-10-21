@@ -744,6 +744,30 @@ class RoomLocalStore(
     override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
 
+    override fun observeInvestmentAssetSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot> =
+        database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot.entities.map{it.table})
+            .map{rows ->vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot(owner,rows.map{it.toCloudRecord()})}
+
+    override suspend fun investmentAssetSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val rows=database.cloudRecordDao().investmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot.entities.map{it.table})
+        ensureCurrentFinanceOwner(owner)
+        vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot(owner,rows.map{it.toCloudRecord()})
+    }
+
+    override suspend fun commitInvestmentAssetMutation(expected:vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentAssetRequest,deviceId:String,now:String):Boolean = database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        val current=investmentAssetSnapshot(expected.owner)
+        if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+        val plan=vn.com.quyln.mistia.core.model.planInvestmentAssetMutation(current,request,deviceId,now)
+        if(plan.mutations.any{(row,_) ->current.rows.none{it.entity==row.entity && it.id==row.id} &&
+            database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)!=null})return@withTransaction false
+        plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+        ensureCurrentFinanceOwner(expected.owner)
+        true
+    }
+
     override fun observeInvestmentChannelSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot> =
         database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot.entities.map {it.table})
             .map {rows ->vn.com.quyln.mistia.core.model.InvestmentChannelSnapshot(owner,rows.map {it.toCloudRecord()})}

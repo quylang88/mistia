@@ -4,7 +4,6 @@ import java.util.UUID
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.RemoteMutationStore
@@ -12,6 +11,7 @@ import vn.com.quyln.mistia.core.model.UserId
 import vn.com.quyln.mistia.core.model.MutationKind
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.QueuedMutation
+import vn.com.quyln.mistia.core.model.requiresInvestmentLedgerDomain
 
 typealias TransactionPushSummary = DomainPushSummary
 
@@ -30,12 +30,7 @@ class TransactionPushCoordinator(
         allowTombstoneDeletes = true,
         preflight = { queued, local, owner, _ -> transactionDependencyPreflight(localStore, queued, local, owner) },
         beforeRemoteWrite = { queued, local, owner, _ -> transactionDependencyPreflight(localStore, queued, local, owner) },
-        validateRecord = { record ->
-            val role=(record.payload["settlement_role_raw_value"] as? JsonPrimitive)?.contentOrNull
-            require(role!="investmentCashDeposit" && role!="investmentCashWithdrawal") {
-                "Investment cash events require their atomic RPC"
-            }
-        },
+
     )
 
     override val entity: CloudEntity = CloudEntity.LEDGER_TRANSACTION
@@ -48,6 +43,10 @@ class TransactionPushCoordinator(
 
 /** Includes blocked/future retries; domain ordering alone does not prove a parent was acknowledged. */
 private suspend fun transactionDependencyPreflight(store: LocalStore, queued: QueuedMutation, local: CloudRecord, owner: UserId): MutationPreflight {
+    if(requiresInvestmentLedgerDomain(local.payload) || requiresInvestmentLedgerDomain(queued.mutation.payload))return MutationPreflight.Deferred
+    val latest=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,local.id)
+    if(latest==null || latest.ownerUserId!=owner.value || latest.id!=local.id)return MutationPreflight.Stale
+    if(requiresInvestmentLedgerDomain(latest.payload))return MutationPreflight.Deferred
     if (queued.mutation.kind == MutationKind.DELETE) return MutationPreflight.Continue
     val wallets = listOfNotNull(local.payload.dependencyReference("source_wallet_id"), local.payload.dependencyReference("destination_wallet_id")).toSet()
     val category = local.payload.dependencyReference("category_id")

@@ -24,14 +24,14 @@ import vn.com.quyln.mistia.core.model.*
 
 @Composable
 fun InvestmentScreen(ownerUserId:UserId,repository:InvestmentRepository,onBack:()->Unit,modifier:Modifier=Modifier,
-    primaryCurrencyCode:String="JPY",deviceIdProvider:suspend ()->String={throw UnsupportedOperationException("Device identity unavailable")}) {
-    key(ownerUserId.value,repository){OwnedInvestmentScreen(ownerUserId,repository,onBack,modifier,primaryCurrencyCode,deviceIdProvider)}
+    primaryCurrencyCode:String="JPY",deviceIdProvider:suspend ()->String={throw UnsupportedOperationException("Device identity unavailable")},enabledCurrencyCodes:List<String> = listOf(primaryCurrencyCode)) {
+    key(ownerUserId.value,repository){OwnedInvestmentScreen(ownerUserId,repository,onBack,modifier,primaryCurrencyCode,deviceIdProvider,enabledCurrencyCodes)}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,onBack:()->Unit,modifier:Modifier,
-    primaryCurrency:String,deviceIdProvider:suspend ()->String) {
+    primaryCurrency:String,deviceIdProvider:suspend ()->String,enabledCurrencies:List<String>) {
     var retry by remember{mutableIntStateOf(0)}
     val load by investmentChannelReadLoad(owner,repository,retry)
     val snapshot=(load as? InvestmentChannelReadLoad.Loaded)?.snapshot
@@ -50,6 +50,33 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     var actionError by remember{mutableStateOf<Int?>(null)}
     var archiveToken by rememberSaveable{mutableStateOf<String?>(null)}
     var actionRunning by remember{mutableStateOf(false)}
+    var assetEditorId by rememberSaveable{mutableStateOf<String?>(null)}
+    var assetExpectedToken by rememberSaveable{mutableStateOf<String?>(null)}
+    var assetArchiveToken by rememberSaveable{mutableStateOf<String?>(null)}
+    var assetActionError by remember{mutableStateOf<Int?>(null)}
+    val assetParsed=remember(snapshot){snapshot?.let{runCatching{
+        it.records(CloudEntity.INVESTMENT_ASSET).filter{raw ->raw.financeRawDeleted()!=true}.map(InvestmentAssetRecord::fromCloudRecord)
+            .sortedWith(compareBy(InvestmentAssetRecord::sortOrder).thenBy{asset ->Instant.parse(asset.createdAt)}.thenBy(InvestmentAssetRecord::id))
+    }}}
+    val assets=assetParsed?.getOrNull()
+    val assetReadable=readable && assets!=null
+    fun editAsset(asset:InvestmentAssetRecord?){
+        assetExpectedToken=asset?.toCloudRecord()?.payload?.toString();assetEditorId=asset?.id ?: UUID.randomUUID().toString()
+    }
+    fun changeAssetArchive(asset:InvestmentAssetRecord,archive:Boolean){
+        if(actionRunning || !assetReadable)return
+        actionRunning=true;assetActionError=null
+        scope.launch{
+            try{
+                val device=deviceIdProvider();val now=Instant.now().toString()
+                val result=if(archive)repository.archiveAsset(owner,asset,device,now) else repository.restoreAsset(owner,asset,device,now)
+                coroutineContext.ensureActive()
+                result.exceptionOrNull()?.let{assetActionError=investmentAssetErrorResource(it)}
+            }catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}
+            catch(error:Exception){assetActionError=investmentAssetErrorResource(error)}
+            finally{actionRunning=false}
+        }
+    }
     val expected=remember(expectedToken){expectedToken?.let{decodeChannel(owner,it)}}
     val current=channels?.singleOrNull{it.id==editorId}
     val consent=expectedToken==null || (expected!=null && current!=null && expected.matchesVisibleInvestmentChannel(current))
@@ -77,6 +104,8 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             }
         }
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
+        item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
+            modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}
         if(load==InvestmentChannelReadLoad.Loading)item{CircularProgressIndicator(Modifier.size(24.dp).testTag("investment.channels.loading"))}
         if(load==InvestmentChannelReadLoad.Failed || parsed?.isFailure==true)item{
             Text(stringResource(R.string.common_error),Modifier.testTag("investment.channels.unavailable"),color=MaterialTheme.colorScheme.error)
@@ -95,10 +124,25 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         items(channels.orEmpty().filter{it.isArchived},key={"archived-${it.id}"}){channel ->
             InvestmentChannelRow(channel,!actionRunning,onEdit={edit(channel)},onArchive={},onRestore={changeArchive(channel,false)})
         }
-        val assets=snapshot?.records(CloudEntity.INVESTMENT_ASSET).orEmpty().filter{it.financeRawDeleted()==false}
-        items(assets,key={"asset-${it.id}"}){asset ->
-            MistiaGlassCard{padding ->MistiaRecordRow(asset.string("name") ?: stringResource(R.string.investment_hub_assets_tab),
-                subtitle=asset.string("default_unit_label") ?: asset.string("currency_code"),modifier=Modifier.padding(padding))}
+        if(assetParsed?.isFailure==true)item{
+            Text(stringResource(R.string.common_error),Modifier.testTag("investment.assets.unavailable"),color=MaterialTheme.colorScheme.error)
+            TextButton(onClick={retry++}){Text(stringResource(R.string.planning_installment_retry))}
+        }
+        if(assets.orEmpty().isNotEmpty())item{Text(stringResource(R.string.investment_hub_assets_tab),style=MaterialTheme.typography.titleLarge)}
+        items(assets.orEmpty(),key={asset ->"asset-"+asset.id}){asset ->
+            MistiaGlassCard{padding ->Column(Modifier.fillMaxWidth().padding(padding),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                Text(asset.name,style=MaterialTheme.typography.titleMedium)
+                Text(listOfNotNull(asset.defaultUnitLabel,asset.currencyCode).joinToString(" · "),style=MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    TextButton(onClick={editAsset(asset)},enabled=!actionRunning,modifier=Modifier.testTag("investment.asset.edit."+asset.id)){
+                        Text(stringResource(R.string.management_management_edit))
+                    }
+                    if(asset.isArchived)TextButton(onClick={changeAssetArchive(asset,false)},enabled=!actionRunning,
+                        modifier=Modifier.testTag("investment.asset.restore."+asset.id)){Text(stringResource(R.string.management_managementarchiveditems_restore))}
+                    else TextButton(onClick={assetArchiveToken=asset.toCloudRecord().payload.toString()},enabled=!actionRunning,
+                        modifier=Modifier.testTag("investment.asset.archive."+asset.id)){Text(stringResource(R.string.common_archive))}
+                }
+            }}
         }
         val trades=snapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty().filter{it.financeRawDeleted()==false}
         if(trades.isNotEmpty())item{Text(stringResource(R.string.investment_hub_activity),style=MaterialTheme.typography.titleLarge)}
@@ -110,6 +154,19 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         }
         item{Spacer(Modifier.height(32.dp))}
     }
+    assetActionError?.let{resource ->AlertDialog(onDismissRequest={assetActionError=null},title={Text(stringResource(R.string.common_error))},
+        text={Text(stringResource(resource),Modifier.testTag("investment.assets.error"))},
+        confirmButton={TextButton(onClick={assetActionError=null}){Text(stringResource(R.string.common_ok))}})}
+    val assetArchive=remember(assetArchiveToken){assetArchiveToken?.let{decodeInvestmentAsset(owner,it)}}
+    if(assetArchiveToken!=null)AlertDialog(onDismissRequest={assetArchiveToken=null},
+        title={Text(stringResource(if(assetArchive==null)R.string.common_error else R.string.common_archive))},
+        text={Text(assetArchive?.name ?: stringResource(R.string.common_error))},
+        confirmButton={TextButton(onClick={assetArchiveToken=null;if(assetArchive!=null)changeAssetArchive(assetArchive,true)},
+            enabled=assetArchive!=null && !actionRunning,modifier=Modifier.testTag("investment.asset.confirmArchive")){Text(stringResource(R.string.common_archive))}},
+        dismissButton={TextButton(onClick={assetArchiveToken=null}){Text(stringResource(R.string.common_cancel))}})
+    assetEditorId?.let{id ->key(id,assetExpectedToken){
+        InvestmentAssetEditorSheet(owner,repository,id,assetExpectedToken,primaryCurrency,enabledCurrencies,deviceIdProvider,onDismiss={assetEditorId=null})
+    }}
     actionError?.let{resource ->AlertDialog(onDismissRequest={actionError=null},title={Text(stringResource(R.string.common_error))},
         text={Text(stringResource(resource),Modifier.testTag("investment.channels.error"))},
         confirmButton={TextButton(onClick={actionError=null},modifier=Modifier.testTag("investment.channel.error.dismiss")){Text(stringResource(R.string.common_ok))}})}

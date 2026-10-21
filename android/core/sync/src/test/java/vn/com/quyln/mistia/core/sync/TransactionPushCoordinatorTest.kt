@@ -171,15 +171,35 @@ class TransactionPushCoordinatorTest {
         assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
         assertEquals(winner,local.record);assertNull(remote.updatedPayload)
     }
-    @Test fun `investment cash events cannot bypass their required RPC as direct ledger writes`()=runTest {
-        for(role in listOf("investmentCashDeposit","investmentCashWithdrawal")) for(kind in listOf(MutationKind.UPSERT,MutationKind.DELETE)) {
-            val base=if(kind==MutationKind.DELETE) tombstone(0) else localRecord(0)
-            val row=base.copy(payload=JsonObject(base.payload+mapOf("settlement_role_raw_value" to JsonPrimitive(role))))
-            val queued=if(kind==MutationKind.DELETE) deletion(row) else queued(0).let {it.copy(mutation=it.mutation.copy(payload=row.payload))}
-            val local=FakeLocalStore(row,queued)
-            val remote=FakeRemoteStore()
-            assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).permanentFailures)
+    @Test fun allInvestmentLedgerRolesDeferUnchangedQueuesToTheAtomicDomainBeforeRemoteAccess()=runTest {
+        for(role in listOf("investmentFunding","investmentCapitalReturn","investmentRealizedProfit","investmentTransfer","investmentReconciliation",
+            "investmentReserveUse","investmentCashDeposit","investmentCashWithdrawal","investmentFutureRole"))for(kind in listOf(MutationKind.UPSERT,MutationKind.DELETE)) {
+            val base=if(kind==MutationKind.DELETE)tombstone(7) else localRecord(7)
+            val row=base.copy(payload=JsonObject(base.payload+("settlement_role_raw_value" to JsonPrimitive(role))))
+            val q=(if(kind==MutationKind.DELETE)deletion(row) else queued(7).let{it.copy(mutation=it.mutation.copy(payload=row.payload))}).copy(attemptCount=4,lastError="old_retry")
+            val local=FakeLocalStore(row,q);val remote=FakeRemoteStore()
+            assertEquals(TransactionPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
             assertEquals(0,remote.fetchCalls);assertNull(remote.createdPayload);assertNull(remote.updatedPayload)
+            assertEquals(q,local.queued);assertEquals(row,local.record)
+        }
+    }
+    @Test fun queuedInvestmentProvenanceCannotBeErasedByANewerOrdinaryLookingPayload()=runTest {
+        val row=localRecord(7)
+        val q=queued(7).let{it.copy(mutation=it.mutation.copy(payload=JsonObject(row.payload+("settlement_role_raw_value" to JsonPrimitive("investmentFunding")))))}
+        val local=FakeLocalStore(row,q);val remote=FakeRemoteStore()
+        assertEquals(TransactionPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(0,remote.fetchCalls);assertSame(q,local.queued)
+    }
+    @Test fun freshInvestmentRoleAppearingDuringFetchBlocksAnOrdinaryWireWrite()=runTest {
+        for(version in listOf(0L,7L)) {
+            val row=localRecord(version);val q=queued(version);val local=FakeLocalStore(row,q)
+            val remote=FakeRemoteStore().apply {
+                if(version>0)fetched=remoteRecord(version,title="Server before")
+                createdResult=remoteRecord(version+1);updatedResult=remoteRecord(version+1)
+                onFetch={local.record=row.copy(payload=JsonObject(row.payload+("settlement_role_raw_value" to JsonPrimitive("investmentFunding"))))}
+            }
+            assertEquals(TransactionPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+            assertEquals(1,remote.fetchCalls);assertNull(remote.createdPayload);assertEquals(0,remote.updateCalls);assertSame(q,local.queued)
         }
     }
 

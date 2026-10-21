@@ -26,6 +26,8 @@ import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.EntityCount
 import vn.com.quyln.mistia.core.model.FamilyRepository
 import vn.com.quyln.mistia.core.model.FinanceRepository
+import vn.com.quyln.mistia.core.model.InvestmentAssetDraft
+import vn.com.quyln.mistia.core.model.InvestmentAssetRecord
 import vn.com.quyln.mistia.core.model.InvestmentRepository
 import vn.com.quyln.mistia.core.model.LocalStore
 import vn.com.quyln.mistia.core.model.PendingCategoryTranslation
@@ -454,6 +456,12 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    private val assets=OfflineInvestmentAssetRepository(localStore)
+    override fun observeAssetSnapshot(owner:UserId)=assets.observe(owner)
+    override suspend fun saveAsset(owner:UserId,draft:InvestmentAssetDraft,deviceId:String,now:String)=assets.save(owner,draft,deviceId,now)
+    override suspend fun archiveAsset(owner:UserId,expected:InvestmentAssetRecord,deviceId:String,now:String)=assets.archive(owner,expected,true,deviceId,now)
+    override suspend fun restoreAsset(owner:UserId,expected:InvestmentAssetRecord,deviceId:String,now:String)=assets.archive(owner,expected,false,deviceId,now)
+
     override fun observeAssets(ownerUserId: UserId): Flow<List<CloudRecord>> =
         localStore.observeOwnedFinanceRows(CloudEntity.INVESTMENT_ASSET, ownerUserId)
 
