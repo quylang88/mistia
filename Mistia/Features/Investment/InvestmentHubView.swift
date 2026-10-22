@@ -3198,7 +3198,16 @@ struct InvestmentWalletDetailView: View {
         let ordinaryWalletLocations = linkedWallet.map { linkedWallet in
             ownerLocations.filter { $0.walletID != linkedWallet.id }
         } ?? ownerLocations
-        let locationsAwaitingTransfer = ordinaryWalletLocations.filter { $0.bookedMinor > 0 }
+        let locationsAwaitingTransfer = ordinaryWalletLocations.filter { location in
+            guard location.bookedMinor > 0, let holder = walletsByID[location.walletID], let linkedWallet,
+                  !holder.isArchived, holder.deletedAt == nil, holder.kind != .creditCard, holder.kind != .investment,
+                  !linkedWallet.isArchived, linkedWallet.deletedAt == nil, linkedWallet.kind != .creditCard, linkedWallet.kind != .investment else { return false }
+            return InvestmentCashReconciliationLogic.hasMatchingCurrencies(
+                holder: holder.currencyCode, linked: linkedWallet.currencyCode, accounting: accountingCurrencyCode
+            ) && InvestmentCashReconciliationLogic.hasMatchingCurrencies(
+                holder: location.currencyCode, linked: linkedWallet.currencyCode, accounting: accountingCurrencyCode
+            ) && location.originalBookedMinor == location.bookedMinor
+        }
         let balanceIndex = TransactionLogic.walletBalanceIndex(
             wallets: wallets.map {
                 TransactionWalletSnapshot(id: $0.id, kind: $0.kind, openingBalanceMinor: $0.openingBalanceMinor)
@@ -4550,8 +4559,15 @@ private struct InvestmentCashReconciliationSheet: View {
             ownerUserID: ownerUserID,
             accountingCurrencyCode: currencyCode
         )
-        let locations = cashSnapshot.locations.filter {
-            $0.walletID != linkedWalletID && $0.bookedMinor > 0
+        let walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        let locations = cashSnapshot.locations.filter { location in
+            guard location.walletID != linkedWalletID, location.bookedMinor > 0,
+                  let holder = walletsByID[location.walletID], let linked = linkedWalletID.flatMap({ walletsByID[$0] }),
+                  !holder.isArchived, holder.deletedAt == nil, holder.kind != .creditCard, holder.kind != .investment,
+                  !linked.isArchived, linked.deletedAt == nil, linked.kind != .creditCard, linked.kind != .investment else { return false }
+            return InvestmentCashReconciliationLogic.hasMatchingCurrencies(holder: holder.currencyCode, linked: linked.currencyCode, accounting: currencyCode)
+                && InvestmentCashReconciliationLogic.hasMatchingCurrencies(holder: location.currencyCode, linked: linked.currencyCode, accounting: currencyCode)
+                && location.originalBookedMinor == location.bookedMinor
         }
         return InvestmentCashReconciliationRenderSnapshot(
             currencyCode: currencyCode,
@@ -4567,14 +4583,10 @@ private struct InvestmentCashReconciliationSheet: View {
     private func requests(
         snapshot: InvestmentCashReconciliationRenderSnapshot
     ) -> [InvestmentReconciliationRequest] {
-        if let selectedLocation = snapshot.selectedLocation {
-            let entered = amountText.currencyInputToMinorUnits(currencyCode: snapshot.currencyCode)
-            guard entered > 0 else { return [] }
-            return [InvestmentReconciliationRequest(walletID: selectedLocation.walletID, accountingAmountMinor: entered)]
-        }
-        return snapshot.locations.map {
-            InvestmentReconciliationRequest(walletID: $0.walletID, accountingAmountMinor: $0.bookedMinor)
-        }
+        InvestmentCashReconciliationLogic.requests(
+            locations: snapshot.locations, selectedWalletID: initialWalletID,
+            requestedMinor: amountText.currencyInputToMinorUnits(currencyCode: snapshot.currencyCode)
+        )
     }
 
     var body: some View {
@@ -4615,6 +4627,10 @@ private struct InvestmentCashReconciliationSheet: View {
                 if let selectedLocation = snapshot.selectedLocation {
                     amountText = MistiaCurrencyInputFormatting.groupedInput(String(selectedLocation.bookedMinor))
                 }
+            }
+            .onChange(of: cacheKey) { _, _ in
+                confirmedRealTransfer = false
+                amountText = snapshot.selectedLocation.map { MistiaCurrencyInputFormatting.groupedInput(String($0.bookedMinor)) } ?? ""
             }
         }
         .task(id: cacheKey) {

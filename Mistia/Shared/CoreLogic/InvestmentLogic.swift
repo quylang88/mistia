@@ -1,6 +1,21 @@
 import CryptoKit
 import Foundation
 
+nonisolated enum InvestmentCashReconciliationLogic {
+    static func hasMatchingCurrencies(holder: String, linked: String, accounting: String) -> Bool {
+        let codes = [holder, linked, accounting].map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+        return codes.allSatisfy { MistiaCurrencyLogic.supportedCurrencyCodes.contains($0) } && codes[0] == codes[1] && codes[1] == codes[2]
+    }
+
+    static func requests(locations: [InvestmentWalletCashLocation], selectedWalletID: UUID?, requestedMinor: Int64) -> [InvestmentReconciliationRequest] {
+        if let selectedWalletID {
+            guard let location = locations.first(where: { $0.walletID == selectedWalletID }), requestedMinor > 0 else { return [] }
+            return [InvestmentReconciliationRequest(walletID: location.walletID, accountingAmountMinor: requestedMinor)]
+        }
+        return locations.filter { $0.bookedMinor > 0 }.map { InvestmentReconciliationRequest(walletID: $0.walletID, accountingAmountMinor: $0.bookedMinor) }
+    }
+}
+
 nonisolated enum InvestmentSystemWalletIdentity {
     private static let namespace = "com.mistia.wallet.system.investment-profit"
     static let canonicalSortOrder = Int(Int32.max) - 100

@@ -1558,6 +1558,80 @@ final class InvestmentPersistenceTests: XCTestCase {
         XCTAssertEqual(try balance(fixture.fundingWallet, fixture), 910)
     }
 
+    private func reconciliationCurrencyFixture() throws -> (Fixture, LedgerWallet) {
+        let fixture = try makeFixture()
+        let linked = LedgerWallet(name: "Linked", kind: .cash, iconSymbolName: "banknote.fill", iconColorHex: "#9A67FF", currencyCode: "JPY", openingBalanceMinor: 0)
+        fixture.context.insert(linked)
+        try MistiaRecordOwnershipStore.upsert(entity: .wallet, recordID: linked.id, ownerUserID: fixture.ownerID, context: fixture.context)
+        _ = try InvestmentPersistenceService.setLinkedWallet(ownerUserID: fixture.ownerID, linkedWalletID: linked.id, context: fixture.context)
+        _ = try saveTrade(fixture: fixture, kind: .buy, quantity: 1, gross: 100, fundingWalletID: fixture.fundingWallet.id, occurredAt: fixture.start)
+        _ = try saveTrade(fixture: fixture, kind: .sell, quantity: 1, gross: 150, capitalWalletID: fixture.capitalWallet.id, occurredAt: fixture.start.addingTimeInterval(1))
+        return (fixture, linked)
+    }
+
+    private func assertReconciliationCurrencyRejected(_ fixture: Fixture, requests: [InvestmentReconciliationRequest], file: StaticString = #filePath, line: UInt = #line) throws {
+        try fixture.context.save()
+        let ledgerIDs = Set(try fixture.context.fetch(FetchDescriptor<LedgerTransaction>()).map(\.id))
+        let postingIDs = Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id))
+        let metadataIDs = Set(try fixture.context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()).map(\.id))
+        XCTAssertThrowsError(try InvestmentPersistenceService.reconcileCash(ownerUserID: fixture.ownerID, requests: requests, context: fixture.context), file: file, line: line) { error in
+            XCTAssertEqual(error as? InvestmentPersistenceError, .invalidWallet, file: file, line: line)
+        }
+        XCTAssertEqual(Set(try fixture.context.fetch(FetchDescriptor<LedgerTransaction>()).map(\.id)), ledgerIDs, file: file, line: line)
+        XCTAssertEqual(Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id)), postingIDs, file: file, line: line)
+        XCTAssertEqual(Set(try fixture.context.fetch(FetchDescriptor<InvestmentCashPostingMetadata>()).map(\.id)), metadataIDs, file: file, line: line)
+        XCTAssertFalse(fixture.context.hasChanges, "A rejected batch must not leave pending rows for a later save", file: file, line: line)
+    }
+
+    func testReconciliationCurrencyRejectsForeignHolderWithoutAnyFinancialRows() throws {
+        let (fixture, _) = try reconciliationCurrencyFixture()
+        fixture.capitalWallet.currencyCode = "VND"
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+    }
+
+    func testReconciliationCurrencyRejectsForeignLinkedWalletAndAccountingMismatch() throws {
+        let (fixture, linked) = try reconciliationCurrencyFixture()
+        linked.currencyCode = "VND"
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+        linked.currencyCode = "JPY"
+        let systemID = InvestmentSystemWalletIdentity.walletID(ownerUserID: fixture.ownerID)
+        let system = try XCTUnwrap(try fixture.context.fetch(FetchDescriptor<LedgerWallet>()).first { $0.id == systemID })
+        system.currencyCode = "VND"
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+    }
+
+    func testReconciliationCurrencyPreflightsEveryHolderBeforeWritingAValidEarlierRequest() throws {
+        let (fixture, _) = try reconciliationCurrencyFixture()
+        let event = UUID()
+        fixture.fundingWallet.currencyCode = "VND"
+        let posting = InvestmentWalletPosting(ownerUserID: fixture.ownerID, eventID: event, walletID: fixture.fundingWallet.id, ledgerTransactionID: event,
+            role: .cashAccrual, amountMinor: 20, currencyCode: "VND", accountingAmountMinor: 20, accountingCurrencyCode: "JPY")
+        fixture.context.insert(posting)
+        fixture.context.insert(InvestmentCashPostingMetadata(id: posting.id, ownerUserID: fixture.ownerID, cashBucket: .booked, cashOrigin: .manual))
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80), .init(walletID: fixture.fundingWallet.id, accountingAmountMinor: 20)])
+    }
+
+    func testReconciliationCurrencyRejectsArchivedOrCardHolderBeforeAnyWrite() throws {
+        let (fixture, _) = try reconciliationCurrencyFixture()
+        fixture.capitalWallet.isArchived = true
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+        fixture.capitalWallet.isArchived = false
+        fixture.capitalWallet.kind = .creditCard
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+    }
+
+    func testReconciliationCurrencyRejectsContradictoryOriginalBookedUnitsAndUnavailableLinkedWallet() throws {
+        let (fixture, linked) = try reconciliationCurrencyFixture()
+        let posting = try XCTUnwrap(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).first {
+            $0.walletID == fixture.capitalWallet.id && $0.role == .cashAccrual && $0.amountMinor == 50
+        })
+        posting.amountMinor = 51
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+        posting.amountMinor = 50
+        linked.isArchived = true
+        try assertReconciliationCurrencyRejected(fixture, requests: [.init(walletID: fixture.capitalWallet.id, accountingAmountMinor: 80)])
+    }
+
     func testProfitTransferCanIncludeOrdinaryMoneyAboveHeldProfit() throws {
         let fixture = try makeFixture()
         let linkedWallet = LedgerWallet(

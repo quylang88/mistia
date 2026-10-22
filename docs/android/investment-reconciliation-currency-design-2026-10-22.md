@@ -1,0 +1,9 @@
+# Slice136 — iOS reconciliation currency boundary
+
+User decision: only reconcile cash between wallets of the same currency; correct both iOS and Android. Baselineaaa61dad. Complete iOS persistence and selection policy first as one independent correction, then implement the missing Android reconciliation vertical slice137. No claim of Android reconciliation delivery in136.
+
+Persistence must reject holder/linked/accounting currency disagreement before mutating any ledger, posting, metadata or ownership row, including a later mismatched request in a batch. All positive requests must use active ordinary wallets and valid supported normalized currencies. Exact original booked cash must agree with accounting cash for a same-currency transfer. Preserve source behavior allowing requested real cash above booked profit when actual cash suffices; only the booked portion changes allocation. Currency validation covers every positive request before the existing sequential balance checks. Retain direct ownership validation and source errors.
+
+Wallet-detail buttons, reconcile-all and sheet selection reuse the same currency predicate. Foreign locations remain visible as original-currency balances but have no reconciliation action. A stale selected ID must yield no requests, never fall back to all locations. Source cache changes invalidate transfer consent. Pure selection/currency policy and real SwiftData service tests must characterize rejection/no partial rows before fixes; same-currency80 actual/50 allocation scenario remains green. Compile actual iOS view code where local Xcode supports it; distinguish compile from native UI acceptance.
+
+Run runtime RED→GREEN, appropriate Swift/Android/contracts/l10n/lint/build checks, direct diff/source review, evidence/progress and separate local commit; immediately continue Android same-currency reconciliation. All cloud gates stay false; no production/deploy/push/schema migration.

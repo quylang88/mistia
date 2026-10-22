@@ -1825,6 +1825,31 @@ nonisolated enum InvestmentPersistenceService {
             accountingCurrencyCode: systemWallet.currencyCode,
             context: context
         )
+        // Preflight the entire batch before creating even its first financial row.
+        // Accounting minor units can be transferred verbatim only in one currency.
+        guard systemWallet.kind == .investment, !systemWallet.isArchived, systemWallet.deletedAt == nil,
+              linkedWallet.kind != .creditCard, linkedWallet.kind != .investment,
+              !linkedWallet.isArchived, linkedWallet.deletedAt == nil else {
+            throw InvestmentPersistenceError.invalidWallet
+        }
+        for request in requests where request.accountingAmountMinor > 0 {
+            guard let holder = walletsByID[request.walletID] else {
+                throw InvestmentPersistenceError.invalidTradeInput
+            }
+            guard holder.kind != .creditCard, holder.kind != .investment,
+                  !holder.isArchived, holder.deletedAt == nil,
+                  InvestmentCashReconciliationLogic.hasMatchingCurrencies(
+                    holder: holder.currencyCode, linked: linkedWallet.currencyCode, accounting: systemWallet.currencyCode
+                  ) else {
+                throw InvestmentPersistenceError.invalidWallet
+            }
+            if let location = snapshot.locations.first(where: { $0.walletID == request.walletID }),
+               !InvestmentCashReconciliationLogic.hasMatchingCurrencies(
+                    holder: location.currencyCode, linked: linkedWallet.currencyCode, accounting: systemWallet.currencyCode
+               ) || location.originalBookedMinor != location.bookedMinor {
+                throw InvestmentPersistenceError.invalidWallet
+            }
+        }
         var result = InvestmentPersistenceResult(walletIDs: [systemWalletID, linkedWalletID])
         var instructions: [InvestmentReconciliationInstruction] = []
 

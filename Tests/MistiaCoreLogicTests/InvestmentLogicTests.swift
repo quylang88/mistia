@@ -2,6 +2,24 @@ import XCTest
 @testable import MistiaCoreLogic
 
 final class InvestmentLogicTests: XCTestCase {
+    func testReconciliationRequiresOneKnownCurrencyAcrossHolderLinkedAndAccounting() {
+        XCTAssertTrue(InvestmentCashReconciliationLogic.hasMatchingCurrencies(holder: " jpy\n", linked: "JPY", accounting: "jpy"))
+        XCTAssertTrue(InvestmentCashReconciliationLogic.hasMatchingCurrencies(holder: "VND", linked: "vnd", accounting: " VND "))
+        for codes in [("VND", "JPY", "JPY"), ("JPY", "VND", "JPY"), ("JPY", "JPY", "VND"),
+                      ("", "JPY", "JPY"), ("USD", "USD", "USD"), ("bad", "JPY", "JPY")] {
+            XCTAssertFalse(InvestmentCashReconciliationLogic.hasMatchingCurrencies(holder: codes.0, linked: codes.1, accounting: codes.2))
+        }
+    }
+
+    func testStaleSingleReconciliationSelectionCannotBecomeAReconcileAllRequest() {
+        let id = UUID()
+        let location = InvestmentWalletCashLocation(walletID: id, currencyCode: "JPY", bookedMinor: 50, unreconciledMinor: 0, originalBookedMinor: 50, originalUnreconciledMinor: 0)
+        XCTAssertTrue(InvestmentCashReconciliationLogic.requests(locations: [location], selectedWalletID: UUID(), requestedMinor: 80).isEmpty)
+        XCTAssertTrue(InvestmentCashReconciliationLogic.requests(locations: [location], selectedWalletID: id, requestedMinor: 0).isEmpty)
+        let selected = InvestmentCashReconciliationLogic.requests(locations: [location], selectedWalletID: id, requestedMinor: 80)
+        XCTAssertEqual(selected.count, 1); XCTAssertEqual(selected.first?.walletID, id); XCTAssertEqual(selected.first?.accountingAmountMinor, 80)
+        XCTAssertEqual(InvestmentCashReconciliationLogic.requests(locations: [location], selectedWalletID: nil, requestedMinor: 0).first?.accountingAmountMinor, 50)
+    }
     func testBuyOneHundredThenSellOneHundredFiftyReleasesCapitalAndRealizesProfit() throws {
         let buyID = UUID()
         let sellID = UUID()
