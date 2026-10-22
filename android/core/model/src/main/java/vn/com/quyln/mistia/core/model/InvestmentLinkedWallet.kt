@@ -1,6 +1,5 @@
 package vn.com.quyln.mistia.core.model
 
-import java.math.BigInteger
 import java.time.Instant
 import kotlinx.serialization.json.*
 
@@ -42,8 +41,7 @@ fun planInvestmentWalletLink(
     fun record(entity:CloudEntity,id:String)=snapshot.rows.singleOrNull{it.entity==entity.table && it.id==id}
     fun wallet(raw:CloudRecord)=investmentLinkedWalletRecord(raw)
     fun visible(expected:LedgerWalletRecord,current:LedgerWalletRecord):Boolean =
-        expected.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=instant(expected.createdAt).toString())==
-            current.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=instant(current.createdAt).toString())
+        try{expected.matchesVisibleInvestmentWallet(current)}catch(_:Exception){unreadable()}
     val systemId=investmentSystemWalletId(snapshot.owner)
     if(request.expectedSystem.id!=systemId || request.expectedSystem.ownerUserId!=snapshot.owner.value ||
         request.expectedTarget.ownerUserId!=snapshot.owner.value)fail(InvestmentWalletLinkError.INVALID_WALLET)
@@ -149,33 +147,21 @@ fun investmentLinkedWalletRecord(raw:CloudRecord):LedgerWalletRecord {
     val link=p.financeRawReference("investment_linked_wallet_id");if(!link.readable)unreadable()
     for(key in listOf("system_purpose_raw_value","last_modified_by_device_id","archived_at","deleted_at"))
         if(p[key]!=null && p[key]!=JsonNull && p.financeRawString(key)==null)unreadable()
-    return try{LedgerWalletRecord.fromCloudRecord(raw)}catch(_:Exception){unreadable()}
+    return try{LedgerWalletRecord.fromCloudRecord(raw).copy(currencyCode=investmentAssetCurrency(p.financeRawString("currency_code")!!) ?: unreadable())}
+    catch(_:Exception){unreadable()}
 }
 
 fun investmentBookedCashMinor(snapshot:InvestmentWalletSnapshot,walletId:String?,code:String):Long {
-    fun fail(reason:InvestmentWalletLinkError):Nothing=throw InvestmentWalletLinkException(reason)
+    fun fail():Nothing=throw InvestmentWalletLinkException(InvestmentWalletLinkError.UNREADABLE_CASH)
     requireInvestmentWalletReadScope(snapshot)
     if(walletId==null)return 0L
-    var sum=BigInteger.ZERO
-    for(raw in snapshot.rows.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}) {
-        val deleted=raw.financeRawDeleted(true) ?: fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        if(deleted)continue
-        val p=raw.payload;val bucket=p.financeRawString("cash_bucket_raw_value")
-        if(bucket==null) {
-            if(p["cash_bucket_raw_value"]!=null && p["cash_bucket_raw_value"]!=JsonNull)fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-            if(p.financeRawString("role_raw_value") in setOf("funding","capitalReturn","realizedProfit"))continue
-            fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        }
-        if(bucket !in setOf("booked","unreconciled"))fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        val ref=p.financeRawReference("wallet_id")
-        if(!ref.readable || ref.id==null)fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        if(bucket!="booked" || ref.id!=walletId)continue
-        if(p.financeRawString("currency_code")!=code || p.financeRawString("accounting_currency_code")!=code)fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        val value=p.financeRawLong("accounting_amount_minor") ?: fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        if(p.financeRawLong("amount_minor")!=value)fail(InvestmentWalletLinkError.UNREADABLE_CASH)
-        sum=sum.add(BigInteger.valueOf(value))
-    }
-    return try{sum.longValueExact().coerceAtLeast(0)}catch(_:ArithmeticException){fail(InvestmentWalletLinkError.UNREADABLE_CASH)}
+    val currency=investmentAssetCurrency(code) ?: fail()
+    val location=try{investmentCashAllocation(snapshot,currency).locations.singleOrNull{it.walletId==walletId}}
+        catch(_:InvestmentCashReadException){fail()}
+    if(location==null)return 0L
+    if((location.bookedMinor.signum()!=0 || location.originalBookedMinor.signum()!=0) &&
+        (location.currencyCode!=currency || location.originalBookedMinor!=location.bookedMinor))fail()
+    return try{location.bookedMinor.longValueExact().coerceAtLeast(0)}catch(_:ArithmeticException){fail()}
 }
 
 private fun requireInvestmentWalletReadScope(snapshot:InvestmentWalletSnapshot) {
@@ -186,9 +172,12 @@ private fun requireInvestmentWalletReadScope(snapshot:InvestmentWalletSnapshot) 
         throw InvestmentWalletLinkException(InvestmentWalletLinkError.UNREADABLE_SOURCE)
 }
 
-fun LedgerWalletRecord.matchesVisibleInvestmentWallet(other:LedgerWalletRecord):Boolean =
-    copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString())==
-        other.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString())
+fun LedgerWalletRecord.matchesVisibleInvestmentWallet(other:LedgerWalletRecord):Boolean {
+    val currency=investmentAssetCurrency(currencyCode) ?: return false
+    val otherCurrency=investmentAssetCurrency(other.currencyCode) ?: return false
+    return copy(currencyCode=currency,updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString())==
+        other.copy(currencyCode=otherCurrency,updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString())
+}
 
 data class InvestmentLinkedWalletView(
     val system:LedgerWalletRecord,val linkedWallet:LedgerWalletRecord?,

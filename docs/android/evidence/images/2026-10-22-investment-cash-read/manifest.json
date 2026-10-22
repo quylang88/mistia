@@ -1,0 +1,254 @@
+[
+  {
+    "file": "investment-cash-linked-en-dark-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 57056,
+    "sha256": "6f152793510b7aea5df46703ea2e564c08ad98888a93517d29da10b689964a4c"
+  },
+  {
+    "file": "investment-cash-linked-en-light-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 43756,
+    "sha256": "434c91387fdee946397ef16052663e9c9cb0579ccefa5392bbd0b1dd6e7522ff"
+  },
+  {
+    "file": "investment-cash-linked-ja-dark-font130-width320.png",
+    "width": 792,
+    "height": 610,
+    "bytes": 68116,
+    "sha256": "ed3453d19930459b538bd38bfd7410d19c76c0f90322ff25fea0ff5457705276"
+  },
+  {
+    "file": "investment-cash-linked-ja-light-font130-width320.png",
+    "width": 792,
+    "height": 610,
+    "bytes": 60940,
+    "sha256": "880a44edec981c31ab11e3ecebfc7a806627a50a32a8f09f84f255dec35fafcc"
+  },
+  {
+    "file": "investment-cash-linked-vi-dark-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 52738,
+    "sha256": "07d63853fe4ffc9a002cf505f8e2e6810962314c70e5317a6ade301fe7f94829"
+  },
+  {
+    "file": "investment-cash-linked-vi-light-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 46407,
+    "sha256": "67c68d5f4d7212f4295b26417f8859dc4dde12feb4fe0555a5cd1c682f4cf4d7"
+  },
+  {
+    "file": "investment-cash-location-en-dark-font130-width320.png",
+    "width": 792,
+    "height": 540,
+    "bytes": 67907,
+    "sha256": "6ea1446721ec58bb3024a82caef7a1ea86f13f9d55b2789198eb50c0bd6589b9"
+  },
+  {
+    "file": "investment-cash-location-en-light-font130-width320.png",
+    "width": 792,
+    "height": 540,
+    "bytes": 67977,
+    "sha256": "c5ed47321b5d0ee9f40039ec3d44e0a4cd633766128c89b4a1b0851b61bb9d72"
+  },
+  {
+    "file": "investment-cash-location-ja-dark-font130-width320.png",
+    "width": 792,
+    "height": 548,
+    "bytes": 71652,
+    "sha256": "55ae59963c51b6a9b0eb3c9554c5731b2a2dfb8c755612ac096aad35500ec3e0"
+  },
+  {
+    "file": "investment-cash-location-ja-light-font130-width320.png",
+    "width": 792,
+    "height": 548,
+    "bytes": 71167,
+    "sha256": "7d8386c31b85547c885eb93754d7be18c09acd16f5acae8f76fa13208ac156e2"
+  },
+  {
+    "file": "investment-cash-location-vi-dark-font130-width320.png",
+    "width": 792,
+    "height": 482,
+    "bytes": 66838,
+    "sha256": "89e7adf0c577f8ddeae0bfd295c05c557f92fbb2045cac57395b50cbea941421"
+  },
+  {
+    "file": "investment-cash-location-vi-light-font130-width320.png",
+    "width": 792,
+    "height": 482,
+    "bytes": 66885,
+    "sha256": "7286b6d6f5c6b4767c5f2e433e335e6cbc5218286aef0146d92bb8d5e8aac7fc"
+  },
+  {
+    "file": "investment-cash-summary-en-dark-font130-width320.png",
+    "width": 792,
+    "height": 679,
+    "bytes": 72359,
+    "sha256": "13a8f3dfdc581b2a4752ce4c07d192cfade5f514d950c18e78e185c950276053"
+  },
+  {
+    "file": "investment-cash-summary-en-light-font130-width320.png",
+    "width": 792,
+    "height": 679,
+    "bytes": 52352,
+    "sha256": "cd410ca16259279dd19635e84d60f4aa33a6da15f520c030086919af6bce2c77"
+  },
+  {
+    "file": "investment-cash-summary-ja-dark-font130-width320.png",
+    "width": 792,
+    "height": 687,
+    "bytes": 81544,
+    "sha256": "c8a7600d5af189ebcc67da33d8d454fa965e964f63f56933d1223ba757dcbf58"
+  },
+  {
+    "file": "investment-cash-summary-ja-light-font130-width320.png",
+    "width": 792,
+    "height": 687,
+    "bytes": 77980,
+    "sha256": "c782ba868cddab401e9a2912b2d83a987dac7a806ad129fb1850d2f29861890a"
+  },
+  {
+    "file": "investment-cash-summary-vi-dark-font130-width320.png",
+    "width": 792,
+    "height": 679,
+    "bytes": 64703,
+    "sha256": "5831039462618644db1a5c5fd87316a4ffb638512aa9bb93637574f1c02ed26c"
+  },
+  {
+    "file": "investment-cash-summary-vi-light-font130-width320.png",
+    "width": 792,
+    "height": 679,
+    "bytes": 61092,
+    "sha256": "c24a0dd10fdb9bd3f34d02f0a29282c445a6581e177bf88fa70d6baf29b371d3"
+  },
+  {
+    "file": "investment-linked-wallet-card-en-dark-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 48748,
+    "sha256": "68e7e3cf983477fd082bb0e682fc2e47a242e59bd9cd4b01ff0457f316f5364a"
+  },
+  {
+    "file": "investment-linked-wallet-card-en-light-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 43756,
+    "sha256": "434c91387fdee946397ef16052663e9c9cb0579ccefa5392bbd0b1dd6e7522ff"
+  },
+  {
+    "file": "investment-linked-wallet-card-ja-dark-font130-width320.png",
+    "width": 792,
+    "height": 610,
+    "bytes": 59418,
+    "sha256": "5d8ebfbcadeca69a6aad5261592c2ee3701eefa1a68955513f3cad69c7f83cca"
+  },
+  {
+    "file": "investment-linked-wallet-card-ja-light-font130-width320.png",
+    "width": 792,
+    "height": 610,
+    "bytes": 53904,
+    "sha256": "d8b8f2209d21c9943b82bc1bd4ebb06e9cc54328e45f26db7381b7fa70222d28"
+  },
+  {
+    "file": "investment-linked-wallet-card-vi-dark-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 43759,
+    "sha256": "612b3f162a2e3977475a419c317c280d81131d05090bb33790388c7915083532"
+  },
+  {
+    "file": "investment-linked-wallet-card-vi-light-font130-width320.png",
+    "width": 792,
+    "height": 628,
+    "bytes": 39737,
+    "sha256": "86904a7ef3eee8fc2ca6dceeef81e76759c251a6581e332e90b27fe86e040d04"
+  },
+  {
+    "file": "investment-linked-wallet-choices-en-dark-font130-width320.png",
+    "width": 880,
+    "height": 1171,
+    "bytes": 80343,
+    "sha256": "ae947aebe3fd8839359a8ea51c4d20b54580da32aae098f4a38b56d110a0e39e"
+  },
+  {
+    "file": "investment-linked-wallet-choices-en-light-font130-width320.png",
+    "width": 880,
+    "height": 1171,
+    "bytes": 77628,
+    "sha256": "0cc01e25beb710b2d8e38a6a41c0778136bb1a8730a90a0d3431ae18c7cb6b66"
+  },
+  {
+    "file": "investment-linked-wallet-choices-ja-dark-font130-width320.png",
+    "width": 880,
+    "height": 1276,
+    "bytes": 140520,
+    "sha256": "f37c606a454b5fd282a91ef0569b4156fb6d225f2959b7a6e10c669da7dae538"
+  },
+  {
+    "file": "investment-linked-wallet-choices-ja-light-font130-width320.png",
+    "width": 880,
+    "height": 1276,
+    "bytes": 135749,
+    "sha256": "3ff0e8e5c88e30bc06125d9dc265d5735deebf21df4ce0e30063b2e94e836486"
+  },
+  {
+    "file": "investment-linked-wallet-choices-vi-dark-font130-width320.png",
+    "width": 880,
+    "height": 1171,
+    "bytes": 82231,
+    "sha256": "2b00884700680d9b5bb72b7ee16c9a5173a591f14a68fb6256a47ffb4baf39d7"
+  },
+  {
+    "file": "investment-linked-wallet-choices-vi-light-font130-width320.png",
+    "width": 880,
+    "height": 1171,
+    "bytes": 79684,
+    "sha256": "39a958e1d1f15a4e1b2f02602e2e2f7a118ee19268c9bc4d2bbd04497df90d77"
+  },
+  {
+    "file": "investment-linked-wallet-picker-en-dark-font130-width320.png",
+    "width": 880,
+    "height": 737,
+    "bytes": 61530,
+    "sha256": "967d1b9ef738286fd9703e1a442a0a3c576c360abf8fb8f73b0aa2104f5924d5"
+  },
+  {
+    "file": "investment-linked-wallet-picker-en-light-font130-width320.png",
+    "width": 880,
+    "height": 737,
+    "bytes": 60959,
+    "sha256": "57fc9c913bd5ccb463de91d6b528b654912f6d7bbac1436e77c492b70d80982b"
+  },
+  {
+    "file": "investment-linked-wallet-picker-ja-dark-font130-width320.png",
+    "width": 880,
+    "height": 837,
+    "bytes": 72331,
+    "sha256": "0519d3c927596ac3ce0df257e162a4753871e8891121010c4c59914bd295816e"
+  },
+  {
+    "file": "investment-linked-wallet-picker-ja-light-font130-width320.png",
+    "width": 880,
+    "height": 837,
+    "bytes": 71499,
+    "sha256": "bdd5b2f8db87e1cee85a27287eacb81bc3097a46a2d3f3fd1b1af03e1b1cc4c8"
+  },
+  {
+    "file": "investment-linked-wallet-picker-vi-dark-font130-width320.png",
+    "width": 880,
+    "height": 737,
+    "bytes": 54031,
+    "sha256": "4155af8bf002f1bffb340089c2ae7276b6ac806a4d7f2e3311586a16521b43fa"
+  },
+  {
+    "file": "investment-linked-wallet-picker-vi-light-font130-width320.png",
+    "width": 880,
+    "height": 737,
+    "bytes": 53713,
+    "sha256": "7cd7b1513b43fe482b6c829de41bd92171f9818fcb91f6b5edee218db71c6fa5"
+  }
+]

@@ -55,7 +55,13 @@ class InvestmentChannelScreenTest {
     private fun channels(subject:UserId=owner)=runBlocking{store.recordsIncludingDeleted(subject,CloudEntity.INVESTMENT_CHANNEL.table)}
     private fun queues(subject:UserId=owner)=runBlocking{InvestmentChannelSnapshot.entities.associateWith{store.pendingMutations(subject,it,Long.MAX_VALUE)}}
     private fun channel(name:String="Cards")=runBlocking{repo.saveChannel(owner,InvestmentChannelDraft(id,name),"VND",device,now).getOrThrow()}
-    private fun await(tag:String){compose.waitUntil(5000){compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+    private fun await(tag:String){compose.waitUntil(5000){
+        if(compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty())true
+        else if(tag=="investment.assets.add" || tag.startsWith("investment.channels.") ||
+            listOf("investment.asset.edit.","investment.asset.archive.","investment.asset.restore.","investment.channel.edit.","investment.channel.archive.","investment.channel.restore.").any(tag::startsWith))
+            runCatching{compose.onNodeWithTag("investment.list").performScrollToNode(hasTestTag(tag));true}.getOrDefault(false)
+        else false
+    }}
     private fun add(){await("investment.channels.add");compose.waitUntil(5000){compose.onAllNodes(hasTestTag("investment.channels.add") and isEnabled()).fetchSemanticsNodes().isNotEmpty()};compose.onNodeWithTag("investment.channels.add").performScrollTo().performClick();await("investment.channel.name")}
     private fun save(){compose.onNodeWithTag("investment.channel.save").assertIsEnabled().performClick()}
     private fun awaitClosed(){compose.waitUntil(5000){compose.onAllNodesWithTag("investment.channel.sheet").fetchSemanticsNodes().isEmpty()}}
@@ -200,7 +206,7 @@ class InvestmentChannelScreenTest {
         val late=early.copy(id="66666666-6666-6666-6666-666666666666",name="Later instant",createdAt="2026-10-21T01:00:00Z")
         runBlocking{store.commitMutations(listOf(late,early).map{record ->val raw=record.toCloudRecord();raw to PendingMutation(CloudEntity.INVESTMENT_CHANNEL,raw.id,owner.value,MutationKind.UPSERT,raw.payload,now,0,device)})}
         val before=runBlocking{store.investmentChannelSnapshot(owner)};val pending=queues()
-        compose.setContent{Screen()};await("investment.channel.edit.$id")
+        compose.setContent{Screen()};await("investment.channel.edit.$id");await("investment.channel.edit."+late.id)
         Assert.assertTrue(compose.onNodeWithText(early.name).fetchSemanticsNode().boundsInRoot.top < compose.onNodeWithText(late.name).fetchSemanticsNode().boundsInRoot.top)
         Assert.assertEquals(before,runBlocking{store.investmentChannelSnapshot(owner)});Assert.assertEquals(pending,queues())
     }

@@ -69,7 +69,13 @@ class InvestmentAssetScreenTest {
     }
     private fun rows(subject:UserId=owner)=runBlocking{store.investmentAssetSnapshot(subject)}
     private fun queues(subject:UserId=owner)=runBlocking{InvestmentAssetSnapshot.entities.associateWith{store.pendingMutations(subject,it,Long.MAX_VALUE)}}
-    private fun await(tag:String){compose.waitUntil(5000){compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+    private fun await(tag:String){compose.waitUntil(5000){
+        if(compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty())true
+        else if(tag=="investment.assets.add" || tag.startsWith("investment.channels.") ||
+            listOf("investment.asset.edit.","investment.asset.archive.","investment.asset.restore.","investment.channel.edit.","investment.channel.archive.","investment.channel.restore.").any(tag::startsWith))
+            runCatching{compose.onNodeWithTag("investment.list").performScrollToNode(hasTestTag(tag));true}.getOrDefault(false)
+        else false
+    }}
     private fun add() {
         await("investment.assets.add")
         compose.waitUntil(5000){compose.onAllNodes(hasTestTag("investment.assets.add") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
@@ -133,7 +139,7 @@ class InvestmentAssetScreenTest {
         compose.onNodeWithTag("investment.asset.edit.$id").performScrollTo().performClick();await("investment.asset.name")
         compose.runOnIdle{subject=other}
         compose.onNodeWithTag("investment.asset.sheet").assertDoesNotExist();compose.onAllNodesWithText("Private product").assertCountEquals(0)
-        compose.onNodeWithTag("investment.assets.add").assertIsNotEnabled();Assert.assertTrue(rows(other).rows.isEmpty());Assert.assertTrue(queues(other).values.all{it.isEmpty()})
+        await("investment.assets.add");compose.onNodeWithTag("investment.assets.add").assertIsNotEnabled();Assert.assertTrue(rows(other).rows.isEmpty());Assert.assertTrue(queues(other).values.all{it.isEmpty()})
     }
     @Test fun visibleSourceChangeWhileEditorIsOpenDisablesSaveAndCannotBecomeCreate() {
         val original=seedAsset();compose.setContent{Screen()};await("investment.asset.edit.$id")

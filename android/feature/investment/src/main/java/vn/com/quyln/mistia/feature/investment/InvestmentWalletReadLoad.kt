@@ -10,7 +10,7 @@ import vn.com.quyln.mistia.core.model.*
 internal sealed interface InvestmentWalletReadLoad {
     data object Loading:InvestmentWalletReadLoad
     data object Failed:InvestmentWalletReadLoad
-    data class Loaded(val snapshot:InvestmentWalletSnapshot):InvestmentWalletReadLoad
+    data class Loaded(val snapshot:InvestmentCashReadSnapshot):InvestmentWalletReadLoad
 }
 
 @Composable internal fun investmentWalletReadLoad(owner:UserId,repository:InvestmentRepository,retry:Int):State<InvestmentWalletReadLoad> {
@@ -20,11 +20,8 @@ internal sealed interface InvestmentWalletReadLoad {
             try {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     value=InvestmentWalletReadLoad.Loading
-                    repository.observeWalletSnapshot(owner).collect { snapshot ->
-                        val scoped=snapshot.owner==owner && snapshot.rows.all { row ->
-                            val entity=CloudEntity.fromTable(row.entity)
-                            entity!=null && entity in InvestmentWalletSnapshot.entities && row.financeRawIdentity(owner,entity,true)
-                        }
+                    repository.observeCashSnapshot(owner).collect { snapshot ->
+                        val scoped=snapshot.owner==owner && runCatching{snapshot.requireScoped()}.isSuccess
                         value=if(scoped)InvestmentWalletReadLoad.Loaded(snapshot) else InvestmentWalletReadLoad.Failed
                     }
                 }

@@ -458,6 +458,12 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    override fun observeCashSnapshot(owner:UserId)=localStore.observeInvestmentCashSnapshot(owner).map { snapshot ->
+        require(snapshot.owner==owner)
+        snapshot.requireScoped()
+        snapshot
+    }
+
     private val linkedWallet=OfflineInvestmentLinkedWalletRepository(localStore)
     override fun observeWalletSnapshot(owner:UserId)=linkedWallet.observe(owner)
     override suspend fun changeLinkedWallet(owner:UserId,request:InvestmentWalletLinkRequest,deviceId:String,now:String)=linkedWallet.change(owner,request,deviceId,now)

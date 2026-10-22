@@ -12,6 +12,12 @@ fun overviewInvestmentSummary(owner:UserId,snapshot:OverviewFinancialReadSnapsho
     val trades=snapshot.records(CloudEntity.INVESTMENT_TRADE)
     val currency=overviewInventoryAccountingCurrency(owner,wallets,primaryCurrency)?.investmentAccountingCode()
     val capital=overviewInventoryCostInCurrency(owner,snapshot.records(CloudEntity.INVESTMENT_CHANNEL),snapshot.records(CloudEntity.INVESTMENT_ASSET),trades,currency)
+    val profit=investmentPersistedProfit(owner,trades,currency)
+    return OverviewInvestmentSummary(capital,profit,currency)
+}
+
+/** All-time persisted realized profit, independent of asset visibility, positions and FIFO. */
+fun investmentPersistedProfit(owner:UserId,trades:List<CloudRecord>,currency:String?):BigInteger? {
     var profit:BigInteger?=BigInteger.ZERO
     for(raw in trades) {
         if(!raw.financeRawIdentity(owner,CloudEntity.INVESTMENT_TRADE,true) || raw.financeRawDeleted()==true) continue
@@ -21,7 +27,7 @@ fun overviewInvestmentSummary(owner:UserId,snapshot:OverviewFinancialReadSnapsho
         if(amount==null || raw.financeRawDeleted()==null || source==null || currency==null || source!=currency) {profit=null;break}
         profit=profit?.plus(BigInteger.valueOf(amount))
     }
-    return OverviewInvestmentSummary(capital,profit,currency)
+    return profit
 }
 
 internal fun String.investmentAccountingCode():String? = financeReportingCode()?.takeIf {code ->

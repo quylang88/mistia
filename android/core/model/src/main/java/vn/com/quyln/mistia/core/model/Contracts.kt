@@ -242,6 +242,7 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    fun observeCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = throw UnsupportedOperationException("Consistent investment cash read unavailable")
     fun observeWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = throw UnsupportedOperationException("Consistent investment wallet snapshot unavailable")
     suspend fun changeLinkedWallet(owner:UserId,request:InvestmentWalletLinkRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment linked wallet change unavailable"))
 
@@ -260,6 +261,8 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    fun observeInvestmentCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = throw UnsupportedOperationException("Consistent investment cash read unavailable")
+    suspend fun investmentCashSnapshot(owner:UserId):InvestmentCashReadSnapshot = throw UnsupportedOperationException("Atomic investment cash read unavailable")
     fun observeInvestmentWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = throw UnsupportedOperationException("Consistent investment wallet snapshot unavailable")
     suspend fun investmentWalletSnapshot(owner:UserId):InvestmentWalletSnapshot = throw UnsupportedOperationException("Atomic investment wallet snapshot unavailable")
     suspend fun commitInvestmentWalletLink(expected:InvestmentWalletSnapshot,request:InvestmentWalletLinkRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment wallet link unavailable")

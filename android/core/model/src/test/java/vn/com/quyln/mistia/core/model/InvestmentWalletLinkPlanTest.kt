@@ -140,4 +140,24 @@ class InvestmentWalletLinkPlanTest {
         failure(InvestmentWalletLinkError.EVENT_CONFLICT){plan(mixedDate)}
     }
 
+    @Test fun validNoncashAssetTransfersCannotMakeABookedCashMoveUnreadable() {
+        val ignored=cash(999).let{it.copy(id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",payload=JsonObject(it.payload+buildJsonObject {
+            put("id","aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");put("role_raw_value","transferOut");put("cash_bucket_raw_value",JsonNull)
+        }))}
+        val result=plan(snapshot(postings=listOf(cash(),ignored)))
+        assertEquals(1250L,result.mutations.single{it.first.entity==CloudEntity.LEDGER_TRANSACTION.table}.first.payload.financeRawLong("amount_minor"))
+    }
+
+    @Test fun recognizedCurrencyCodesAreCanonicalBeforeBeingPassedToMoneyFormatting() {
+        val raw=change(wallet(target),buildJsonObject{put("currency_code"," usd ")})
+        assertEquals("USD",investmentLinkedWalletRecord(raw).currencyCode)
+    }
+    @Test fun canonicalCurrencyReadDoesNotInventAChangedVisibleWalletOrRewriteRawFields() {
+        val sourceSystem=change(system(),buildJsonObject{put("currency_code"," vnd ")})
+        val sourceTarget=change(wallet(target),buildJsonObject{put("currency_code"," vnd ")})
+        val result=plan(snapshot(system=sourceSystem,selected=sourceTarget),request(system=sourceSystem,selected=sourceTarget,move=false))
+        assertEquals(1,result.mutations.size)
+        assertEquals(" vnd ",result.mutations.single().first.payload.financeRawString("currency_code"))
+    }
+
 }

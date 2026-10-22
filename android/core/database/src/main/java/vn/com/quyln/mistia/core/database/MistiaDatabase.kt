@@ -744,6 +744,17 @@ class RoomLocalStore(
     override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
 
+    override fun observeInvestmentCashSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot> =
+        database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot.entities.map{it.table})
+            .map{rows ->vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot(owner,rows.map{it.toCloudRecord()})}
+
+    override suspend fun investmentCashSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val rows=database.cloudRecordDao().investmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot.entities.map{it.table})
+        ensureCurrentFinanceOwner(owner)
+        vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot(owner,rows.map{it.toCloudRecord()})
+    }
+
     override fun observeInvestmentWalletSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentWalletSnapshot> =
         database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentWalletSnapshot.entities.map{it.table})
             .map{rows ->vn.com.quyln.mistia.core.model.InvestmentWalletSnapshot(owner,rows.map{it.toCloudRecord()})}

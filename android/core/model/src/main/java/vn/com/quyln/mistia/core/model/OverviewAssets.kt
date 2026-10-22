@@ -12,6 +12,19 @@ import kotlinx.serialization.json.*
 fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:List<LedgerTransactionRecord>,currency:String,
     rates:List<ExchangeRateSnapshot> = emptyList(),inventoryCost:BigInteger?=BigInteger.ZERO,inventoryCurrency:String?=currency):BigInteger? {
     val active=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null && !it.isArchived && it.kind!=null && it.kind!=WalletKind.CREDIT_CARD}
+    val balances=financeWalletBalancesExact(owner,wallets,records) ?: return null
+    val cost=inventoryCost ?: return null
+    var total=if(cost.signum()==0) BigInteger.ZERO else {
+        val code=inventoryCurrency ?: return null
+        overviewMoneyMinorExact(cost,code,currency,rates) ?: return null
+    }
+    for(wallet in active) total+=overviewMoneyMinorExact(balances.getValue(wallet.id),wallet.currencyCode,currency,rates) ?: return null
+    return total
+}
+
+/** Exact current cash by selected wallet; all wallet metadata remains available for legacy incoming pairs. */
+fun financeWalletBalancesExact(owner:UserId,wallets:List<LedgerWalletRecord>,records:List<LedgerTransactionRecord>,walletIds:Set<String>?=null):Map<String,BigInteger>? {
+    val active=wallets.filter {it.ownerUserId==owner.value && it.deletedAt==null && !it.isArchived && it.kind!=null && it.kind!=WalletKind.CREDIT_CARD && (walletIds==null || it.id in walletIds)}
     val balances=active.associate {it.id to BigInteger.valueOf(it.openingBalanceMinor)}.toMutableMap()
     fun apply(id:String?,amount:Long,outgoing:Boolean) {
         val key=id ?: return
@@ -54,13 +67,7 @@ fun overviewTotalAssets(owner:UserId,wallets:List<LedgerWalletRecord>,records:Li
             null -> Unit
         }
     }
-    val cost=inventoryCost ?: return null
-    var total=if(cost.signum()==0) BigInteger.ZERO else {
-        val code=inventoryCurrency ?: return null
-        overviewMoneyMinorExact(cost,code,currency,rates) ?: return null
-    }
-    for(wallet in active) total+=overviewMoneyMinorExact(balances.getValue(wallet.id),wallet.currencyCode,currency,rates) ?: return null
-    return total
+    return balances
 }
 
 /** Current inventory position snapshots, not trade gross amounts or realized gains. */

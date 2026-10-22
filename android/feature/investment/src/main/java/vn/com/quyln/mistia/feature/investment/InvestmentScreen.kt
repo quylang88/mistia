@@ -41,6 +41,10 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     }}}
     val channels=parsed?.getOrNull()
     val readable=snapshot!=null && channels!=null
+    var cashRetry by remember{mutableIntStateOf(0)}
+    val cashLoad by investmentWalletReadLoad(owner,repository,cashRetry)
+    val cashSnapshot=(cashLoad as? InvestmentWalletReadLoad.Loaded)?.snapshot
+    val cashView=remember(cashSnapshot,primaryCurrency){cashSnapshot?.let{runCatching{investmentCashFinancialView(it,primaryCurrency)}.getOrNull()}}
     val scope=rememberCoroutineScope()
     var editorId by rememberSaveable{mutableStateOf<String?>(null)}
     var expectedToken by rememberSaveable{mutableStateOf<String?>(null)}
@@ -96,14 +100,16 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             finally{actionRunning=false}
         }
     }
-    LazyColumn(modifier.fillMaxSize(),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+    LazyColumn(modifier.fillMaxSize().testTag("investment.list"),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         item{
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                 IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,stringResource(R.string.common_close))}
                 Text(stringResource(R.string.investment_title),style=MaterialTheme.typography.headlineMedium)
             }
         }
-        item(key="investment.wallet.link"){InvestmentLinkedWalletSection(owner,repository,deviceIdProvider)}
+        item(key="investment.cash.summary"){InvestmentCashSummary(cashLoad,cashView,onRetry={cashRetry++})}
+        item(key="investment.wallet.link"){InvestmentLinkedWalletSection(owner,repository,deviceIdProvider,cashLoad,cashView,onRetry={cashRetry++})}
+        item(key="investment.cash.locations"){InvestmentCashLocations(cashLoad,cashSnapshot,cashView,onRetry={cashRetry++})}
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
             modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}

@@ -25,11 +25,9 @@ import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun InvestmentLinkedWalletSection(owner:UserId,repository:InvestmentRepository,deviceIdProvider:suspend ()->String) {
-    var retry by remember{mutableIntStateOf(0)}
-    val load by investmentWalletReadLoad(owner,repository,retry)
+@Composable internal fun InvestmentLinkedWalletSection(owner:UserId,repository:InvestmentRepository,deviceIdProvider:suspend ()->String,load:InvestmentWalletReadLoad,financial:InvestmentCashFinancialView?,onRetry:()->Unit) {
     val snapshot=(load as? InvestmentWalletReadLoad.Loaded)?.snapshot
-    val parsed=remember(snapshot){snapshot?.let{runCatching{investmentLinkedWalletView(it)}}}
+    val parsed=remember(snapshot){snapshot?.let{runCatching{investmentLinkedWalletView(it.walletSnapshot())}}}
     val view=parsed?.getOrNull()
     var picker by rememberSaveable{mutableStateOf(false)}
     var choices by rememberSaveable{mutableStateOf(false)}
@@ -67,7 +65,7 @@ import vn.com.quyln.mistia.core.model.*
         if(load==InvestmentWalletReadLoad.Loading)CircularProgressIndicator(Modifier.size(24.dp).testTag("investment.wallet.link.loading"))
         if(view==null && load!=InvestmentWalletReadLoad.Loading)Text(stringResource(R.string.common_error),Modifier.testTag("investment.wallet.link.unavailable"),color=MaterialTheme.colorScheme.error)
         if(load==InvestmentWalletReadLoad.Failed || parsed?.isFailure==true)
-            TextButton(onClick={retry++},enabled=!busy,modifier=Modifier.testTag("investment.wallet.link.retry")){Text(stringResource(R.string.planning_installment_retry))}
+            TextButton(onClick=onRetry,enabled=!busy,modifier=Modifier.testTag("investment.wallet.link.retry")){Text(stringResource(R.string.planning_installment_retry))}
     }
     Surface(shape=RoundedCornerShape(22.dp),color=MaterialTheme.colorScheme.surfaceContainerLow,modifier=Modifier.fillMaxWidth().testTag("investment.wallet.link.card")) {
         Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
@@ -80,13 +78,19 @@ import vn.com.quyln.mistia.core.model.*
                     Text(stringResource(if(view?.system?.investmentLinkedWalletId==null)R.string.investment_wallet_choose else R.string.investment_wallet_change))
                 }
             }
-            val linked=view?.linkedWallet
+            val linked=financial?.linkedWallet ?: view?.linkedWallet
             if(linked!=null)Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 CategoryIcon(linked.iconSymbolName,TransactionCategoryKind.INCOME,linked.iconColorHex,Modifier.size(38.dp))
                 Text(linked.name,Modifier.weight(1f).testTag("investment.wallet.linked.name"),style=MaterialTheme.typography.titleSmall)
             } else if(view!=null) {
                 Text(stringResource(R.string.investment_wallet_not_set),style=MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.investment_wallet_not_set_message),style=MaterialTheme.typography.bodySmall)
+            }
+            if(linked!=null) {
+                val actual=financial?.linkedActualMinor?.let{formatMinorUnits(it,linked.currencyCode)}
+                Text(actual?.let{stringResource(R.string.investment_wallet_actual_balance,it)} ?: "—",Modifier.testTag("investment.wallet.link.actual"),style=MaterialTheme.typography.bodySmall)
+                val portion=financial?.linkedBalances?.investmentMinor?.let{formatMinorUnits(it,linked.currencyCode)}
+                Text(portion?.let{stringResource(R.string.investment_wallet_investment_portion,it)} ?: "—",Modifier.testTag("investment.wallet.link.portion"),style=MaterialTheme.typography.bodySmall,color=androidx.compose.ui.graphics.Color(0.65f,0.45f,0.98f))
             }
             ReadStatus()
         }

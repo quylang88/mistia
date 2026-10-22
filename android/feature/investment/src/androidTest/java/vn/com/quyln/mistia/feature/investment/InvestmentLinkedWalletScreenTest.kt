@@ -27,7 +27,7 @@ class InvestmentLinkedWalletScreenTest {
     private val compose=createComposeRule()
     @get:Rule val rules=RuleChain.outerRule(org.junit.rules.TestRule{base,description ->
         object:org.junit.runners.model.Statement(){override fun evaluate(){
-            if(description.methodName!="linkedWalletSelectorAndChoicesFitThreeLanguagesBothThemesAtActual130And320Dp"){base.evaluate();return}
+            if(description.methodName !in setOf("linkedWalletSelectorAndChoicesFitThreeLanguagesBothThemesAtActual130And320Dp","cashReadCardsFitThreeLanguagesBothThemesAtActual130And320Dp")){base.evaluate();return}
             val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
             fun shell(command:String)=android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use{it.readText().trim()}
             val originalFont=shell("settings get system font_scale").takeUnless{it=="null"} ?: "1.0"
@@ -121,11 +121,11 @@ class InvestmentLinkedWalletScreenTest {
         Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
     }
     @Test fun failedReadKeepsTheConfirmedTargetAndDisablesBothChoicesUntilRetry() {
-        prepare();val initial=rows();var starts=0;val fail=MutableStateFlow(false)
+        prepare();val initial=runBlocking{store.investmentCashSnapshot(owner)};var starts=0;val fail=MutableStateFlow(false)
         val source=object:InvestmentRepository by repo {
-            override fun observeWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = flow {
+            override fun observeCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = flow {
                 if(starts++==0){emit(initial);fail.first{it};throw IllegalStateException("read failed")}
-                emitAll(repo.observeWalletSnapshot(owner))
+                emitAll(repo.observeCashSnapshot(owner))
             }
         }
         val before=rows();val pending=queues();compose.setContent{Screen(source=source)};choose();select();await("investment.wallet.link.moveAll")
@@ -254,6 +254,134 @@ class InvestmentLinkedWalletScreenTest {
             originals.forEach{(resource,config)->resource.updateConfiguration(config,resource.displayMetrics)}
             android.view.inspector.WindowInspector.getGlobalWindowViews().forEach{it.dispatchConfigurationChanged(android.content.res.Configuration(it.resources.configuration))}
         }}
+    }
+
+    private fun profit(value:JsonElement=JsonPrimitive(800L)):CloudRecord {
+        val id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        return CloudRecord(CloudEntity.INVESTMENT_TRADE.table,id,owner.value,buildJsonObject {
+            put("id",id);put("user_id",owner.value);put("realized_profit_loss_minor",value);put("accounting_currency_code","VND")
+        },now,null,0)
+    }
+    private fun showCash(tag:String) {
+        compose.onNodeWithTag("investment.list").performScrollToNode(hasTestTag(tag))
+        await(tag)
+    }
+    @Test fun financialSummaryShowsPersistedProfitShortfallAndActualCashWithoutDoubleCounting() {
+        prepare();seed(profit());val before=runBlocking{store.investmentCashSnapshot(owner)};val pending=queues()
+        compose.setContent{Screen()};await("investment.cash.profit")
+        compose.onNodeWithTag("investment.cash.profit").assertTextEquals("+"+vn.com.quyln.mistia.core.designsystem.formatMinorUnits(800,"VND"))
+        compose.onNodeWithTag("investment.cash.available").assertTextEquals(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(300,"VND"))
+        compose.onNodeWithTag("investment.cash.shortfall").assertTextEquals(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(500,"VND"))
+        showCash("investment.wallet.link.actual")
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        compose.onNodeWithTag("investment.wallet.link.actual").assertTextEquals(context.getString(R.string.investment_wallet_actual_balance,vn.com.quyln.mistia.core.designsystem.formatMinorUnits(10000,"VND")))
+        compose.onNodeWithTag("investment.wallet.link.portion").assertTextEquals(context.getString(R.string.investment_wallet_investment_portion,vn.com.quyln.mistia.core.designsystem.formatMinorUnits(300,"VND")))
+        Assert.assertEquals(before,runBlocking{store.investmentCashSnapshot(owner)});Assert.assertEquals(pending,queues())
+    }
+    @Test fun unreadableProfitDoesNotEraseCashAndUnreadableCashNeverBecomesEmpty() {
+        prepare();seed(profit(JsonPrimitive("broken")));compose.setContent{Screen()};await("investment.cash.profit")
+        compose.onNodeWithTag("investment.cash.profit").assertTextEquals("—")
+        compose.onNodeWithTag("investment.cash.available").assertTextEquals(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(300,"VND"))
+        val posting=rows().rows.single{it.id==cashId};seed(posting.copy(payload=JsonObject(posting.payload+("amount_minor" to JsonNull))))
+        compose.waitUntil(5000){compose.onAllNodes(hasTestTag("investment.cash.available") and hasText("—")).fetchSemanticsNodes().isNotEmpty()}
+        showCash("investment.cash.locations.unavailable");compose.onNodeWithTag("investment.cash.locations.empty").assertDoesNotExist()
+        showCash("investment.wallet.link.actual");compose.onNodeWithTag("investment.wallet.link.portion").assertTextEquals("—")
+    }
+    @Test fun orphanCashKeepsAccountingAndOriginalCurrencyReferencesWithoutForeignWalletNames() {
+        prepare();val id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";val orphan="cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val template=rows().rows.single{it.id==cashId}
+        seed(template.copy(id=id,payload=JsonObject(template.payload+buildJsonObject {
+            put("id",id);put("wallet_id",orphan);put("currency_code","JPY");put("amount_minor",50L);put("accounting_amount_minor",12500L)
+        })))
+        val before=runBlocking{store.investmentCashSnapshot(owner)};compose.setContent{Screen()};await("investment.cash.available")
+        compose.onNodeWithTag("investment.cash.available").assertTextEquals(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(12800,"VND"))
+        showCash("investment.cash.location."+orphan)
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        compose.onNodeWithTag("investment.cash.location.name."+orphan).assertTextEquals(context.getString(R.string.investment_wallet_unidentified))
+        compose.onNodeWithTag("investment.cash.location.amount."+orphan).assertTextEquals(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(12500,"VND"))
+        compose.onNodeWithTag("investment.cash.location.original."+orphan).assertTextEquals(context.getString(R.string.investment_wallet_original_amount_reference,vn.com.quyln.mistia.core.designsystem.formatMinorUnits(50,"JPY")))
+        Assert.assertEquals(before,runBlocking{store.investmentCashSnapshot(owner)})
+    }
+
+    @Test fun cashReadFailureRetryEmptyAndLateOwnerEmissionNeverShowStaleFinancialAmounts() {
+        prepare();seed(profit());val initial=runBlocking{store.investmentCashSnapshot(owner)}
+        val other=UserId("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");val release=CompletableDeferred<Unit>();var oldCompleted=false;var starts=0
+        var subject by mutableStateOf(owner)
+        val source=object:InvestmentRepository by repo {
+            override fun observeCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = flow {
+                if(owner==this@InvestmentLinkedWalletScreenTest.owner) {
+                    if(starts++==0)throw IllegalStateException("disk failed")
+                    emit(initial)
+                    withContext(NonCancellable){release.await();oldCompleted=true;emit(initial)}
+                }else emit(InvestmentCashReadSnapshot(owner,emptyList()))
+            }
+        }
+        val pending=queues();compose.setContent{Screen(subject,source)};await("investment.cash.retry")
+        compose.onNodeWithTag("investment.cash.profit").assertTextEquals("—");compose.onAllNodesWithTag("investment.cash.retry").onFirst().performClick()
+        compose.waitUntil(5000){compose.onAllNodes(hasTestTag("investment.cash.profit") and hasText("+"+vn.com.quyln.mistia.core.designsystem.formatMinorUnits(800,"VND"))).fetchSemanticsNodes().isNotEmpty()}
+        compose.runOnIdle{subject=other;release.complete(Unit)};compose.waitUntil(5000){oldCompleted}
+        compose.waitUntil(5000){compose.onAllNodes(hasTestTag("investment.cash.profit") and hasText(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(0,"VND"))).fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("investment.cash.available").assertTextEquals(vn.com.quyln.mistia.core.designsystem.formatMinorUnits(0,"VND"))
+        showCash("investment.cash.locations.empty");Assert.assertEquals(pending,queues())
+    }
+    @Test fun cashReadCardsFitThreeLanguagesBothThemesAtActual130And320Dp() {
+        prepare()
+        val first=profit(JsonPrimitive(Long.MAX_VALUE));val second=first.copy(id="dddddddd-dddd-4ddd-8ddd-dddddddddddd").let{it.copy(payload=JsonObject(it.payload+("id" to JsonPrimitive(it.id))))}
+        val template=rows().rows.single{it.id==cashId};val orphan="cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        seed(first,second,template.copy(id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",payload=JsonObject(template.payload+buildJsonObject {
+            put("id","bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");put("wallet_id",orphan);put("currency_code","JPY");put("amount_minor",Long.MAX_VALUE);put("accounting_amount_minor",Long.MAX_VALUE)
+        })))
+        val context=ApplicationProvider.getApplicationContext<Context>();val before=runBlocking{store.investmentCashSnapshot(owner)};val pending=queues()
+        var language by mutableStateOf("en");var dark by mutableStateOf(false)
+        compose.setContent {
+            val config=android.content.res.Configuration(context.resources.configuration).apply{setLocale(java.util.Locale.forLanguageTag(language))}
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides context.createConfigurationContext(config),androidx.compose.ui.platform.LocalConfiguration provides config){Screen(dark=dark)}
+        }
+        fun complete(tag:String) {
+            val node=compose.onNodeWithTag(tag);val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            node.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
+            val layout=layouts.single();Assert.assertEquals(1.3f,layout.layoutInput.density.fontScale,0.0001f)
+            Assert.assertEquals(layout.layoutInput.text.length,layout.getLineEnd(layout.lineCount-1,true));Assert.assertFalse(layout.didOverflowHeight)
+            for(line in 0 until layout.lineCount){Assert.assertFalse(layout.isLineEllipsized(line));Assert.assertTrue(layout.getLineRight(line)<=layout.size.width+1f);Assert.assertTrue(layout.getLineLeft(line)>=-1f)}
+            val paint=android.graphics.Paint();layout.layoutInput.text.text.codePoints().forEach{code ->if(!Character.isWhitespace(code))Assert.assertTrue("Missing glyph "+code,paint.hasGlyph(String(Character.toChars(code))))}
+        }
+        fun capture(kind:String,tag:String) {
+            showCash(tag);compose.onNodeWithTag(tag).assertIsDisplayed()
+            val bitmap=compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            java.io.File(context.getExternalFilesDir(null),"investment-cash-"+kind+"-"+language+"-"+(if(dark)"dark" else "light")+"-font130-width320.png").outputStream().use{Assert.assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it))}
+        }
+        for(code in listOf("en","vi","ja"))for(theme in listOf(false,true)) {
+            compose.runOnIdle{language=code;dark=theme}
+            showCash("investment.cash.summary")
+            for(tag in listOf("investment.cash.profit","investment.cash.available","investment.cash.shortfall"))complete(tag)
+            for(tag in listOf("investment.cash.profit","investment.cash.available","investment.cash.shortfall")) {
+                val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                compose.onNodeWithTag(tag).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
+                Assert.assertEquals("Money digits must stay together: "+tag,1,layouts.single().lineCount)
+            }
+            val profitLayouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            compose.onNodeWithTag("investment.cash.profit").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(profitLayouts)}
+            Assert.assertEquals(androidx.compose.ui.graphics.Color(if(theme)0xFF30D158 else 0xFF34C759),profitLayouts.single().layoutInput.style.color)
+
+            val summary=compose.onNodeWithTag("investment.cash.summary").fetchSemanticsNode().boundsInRoot
+            Assert.assertEquals(288*context.resources.displayMetrics.density,summary.width,1f)
+            capture("summary","investment.cash.summary")
+            showCash("investment.wallet.link.card");complete("investment.wallet.link.actual");complete("investment.wallet.link.portion");capture("linked","investment.wallet.link.card")
+            showCash("investment.cash.location."+orphan)
+            complete("investment.cash.location.amount."+orphan);complete("investment.cash.location.original."+orphan)
+            capture("location","investment.cash.location."+orphan)
+            Assert.assertEquals(before,runBlocking{store.investmentCashSnapshot(owner)});Assert.assertEquals(pending,queues())
+        }
+    }
+
+    @Test fun unusedOtherWalletDamageKeepsActualCashVisibleWhileSelectorIsUnavailable() {
+        prepare();val other=wallet("ffffffff-ffff-4fff-8fff-ffffffffffff").let{it.copy(payload=JsonObject(it.payload+("opening_balance_minor" to JsonPrimitive("broken"))))}
+        seed(other);val before=runBlocking{store.investmentCashSnapshot(owner)};compose.setContent{Screen()};await("investment.cash.available")
+        showCash("investment.wallet.link.actual")
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        compose.onNodeWithTag("investment.wallet.link.actual").assertTextEquals(context.getString(R.string.investment_wallet_actual_balance,vn.com.quyln.mistia.core.designsystem.formatMinorUnits(10000,"VND")))
+        compose.onNodeWithTag("investment.wallet.link.choose").assertIsNotEnabled()
+        Assert.assertEquals(before,runBlocking{store.investmentCashSnapshot(owner)})
     }
 
 }
