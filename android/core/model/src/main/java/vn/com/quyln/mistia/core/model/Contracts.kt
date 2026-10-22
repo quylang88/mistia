@@ -242,6 +242,9 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    /** Read-only historical comparison; never grants consent or writes derived financial rows. */
+    suspend fun previewFundUsageTimeline(owner:UserId,accountingCurrency:String,replacingTransactionId:String?,proposed:CloudRecord?):InvestmentFundTimelineComparison =
+        throw UnsupportedOperationException("Historical investment usage comparison unavailable")
     suspend fun saveCashTransfer(owner:UserId,request:InvestmentCashTransferRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment cash transfer unavailable"))
     suspend fun changeCashTransfer(owner:UserId,request:InvestmentCashTransferLifecycleRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment cash transfer lifecycle unavailable"))
     fun observeCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = throw UnsupportedOperationException("Consistent investment cash read unavailable")

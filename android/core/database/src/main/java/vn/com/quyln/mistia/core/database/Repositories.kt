@@ -5,6 +5,7 @@ import vn.com.quyln.mistia.core.model.InvestmentCashTransferLifecycleRequest
 import vn.com.quyln.mistia.core.model.InvestmentWalletLinkRequest
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -460,6 +461,16 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    override suspend fun previewFundUsageTimeline(owner:UserId,accountingCurrency:String,replacingTransactionId:String?,proposed:CloudRecord?):vn.com.quyln.mistia.core.model.InvestmentFundTimelineComparison {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        val snapshot=localStore.investmentCashSnapshot(owner)
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        if(snapshot.owner!=owner)throw vn.com.quyln.mistia.core.model.InvestmentFundTimelineException(vn.com.quyln.mistia.core.model.InvestmentFundTimelineError.UNREADABLE_SOURCE)
+        val preview=vn.com.quyln.mistia.core.model.compareInvestmentFundUsageTimeline(snapshot,accountingCurrency,replacingTransactionId,proposed)
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        return preview
+    }
+
     override fun observeCashSnapshot(owner:UserId)=localStore.observeInvestmentCashSnapshot(owner).map { snapshot ->
         require(snapshot.owner==owner)
         snapshot.requireScoped()
