@@ -1,5 +1,7 @@
 package vn.com.quyln.mistia.core.database
 
+import vn.com.quyln.mistia.core.model.InvestmentWalletLinkRequest
+
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -456,6 +458,10 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    private val linkedWallet=OfflineInvestmentLinkedWalletRepository(localStore)
+    override fun observeWalletSnapshot(owner:UserId)=linkedWallet.observe(owner)
+    override suspend fun changeLinkedWallet(owner:UserId,request:InvestmentWalletLinkRequest,deviceId:String,now:String)=linkedWallet.change(owner,request,deviceId,now)
+
     private val assets=OfflineInvestmentAssetRepository(localStore)
     override fun observeAssetSnapshot(owner:UserId)=assets.observe(owner)
     override suspend fun saveAsset(owner:UserId,draft:InvestmentAssetDraft,deviceId:String,now:String)=assets.save(owner,draft,deviceId,now)

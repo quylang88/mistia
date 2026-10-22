@@ -242,6 +242,9 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    fun observeWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = throw UnsupportedOperationException("Consistent investment wallet snapshot unavailable")
+    suspend fun changeLinkedWallet(owner:UserId,request:InvestmentWalletLinkRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment linked wallet change unavailable"))
+
     fun observeAssetSnapshot(owner:UserId):Flow<InvestmentAssetSnapshot> = throw UnsupportedOperationException("Consistent investment asset snapshot unavailable")
     suspend fun saveAsset(owner:UserId,draft:InvestmentAssetDraft,deviceId:String,now:String):Result<InvestmentAssetRecord> = Result.failure(UnsupportedOperationException("Investment asset save unavailable"))
     suspend fun archiveAsset(owner:UserId,expected:InvestmentAssetRecord,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment asset archive unavailable"))
@@ -257,6 +260,10 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    fun observeInvestmentWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = throw UnsupportedOperationException("Consistent investment wallet snapshot unavailable")
+    suspend fun investmentWalletSnapshot(owner:UserId):InvestmentWalletSnapshot = throw UnsupportedOperationException("Atomic investment wallet snapshot unavailable")
+    suspend fun commitInvestmentWalletLink(expected:InvestmentWalletSnapshot,request:InvestmentWalletLinkRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment wallet link unavailable")
+
     fun observeInvestmentAssetSnapshot(owner:UserId):Flow<InvestmentAssetSnapshot> = throw UnsupportedOperationException("Consistent investment asset snapshot unavailable")
     suspend fun investmentAssetSnapshot(owner:UserId):InvestmentAssetSnapshot = throw UnsupportedOperationException("Atomic investment asset snapshot unavailable")
     suspend fun commitInvestmentAssetMutation(expected:InvestmentAssetSnapshot,request:InvestmentAssetRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment asset mutation unavailable")

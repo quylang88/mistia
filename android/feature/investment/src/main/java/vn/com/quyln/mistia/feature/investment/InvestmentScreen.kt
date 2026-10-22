@@ -103,6 +103,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
                 Text(stringResource(R.string.investment_title),style=MaterialTheme.typography.headlineMedium)
             }
         }
+        item(key="investment.wallet.link"){InvestmentLinkedWalletSection(owner,repository,deviceIdProvider)}
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
             modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}
