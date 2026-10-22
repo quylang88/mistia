@@ -744,6 +744,18 @@ class RoomLocalStore(
     override suspend fun recordsIncludingDeleted(ownerUserId: UserId, entity: String): List<CloudRecord> =
         database.cloudRecordDao().recordsIncludingDeleted(ownerUserId.value, entity).map { it.toCloudRecord() }
 
+    override suspend fun commitInvestmentCashTransferLifecycle(expected:vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentCashTransferLifecycleRequest,deviceId:String,now:String):Boolean = database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        val current=investmentCashSnapshot(expected.owner)
+        val order=compareBy<CloudRecord>({it.entity},{it.id})
+        if(expected.owner!=current.owner || expected.rows.sortedWith(order)!=current.rows.sortedWith(order))return@withTransaction false
+        val plan=vn.com.quyln.mistia.core.model.planInvestmentCashTransferLifecycle(current,request,deviceId,now)
+        plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+        ensureCurrentFinanceOwner(expected.owner)
+        true
+    }
+
     override suspend fun commitInvestmentCashTransfer(expected:vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentCashTransferRequest,deviceId:String,now:String):Boolean = database.withTransaction {
         ensureCurrentFinanceOwner(expected.owner)

@@ -243,6 +243,7 @@ interface FamilyRepository {
 
 interface InvestmentRepository {
     suspend fun saveCashTransfer(owner:UserId,request:InvestmentCashTransferRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment cash transfer unavailable"))
+    suspend fun changeCashTransfer(owner:UserId,request:InvestmentCashTransferLifecycleRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment cash transfer lifecycle unavailable"))
     fun observeCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = throw UnsupportedOperationException("Consistent investment cash read unavailable")
     fun observeWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = throw UnsupportedOperationException("Consistent investment wallet snapshot unavailable")
     suspend fun changeLinkedWallet(owner:UserId,request:InvestmentWalletLinkRequest,deviceId:String,now:String):Result<Unit> = Result.failure(UnsupportedOperationException("Investment linked wallet change unavailable"))
@@ -263,6 +264,7 @@ interface InvestmentRepository {
 
 interface LocalStore {
     suspend fun commitInvestmentCashTransfer(expected:InvestmentCashReadSnapshot,request:InvestmentCashTransferRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment cash transfer unavailable")
+    suspend fun commitInvestmentCashTransferLifecycle(expected:InvestmentCashReadSnapshot,request:InvestmentCashTransferLifecycleRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment cash transfer lifecycle unavailable")
     fun observeInvestmentCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = throw UnsupportedOperationException("Consistent investment cash read unavailable")
     suspend fun investmentCashSnapshot(owner:UserId):InvestmentCashReadSnapshot = throw UnsupportedOperationException("Atomic investment cash read unavailable")
     fun observeInvestmentWalletSnapshot(owner:UserId):Flow<InvestmentWalletSnapshot> = throw UnsupportedOperationException("Consistent investment wallet snapshot unavailable")

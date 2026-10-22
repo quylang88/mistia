@@ -47,6 +47,10 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     val cashView=remember(cashSnapshot,primaryCurrency){cashSnapshot?.let{runCatching{investmentCashFinancialView(it,primaryCurrency)}.getOrNull()}}
     val walletParsed=remember(cashSnapshot){cashSnapshot?.let{runCatching{investmentLinkedWalletView(it.walletSnapshot())}}}
     val walletView=walletParsed?.getOrNull()
+    val historyParsed=remember(cashSnapshot,cashView?.currencyCode){cashSnapshot?.let{runCatching{investmentCashHistory(it,requireNotNull(cashView?.currencyCode))}}}
+    val walletNames=remember(cashSnapshot){cashSnapshot?.rows.orEmpty().filter{it.entity==CloudEntity.LEDGER_WALLET.table && it.financeRawDeleted(true)==false}.mapNotNull{row ->row.payload.financeRawString("name")?.let{row.id to it}}.toMap()}
+    var historyOpen by rememberSaveable{mutableStateOf(false)}
+    var cashEditing by rememberSaveable{mutableStateOf(false)}
     var cashDirection by rememberSaveable{mutableStateOf<String?>(null)}
     var cashEvent by rememberSaveable{mutableStateOf<String?>(null)}
     var pendingCashDirection by rememberSaveable{mutableStateOf<String?>(null)}
@@ -57,7 +61,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     val linkedUsable=walletView?.linkedWallet?.let{linked ->walletView.eligibleWallets.any{it.id==linked.id}} ?: true
     val cashActionsReady=walletView!=null && linkedUsable && cashView?.allocation!=null && cashView.realizedProfitMinor!=null && cashDirection==null && pendingCashDirection==null
     fun openCash(direction:InvestmentCashTransferDirection) {
-        cashActionError=null;cashEvent=UUID.randomUUID().toString()
+        cashActionError=null;cashEditing=false;cashEvent=UUID.randomUUID().toString()
         if(walletView?.linkedWallet==null){pendingCashDirection=direction.name;pendingCashReady=false;pickRequest++}
         else cashDirection=direction.name
     }
@@ -124,7 +128,16 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             finally{actionRunning=false}
         }
     }
-    LazyColumn(modifier.fillMaxSize().testTag("investment.list"),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+    fun editCash(item:InvestmentCashHistoryItem) {
+        if(cashDirection!=null || cashSnapshot==null)return
+        val event=item.ledgerTransactionId?.let{id ->runCatching{readInvestmentCashTransferLifecycle(cashSnapshot,id).event}.getOrNull()}
+        if(event==null)cashActionError=R.string.common_error
+        else {cashEditing=true;cashDirection=event.draft.direction.name;cashEvent=event.draft.id}
+    }
+    androidx.activity.compose.BackHandler(enabled=historyOpen && cashDirection==null){historyOpen=false}
+    if(historyOpen)InvestmentCashHistoryScreen(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
+        onBack={historyOpen=false},onOpen=::editCash,onRetry={cashRetry++},modifier=modifier)
+    else LazyColumn(modifier.fillMaxSize().testTag("investment.list"),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         item{
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                 IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,stringResource(R.string.common_close))}
@@ -144,6 +157,8 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             onPickerSaved={pickRequest=0;if(pendingCashDirection!=null)pendingCashReady=true},
             onPickerCancelled={pickRequest=0;if(pendingCashDirection!=null){pendingCashDirection=null;pendingCashReady=false;cashEvent=null}},onRetry={cashRetry++})}
         item(key="investment.cash.locations"){InvestmentCashLocations(cashLoad,cashSnapshot,cashView,onRetry={cashRetry++})}
+        item(key="investment.cash.history"){InvestmentCashHistoryPreview(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
+            onAll={historyOpen=true},onOpen=::editCash,onRetry={cashRetry++})}
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
             modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}
@@ -217,7 +232,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         dismissButton={TextButton(onClick={archiveToken=null}){Text(stringResource(R.string.common_cancel))}})
     if(cashDirection!=null && cashEvent!=null)key(cashEvent) {
         InvestmentCashTransferSheet(owner,repository,deviceIdProvider,requireNotNull(cashEvent),InvestmentCashTransferDirection.valueOf(requireNotNull(cashDirection)),
-            cashLoad,walletView,onRetry={cashRetry++},onDismiss={cashDirection=null;cashEvent=null})
+            cashLoad,walletView,onRetry={cashRetry++},onDismiss={cashDirection=null;cashEvent=null;cashEditing=false},editing=cashEditing)
     }
     cashActionError?.let{message ->AlertDialog(onDismissRequest={cashActionError=null},title={Text(stringResource(R.string.common_error))},
         text={Text(stringResource(message))},confirmButton={TextButton(onClick={cashActionError=null}){Text(stringResource(R.string.common_ok))}})}

@@ -9,7 +9,7 @@ data class InvestmentCashTransferDraft(val id:String,val direction:InvestmentCas
 data class InvestmentCashTransferRequest(val expectedSystem:LedgerWalletRecord,val expectedLinked:LedgerWalletRecord,val expectedSelected:LedgerWalletRecord,
     val draft:InvestmentCashTransferDraft,val expectedPreview:InvestmentCashTransferPreview,val ledgerTitle:String)
 data class InvestmentCashTransferPlan(val mutations:List<Pair<CloudRecord,PendingMutation>>)
-enum class InvestmentCashTransferError { INVALID_INPUT, INVALID_WALLET, UNREADABLE_SOURCE, STALE_RECORD, EXCEEDS_LIMIT, EVENT_CONFLICT }
+enum class InvestmentCashTransferError { INVALID_INPUT, INVALID_WALLET, UNREADABLE_SOURCE, STALE_RECORD, EXCEEDS_LIMIT, EVENT_CONFLICT, HAS_DEPENDENTS, DIRECTION_LOCKED }
 class InvestmentCashTransferException(val reason:InvestmentCashTransferError):IllegalArgumentException(reason.name)
 fun planInvestmentCashTransfer(snapshot:InvestmentCashReadSnapshot,request:InvestmentCashTransferRequest,deviceId:String,now:String):InvestmentCashTransferPlan {
     fun fail(reason:InvestmentCashTransferError):Nothing=throw InvestmentCashTransferException(reason)
@@ -44,7 +44,7 @@ fun planInvestmentCashTransfer(snapshot:InvestmentCashReadSnapshot,request:Inves
     val destination=if(deposit)linked else selected
     val postingId=investmentLedgerIdentity(draft.id,"cash-transfer-posting")
     val signed=if(deposit)draft.amountMinor else -draft.amountMinor
-    val note=draft.note?.trim{it.isInvestmentWhitespace()}?.takeIf{it.isNotEmpty()}
+    val note=investmentCashTrimmedText(draft.note)
     val ledgerFields=buildJsonObject {
         put("primary_kind_raw_value","transfer");put("transfer_subtype_raw_value","internalTransfer");put("entry_status_raw_value","posted")
         put("title",request.ledgerTitle);put("amount_minor",draft.amountMinor);put("source_wallet_id",source.id);put("destination_wallet_id",destination.id)
@@ -121,3 +121,6 @@ private fun cashTransferCapacity(snapshot:InvestmentCashReadSnapshot,system:Ledg
         actual,sourceLocation?.originalTotalMinor ?: BigInteger.ZERO)
     return preview
 }
+
+/** Swift CharacterSet.whitespacesAndNewlines without collapsing internal text. */
+fun investmentCashTrimmedText(value:String?):String?=value?.trim{it.isInvestmentWhitespace()}?.takeIf{it.isNotEmpty()}
