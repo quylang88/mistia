@@ -25,7 +25,7 @@ import vn.com.quyln.mistia.core.model.*
 @Composable
 fun InvestmentScreen(ownerUserId:UserId,repository:InvestmentRepository,onBack:()->Unit,modifier:Modifier=Modifier,
     primaryCurrencyCode:String="JPY",deviceIdProvider:suspend ()->String={throw UnsupportedOperationException("Device identity unavailable")},enabledCurrencyCodes:List<String> = listOf(primaryCurrencyCode)) {
-    key(ownerUserId.value,repository){OwnedInvestmentScreen(ownerUserId,repository,onBack,modifier,primaryCurrencyCode,deviceIdProvider,enabledCurrencyCodes)}
+    key(ownerUserId.value){OwnedInvestmentScreen(ownerUserId,repository,onBack,modifier,primaryCurrencyCode,deviceIdProvider,enabledCurrencyCodes)}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +45,31 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     val cashLoad by investmentWalletReadLoad(owner,repository,cashRetry)
     val cashSnapshot=(cashLoad as? InvestmentWalletReadLoad.Loaded)?.snapshot
     val cashView=remember(cashSnapshot,primaryCurrency){cashSnapshot?.let{runCatching{investmentCashFinancialView(it,primaryCurrency)}.getOrNull()}}
-    val scope=rememberCoroutineScope()
+    val walletParsed=remember(cashSnapshot){cashSnapshot?.let{runCatching{investmentLinkedWalletView(it.walletSnapshot())}}}
+    val walletView=walletParsed?.getOrNull()
+    var cashDirection by rememberSaveable{mutableStateOf<String?>(null)}
+    var cashEvent by rememberSaveable{mutableStateOf<String?>(null)}
+    var pendingCashDirection by rememberSaveable{mutableStateOf<String?>(null)}
+    var pendingCashReady by rememberSaveable{mutableStateOf(false)}
+    var pickRequest by rememberSaveable{mutableIntStateOf(0)}
+    var cashActionError by remember{mutableStateOf<Int?>(null)}
+    val linkedBooked=cashView?.allocation?.locations?.singleOrNull{it.walletId==walletView?.linkedWallet?.id}?.bookedMinor
+    val linkedUsable=walletView?.linkedWallet?.let{linked ->walletView.eligibleWallets.any{it.id==linked.id}} ?: true
+    val cashActionsReady=walletView!=null && linkedUsable && cashView?.allocation!=null && cashView.realizedProfitMinor!=null && cashDirection==null && pendingCashDirection==null
+    fun openCash(direction:InvestmentCashTransferDirection) {
+        cashActionError=null;cashEvent=UUID.randomUUID().toString()
+        if(walletView?.linkedWallet==null){pendingCashDirection=direction.name;pendingCashReady=false;pickRequest++}
+        else cashDirection=direction.name
+    }
+    LaunchedEffect(pendingCashReady,walletView?.linkedWallet?.id,linkedBooked) {
+        if(pendingCashReady && pendingCashDirection!=null && walletView?.linkedWallet!=null && linkedUsable) {
+            if(pendingCashDirection==InvestmentCashTransferDirection.WITHDRAWAL.name && (linkedBooked==null || linkedBooked.signum()<=0)) {
+                cashActionError=R.string.investment_cash_transfer_move_to_linked_first;cashEvent=null
+            } else cashDirection=pendingCashDirection
+            pendingCashDirection=null;pendingCashReady=false
+        }
+    }
+    val scope=key(repository){rememberCoroutineScope()}
     var editorId by rememberSaveable{mutableStateOf<String?>(null)}
     var expectedToken by rememberSaveable{mutableStateOf<String?>(null)}
     var name by rememberSaveable{mutableStateOf("")}
@@ -108,7 +132,17 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             }
         }
         item(key="investment.cash.summary"){InvestmentCashSummary(cashLoad,cashView,onRetry={cashRetry++})}
-        item(key="investment.wallet.link"){InvestmentLinkedWalletSection(owner,repository,deviceIdProvider,cashLoad,cashView,onRetry={cashRetry++})}
+        item(key="investment.cash.actions") {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                Button(onClick={openCash(InvestmentCashTransferDirection.DEPOSIT)},enabled=cashActionsReady && (cashView?.shortfallMinor?.signum() ?: 0)>0,
+                    modifier=Modifier.weight(1f).testTag("investment.cash.deposit")){Text(stringResource(R.string.investment_wallet_refill_action))}
+                OutlinedButton(onClick={openCash(InvestmentCashTransferDirection.WITHDRAWAL)},enabled=cashActionsReady && (walletView?.linkedWallet==null || (linkedBooked?.signum() ?: 0)>0),
+                    modifier=Modifier.weight(1f).testTag("investment.cash.withdraw")){Text(stringResource(R.string.investment_wallet_transfer_out_action))}
+            }
+        }
+        item(key="investment.wallet.link"){InvestmentLinkedWalletSection(owner,repository,deviceIdProvider,cashLoad,cashView,walletParsed,pickRequest,
+            onPickerSaved={pickRequest=0;if(pendingCashDirection!=null)pendingCashReady=true},
+            onPickerCancelled={pickRequest=0;if(pendingCashDirection!=null){pendingCashDirection=null;pendingCashReady=false;cashEvent=null}},onRetry={cashRetry++})}
         item(key="investment.cash.locations"){InvestmentCashLocations(cashLoad,cashSnapshot,cashView,onRetry={cashRetry++})}
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
@@ -181,6 +215,12 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     if(archive!=null)AlertDialog(onDismissRequest={archiveToken=null},title={Text(stringResource(R.string.common_archive))},text={Text(archive.name)},
         confirmButton={TextButton(onClick={archiveToken=null;changeArchive(archive,true)},enabled=!actionRunning,modifier=Modifier.testTag("investment.channel.confirmArchive")){Text(stringResource(R.string.common_archive))}},
         dismissButton={TextButton(onClick={archiveToken=null}){Text(stringResource(R.string.common_cancel))}})
+    if(cashDirection!=null && cashEvent!=null)key(cashEvent) {
+        InvestmentCashTransferSheet(owner,repository,deviceIdProvider,requireNotNull(cashEvent),InvestmentCashTransferDirection.valueOf(requireNotNull(cashDirection)),
+            cashLoad,walletView,onRetry={cashRetry++},onDismiss={cashDirection=null;cashEvent=null})
+    }
+    cashActionError?.let{message ->AlertDialog(onDismissRequest={cashActionError=null},title={Text(stringResource(R.string.common_error))},
+        text={Text(stringResource(message))},confirmButton={TextButton(onClick={cashActionError=null}){Text(stringResource(R.string.common_ok))}})}
     val id=editorId
     if(id!=null)ModalBottomSheet(onDismissRequest={if(!saving)editorId=null}){
         Column(Modifier.fillMaxWidth().padding(horizontal=20.dp).padding(bottom=24.dp).testTag("investment.channel.sheet"),verticalArrangement=Arrangement.spacedBy(14.dp)){

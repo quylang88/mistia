@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.core.database
 
+import vn.com.quyln.mistia.core.model.InvestmentCashTransferRequest
 import vn.com.quyln.mistia.core.model.InvestmentWalletLinkRequest
 
 import kotlinx.coroutines.flow.Flow
@@ -463,6 +464,9 @@ class OfflineFirstInvestmentRepository(private val localStore: LocalStore,system
         snapshot.requireScoped()
         snapshot
     }
+
+    private val cashTransfer=OfflineInvestmentCashTransferRepository(localStore)
+    override suspend fun saveCashTransfer(owner:UserId,request:InvestmentCashTransferRequest,deviceId:String,now:String)=cashTransfer.save(owner,request,deviceId,now)
 
     private val linkedWallet=OfflineInvestmentLinkedWalletRepository(localStore)
     override fun observeWalletSnapshot(owner:UserId)=linkedWallet.observe(owner)

@@ -92,7 +92,7 @@ private fun cashMoney(value:BigInteger?,code:String?,signed:Boolean=false):Strin
     if(value==null || code==null)"—" else (if(signed && value.signum()>0)"+" else "")+formatMinorUnits(value,code)
 
 /** Keep a formatted amount together while retaining every digit and the actual system font scale. */
-@Composable private fun CashMoneyText(value:String,tag:String,style:TextStyle) {
+@Composable internal fun CashMoneyText(value:String,tag:String,style:TextStyle) {
     val measurer=rememberTextMeasurer()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         var size=style.fontSize.value

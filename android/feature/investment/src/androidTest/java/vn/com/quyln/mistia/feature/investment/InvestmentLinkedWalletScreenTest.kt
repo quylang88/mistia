@@ -384,4 +384,18 @@ class InvestmentLinkedWalletScreenTest {
         Assert.assertEquals(before,runBlocking{store.investmentCashSnapshot(owner)})
     }
 
+    @Test fun firstLinkWithALostSuccessReceiptCanRetryTheFrozenChoiceWithoutAnotherWrite() {
+        prepare(first=true);var calls=0
+        val source=object:InvestmentRepository by repo {
+            override suspend fun changeLinkedWallet(owner:UserId,request:InvestmentWalletLinkRequest,deviceId:String,now:String):Result<Unit> {
+                calls++;val result=repo.changeLinkedWallet(owner,request,deviceId,now)
+                return if(calls==1 && result.isSuccess)Result.failure(IllegalStateException("receipt lost")) else result
+            }
+        }
+        compose.setContent{Screen(source=source)};choose();select();await("investment.wallet.link.error")
+        linked();compose.onNodeWithTag("investment.wallet.link.retrySave").assertIsEnabled().performClick()
+        compose.waitUntil(5000){compose.onAllNodesWithTag("investment.wallet.link.picker").fetchSemanticsNodes().isEmpty()}
+        Assert.assertEquals(2,calls);Assert.assertEquals(4,queues().values.sumOf{it.size});Assert.assertTrue(rows().rows.none{it.entity==CloudEntity.LEDGER_TRANSACTION.table})
+    }
+
 }

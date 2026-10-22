@@ -61,7 +61,7 @@ internal fun InvestmentAssetEditorSheet(
     val currencies=(enabledCurrencies.mapNotNull{it.financeReportingCode()}+listOfNotNull(expected?.currencyCode)).distinct()
     val canSave=readable && consent && selectedChannel!=null && currency in currencies &&
         normalizedInvestmentChannelName(name).isNotEmpty() && InvestmentUnitLabel.normalizedDisplay(unit)!=null
-    val scope=rememberCoroutineScope()
+    val scope=key(repository){rememberCoroutineScope()}
     val sheet=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={it!=SheetValue.Hidden || !saving})
     ModalBottomSheet(onDismissRequest={if(!saving)onDismiss()},sheetState=sheet) {
         Column(Modifier.fillMaxWidth().padding(horizontal=20.dp).verticalScroll(rememberScrollState())
