@@ -47,6 +47,8 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     val cashView=remember(cashSnapshot,primaryCurrency){cashSnapshot?.let{runCatching{investmentCashFinancialView(it,primaryCurrency)}.getOrNull()}}
     val walletParsed=remember(cashSnapshot){cashSnapshot?.let{runCatching{investmentLinkedWalletView(it.walletSnapshot())}}}
     val walletView=walletParsed?.getOrNull()
+    val reconciliationView=remember(cashSnapshot){cashSnapshot?.let{runCatching{readInvestmentCashReconciliation(it)}.getOrNull()}}
+    var reconciliationTarget by rememberSaveable{mutableStateOf<String?>(null)}
     val historyParsed=remember(cashSnapshot,cashView?.currencyCode){cashSnapshot?.let{runCatching{investmentCashHistory(it,requireNotNull(cashView?.currencyCode))}}}
     val walletNames=remember(cashSnapshot){cashSnapshot?.rows.orEmpty().filter{it.entity==CloudEntity.LEDGER_WALLET.table && it.financeRawDeleted(true)==false}.mapNotNull{row ->row.payload.financeRawString("name")?.let{row.id to it}}.toMap()}
     var historyOpen by rememberSaveable{mutableStateOf(false)}
@@ -156,7 +158,12 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         item(key="investment.wallet.link"){InvestmentLinkedWalletSection(owner,repository,deviceIdProvider,cashLoad,cashView,walletParsed,pickRequest,
             onPickerSaved={pickRequest=0;if(pendingCashDirection!=null)pendingCashReady=true},
             onPickerCancelled={pickRequest=0;if(pendingCashDirection!=null){pendingCashDirection=null;pendingCashReady=false;cashEvent=null}},onRetry={cashRetry++})}
-        item(key="investment.cash.locations"){InvestmentCashLocations(cashLoad,cashSnapshot,cashView,onRetry={cashRetry++})}
+        item(key="investment.cash.reconcile.all") {
+            OutlinedButton(onClick={reconciliationTarget="all"},enabled=reconciliationView?.locations?.let{locations->locations.isNotEmpty() && locations.all{it.bookedMinor<=java.math.BigInteger.valueOf(Long.MAX_VALUE) && it.actualMinor>=it.bookedMinor}}==true,
+                modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("investment.cash.reconcile.all")){Text(stringResource(R.string.investment_wallet_reconcile_all))}
+        }
+        item(key="investment.cash.locations"){InvestmentCashLocations(cashLoad,cashSnapshot,cashView,onRetry={cashRetry++},
+            reconcilableIds=reconciliationView?.locations.orEmpty().map{it.wallet.id}.toSet(),onReconcile={reconciliationTarget=it})}
         item(key="investment.cash.history"){InvestmentCashHistoryPreview(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
             onAll={historyOpen=true},onOpen=::editCash,onRetry={cashRetry++})}
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
@@ -234,6 +241,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         InvestmentCashTransferSheet(owner,repository,deviceIdProvider,requireNotNull(cashEvent),InvestmentCashTransferDirection.valueOf(requireNotNull(cashDirection)),
             cashLoad,walletView,onRetry={cashRetry++},onDismiss={cashDirection=null;cashEvent=null;cashEditing=false},editing=cashEditing)
     }
+    reconciliationTarget?.let{target->key(target){InvestmentCashReconciliationSheet(owner,repository,deviceIdProvider,target.takeUnless{it=="all"},cashLoad,onRetry={cashRetry++},onDismiss={reconciliationTarget=null})}}
     cashActionError?.let{message ->AlertDialog(onDismissRequest={cashActionError=null},title={Text(stringResource(R.string.common_error))},
         text={Text(stringResource(message))},confirmButton={TextButton(onClick={cashActionError=null}){Text(stringResource(R.string.common_ok))}})}
     val id=editorId

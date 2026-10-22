@@ -49,7 +49,8 @@ import vn.com.quyln.mistia.core.model.*
     }
 }
 
-@Composable internal fun InvestmentCashLocations(load:InvestmentWalletReadLoad,snapshot:InvestmentCashReadSnapshot?,view:InvestmentCashFinancialView?,onRetry:()->Unit) {
+@Composable internal fun InvestmentCashLocations(load:InvestmentWalletReadLoad,snapshot:InvestmentCashReadSnapshot?,view:InvestmentCashFinancialView?,onRetry:()->Unit,
+    reconcilableIds:Set<String> = emptySet(),onReconcile:(String)->Unit={}) {
     Column(Modifier.fillMaxWidth().testTag("investment.cash.locations"),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.investment_wallet_locations),style=MaterialTheme.typography.titleMedium)
         val allocation=view?.allocation
@@ -71,6 +72,9 @@ import vn.com.quyln.mistia.core.model.*
                             Text(name,Modifier.weight(1f).testTag("investment.cash.location.name."+location.walletId),style=MaterialTheme.typography.titleSmall)
                         }
                         Text(formatMinorUnits(location.totalMinor,allocation.accountingCurrencyCode),Modifier.testTag("investment.cash.location.amount."+location.walletId),style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Bold)
+                        if(location.walletId in reconcilableIds)TextButton(onClick={onReconcile(location.walletId)},modifier=Modifier.heightIn(min=48.dp).testTag("investment.cash.reconcile."+location.walletId)){
+                            Text(stringResource(R.string.investment_wallet_reconcile))
+                        }
                         Text(stringResource(R.string.investment_wallet_available_cash_in_wallet),style=MaterialTheme.typography.bodySmall)
                         if(location.currencyCode!=allocation.accountingCurrencyCode)Text(stringResource(R.string.investment_wallet_original_amount_reference,formatMinorUnits(location.originalTotalMinor,location.currencyCode)),
                             Modifier.testTag("investment.cash.location.original."+location.walletId),style=MaterialTheme.typography.bodySmall)

@@ -242,6 +242,8 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    suspend fun reconcileCash(owner:UserId,request:InvestmentCashReconciliationRequest,deviceId:String,now:String):Result<Unit> =
+        Result.failure(UnsupportedOperationException("Investment reconciliation unavailable"))
     /** Read-only historical comparison; never grants consent or writes derived financial rows. */
     suspend fun previewFundUsageTimeline(owner:UserId,accountingCurrency:String,replacingTransactionId:String?,proposed:CloudRecord?):InvestmentFundTimelineComparison =
         throw UnsupportedOperationException("Historical investment usage comparison unavailable")
@@ -267,6 +269,7 @@ interface InvestmentRepository {
 
 interface LocalStore {
     suspend fun commitInvestmentCashTransfer(expected:InvestmentCashReadSnapshot,request:InvestmentCashTransferRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment cash transfer unavailable")
+    suspend fun commitInvestmentCashReconciliation(expected:InvestmentCashReadSnapshot,request:InvestmentCashReconciliationRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment reconciliation unavailable")
     suspend fun commitInvestmentCashTransferLifecycle(expected:InvestmentCashReadSnapshot,request:InvestmentCashTransferLifecycleRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment cash transfer lifecycle unavailable")
     fun observeInvestmentCashSnapshot(owner:UserId):Flow<InvestmentCashReadSnapshot> = throw UnsupportedOperationException("Consistent investment cash read unavailable")
     suspend fun investmentCashSnapshot(owner:UserId):InvestmentCashReadSnapshot = throw UnsupportedOperationException("Atomic investment cash read unavailable")

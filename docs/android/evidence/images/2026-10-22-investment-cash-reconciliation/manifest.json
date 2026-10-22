@@ -1,0 +1,107 @@
+{
+  "slice": 137,
+  "locale": [
+    "en",
+    "vi",
+    "ja"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "fontScale": 1.3,
+  "widthDp": 320,
+  "emulator": "API36 ARM64; transport15",
+  "files": [
+    {
+      "file": "investment-cash-reconciliation-single-top-en-light-font130-width320.png",
+      "bytes": 192365,
+      "sha256": "deccd654ed39606a41bfa1ddd604d1a9ba033b0e83a6347cbd5e151b77b4f9b7"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-top-en-dark-font130-width320.png",
+      "bytes": 193035,
+      "sha256": "4822b50a1c4234e9bbb43ac2f0685f8a8e1e4a61940e91b650ce28cad4cb4ac6"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-top-vi-light-font130-width320.png",
+      "bytes": 196864,
+      "sha256": "86b602557ac8bf359179434f1efccc55aa5ce3650ec177a0a857e4c97cc78afe"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-top-vi-dark-font130-width320.png",
+      "bytes": 198055,
+      "sha256": "e8b923c909b5eff8fba5d514ea1a248b5f1adf9bed74cc0c87cb5453246bbd66"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-top-ja-light-font130-width320.png",
+      "bytes": 292324,
+      "sha256": "5e8b19719dd2346ea49fd615df7d4b3698eb77a97fe58dc117c035a2b43e3b75"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-top-ja-dark-font130-width320.png",
+      "bytes": 293335,
+      "sha256": "d6de39d98de18e46a851c9b8f993ad24c505a66598dae8490f27d881cf91f5aa"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-bottom-en-light-font130-width320.png",
+      "bytes": 196478,
+      "sha256": "676c1d5fe82b1321686049196deb360dc9a920ff85b81599366a577a0616ca92"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-bottom-en-dark-font130-width320.png",
+      "bytes": 196914,
+      "sha256": "7253778d9050ae9f4230cfe7f886df3a7c336001422c746d3b197d435859ef11"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-bottom-vi-light-font130-width320.png",
+      "bytes": 200698,
+      "sha256": "98db37183c57ebd161a425aa33262c59a03f28c89b2787966bff2ea76f350ac5"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-bottom-vi-dark-font130-width320.png",
+      "bytes": 201999,
+      "sha256": "864820e900c376fc0319d99c9d60e751755e0a249a692cecb31e71d72c8c69e4"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-bottom-ja-light-font130-width320.png",
+      "bytes": 296139,
+      "sha256": "ed0c406aff3b8bdb980f6d293a2e7c4c26a22b7c2269530624e9fc7ad7450f24"
+    },
+    {
+      "file": "investment-cash-reconciliation-single-bottom-ja-dark-font130-width320.png",
+      "bytes": 297495,
+      "sha256": "3cb8012164f57df8ed93dfe0fb79d0cf0f243a7cc9cea9b3caf53bc98837ebb9"
+    },
+    {
+      "file": "investment-cash-reconciliation-all-en-light-font130-width320.png",
+      "bytes": 163137,
+      "sha256": "c7a82fd709d55d3162701cad8669b40fe40709d8d4ff9ad633f2135a54047754"
+    },
+    {
+      "file": "investment-cash-reconciliation-all-en-dark-font130-width320.png",
+      "bytes": 164085,
+      "sha256": "04795c73a8ceb7de54652468c285d45ab723b8b38584224a465c37754939315e"
+    },
+    {
+      "file": "investment-cash-reconciliation-all-vi-light-font130-width320.png",
+      "bytes": 172419,
+      "sha256": "64c4cb0ef124bd25eacffc41a0bceb24166b4fbfc5ec447623f17830082ae02a"
+    },
+    {
+      "file": "investment-cash-reconciliation-all-vi-dark-font130-width320.png",
+      "bytes": 173383,
+      "sha256": "0f7aae031c7c92499bd110196c71d997a60e75bc676f6ce06754da82c9100722"
+    },
+    {
+      "file": "investment-cash-reconciliation-all-ja-light-font130-width320.png",
+      "bytes": 213664,
+      "sha256": "d54dd944a00fe423088dcf9433e87423a706376326921ac03ae7f4347513a01d"
+    },
+    {
+      "file": "investment-cash-reconciliation-all-ja-dark-font130-width320.png",
+      "bytes": 215970,
+      "sha256": "490ef312a8cb1163db6602b309995ae58c01adcdcf7e5bbeba1635c46bfce9db"
+    }
+  ]
+}

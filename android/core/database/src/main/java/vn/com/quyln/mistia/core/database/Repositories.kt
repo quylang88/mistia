@@ -461,6 +461,9 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    private val reconciliation=OfflineInvestmentCashReconciliationRepository(localStore)
+    override suspend fun reconcileCash(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentCashReconciliationRequest,deviceId:String,now:String)=reconciliation.reconcile(owner,request,deviceId,now)
+
     override suspend fun previewFundUsageTimeline(owner:UserId,accountingCurrency:String,replacingTransactionId:String?,proposed:CloudRecord?):vn.com.quyln.mistia.core.model.InvestmentFundTimelineComparison {
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val snapshot=localStore.investmentCashSnapshot(owner)

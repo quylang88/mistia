@@ -770,6 +770,20 @@ class RoomLocalStore(
         true
     }
 
+    override suspend fun commitInvestmentCashReconciliation(expected:vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentCashReconciliationRequest,deviceId:String,now:String):Boolean = database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        val current=investmentCashSnapshot(expected.owner)
+        val order=compareBy<CloudRecord>({it.entity},{it.id})
+        if(expected.owner!=current.owner || expected.rows.sortedWith(order)!=current.rows.sortedWith(order))return@withTransaction false
+        val plan=vn.com.quyln.mistia.core.model.planInvestmentCashReconciliation(current,request,deviceId,now)
+        if(plan.mutations.any{(row,_) ->current.rows.none{it.entity==row.entity && it.id==row.id} &&
+            database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)!=null})return@withTransaction false
+        plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+        ensureCurrentFinanceOwner(expected.owner)
+        true
+    }
+
     override fun observeInvestmentCashSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot> =
         database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot.entities.map{it.table})
             .map{rows ->vn.com.quyln.mistia.core.model.InvestmentCashReadSnapshot(owner,rows.map{it.toCloudRecord()})}

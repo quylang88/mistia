@@ -1,0 +1,49 @@
+# Slice137 — Android same-currency real cash reconciliation (2026-10-22)
+
+Baseline88854376, branch codex/android-apk2-4-parity. Delivers actual single-source and reconcile-all native reconciliation. Combined with iOS correction136, applies user's same-currency-only reconciliation decision to both platforms. APK1–4/RC remains incomplete: ordinary reserved-fund consent/derived writes/payment edits/restores, trades/private images/dedicated atomic RPC and remaining family/receipt/background/settings/release work are open.
+
+## Behavior and direct source review
+
+Reuses one owned four-entity cash snapshot for read/action consent. Only active owned ordinary wallets with holder/linked/system accounting currency equal are actionable. Foreign locations remain visible in their original currency; no FX conversion or minor-unit relabel. Original booked/accounting contradictions or malformed consumed event/reference/role/origin/date/money hold explicitly. Single input and every wire amount are1..Long.MAX; aggregate reads remain BigInteger beyond Long. Oversized booked allocation disables automatic-all instead of truncating; single-source partial wire input remains possible with the complete exact allocation visible.
+
+Preserves source80actual/50booked behavior: real transfer can include ordinary money up to actual source balance, while onlymin(requested,positivebooked) allocation moves. Total allocation/realized profit and wallet openings are unchanged. Each stable event creates source-derived cash-reconciliation ledger +holder-cash-posting +linked-cash-posting. Known currencies/source/destination amounts, explicit financial nulls, owned identities and matching UPSERT payloads are retained. No half-transfer repair or second debit: strict complete batch replay, including metadata ACK, is checked before exhausted capacity; partial/tampered/reused identities/financial bindings hold.
+
+Frozen wallet visibility/source actual/booked amounts are rechecked after one owned read; metadata ACK can advance without authorizing changed money. Repository3 bounded retries, cancellation boundaries and wrong declared-owner rejection feed whole-four RoomCAS, orphan outbox identity protection, one transaction for all3N rows/queues and before/after active-owner fences. Production AppModule injects current auth owner into that fence. Actual trigger failure at the last posting rolls back both complete transfers and all queues; observers see0or6 rows, never halves.
+
+Native single/all entry points show real-transfer instructions, exact source amounts, large money inputs and explicit actual-transfer checkbox. Pinned48dp save/cancel, grouped cards, error/read/save retry, original draft/identities through saved state and same-owner DI rebinding are implemented. Source changes clear consent and require explicit refresh. An actual previously attempted device identity is retained for a pure complete-result proof after loss of receipt. That proof can inspect the already committed request with confirmation=true independently of the current checkbox; it never writes. Save still requires the current checkbox to be checked. Unchecking/rechecking confirmation after a lost receipt remains possible and never adds a debit. Duplicate touch/noncancellable old-owner callback cannot write/dismiss/leak across owner replacement. These are feature/native owner-restoration tests, not full-app process-kill or live cloud/RLS acceptance.
+
+Direct author comparison: InvestmentPersistence.swift1796–1955, InvestmentHubView.swift3160–3306,4471–4665 and original testProfitTransferCanIncludeOrdinaryMoneyAboveHeldProfit, including136 stricter currency policy. Existing exact cash/history/raw readers and visible-wallet comparison reviewed. Author scoped diff/source review only; fresh independent whole-branch review remains a final-goal gate.
+
+## Runtime RED → GREEN
+
+- Model8 unsupported runtimeRED2s →8GREEN2s. Additional reference/role/origin/date test found9pass/1fail1s among10; strict active cash identity/date admission fixed it. Full model GREEN. Other regression proves complete metadata ACK replay, changed nonnull financial binding hold and no completed-prefix batch repair. Logs `/tmp/mistia137-model-{red,green,review-red}.log`.
+- Repository5/5 unsupported runtimeRED6s →5GREEN6s. Real Room6/6 unsupported runtimeRED →6GREEN0.258s. Added actual orphan-queue case, current7GREEN0.294s; final related48RoomGREEN1.302s. Logs `/tmp/mistia137-repository-{red,green}.log`, `/tmp/mistia137-room-{red,green,current}.log`.
+- Native initial3 missing-route runtimeRED →3GREEN9.439s. A missing darkTheme argument was corrected before runtime; an accidental old-APK class-loader run is preserved separately as native-loader-error and is not counted as meaningful RED.
+- Recovery6 first4pass/2fail: current-source change left the checkbox checked; zero input was labelled overflow. Corrected both. Complete12 then11pass/1accessibilityBack timeout44.029s. Same isolated GlobalActionBack passed2.932s without product change; added explicit native window-focus/idle readiness and a diagnostic physical-Back attempt that still throws the original failure if needed. No product Back fix or clean first12-run claim; final13 complete runs pass the original accessibility Back assertion.
+- Actual visual1 runtimeRED4.218s: save touch target below48dp. Added explicit48dp actions/checkbox and source grouped surfaces; complete13 native GREEN97.314s,18 captures. No text/glyph/large-money assertion weakened.
+- Final direct retry review strengthened the existing lost-single-receipt test with uncheck→recheck. Actual1runtimeRED5.003s: checkbox became disabled after unchecking because result proof depended on live confirmation state. Pure already-committed proof corrected as above; full host rerun and final complete13 native accepted. Logs `/tmp/mistia137-proof-review-red.log`, `/tmp/mistia137-final-host.log`, `/tmp/mistia137-final-reconciliation-native.log`.
+
+Other native logs `/tmp/mistia137-native-{red,green,recovery-red,recovery-green,visual,current}.log`. Historical failures remain recorded, rather than treating compile/loader failures or adb exit0 as acceptance.
+
+## Final verification and actual visuals
+
+**1959 JVM/192suites, zero failures/errors/skips.** Full host/lint/main APK/model+DB+Investment test packages and required Room native compile pass1m5s; final retry-proof correction rerun passes10s. `/tmp/mistia137-{full-host,final-host}.log`. Full Swift **618=4+142+472, zero failures**, `/tmp/mistia137-swift.log`; separate0-test Testing summaries are not the evidence. Contracts15, Android/strict Swift l10n, outbox7/notification3/installment11 guards, Room6 schema assets, finance196tokens/111artworks, fold4tests/1553entries and gitdiff whitespace pass; `/tmp/mistia137-check-*.log`.
+
+**123 actual scoped emulator native cases accepted:** final new reconciliation13; related Channel10+LinkedWallet17; Room48; exact accounting/timeline35. Final new13 rerun includes the strengthened checkbox proof case; unchanged other110 passed before that one-line pure feature proof correction. No full77/90 Investment, Overview/Planning/Management native-suite claim. Logs `/tmp/mistia137-final-{reconciliation,database,model,investment-regressions}-native.log`.
+
+[18 original native PNGs and SHA manifest](images/2026-10-22-investment-cash-reconciliation/manifest.json): EN/VI/JA ×light/dark ×single-top/single-bottom/all, actual systemfont1.3 and320dp width. Full19digit Long.MAX money/input, all text line endings/nonellipsis/overflow, glyphs, full width, pinned separated action bounds and>=48dp save/cancel/checkbox targets verified. Three six-image contact sheets and original VIlight single, JAdark all and ENlight confirmed single inspected. Native matrix proves viewing/canceling never changes rows/queues. Final rerun18 captures refreshed/hashed: six top captures byte-identical;12 checked-state captures updated with normal checkbox transition pixels and re-inspected on two final contact sheets plus original VIall. Font restored1.0, wm override cleared. No global font/palette/insets/whole-app touch-target/physical Samsung claim.
+
+Source13 Kotlin/build files/97514bytes SHA256`776f809d784a73936956510fc67e977e792a856884c414d387d6af736c0bc48d`, `/tmp/mistia137-source.patch`.
+
+## Update artifacts and limits
+
+Android checkpoint **versionCode136** belongs to **slice137** (slice136 was iOS-only), versionName0.2.0-apk2-debug/min26/target36. Four main/model/DB/Investment APKs archived in ignored android/build/outputs/apk2/2026-10-22/, install-r preserving data, every installed/archive SHA rechecked. Final COLD Statusok1172ms is one emulator observation, not performance acceptance. `/tmp/mistia137-installed.json`, final-artifacts-install log and final-badging log.
+
+| APK | Bytes | DEX | SHA256 |
+| --- | ---: | ---: | --- |
+| main | 35882277 | 20 | `42248cdfbab5892cd0d35f5405a66361499577d1136233b99ba9a0d0a8ae3cd2` |
+| model | 3319660 | 4 | `b99661413150f89bb1b9b828c14554df59d19629c48c1babaef920029b3a3ac5` |
+| database | 5542611 | 5 | `6495e4c5121fb1462400256eb7f6c85651a473d9259fc73b2fa2ea97624478f3` |
+| investment | 27702338 | 9 | `a2604029b58e8b085122ed3b6bc7eb09d1e59fdf47749ba5aa6e61873a65ea81` |
+
+All11cloud flagsfalse/Room6/SwiftDataV11 unchanged, no iOS product edits137. API36ARM64 emulator transport15 only, no Samsung connected. No live Supabase/production write/deploy/migration/push. Same-currency reconciliation now delivered iOS136/Android137; previous budget/bill/installment choices remain, including both-platform installment corrections62–64. Separate card-currency question remains unanswered. Next complete ordinary reserved-fund confirmation/atomic derived postings/payment edits/restores using135 timeline, then remaining full goal. Do not mark APK1–4/RC complete from this slice.
