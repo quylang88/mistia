@@ -374,6 +374,12 @@ interface LocalStore {
     suspend fun commitInstallmentMutations(expected: InstallmentMutationSnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>): Boolean =
         throw UnsupportedOperationException("Conditional installment writes unavailable")
 
+    suspend fun installmentInvestmentMoneySnapshot(owner:UserId,planId:RecordId,month:java.time.YearMonth):BillMoneySnapshot =
+        throw UnsupportedOperationException("Installment investment snapshot unavailable")
+    suspend fun commitInstallmentInvestmentMoney(expected:BillMoneySnapshot,operation:InstallmentInvestmentMoneyOperation,catalog:SystemCategoryCatalog,
+        deviceId:String,now:String,zone:java.time.ZoneId):InstallmentInvestmentMoneyPlan =
+        throw UnsupportedOperationException("Installment investment commit unavailable")
+
     suspend fun billInvestmentMoneySnapshot(owner:UserId,billId:RecordId,month:java.time.YearMonth):BillMoneySnapshot =
         throw UnsupportedOperationException("Consistent bill investment snapshots unavailable")
     suspend fun commitBillInvestmentMoney(expected:BillMoneySnapshot,operation:BillInvestmentMoneyOperation,catalog:SystemCategoryCatalog,

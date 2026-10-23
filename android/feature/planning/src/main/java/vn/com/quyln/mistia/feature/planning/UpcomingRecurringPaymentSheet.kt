@@ -80,7 +80,7 @@ fun UpcomingRecurringPaymentSheet(owner:UserId,target:UpcomingDuePaymentTarget,r
             target.sourceKind==DueSourceKind.INSTALLMENT && installmentRow!=null -> InstallmentPaymentSheet(owner.value,installmentRow,data?.wallets.orEmpty(),
                 dataReady=data!=null,loadFailed=failed,targetCurrent=installmentPaymentTargetIsCurrent(installmentRow,installment),onRetryLoad={retry++},
                 onPay={repository.payInstallment(owner,it,deviceIdProvider(),Instant.now().toString())},
-                onUndo={Result.failure(IllegalStateException("Pay target cannot undo"))},onDismiss=onDismiss)
+                onUndo={Result.failure(IllegalStateException("Pay target cannot undo"))},onDismiss=onDismiss,primaryCurrencyCode=primaryCurrencyCode,operationScopeKey=repository)
             else -> AlertDialog(onDismissRequest=onDismiss,modifier=Modifier.testTag("upcoming.paymentUnavailable"),text={
                 if(load==UpcomingPaymentLoad.Loading) CircularProgressIndicator()
                 else Text(stringResource(if(failed) R.string.planning_installment_load_error else R.string.planning_duepayment_could_not_find_the_due_item))

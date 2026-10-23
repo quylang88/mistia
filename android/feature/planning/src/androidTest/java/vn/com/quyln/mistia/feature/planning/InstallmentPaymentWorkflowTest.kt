@@ -69,17 +69,20 @@ class InstallmentPaymentWorkflowTest {
     private fun waitClosed() { compose.waitUntil(5000) { compose.onAllNodesWithTag("installment.paymentSheet").fetchSemanticsNodes().isEmpty() } }
 
     @Test fun realRoomPaymentUndoAndRepayUseExactMinorAmountAndStableIdentities() {
+        var paymentClock=now
         compose.setContent { MistiaTheme(darkTheme = false) {
-            Column(Modifier.verticalScroll(rememberScrollState())) { InstallmentDuePane(owner, repo, month, { device }, now = { now }) }
+            Column(Modifier.verticalScroll(rememberScrollState())) { InstallmentDuePane(owner, repo, month, { device }, now = { paymentClock }) }
         } }
         open(); compose.onNodeWithTag("installment.paymentAmount").assertExists()
         submit(); Assert.assertTrue(transactions().isEmpty()); confirm()
         compose.waitUntil(5000) { cycles().singleOrNull()?.status == DueStatus.PAID }; waitClosed()
         val transaction = transactions().single(); val cycle = cycles().single()
         Assert.assertEquals(1375L, transaction.amountMinor); Assert.assertEquals(8625L, balance())
+        compose.runOnIdle{paymentClock=now.plusSeconds(60)}
         open(); compose.onNodeWithTag("installment.undoAmount").assertExists(); submit()
         compose.waitUntil(5000) { cycles().isEmpty() && transactions().isEmpty() }; waitClosed()
         Assert.assertEquals(10000L, balance())
+        compose.runOnIdle{paymentClock=now.plusSeconds(120)}
         open(); submit(); confirm()
         compose.waitUntil(5000) { cycles().size == 1 }; waitClosed()
         Assert.assertEquals(transaction.id, transactions().single().id); Assert.assertEquals(cycle.id, cycles().single().id)
@@ -153,7 +156,7 @@ class InstallmentPaymentWorkflowTest {
         runBlocking { repo.payInstallment(owner, InstallmentPaymentRequest(plan, month), device, now.toString()).getOrThrow() }
         val release = CompletableDeferred<Unit>(); var selected by mutableStateOf(month)
         val controlled = object : FinanceRepository by repo {
-            override suspend fun undoInstallmentPayment(owner: UserId, expected: InstallmentPlanRecord, month: YearMonth, deviceId: String, now: String): Result<Unit> =
+            override suspend fun undoInstallmentPaymentWithInvestmentFunds(owner: UserId, request: InstallmentInvestmentUndoRequest, deviceId: String, now: String): Result<Unit> =
                 withContext(NonCancellable) { release.await(); Result.success(Unit) }
         }
         compose.setContent { MistiaTheme(darkTheme = false) { Column(Modifier.verticalScroll(rememberScrollState())) {

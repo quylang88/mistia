@@ -1,0 +1,117 @@
+{
+  "device": "API36 ARM64 emulator",
+  "systemFontScale": 1.3,
+  "widthDp": 320,
+  "density": 2.75,
+  "note": "Actual InstallmentPaymentSheet with real Room/repository. Observing/Cancel preserves rows/outbox; complete exact money/text/glyph/action bounds checked.",
+  "screenshots": [
+    {
+      "file": "installment-funds-confirmation-en-dark-font130-width320.png",
+      "sha256": "bc88ec4e4e5c12937fbad0a6f1528ffc049f36dbb0184905dc80ff8b64855a6d",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-confirmation-en-light-font130-width320.png",
+      "sha256": "a7ba3023f3d182b89706fa131e6557b1bad3d7e9fe45fc895b3b3423868b9331",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-confirmation-ja-dark-font130-width320.png",
+      "sha256": "3455df9ade7a627d5d6de054e10a62078ee97f29bb1c4edc3e8a09b224b12049",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-confirmation-ja-light-font130-width320.png",
+      "sha256": "b174b6737ef3496dab1b45dfc728b027514a90f184330f6b8f24083bc68ba54e",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-confirmation-vi-dark-font130-width320.png",
+      "sha256": "9bea209cc6dc3225f01a245adc52332998f848b5afa2f0a095d39b7c4dbc0e29",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-confirmation-vi-light-font130-width320.png",
+      "sha256": "4d560d9b3cd73e997db4f82fb385e641ec294b60a1a83aa0eb6598071c13ecf1",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-restore-en-dark-font130-width320.png",
+      "sha256": "72df436b9233675588c29b761a057e93a63e23b221a03dc50c69c02cb6208d79",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-restore-en-light-font130-width320.png",
+      "sha256": "796303ff6f31220b62754af4422804173ebe9acdeee9303c6aaa4fd1378a6937",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-restore-ja-dark-font130-width320.png",
+      "sha256": "5a0234c352b1e034661bd9df04be545a87698b53bb26dc6bef076de36b330ab6",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-restore-ja-light-font130-width320.png",
+      "sha256": "b860c38c7024e26da2994d10b92878cb8839f06852fbc7e49a6b6f2fad7da759",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-restore-vi-dark-font130-width320.png",
+      "sha256": "9f16dbc77c8b8867a718ca59effe16e15e8bf6671fe7f5a6e8586a4bb7d16b8e",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-restore-vi-light-font130-width320.png",
+      "sha256": "12be37c2ad20fc0117064f19c87a21b7bf481198b5cf4fecc328af0aa7ef8eaf",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-use-en-dark-font130-width320.png",
+      "sha256": "44a12ccc669336c7d0c863cb1ea1056c954c8178eb3320b10f4d30ab58bfc9e0",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-use-en-light-font130-width320.png",
+      "sha256": "374ec05eb97943708ed9290dc725ce9558f5219f6869fd5f904fc19c54d0bc0c",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-use-ja-dark-font130-width320.png",
+      "sha256": "0266bb015aa33834ccfe2b40bde2462fd81d2bac537e2ce2aad941a10ee7b6c5",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-use-ja-light-font130-width320.png",
+      "sha256": "784dd9f08f8aa36f4ea45754c395d2c683e30610e9d1588ec0240f7df84e2985",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-use-vi-dark-font130-width320.png",
+      "sha256": "ccdf1f8feed8b32666a23f102f8b47404ada276177c16dfe489a6bedf1b451f1",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "installment-funds-use-vi-light-font130-width320.png",
+      "sha256": "2047b57c8fe3723c3162fb638c2ebe54a0f81aced024db57593727b6117703eb",
+      "width": 880,
+      "height": 2340
+    }
+  ]
+}

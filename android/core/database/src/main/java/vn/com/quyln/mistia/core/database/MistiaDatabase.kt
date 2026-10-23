@@ -1275,15 +1275,23 @@ class RoomLocalStore(
         }
     }
 
-    override suspend fun billInvestmentMoneySnapshot(owner:UserId,billId:vn.com.quyln.mistia.core.model.RecordId,month:java.time.YearMonth):BillMoneySnapshot {
+    override suspend fun billInvestmentMoneySnapshot(owner:UserId,billId:vn.com.quyln.mistia.core.model.RecordId,month:java.time.YearMonth):BillMoneySnapshot =
+        scheduledInvestmentMoneySnapshot(owner,billId,month,vn.com.quyln.mistia.core.model.DueSourceKind.RECURRING_BILL)
+
+    override suspend fun installmentInvestmentMoneySnapshot(owner:UserId,planId:vn.com.quyln.mistia.core.model.RecordId,month:java.time.YearMonth):BillMoneySnapshot =
+        scheduledInvestmentMoneySnapshot(owner,planId,month,vn.com.quyln.mistia.core.model.DueSourceKind.INSTALLMENT)
+
+    private suspend fun scheduledInvestmentMoneySnapshot(owner:UserId,billId:vn.com.quyln.mistia.core.model.RecordId,month:java.time.YearMonth,
+        kind:vn.com.quyln.mistia.core.model.DueSourceKind):BillMoneySnapshot {
         val caller=kotlinx.coroutines.currentCoroutineContext()
         caller.ensureActive()
         return database.withTransaction {
             ensureCurrentFinanceOwner(owner)
             val records=CloudEntity.entries.associateWith{recordsIncludingDeleted(owner,it.table)}
-            val bill=records.getValue(CloudEntity.RECURRING_BILL_PLAN).singleOrNull{it.id==billId.value}
+            val sourceEntity=if(kind==vn.com.quyln.mistia.core.model.DueSourceKind.INSTALLMENT)CloudEntity.INSTALLMENT_PLAN else CloudEntity.RECURRING_BILL_PLAN
+            val bill=records.getValue(sourceEntity).singleOrNull{it.id==billId.value}
                 ?: throw vn.com.quyln.mistia.core.model.BillPaymentException(vn.com.quyln.mistia.core.model.BillPaymentError.NOT_FOUND)
-            val snapshot=BillMoneySnapshot(owner,bill,month,records,billMoneyReceiptTransactionIds(owner))
+            val snapshot=BillMoneySnapshot(owner,bill,month,records,billMoneyReceiptTransactionIds(owner),sourceKind=kind)
             ensureCurrentFinanceOwner(owner)
             caller.ensureActive()
             snapshot
@@ -1292,22 +1300,36 @@ class RoomLocalStore(
 
     override suspend fun commitBillInvestmentMoney(expected:BillMoneySnapshot,operation:vn.com.quyln.mistia.core.model.BillInvestmentMoneyOperation,
         catalog:vn.com.quyln.mistia.core.model.SystemCategoryCatalog,deviceId:String,now:String,zone:java.time.ZoneId):vn.com.quyln.mistia.core.model.BillInvestmentMoneyPlan {
+        require(expected.sourceKind==vn.com.quyln.mistia.core.model.DueSourceKind.RECURRING_BILL)
+        return commitScheduledInvestmentMoney(expected,{vn.com.quyln.mistia.core.model.planBillInvestmentMoney(it,operation,catalog,deviceId,now,zone)},{it.mutations})
+    }
+
+    override suspend fun commitInstallmentInvestmentMoney(expected:BillMoneySnapshot,operation:vn.com.quyln.mistia.core.model.InstallmentInvestmentMoneyOperation,
+        catalog:vn.com.quyln.mistia.core.model.SystemCategoryCatalog,deviceId:String,now:String,zone:java.time.ZoneId):vn.com.quyln.mistia.core.model.InstallmentInvestmentMoneyPlan {
+        require(expected.sourceKind==vn.com.quyln.mistia.core.model.DueSourceKind.INSTALLMENT)
+        return commitScheduledInvestmentMoney(expected,{vn.com.quyln.mistia.core.model.planInstallmentInvestmentMoney(it,operation,catalog,deviceId,now,zone)},{it.mutations})
+    }
+
+    private suspend fun <T> commitScheduledInvestmentMoney(expected:BillMoneySnapshot,prepare:(BillMoneySnapshot)->T,
+        writes:(T)->List<Pair<CloudRecord,PendingMutation>>):T {
         val caller=kotlinx.coroutines.currentCoroutineContext()
         caller.ensureActive()
         return database.withTransaction {
             ensureCurrentFinanceOwner(expected.owner)
-            val current=billInvestmentMoneySnapshot(expected.owner,vn.com.quyln.mistia.core.model.RecordId(expected.bill.id),expected.month)
+            val current=scheduledInvestmentMoneySnapshot(expected.owner,vn.com.quyln.mistia.core.model.RecordId(expected.bill.id),expected.month,expected.sourceKind)
             expected.requireUnchanged(current.recordsByEntity)
             require(expected.bill==current.bill && expected.sourceKind==current.sourceKind && expected.receiptTransactionIds==current.receiptTransactionIds){"Bill investment source changed"}
             val planning=current.copy(automaticPaymentNotification=expected.automaticPaymentNotification)
-            val plan=vn.com.quyln.mistia.core.model.planBillInvestmentMoney(planning,operation,catalog,deviceId,now,zone)
-            for((record,_) in plan.mutations) {
+            val plan=prepare(planning)
+            val mutations=writes(plan)
+            for((record,_) in mutations) {
                 val old=current.recordsByEntity.values.flatten().singleOrNull{it.entity==record.entity && it.id==record.id}
                 require(old!=null || database.syncOutboxDao().record(expected.owner.value,record.entity,record.id)==null){"Bill investment identity has an orphan queue"}
             }
-            plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
-            if(plan.mutations.isNotEmpty()) {
-                resolveBillNotificationsInTransaction(current.bill,current.month.toString(),plan.mutations.map{it.first})
+            mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+            if(mutations.isNotEmpty()) {
+                if(current.sourceKind==vn.com.quyln.mistia.core.model.DueSourceKind.RECURRING_BILL)
+                    resolveBillNotificationsInTransaction(current.bill,current.month.toString(),mutations.map{it.first})
                 planning.automaticPaymentNotification?.takeIf{billRemindersEnabled()}?.let{incoming->
                     val existing=localNotifications(current.owner).singleOrNull{it.key==incoming.key}
                     val notification=upsertLocalNotification(existing,incoming)

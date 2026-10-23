@@ -266,4 +266,14 @@ class BillInvestmentMoneyPlanTest {
         assertEquals(BillPaymentError.UNSUPPORTED_LINKED_STATE,(error as? BillPaymentException)?.reason)
     }
 
+    @Test fun olderDeletedDuplicateMarkerDoesNotMakeASuccessfulUndoUnretryable() {
+        val s=legacyCompoundPaid()
+        val live=DueOccurrenceRecord.fromCloudRecord(s.recordsByEntity.getValue(CloudEntity.DUE_OCCURRENCE_RECORD).first())
+        val old=live.copy(id=id(76),createdAt=now,updatedAt=now,paidAt=now,deletedAt=now).toCloudRecord()
+        val withOld=s.copy(recordsByEntity=s.recordsByEntity+(CloudEntity.DUE_OCCURRENCE_RECORD to (s.recordsByEntity.getValue(CloudEntity.DUE_OCCURRENCE_RECORD)+old)));val r=undoRequest(withOld).copy(expectedAmountMinor=30)
+        val result=undo(withOld,r)
+        assertTrue(result.mutations.none{it.first.id==id(76)})
+        assertTrue(undo(apply(withOld,result),r).mutations.isEmpty())
+    }
+
 }

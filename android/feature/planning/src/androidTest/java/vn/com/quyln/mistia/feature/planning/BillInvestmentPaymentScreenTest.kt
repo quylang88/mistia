@@ -279,4 +279,20 @@ class BillInvestmentPaymentScreenTest {
         }finally{compose.runOnIdle{originals.forEach{(resource,configuration)->resource.updateConfiguration(configuration,resource.displayMetrics)}}}
     }
 
+    @Test fun actualUpcomingBillRouteRetriesACommittedPaymentAfterObserverChangesTheCycleToPaid()=runBlocking<Unit> {
+        var lost=false;var closed=false
+        val controlled=object:FinanceRepository by repo {
+            override suspend fun payRecurringBill(owner:UserId,request:BillPaymentRequest,deviceId:String,now:String):Result<SavedBillPayment> {
+                val result=repo.payRecurringBill(owner,request,deviceId,now)
+                return if(result.isSuccess && !lost){lost=true;Result.failure(java.io.IOException("lost committed bill response"))}else result
+            }
+        }
+        compose.setContent{MistiaTheme(darkTheme=false){if(!closed)UpcomingRecurringPaymentSheet(owner,UpcomingDuePaymentTarget(owner.value,DueSourceKind.RECURRING_BILL,bill.id,month),controlled,{device},{closed=true})}}
+        awaitTag("bill.submitPayment");submitToFundReview();compose.onNodeWithTag("bill.funds.confirm").performClick()
+        awaitTag("bill.paymentError");awaitTag("bill.paymentStale")
+        Assert.assertTrue(lost);val before=source();val queue=queues()
+        compose.onNodeWithTag("bill.retryPayment").performScrollTo().performClick();compose.waitUntil(5000){closed}
+        Assert.assertEquals(before,source());Assert.assertEquals(queue,queues())
+    }
+
 }

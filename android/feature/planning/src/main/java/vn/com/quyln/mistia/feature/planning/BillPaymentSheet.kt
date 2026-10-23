@@ -62,6 +62,8 @@ import vn.com.quyln.mistia.core.model.*
     var fundReview by remember {mutableStateOf<InvestmentFundUsageReview?>(null)}
     var fundPayment by remember {mutableStateOf<BillPaymentRequest?>(null)}
     var fundUndo by remember {mutableStateOf<BillInvestmentUndoRequest?>(null)}
+    var retryPayment by remember {mutableStateOf<BillPaymentRequest?>(null)}
+    var retryUndo by remember {mutableStateOf<BillInvestmentUndoRequest?>(null)}
     val scope=rememberCoroutineScope()
     val currentPay by rememberUpdatedState(onPay)
     val currentInvestmentUndo by rememberUpdatedState(onInvestmentUndo)
@@ -75,20 +77,22 @@ import vn.com.quyln.mistia.core.model.*
     val choices=eligibleBillPaymentWallets(owner,row.bill.currencyCode,wallets)
     val selected=choices.firstOrNull {it.id==state.walletId}
     val request=if(dataReady && targetCurrent) runCatching {state.request(row,wallets).copy(investment=investment)}.getOrNull() else null
-    fun execute(payment:BillPaymentRequest?,undoRequest:BillInvestmentUndoRequest?=null) {
-        if(busy || !dataReady || !targetCurrent)return
+    fun execute(payment:BillPaymentRequest?,undoRequest:BillInvestmentUndoRequest?=null,resuming:Boolean=false) {
+        val knownRetry=resuming && if(undo)undoRequest!=null && undoRequest==retryUndo else payment!=null && payment==retryPayment
+        if(busy || !dataReady || (!targetCurrent && !knownRetry) || (resuming && !knownRetry))return
         val frozenUndo=if(undo)undoRequest ?: BillInvestmentUndoRequest(row.bill,month,row.amountMinor,row.linkedTransactionId,investment)else null
-        if((!undo && (payment==null || !payment.matchesBillPaymentConsent(request) || payment.investment?.creation!=creation)) ||
+        if((!undo && (payment==null || !payment.matchesBillPaymentConsent(if(knownRetry)runCatching{state.request(row,wallets)}.getOrNull()else request) || payment.investment?.creation!=creation)) ||
             (frozenUndo!=null && (!row.bill.matchesBillPaymentSource(frozenUndo.expected) || frozenUndo.expectedAmountMinor!=row.amountMinor || frozenUndo.expectedLinkedTransactionId!=row.linkedTransactionId))) {
             confirmedRequest=null;fundReview=null;fundPayment=null;fundUndo=null;error=R.string.planning_bill_payment_changed;return
         }
+        retryPayment=null;retryUndo=null
         busy=true;error=null
         scope.launch {
             fun failed(failure:Throwable) {
                 val review=(failure as? InvestmentFundUsageConfirmationRequired)?.review
                 if(review!=null && review.consent.ownerUserId==owner && review.consent.transactionId==creation.id) {
                     fundReview=review;fundPayment=payment;fundUndo=frozenUndo
-                } else {fundReview=null;fundPayment=null;fundUndo=null;error=billPaymentErrorResource(failure)}
+                } else {fundReview=null;fundPayment=null;fundUndo=null;retryPayment=payment;retryUndo=frozenUndo;error=billPaymentErrorResource(failure)}
             }
             try {
                 val result=if(undo)currentInvestmentUndo?.invoke(requireNotNull(frozenUndo)) ?: currentUndo() else currentPay(requireNotNull(payment)).map{Unit}
@@ -136,6 +140,10 @@ import vn.com.quyln.mistia.core.model.*
             }
             if(dataReady && !targetCurrent) Text(stringResource(R.string.planning_duepayment_could_not_find_the_due_item),Modifier.testTag("bill.paymentStale"),color=MaterialTheme.colorScheme.error)
             error?.let {Text(stringResource(it),color=MaterialTheme.colorScheme.error,modifier=Modifier.testTag("bill.paymentError"))}
+            if(!targetCurrent && (retryPayment!=null || retryUndo!=null)) TextButton(enabled=!busy && dataReady,
+                onClick={execute(retryPayment,retryUndo,true)},modifier=Modifier.fillMaxWidth().testTag("bill.retryPayment")) {
+                Text(stringResource(R.string.planning_installment_retry))
+            }
             if(busy) CircularProgressIndicator(Modifier.testTag("bill.paymentBusy"))
             Button(enabled=!busy && dataReady && targetCurrent && (if(undo) row.status==DueStatus.PAID else request!=null),
                 onClick={if(undo) execute(null) else confirmedRequest=request},modifier=Modifier.fillMaxWidth().testTag("bill.submitPayment")) {

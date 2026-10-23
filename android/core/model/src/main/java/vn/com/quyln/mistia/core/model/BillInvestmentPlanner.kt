@@ -9,7 +9,10 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
     private val device:String,private val now:String,private val zone:ZoneId) {
     private val owner=source.owner
     private val records=source.recordsByEntity
-    private val bill:RecurringBillPlanRecord
+    private val kind=source.sourceKind
+    private val sourceEntity=if(kind==DueSourceKind.INSTALLMENT)CloudEntity.INSTALLMENT_PLAN else CloudEntity.RECURRING_BILL_PLAN
+    private val namespace=if(kind==DueSourceKind.INSTALLMENT)"installment"else "bill"
+    private val bill:ScheduledInvestmentExpenseSource
     private val occurrences:List<DueOccurrenceRecord>
     private val cycle:List<DueOccurrenceRecord>
     private val wallets:List<LedgerWalletRecord>
@@ -17,7 +20,7 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
     private val profiles:List<CreditCardProfileRecord>
     private val transactions:List<LedgerTransactionRecord>
     init {
-        require(records.keys==CloudEntity.entries.toSet() && source.sourceKind==DueSourceKind.RECURRING_BILL)
+        require(records.keys==CloudEntity.entries.toSet() && kind in setOf(DueSourceKind.RECURRING_BILL,DueSourceKind.INSTALLMENT))
         require(financeRawUuid(device)==device);Instant.parse(now)
         records.forEach{(entity,rows)->
             require(rows.map{it.id}.distinct().size==rows.size)
@@ -30,15 +33,15 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
                 if(body!=row.deletedAt?.let{Instant.parse(it).toString()})conflict()
             }
         }
-        require(records.getValue(CloudEntity.RECURRING_BILL_PLAN).singleOrNull{it.id==source.bill.id}==source.bill)
-        bill=RecurringBillPlanRecord.fromCloudRecord(source.bill)
+        require(records.getValue(sourceEntity).singleOrNull{it.id==source.bill.id}==source.bill)
+        bill=ScheduledInvestmentExpenseSource(source.bill,kind)
         if(bill.ownerUserId!=owner.value || bill.deletedAt!=null || bill.isArchived)fail(BillPaymentError.NOT_FOUND)
         occurrences=rows(CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord)
-        occurrences.filter{it.deletedAt==null && it.sourceId==bill.id && (it.sourceKindWireValue=="recurringBill" || it.sourceKindWireValue !in DueSourceKind.entries.map{kind->kind.wireValue})}.forEach{
-            if(it.sourceKindWireValue!="recurringBill" || runCatching{java.time.YearMonth.parse(it.selectedMonthKey)}.isFailure || it.statusWireValue !in DueStatus.entries.map{status->status.wireValue})
+        occurrences.filter{it.deletedAt==null && it.sourceId==bill.id && (it.sourceKindWireValue==kind.wireValue || it.sourceKindWireValue !in DueSourceKind.entries.map{kind->kind.wireValue})}.forEach{
+            if(it.sourceKindWireValue!=kind.wireValue || runCatching{java.time.YearMonth.parse(it.selectedMonthKey)}.isFailure || it.statusWireValue !in DueStatus.entries.map{status->status.wireValue})
                 fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
         }
-        cycle=occurrences.filter{it.sourceKind==DueSourceKind.RECURRING_BILL && it.sourceId==bill.id && it.selectedMonthKey==source.month.toString()}
+        cycle=occurrences.filter{it.sourceKind==kind && it.sourceId==bill.id && it.selectedMonthKey==source.month.toString()}
         wallets=rows(CloudEntity.LEDGER_WALLET).map(LedgerWalletRecord::fromCloudRecord).filter{it.deletedAt==null}
         categories=rows(CloudEntity.TRANSACTION_CATEGORY).map(TransactionCategoryRecord::fromCloudRecord)
         profiles=rows(CloudEntity.CREDIT_CARD_PROFILE).map(CreditCardProfileRecord::fromCloudRecord).filter{it.deletedAt==null}
@@ -55,9 +58,10 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
         return runCatching{Instant.parse(creation.createdAt).also{require(it<=Instant.parse(now))}.toString()}.getOrElse{conflict()}
     }
     private fun expected(expected:RecurringBillPlanRecord?) {
-        if(expected==null || !bill.matchesBillPaymentSource(expected))fail(BillPaymentError.SOURCE_CHANGED)
+        if(expected==null || bill.recurring?.matchesBillPaymentSource(expected)!=true)fail(BillPaymentError.SOURCE_CHANGED)
     }
     fun plan(operation:BillInvestmentMoneyOperation):BillInvestmentMoneyPlan {
+        require(kind==DueSourceKind.RECURRING_BILL)
         require(source.automaticPaymentNotification==null || (operation is BillInvestmentMoneyOperation.Pay && operation.request.automatic)) {
             "Automatic bill notification requires an automatic payment"
         }
@@ -66,21 +70,39 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
             is BillInvestmentMoneyOperation.Undo->undo(operation.request)
         }
     }
-    private fun pay(request:BillPaymentRequest,presentation:BillAutomaticPaymentText?):BillInvestmentMoneyPlan {
+    fun planInstallment(operation:InstallmentInvestmentMoneyOperation):InstallmentInvestmentMoneyPlan {
+        require(kind==DueSourceKind.INSTALLMENT && source.automaticPaymentNotification==null)
+        val plan=when(operation) {
+            is InstallmentInvestmentMoneyOperation.Pay->operation.request.let{request->
+                pay(BillPaymentRequest(RecordId(request.expected.id),request.month,request.walletId,request.amountMinorOverride,
+                    expectedDueAmountMinor=request.expectedDueAmountMinor,investment=request.investment),null,request.expected)
+            }
+            is InstallmentInvestmentMoneyOperation.Undo->operation.request.let{request->
+                requireInstallmentSource(request.expected)
+                undoCycle(request.month,request.expectedAmountMinor,request.expectedLinkedTransactionId,request.investment)
+            }
+        }
+        return InstallmentInvestmentMoneyPlan(plan.payment?.let{SavedInstallmentPayment(it.transaction,it.occurrences)},plan.mutations)
+    }
+    private fun requireInstallmentSource(expected:InstallmentPlanRecord?) {
+        if(expected==null || bill.installment?.matchesInstallmentPaymentSource(expected)!=true)fail(BillPaymentError.SOURCE_CHANGED)
+    }
+    private fun pay(request:BillPaymentRequest,presentation:BillAutomaticPaymentText?,expectedInstallment:InstallmentPlanRecord?=null):BillInvestmentMoneyPlan {
         if(presentation!=null && !request.automatic)fail(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE)
         presentation?.let{require(it.transactionTitle.isNotBlank() && it.successTitle.isNotBlank())}
         if(request.billId.value!=bill.id || request.month!=source.month)fail(BillPaymentError.SOURCE_CHANGED)
-        if(!request.automatic)expected(request.expectedBill)
+        if(kind==DueSourceKind.INSTALLMENT)requireInstallmentSource(expectedInstallment)else if(!request.automatic)expected(request.expectedBill)
         val context=requireNotNull(request.investment){"Bill payment requires a frozen investment operation"};val at=context(context)
         if(request.automatic) {
             if(request.walletId!=null || request.amountMinorOverride!=null || context.consent!=null)fail(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE)
             if(bill.autoPayEnabled!=true || bill.isPaused)fail(BillPaymentError.AUTO_PAY_NOT_DUE)
         }
-        val due=recurringBillDueRows(owner,listOf(bill),occurrences.filter{it.deletedAt==null},source.month,zone).singleOrNull() ?: fail(BillPaymentError.NOT_SCHEDULED)
+        val due=bill.due(owner,occurrences.filter{it.deletedAt==null},source.month,zone) ?: fail(BillPaymentError.NOT_SCHEDULED)
         if(request.automatic && due.autoPayDate?.atZone(zone)?.toLocalDate()!=Instant.parse(now).atZone(zone).toLocalDate())fail(BillPaymentError.AUTO_PAY_NOT_DUE)
         if(!request.automatic && due.amountMinor!=request.expectedDueAmountMinor)fail(BillPaymentError.SOURCE_CHANGED)
         val wallet=wallets.singleOrNull{it.id==(request.walletId?.value ?: bill.paymentWalletId) && !it.isArchived && it.kind!=null && it.kind!=WalletKind.INVESTMENT}
             ?: fail(BillPaymentError.INVALID_WALLET)
+        if(kind==DueSourceKind.INSTALLMENT && wallet.kind==WalletKind.CREDIT_CARD)fail(BillPaymentError.INVALID_WALLET)
         if(!billPaymentCurrenciesMatch(bill.currencyCode,wallet.currencyCode))fail(BillPaymentError.WALLET_CURRENCY_MISMATCH)
         val amount=(request.amountMinorOverride ?: due.amountMinor)?.takeIf{it>0} ?: fail(BillPaymentError.MISSING_AMOUNT)
         val live=cycle.filter{it.deletedAt==null}
@@ -118,14 +140,14 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
             throw TransactionValidationException(TransactionValidationError.PAID_CREDIT_CARD_STATEMENT)
         requireExactOrdinaryAffordability(moneySnapshot(),LedgerTransactionRecord.fromCloudRecord(primary),profiles,null)
         val reused=cycle.filter{it.deletedAt==null || (it.status==DueStatus.PAID && it.linkedTransactionId==targetId)}
-        val paid=if(reused.isEmpty())listOf(DueOccurrenceRecord(UUID.nameUUIDFromBytes("vn.com.quyln.mistia.bill-cycle.${owner.value}.${bill.id}.${source.month}.${context.creation.id}".toByteArray(Charsets.UTF_8)).toString(),owner.value,
-            "recurringBill",bill.id,source.month.toString(),due.dueDate.toString(),amount,"paid",timestamp,targetId,timestamp,timestamp,null,0,device)) else reused.map{
+        val paid=if(reused.isEmpty())listOf(DueOccurrenceRecord(UUID.nameUUIDFromBytes("vn.com.quyln.mistia.$namespace-cycle.${owner.value}.${bill.id}.${source.month}.${context.creation.id}".toByteArray(Charsets.UTF_8)).toString(),owner.value,
+            kind.wireValue,bill.id,source.month.toString(),due.dueDate.toString(),amount,"paid",timestamp,targetId,timestamp,timestamp,null,0,device)) else reused.map{
             it.copy(scheduledDate=due.dueDate.toString(),amountMinorSnapshot=amount,statusWireValue="paid",paidAt=timestamp,linkedTransactionId=targetId,updatedAt=timestamp,deletedAt=null,lastModifiedByDeviceId=device)
         }
         val base=categoryWrites.map{it.toCloudRecord() to it.bootstrapMutation()}+listOf(primary to mutation.pending.copy(payload=primary.payload))+
             paid.map{preserve(it.toCloudRecord() to it.pendingMutation())}
         val notification=if(request.automatic && presentation?.emitNotification==true)
-            billInvestmentSuccessNotification(owner,bill,source.month,amount,wallet.id,due.dueDate.toString(),presentation,now)else null
+            billInvestmentSuccessNotification(owner,requireNotNull(bill.recurring),source.month,amount,wallet.id,due.dueDate.toString(),presentation,now)else null
         require(source.automaticPaymentNotification==notification){"Bill automatic success notification does not match its payment"}
         source.requireValidMutations(base);source.requireInstallmentMoneyCoherence(base)
         val effects=effects(base,context,request.automatic)
@@ -134,7 +156,7 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
     private fun category(created:MutableList<TransactionCategoryRecord>,at:String):TransactionCategoryRecord {
         val definitions=catalog.definitions
         val selected=categories.firstOrNull{it.id==bill.categoryId && it.deletedAt==null}
-        val key=selected?.systemKey?.takeIf{candidate->definitions.any{it.key==candidate}} ?: definitions.firstOrNull{it.isActive && it.iconSymbolName==bill.iconSymbolName}?.key ?: "billing"
+        val key=if(kind==DueSourceKind.INSTALLMENT)"loan_repayment"else selected?.systemKey?.takeIf{candidate->definitions.any{it.key==candidate}} ?: definitions.firstOrNull{it.isActive && it.iconSymbolName==bill.iconSymbolName}?.key ?: "billing"
         fun ensure(key:String):TransactionCategoryRecord {
             val candidates=categories.filter{it.systemKey==key}
             candidates.filter{it.deletedAt==null}.maxWithOrNull(compareBy<TransactionCategoryRecord>({it.id==SystemCategoryIdentity.cloudId(key,owner)},{it.syncVersion},{Instant.parse(it.updatedAt)},{it.id}))?.let{return it}
@@ -161,17 +183,23 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
     }
     private fun undo(request:BillInvestmentUndoRequest):BillInvestmentMoneyPlan {
         expected(request.expected)
-        if(request.month!=source.month)fail(BillPaymentError.SOURCE_CHANGED)
-        val context=request.investment;val at=context(context)
+        return undoCycle(request.month,request.expectedAmountMinor,request.expectedLinkedTransactionId,request.investment)
+    }
+    private fun undoCycle(month:YearMonth,expectedAmountMinor:Long?,expectedLinkedTransactionId:String?,context:BillInvestmentOperationContext):BillInvestmentMoneyPlan {
+        if(month!=source.month)fail(BillPaymentError.SOURCE_CHANGED)
+        val at=context(context)
         val paid=cycle.filter{it.deletedAt==null && it.status==DueStatus.PAID}
         if(paid.isEmpty()) {
             val done=cycle.filter{it.status==DueStatus.PAID && it.deletedAt?.let{t->Instant.parse(t)==Instant.parse(at)}==true}
             if(done.isEmpty() || cycle.any{it.deletedAt==null})conflict()
             // The visible marker binds the request; legacy compound markers bind their own expenses.
-            if(done.none{it.linkedTransactionId==request.expectedLinkedTransactionId &&
-                    (it.amountMinorSnapshot ?: bill.amountMinor)==request.expectedAmountMinor})conflict()
+            if(done.none{it.linkedTransactionId==expectedLinkedTransactionId &&
+                    (it.amountMinorSnapshot ?: bill.amountMinor)==expectedAmountMinor})conflict()
             val ids=done.mapNotNull{it.linkedTransactionId}.toSet()
-            if(cycle.any{it.linkedTransactionId in ids && it !in done} || occurrences.any{it.deletedAt==null && it.linkedTransactionId in ids})conflict()
+            // Older deleted duplicates are preserved historical rows, outside this undo's writes.
+            if(cycle.any{it.linkedTransactionId in ids && it !in done &&
+                    (it.status!=DueStatus.PAID || it.deletedAt==null || Instant.parse(it.deletedAt)>=Instant.parse(at))} ||
+                occurrences.any{it.deletedAt==null && it.linkedTransactionId in ids})conflict()
             val deleted=ids.map{id->rows(CloudEntity.LEDGER_TRANSACTION).singleOrNull{it.id==id} ?: conflict()}
             deleted.forEach{row->
                 if(row.deletedAt?.let{t->Instant.parse(t)<=Instant.parse(at)}!=true)conflict()
@@ -182,9 +210,12 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
             return BillInvestmentMoneyPlan(null,emptyList())
         }
         if(cycle.any{it.deletedAt==null && it.status!=DueStatus.PAID})fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
-        val due=recurringBillDueRows(owner,listOf(bill),occurrences.filter{it.deletedAt==null},source.month,zone).singleOrNull() ?: fail(BillPaymentError.NOT_SCHEDULED)
-        if(due.amountMinor!=request.expectedAmountMinor || due.linkedTransactionId!=request.expectedLinkedTransactionId)fail(BillPaymentError.SOURCE_CHANGED)
+        val due=bill.due(owner,occurrences.filter{it.deletedAt==null},source.month,zone) ?: fail(BillPaymentError.NOT_SCHEDULED)
+        if(due.amountMinor!=expectedAmountMinor || due.linkedTransactionId!=expectedLinkedTransactionId)fail(BillPaymentError.SOURCE_CHANGED)
         val ids=paid.mapNotNull{it.linkedTransactionId}.toSet()
+        if(cycle.any{it.linkedTransactionId in ids && it !in paid &&
+                (it.status!=DueStatus.PAID || it.deletedAt==null || Instant.parse(it.deletedAt)>=Instant.parse(at))})
+            fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
         if(occurrences.any{it.deletedAt==null && it.id !in paid.map{c->c.id} && it.linkedTransactionId in ids})fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
         val expenses=ids.map{id->transactions.singleOrNull{it.id==id} ?: fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)}
         expenses.forEach{tx->
@@ -223,7 +254,7 @@ internal class BillInvestmentPlanner(private val source:BillMoneySnapshot,privat
         if(derived(primary,context).isNotEmpty())conflict()
     }
     private fun requireCurrentCanonicalMoney(context:BillInvestmentOperationContext) {
-        val markerId=UUID.nameUUIDFromBytes("vn.com.quyln.mistia.bill-read-proof.${owner.value}.${context.creation.id}".toByteArray(Charsets.UTF_8)).toString()
+        val markerId=UUID.nameUUIDFromBytes("vn.com.quyln.mistia.$namespace-read-proof.${owner.value}.${context.creation.id}".toByteArray(Charsets.UTF_8)).toString()
         if(records.values.flatten().any{it.id==markerId} || rows(CloudEntity.INVESTMENT_POSTING).any{
                 it.payload.financeRawReference("event_id").id==markerId || it.payload.financeRawReference("ledger_transaction_id").id==markerId})conflict()
         // An archived, zero-effect read marker proves the existing allocation without changing a real event.

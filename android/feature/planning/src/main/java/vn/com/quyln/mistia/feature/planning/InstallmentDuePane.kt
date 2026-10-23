@@ -109,7 +109,8 @@ private fun OwnedInstallmentDuePane(owner: UserId, repository: FinanceRepository
                 rows?.getOrNull()?.firstOrNull { it.plan.id == paymentRow.plan.id }), onRetryLoad = { retry++ },
             onPay = { request -> repository.payInstallment(owner, request, deviceIdProvider(), currentTime().toString()) },
             onUndo = { repository.undoInstallmentPayment(owner, paymentRow.plan, paymentRow.month, deviceIdProvider(), currentTime().toString()) },
-            onDismiss = { paymentNavigation = InstallmentPaymentNavigation.closed(owner.value, month) })
+            onDismiss = { paymentNavigation = InstallmentPaymentNavigation.closed(owner.value, month) },primaryCurrencyCode=defaultCurrency,operationScopeKey=repository,
+            onInvestmentUndo={repository.undoInstallmentPaymentWithInvestmentFunds(owner,it,deviceIdProvider(),currentTime().toString())},operationNow={currentTime()})
     }
     // Keep the editor composed across month/zone/loading changes so drafts and operations survive.
     val editorId = navigation.editorId
