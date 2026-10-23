@@ -1,0 +1,122 @@
+[
+  {
+    "file": "investment-sale-loss-en-dark-font130-width320.png",
+    "bytes": 141109,
+    "sha256": "90ff6e3b0036ff73898dc0e5cc1c37d0e5396a60f66a1d705d3991deb2ab3485"
+  },
+  {
+    "file": "investment-sale-loss-en-light-font130-width320.png",
+    "bytes": 140279,
+    "sha256": "f1b73d00168e4325a851c87376f872f55670af59a5d084d4043d0eb79e550499"
+  },
+  {
+    "file": "investment-sale-loss-ja-dark-font130-width320.png",
+    "bytes": 201127,
+    "sha256": "32a527fcf15af22e3cd2aa1396e2ea98f2bfb5c56a5156c57c9b1d2058146e11"
+  },
+  {
+    "file": "investment-sale-loss-ja-light-font130-width320.png",
+    "bytes": 199897,
+    "sha256": "26f6aa1c9846e852d7763f9c7ae63261dd9f9095b6ea75ba827ad6a804dc94f2"
+  },
+  {
+    "file": "investment-sale-loss-vi-dark-font130-width320.png",
+    "bytes": 139468,
+    "sha256": "b2ebd688fa9e85082a61949e2921b929272dcaf3153b170612d819e2801b6ea4"
+  },
+  {
+    "file": "investment-sale-loss-vi-light-font130-width320.png",
+    "bytes": 139776,
+    "sha256": "8de1d25e62139ad66bf98df968cab003d430410ecff529e84ac3ad441a6fed45"
+  },
+  {
+    "file": "investment-sale-paid-en-dark-font130-width320.png",
+    "bytes": 132019,
+    "sha256": "d33888ec8f77e81539b5428ce02ed7c3d1d7d77dcd7b623e8cc359e5d3ddf9e1"
+  },
+  {
+    "file": "investment-sale-paid-en-light-font130-width320.png",
+    "bytes": 130000,
+    "sha256": "13d0d7db2403a01c42ff2b3593c555ba4c5ced1d930fc0919e9d458e3dea80a9"
+  },
+  {
+    "file": "investment-sale-paid-ja-dark-font130-width320.png",
+    "bytes": 177246,
+    "sha256": "af0c4f7505e985a586268a3979beb410209207a0635553e9c67fe8b6a740adad"
+  },
+  {
+    "file": "investment-sale-paid-ja-light-font130-width320.png",
+    "bytes": 175357,
+    "sha256": "8dbccdc1901668de374d0c76b0f1e5c6a5d2d7f3dcb34698e09ee3f9fc430b0d"
+  },
+  {
+    "file": "investment-sale-paid-vi-dark-font130-width320.png",
+    "bytes": 131438,
+    "sha256": "12028521eee5e05c3edc96219f9d530fb0cd55c26897f01ee75b7d9f584e623c"
+  },
+  {
+    "file": "investment-sale-paid-vi-light-font130-width320.png",
+    "bytes": 129711,
+    "sha256": "46fd10bc974da1a3944b13060b9cfe67218b57bd041da2f5720487f3ed5acecf"
+  },
+  {
+    "file": "investment-sale-review-en-dark-font130-width320.png",
+    "bytes": 140599,
+    "sha256": "560c3810849f0f7c9a830fab41573da1604f7aebbc474913960f0a8176fb8399"
+  },
+  {
+    "file": "investment-sale-review-en-light-font130-width320.png",
+    "bytes": 137686,
+    "sha256": "219118ce5a969c0f1b1771980f7786b99b308b2382e527acad2a72972f1b3728"
+  },
+  {
+    "file": "investment-sale-review-ja-dark-font130-width320.png",
+    "bytes": 212508,
+    "sha256": "490f4ed4f996b51e71bdd921885e4569de1c5513961ba7ee745b50c67cee4ed4"
+  },
+  {
+    "file": "investment-sale-review-ja-light-font130-width320.png",
+    "bytes": 205555,
+    "sha256": "5b6c859111395d8c3f977673d8da2d8dccc1b04c85fc93bccedbce851ea179d5"
+  },
+  {
+    "file": "investment-sale-review-vi-dark-font130-width320.png",
+    "bytes": 152611,
+    "sha256": "ca75eec918ead6bda1150ccf8d9fb3016b3aee2a00d7cdad1ba85c3f8d0e87e2"
+  },
+  {
+    "file": "investment-sale-review-vi-light-font130-width320.png",
+    "bytes": 149013,
+    "sha256": "518a64b754f1cb0b6943607d7328040e8368f0dd8674c6efcfb7f7fb17f6133f"
+  },
+  {
+    "file": "investment-sale-warning-en-dark-font130-width320.png",
+    "bytes": 141244,
+    "sha256": "2565dd7971e501d9f3057639b7c0cd0c6b09e9a7d7085dd30c01041d686fa2f3"
+  },
+  {
+    "file": "investment-sale-warning-en-light-font130-width320.png",
+    "bytes": 139399,
+    "sha256": "055e08c8b8e586c9e971821065ec2f12463ca68d9e053158f9f3b723d991d930"
+  },
+  {
+    "file": "investment-sale-warning-ja-dark-font130-width320.png",
+    "bytes": 177246,
+    "sha256": "af0c4f7505e985a586268a3979beb410209207a0635553e9c67fe8b6a740adad"
+  },
+  {
+    "file": "investment-sale-warning-ja-light-font130-width320.png",
+    "bytes": 175357,
+    "sha256": "8dbccdc1901668de374d0c76b0f1e5c6a5d2d7f3dcb34698e09ee3f9fc430b0d"
+  },
+  {
+    "file": "investment-sale-warning-vi-dark-font130-width320.png",
+    "bytes": 131438,
+    "sha256": "12028521eee5e05c3edc96219f9d530fb0cd55c26897f01ee75b7d9f584e623c"
+  },
+  {
+    "file": "investment-sale-warning-vi-light-font130-width320.png",
+    "bytes": 129711,
+    "sha256": "46fd10bc974da1a3944b13060b9cfe67218b57bd041da2f5720487f3ed5acecf"
+  }
+]

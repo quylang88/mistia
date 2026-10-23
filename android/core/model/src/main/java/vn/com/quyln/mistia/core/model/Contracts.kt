@@ -250,6 +250,9 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    fun observeSaleSnapshot(owner:UserId):Flow<InvestmentSaleSnapshot> = observePurchaseSnapshot(owner)
+    suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord> = Result.failure(UnsupportedOperationException("Sale unavailable"))
+
     fun observePurchaseSnapshot(owner:UserId):Flow<InvestmentPurchaseSnapshot> = throw UnsupportedOperationException("Consistent purchase read unavailable")
     suspend fun savePurchase(owner:UserId,request:InvestmentPurchaseRequest,deviceId:String,now:String):Result<CloudRecord> = Result.failure(UnsupportedOperationException("Purchase unavailable"))
 
@@ -279,6 +282,8 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun commitInvestmentSale(expected:InvestmentSaleSnapshot,request:InvestmentSaleRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional sale unavailable")
+
     fun observeInvestmentPurchaseSnapshot(owner:UserId):Flow<InvestmentPurchaseSnapshot> = throw UnsupportedOperationException("Consistent purchase read unavailable")
     suspend fun investmentPurchaseSnapshot(owner:UserId):InvestmentPurchaseSnapshot = throw UnsupportedOperationException("Atomic purchase read unavailable")
     suspend fun commitInvestmentPurchase(expected:InvestmentPurchaseSnapshot,request:InvestmentPurchaseRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional purchase unavailable")

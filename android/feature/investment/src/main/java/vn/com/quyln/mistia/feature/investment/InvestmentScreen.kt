@@ -3,6 +3,7 @@ package vn.com.quyln.mistia.feature.investment
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -32,6 +33,7 @@ fun InvestmentScreen(ownerUserId:UserId,repository:InvestmentRepository,onBack:(
 @Composable
 private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,onBack:()->Unit,modifier:Modifier,
     primaryCurrency:String,deviceIdProvider:suspend ()->String,enabledCurrencies:List<String>,exchangeRates:List<ExchangeRateSnapshot>) {
+    val listState=rememberLazyListState()
     var retry by remember{mutableIntStateOf(0)}
     val load by investmentChannelReadLoad(owner,repository,retry)
     val snapshot=(load as? InvestmentChannelReadLoad.Loaded)?.snapshot
@@ -84,6 +86,9 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     var actionError by remember{mutableStateOf<Int?>(null)}
     var archiveToken by rememberSaveable{mutableStateOf<String?>(null)}
     var actionRunning by remember{mutableStateOf(false)}
+    var saleId by rememberSaveable{mutableStateOf<String?>(null)}
+    var saleAssetId by rememberSaveable{mutableStateOf<String?>(null)}
+    fun openSale(asset:String?){saleAssetId=asset;saleId=UUID.randomUUID().toString()}
     var purchaseId by rememberSaveable{mutableStateOf<String?>(null)}
     var purchaseAssetId by rememberSaveable{mutableStateOf<String?>(null)}
     fun openPurchase(asset:String?){purchaseAssetId=asset;purchaseId=UUID.randomUUID().toString()}
@@ -97,6 +102,9 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     }}}
     val assets=assetParsed?.getOrNull()
     val assetReadable=readable && assets!=null
+    val assetPositions=remember(snapshot,assets){assets.orEmpty().associate{asset->asset.id to runCatching{investmentTradePositions(snapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty(),asset)}.getOrNull()}}
+    val sellable=assetPositions.filterValues{it?.any{position->position.quantity.signum()>0}==true}.keys
+
     fun editAsset(asset:InvestmentAssetRecord?){
         assetExpectedToken=asset?.toCloudRecord()?.payload?.toString();assetEditorId=asset?.id ?: UUID.randomUUID().toString()
     }
@@ -142,7 +150,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     androidx.activity.compose.BackHandler(enabled=historyOpen && cashDirection==null){historyOpen=false}
     if(historyOpen)InvestmentCashHistoryScreen(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
         onBack={historyOpen=false},onOpen=::editCash,onRetry={cashRetry++},modifier=modifier)
-    else LazyColumn(modifier.fillMaxSize().testTag("investment.list"),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+    else LazyColumn(modifier.fillMaxSize().testTag("investment.list"),state=listState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         item{
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                 IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,stringResource(R.string.common_close))}
@@ -173,6 +181,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
             modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}
         item{Button(onClick={openPurchase(null)},enabled=assetReadable && assets.orEmpty().any{!it.isArchived && it.defaultUnitLabel!=null},modifier=Modifier.testTag("investment.purchase.add")){Text(stringResource(R.string.investment_hub_buy))}}
+        item{OutlinedButton(onClick={openSale(null)},enabled=assetReadable && assets.orEmpty().any{!it.isArchived && it.defaultUnitLabel!=null && it.id in sellable},modifier=Modifier.testTag("investment.sale.add")){Text(stringResource(R.string.investment_hub_sell))}}
         if(load==InvestmentChannelReadLoad.Loading)item{CircularProgressIndicator(Modifier.size(24.dp).testTag("investment.channels.loading"))}
         if(load==InvestmentChannelReadLoad.Failed || parsed?.isFailure==true)item{
             Text(stringResource(R.string.common_error),Modifier.testTag("investment.channels.unavailable"),color=MaterialTheme.colorScheme.error)
@@ -200,17 +209,11 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             MistiaGlassCard{padding ->Column(Modifier.fillMaxWidth().padding(padding),verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text(asset.name,style=MaterialTheme.typography.titleMedium)
                 Text(listOfNotNull(asset.defaultUnitLabel,asset.currencyCode).joinToString(" · "),style=MaterialTheme.typography.bodyMedium)
-                val stock=remember(snapshot,asset.id){runCatching {
-                    val inputs=snapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty().filter{it.financeRawDeleted()==false && it.payload.financeRawReference("asset_id").id==asset.id}.map{row->
-                        val p=row.payload
-                        InvestmentTradeInput(UUID.fromString(row.id),when(p.financeRawString("kind_raw_value")){"buy"->InvestmentTradeKind.BUY;"sell"->InvestmentTradeKind.SELL;else->error("Unreadable trade")},
-                            java.math.BigDecimal(requireNotNull(p.financeRawString("quantity_decimal_string"))),p.financeRawString("unit_label") ?: asset.defaultUnitLabel,requireNotNull(p.financeRawLong("accounting_gross_amount_minor")),Instant.parse(p.financeRawString("occurred_at")),Instant.parse(p.financeRawString("created_at")))
-                    }
-                    InvestmentAccountingEngine.projection(inputs).unitPositions.joinToString(" · "){it.quantity.toPlainString()+" "+it.unitLabel.orEmpty()}
-                }.getOrNull()}
+                val stock=assetPositions[asset.id]?.joinToString(" · "){it.quantity.toPlainString()+" "+it.unitLabel.orEmpty()}
                 Text(stock ?: "—",Modifier.testTag("investment.asset.stock."+asset.id))
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                     if(!asset.isArchived)TextButton(onClick={openPurchase(asset.id)},enabled=asset.defaultUnitLabel!=null && !actionRunning,modifier=Modifier.testTag("investment.asset.buy."+asset.id)){Text(stringResource(R.string.investment_hub_buy))}
+                    if(!asset.isArchived)TextButton(onClick={openSale(asset.id)},enabled=asset.id in sellable && asset.defaultUnitLabel!=null && !actionRunning,modifier=Modifier.testTag("investment.asset.sell."+asset.id)){Text(stringResource(R.string.investment_hub_sell))}
                     TextButton(onClick={editAsset(asset)},enabled=!actionRunning,modifier=Modifier.testTag("investment.asset.edit."+asset.id)){
                         Text(stringResource(R.string.management_management_edit))
                     }
@@ -231,6 +234,10 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         }
         item{Spacer(Modifier.height(32.dp))}
     }
+    saleId?.let{id->key(owner.value,id){InvestmentSaleSheet(owner,repository,id,saleAssetId,exchangeRates,deviceIdProvider,{saleId=null;saleAssetId=null},onSetupLinked={scope.launch{
+        // This fixed section precedes every variable channel/asset/activity row.
+        listState.scrollToItem(3);pickRequest++
+    }})}}
     purchaseId?.let{id->key(owner.value,id){InvestmentPurchaseSheet(owner,repository,id,purchaseAssetId,exchangeRates,deviceIdProvider,{purchaseId=null;purchaseAssetId=null})}}
     assetActionError?.let{resource ->AlertDialog(onDismissRequest={assetActionError=null},title={Text(stringResource(R.string.common_error))},
         text={Text(stringResource(resource),Modifier.testTag("investment.assets.error"))},

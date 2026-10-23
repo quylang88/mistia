@@ -255,4 +255,22 @@ class InvestmentPurchaseScreenTest {
         Assert.assertEquals("2.5",trade.payload.financeRawString("quantity_decimal_string"));Assert.assertEquals(70L,trade.payload.financeRawLong("gross_amount_minor"))
     }
 
+    @Test fun anIncomeThatRemovesFundUsageDoesNotTrapThePurchaseInAnEmptyReview(){
+        seedReserve();compose.setContent{Screen()};open();fill();save();await("investment.purchase.funds.review")
+        runBlocking {
+            val id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";val at="2026-10-22T12:00:00Z"
+            val raw=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,id,owner.value,buildJsonObject {
+                put("id",id);put("user_id",owner.value);put("created_at",at);put("updated_at",now);put("occurred_at",at);put("deleted_at",JsonNull);put("sync_version",0L)
+                put("primary_kind_raw_value","income");put("entry_status_raw_value","posted");put("settlement_role_raw_value",JsonNull);put("title","Income");put("is_archived",false)
+                put("amount_minor",30L);put("source_wallet_id",walletId);put("source_currency_code","VND");put("destination_wallet_id",JsonNull)
+                put("reporting_currency_code","VND");put("reporting_amount_minor",30L);put("reporting_income_minor",30L);put("reporting_expense_minor",0L)
+            },now,null,0)
+            store.commitMutation(raw,PendingMutation(CloudEntity.LEDGER_TRANSACTION,id,owner.value,MutationKind.UPSERT,raw.payload,now,0,device))
+        }
+        val before=rows();val pending=queue();compose.onNodeWithTag("investment.purchase.funds.confirm").performClick()
+        try{await("investment.purchase.error")}catch(failure:Throwable){throw AssertionError(compose.onNodeWithTag("investment.purchase.funds.review").printToString(),failure)}
+        compose.onNodeWithTag("investment.purchase.funds.review").assertDoesNotExist();Assert.assertEquals(before,rows());Assert.assertEquals(pending,queue())
+        save();closed();Assert.assertEquals(1,rows().rows.count{it.entity==CloudEntity.INVESTMENT_TRADE.table})
+    }
+
 }

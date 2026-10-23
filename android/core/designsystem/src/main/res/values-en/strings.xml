@@ -393,6 +393,9 @@
     <string name="investment_trade_available_quantity">Available to sell: %1$s</string>
     <string name="investment_trade_buy_total">Total Purchase Amount</string>
     <string name="investment_trade_capital_wallet">Capital Return Wallet</string>
+    <string name="investment_trade_cash_review_action">Save and Update Usage</string>
+    <string name="investment_trade_cash_review_message">Saving this trade updates the investment cash used in this wallet from %1$s to %2$s. After saving, %3$s will remain available. The trade and these cash changes will be saved together.</string>
+    <string name="investment_trade_cash_review_title">Review investment cash changes</string>
     <string name="investment_trade_choose_asset">Select Asset</string>
     <string name="investment_trade_clear_search">Clear Search</string>
     <string name="investment_trade_delete_action">Delete Transaction</string>
@@ -410,6 +413,7 @@
     <string name="investment_trade_promotional_free_description">Add this quantity to inventory without deducting money from a wallet.</string>
     <string name="investment_trade_quantity">Quantity</string>
     <string name="investment_trade_resolve_unit_before_trading">Add a default unit in Edit Asset before recording another transaction.</string>
+    <string name="investment_trade_sale_cash_review_context">This sale also changes how later transactions use investment cash.</string>
     <string name="investment_trade_search_asset">Search assets or channels</string>
     <string name="investment_trade_sell_total">Total Sale Amount</string>
     <string name="investment_trade_time">Time</string>

@@ -393,6 +393,9 @@
     <string name="investment_trade_available_quantity">売却可能数量：%1$s</string>
     <string name="investment_trade_buy_total">買付総額</string>
     <string name="investment_trade_capital_wallet">資金回収先ウォレット</string>
+    <string name="investment_trade_cash_review_action">保存して使用額を更新</string>
+    <string name="investment_trade_cash_review_message">この取引を保存すると、このウォレットで使用する投資資金が%1$sから%2$sに変わります。保存後に利用可能な投資資金は%3$sです。取引と資金使用額の変更は一緒に保存されます。</string>
+    <string name="investment_trade_cash_review_title">投資資金の変更を確認</string>
     <string name="investment_trade_choose_asset">資産を選択</string>
     <string name="investment_trade_clear_search">検索をクリア</string>
     <string name="investment_trade_delete_action">取引を削除</string>
@@ -410,6 +413,7 @@
     <string name="investment_trade_promotional_free_description">この数量を在庫に追加し、ウォレットからは差し引きません。</string>
     <string name="investment_trade_quantity">数量</string>
     <string name="investment_trade_resolve_unit_before_trading">次の取引を記録する前に、資産の編集でデフォルト単位を追加してください。</string>
+    <string name="investment_trade_sale_cash_review_context">この売却により、後の取引が使用する投資資金も変わります。</string>
     <string name="investment_trade_search_asset">資産またはチャンネルを検索</string>
     <string name="investment_trade_sell_total">売却総額</string>
     <string name="investment_trade_time">日時</string>

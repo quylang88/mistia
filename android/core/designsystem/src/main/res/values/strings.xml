@@ -393,6 +393,9 @@
     <string name="investment_trade_available_quantity">Có thể bán: %1$s</string>
     <string name="investment_trade_buy_total">Tổng tiền mua</string>
     <string name="investment_trade_capital_wallet">Ví thu hồi vốn</string>
+    <string name="investment_trade_cash_review_action">Lưu và cập nhật tiền đã dùng</string>
+    <string name="investment_trade_cash_review_message">Lưu giao dịch này sẽ cập nhật tiền đầu tư đã dùng trong ví này từ %1$s thành %2$s. Sau khi lưu, ví còn %3$s tiền đầu tư khả dụng. Giao dịch và thay đổi tiền đã dùng sẽ được lưu cùng nhau.</string>
+    <string name="investment_trade_cash_review_title">Xác nhận thay đổi tiền đầu tư</string>
     <string name="investment_trade_choose_asset">Chọn tài sản</string>
     <string name="investment_trade_clear_search">Xóa tìm kiếm</string>
     <string name="investment_trade_delete_action">Xóa giao dịch</string>
@@ -410,6 +413,7 @@
     <string name="investment_trade_promotional_free_description">Thêm số lượng này vào kho và không trừ tiền từ ví.</string>
     <string name="investment_trade_quantity">Số lượng</string>
     <string name="investment_trade_resolve_unit_before_trading">Hãy bổ sung đơn vị mặc định trong phần Sửa tài sản trước khi ghi thêm giao dịch.</string>
+    <string name="investment_trade_sale_cash_review_context">Giao dịch bán này cũng làm thay đổi tiền đầu tư mà các giao dịch về sau đã dùng.</string>
     <string name="investment_trade_search_asset">Tìm tài sản hoặc kênh</string>
     <string name="investment_trade_sell_total">Tổng tiền bán</string>
     <string name="investment_trade_time">Thời gian</string>

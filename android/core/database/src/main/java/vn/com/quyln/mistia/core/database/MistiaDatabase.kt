@@ -862,14 +862,22 @@ class RoomLocalStore(
     }
 
     override suspend fun commitInvestmentPurchase(expected:vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot,
-        request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String):Boolean {
+        request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String):Boolean =
+        commitInvestmentTradeCreation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentPurchase(it,request,deviceId,now)}
+
+    override suspend fun commitInvestmentSale(expected:vn.com.quyln.mistia.core.model.InvestmentSaleSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentSaleRequest,deviceId:String,now:String):Boolean =
+        commitInvestmentTradeCreation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentSale(it,request,deviceId,now)}
+
+    private suspend fun commitInvestmentTradeCreation(expected:vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot,assetId:String,
+        prepare:(vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot)->vn.com.quyln.mistia.core.model.InvestmentTradeCreationPlan):Boolean {
         val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
         return database.withTransaction {
             ensureCurrentFinanceOwner(expected.owner)
             val current=investmentPurchaseSnapshot(expected.owner)
             if(expected.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id))!=current.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id)))return@withTransaction false
-            val plan=vn.com.quyln.mistia.core.model.planInvestmentPurchase(current,request,deviceId,now)
-            val historyIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id==request.draft.assetId}.map{it.id}.toSet()
+            val plan=prepare(current)
+            val historyIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id==assetId}.map{it.id}.toSet()
             val historyLedgerIds=historyIds.flatMap{id->listOf("funding","capital-return","profit-loss").map{component->vn.com.quyln.mistia.core.model.investmentLedgerIdentity(id,component)}}.toSet()
             val protectedRows=current.rows.filter{row->
                 (row.entity==CloudEntity.INVESTMENT_TRADE.table && row.id in historyIds) ||

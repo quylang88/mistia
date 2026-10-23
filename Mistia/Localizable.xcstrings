@@ -9178,6 +9178,98 @@
         }
       }
     },
+    "investment.trade.cashReviewAction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save and Update Usage"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存して使用額を更新"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu và cập nhật tiền đã dùng"
+          }
+        }
+      }
+    },
+    "investment.trade.cashReviewMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving this trade updates the investment cash used in this wallet from %@ to %@. After saving, %@ will remain available. The trade and these cash changes will be saved together."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この取引を保存すると、このウォレットで使用する投資資金が%@から%@に変わります。保存後に利用可能な投資資金は%@です。取引と資金使用額の変更は一緒に保存されます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu giao dịch này sẽ cập nhật tiền đầu tư đã dùng trong ví này từ %@ thành %@. Sau khi lưu, ví còn %@ tiền đầu tư khả dụng. Giao dịch và thay đổi tiền đã dùng sẽ được lưu cùng nhau."
+          }
+        }
+      }
+    },
+    "investment.trade.cashReviewTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review investment cash changes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投資資金の変更を確認"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xác nhận thay đổi tiền đầu tư"
+          }
+        }
+      }
+    },
+    "investment.trade.saleCashReviewContext" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This sale also changes how later transactions use investment cash."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この売却により、後の取引が使用する投資資金も変わります。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch bán này cũng làm thay đổi tiền đầu tư mà các giao dịch về sau đã dùng."
+          }
+        }
+      }
+    },
     "investment.trade.isPromotionalFree" : {
       "extractionState" : "stale",
       "localizations" : {

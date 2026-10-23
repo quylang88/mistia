@@ -18,6 +18,7 @@ fun investmentLedgerIdentity(eventId:String,component:String):String {
 internal fun rebuildInvestmentAssetUnitHistory(
     snapshot:InvestmentAssetSnapshot,asset:InvestmentAssetRecord,unit:String,device:String,now:String,
     resolveZeroBuyFunding:Boolean=true,
+    preserveAccountingErrors:Boolean=false,
 ):List<CloudRecord> {
     fun fail(reason:InvestmentAssetError=InvestmentAssetError.INVALID_ACCOUNTING):Nothing=investmentAssetFail(reason)
     fun JsonObject.text(key:String)=financeRawString(key) ?: fail()
@@ -73,6 +74,9 @@ internal fun rebuildInvestmentAssetUnitHistory(
     }
     val history=investmentAssetHistory(snapshot,asset.id)
     val labelled=history.map{raw ->
+        val label=raw.payload["unit_label"]
+        if(label!=null && label!=JsonNull && raw.payload.financeRawString("unit_label")==null)
+            fail(InvestmentAssetError.UNREADABLE_SOURCE)
         if(raw.payload["unit_label"]==null || raw.payload["unit_label"]==JsonNull)
             investmentAssetChanged(raw,buildJsonObject{put("unit_label",unit)},device,now).also(::write)
         else raw
@@ -96,7 +100,7 @@ internal fun rebuildInvestmentAssetUnitHistory(
         }catch(_:Exception){fail()}
     }
     val calculations=try{InvestmentAccountingEngine.projection(inputs).calculations.associateBy{it.id.toString()}}
-        catch(_:InvestmentAccountingException){fail()}
+        catch(error:InvestmentAccountingException){if(preserveAccountingErrors)throw error else fail()}
     fun ledger(trade:CloudRecord,component:String,kind:String,role:String,amount:Long,source:CloudRecord,reporting:Long,reportingCode:String):String {
         val id=investmentLedgerIdentity(trade.id,component)
         val fields=buildJsonObject {

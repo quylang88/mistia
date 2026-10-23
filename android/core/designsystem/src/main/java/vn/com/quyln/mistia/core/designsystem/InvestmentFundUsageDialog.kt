@@ -14,7 +14,7 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
-@Composable fun InvestmentFundUsageDialog(review:InvestmentFundUsageReview,wallets:List<LedgerWalletRecord>,onDismiss:()->Unit,onConfirm:()->Unit,isSaving:Boolean=false,tagPrefix:String="transaction.funds",canConfirm:Boolean=true) {
+@Composable fun InvestmentFundUsageDialog(review:InvestmentFundUsageReview,wallets:List<LedgerWalletRecord>,onDismiss:()->Unit,onConfirm:()->Unit,isSaving:Boolean=false,tagPrefix:String="transaction.funds",canConfirm:Boolean=true,tradeChanges:Boolean=false,contextMessage:String?=null) {
     val comparison=review.comparison
     val rows=comparison.changes.ifEmpty {
         val prior=comparison.current.usages[review.consent.transactionId]
@@ -30,14 +30,15 @@ import vn.com.quyln.mistia.core.model.*
         else->0
     }
     val mode=if(rows.size==1)kind(rows.single().previousMinor,rows.single().proposedMinor) else 1
-    val title=when(mode){0->R.string.investment_wallet_use_funds_title;1->R.string.investment_wallet_update_funds_title;else->R.string.investment_wallet_restore_funds_title}
-    val action=when(mode){0->R.string.investment_wallet_use_funds_action;1->R.string.investment_wallet_update_funds_action;else->R.string.investment_wallet_restore_funds_action}
+    val title=if(tradeChanges)R.string.investment_trade_cash_review_title else when(mode){0->R.string.investment_wallet_use_funds_title;1->R.string.investment_wallet_update_funds_title;else->R.string.investment_wallet_restore_funds_title}
+    val action=if(tradeChanges)R.string.investment_trade_cash_review_action else when(mode){0->R.string.investment_wallet_use_funds_action;1->R.string.investment_wallet_update_funds_action;else->R.string.investment_wallet_restore_funds_action}
     AlertDialog(modifier=Modifier.testTag(tagPrefix+".review"),onDismissRequest={if(!isSaving)onDismiss()},title={Text(stringResource(title),Modifier.testTag(tagPrefix+".title"))},
         text={Column(Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            contextMessage?.let{Text(it,Modifier.testTag(tagPrefix+".context"))}
             rows.forEach{row->Column(Modifier.fillMaxWidth().testTag(tagPrefix+".wallet."+row.walletId),verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 Text(wallets.firstOrNull{it.id==row.walletId && it.ownerUserId==review.consent.ownerUserId}?.name.orEmpty(),Modifier.testTag(tagPrefix+".name."+row.walletId),style=MaterialTheme.typography.titleSmall)
                 val previous=formatMinorUnits(row.previousMinor,row.currencyCode);val proposed=formatMinorUnits(row.proposedMinor,row.currencyCode);val remaining=formatMinorUnits(row.remainingInvestmentMinor,row.currencyCode)
-                Text(when(kind(row.previousMinor,row.proposedMinor)) {
+                Text(if(tradeChanges)stringResource(R.string.investment_trade_cash_review_message,previous,proposed,remaining) else when(kind(row.previousMinor,row.proposedMinor)) {
                     0->stringResource(R.string.investment_wallet_use_funds_message,proposed,remaining)
                     1->stringResource(R.string.investment_wallet_update_funds_message,previous,proposed,remaining)
                     else->stringResource(R.string.investment_wallet_restore_funds_message,previous,remaining)
