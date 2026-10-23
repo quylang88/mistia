@@ -12,25 +12,37 @@ class LocalNotificationPreferencesStore(context:Context):NotificationPreferences
     private val preferences=context.getSharedPreferences("mistia-notification-preferences",Context.MODE_PRIVATE)
     private val mutable=MutableStateFlow(read())
     override val state:StateFlow<NotificationPreferences> = mutable.asStateFlow()
-    private val listener=SharedPreferences.OnSharedPreferenceChangeListener {_,_ -> mutable.value=read()}
-    init {preferences.registerOnSharedPreferenceChangeListener(listener)}
+    private val listener=SharedPreferences.OnSharedPreferenceChangeListener {_,_ -> refresh()}
+    init {synchronized(publicationLock) {
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        mutable.value=read()
+    }}
     override fun initializeDetails()=update {it.initializeDetails()}
     override fun setMaster(value:Boolean)=update {it.master(value)}
     override fun setDetail(kind:ReminderKind,value:Boolean)=update {it.detail(kind,value)}
     override fun setFamily(value:Boolean)=update {it.family(value)}
-    @Synchronized private fun update(change:(NotificationPreferences)->NotificationPreferences) {
+    private fun update(change:(NotificationPreferences)->NotificationPreferences)=synchronized(publicationLock) {
         val value=change(read())
         preferences.edit().putBoolean(MASTER,value.enabled).putBoolean(HAD_GROUP,value.hadAnyGroupOn)
             .putBoolean(REMINDERS,value.reminders).putBoolean(FAMILY,value.family).apply {
                 ReminderKind.entries.forEach {kind -> value.details[kind]?.let {putBoolean(key(kind),it)} ?: remove(key(kind))}
             }.apply()
-        mutable.value=value
+        // Main-thread listeners/observers may re-enter a mutation during apply().
+        // Publish current storage, never the outer mutation's now-older value.
+        mutable.value=read()
     }
-    private fun read()=NotificationPreferences(preferences.getBoolean(MASTER,false),preferences.getBoolean(HAD_GROUP,false),
-        preferences.getBoolean(REMINDERS,false),preferences.getBoolean(FAMILY,false),ReminderKind.entries.mapNotNull {kind ->
-            if(preferences.contains(key(kind))) kind to preferences.getBoolean(key(kind),false) else null
-        }.toMap())
+    private fun refresh()=synchronized(publicationLock) {mutable.value=read()}
+    private fun read():NotificationPreferences {
+        val snapshot=preferences.all
+        fun boolean(key:String)=(snapshot[key] as Boolean?) ?: false
+        return NotificationPreferences(boolean(MASTER),boolean(HAD_GROUP),boolean(REMINDERS),boolean(FAMILY),
+            ReminderKind.entries.mapNotNull {kind ->
+                if(snapshot.containsKey(key(kind)))kind to boolean(key(kind))else null
+            }.toMap())
+    }
     companion object {
+        // One device-level preference file; all store instances share publication order.
+        private val publicationLock=Any()
         private const val MASTER="mistia.notifications.enabled"
         private const val HAD_GROUP="mistia.notifications.hadAnyGroupOn"
         private const val REMINDERS="mistia.notifications.group.reminders.enabled"
