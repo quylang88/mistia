@@ -218,6 +218,19 @@ class OfflineFirstFinanceRepository(
         CreditCardAccount(mutation.wallet.record, mutation.profile.record)
     }
 
+    override suspend fun prepareTransactionLifecycle(owner:UserId,
+        request:vn.com.quyln.mistia.core.model.TransactionInvestmentLifecycleRequest,deviceId:String,now:String):Result<vn.com.quyln.mistia.core.model.TransactionInvestmentSavePlan> = runCatching {
+        vn.com.quyln.mistia.core.model.planTransactionInvestmentLifecycle(localStore.transactionInvestmentSaveSnapshot(owner),request,deviceId,now)
+    }
+
+    override suspend fun saveTransactionLifecycle(owner:UserId,
+        request:vn.com.quyln.mistia.core.model.TransactionInvestmentLifecycleRequest,deviceId:String,now:String):Result<LedgerTransactionRecord> = runCatching {
+        val zone=ZoneId.systemDefault()
+        val snapshot=localStore.transactionInvestmentSaveSnapshot(owner)
+        vn.com.quyln.mistia.core.model.planTransactionInvestmentLifecycle(snapshot,request,deviceId,now,zone)
+        localStore.commitTransactionInvestmentLifecycle(snapshot,request,deviceId,now,zone)
+    }
+
     override suspend fun prepareTransactionWithInvestmentFunds(owner:UserId,
         request:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveRequest,deviceId:String,now:String):Result<vn.com.quyln.mistia.core.model.TransactionInvestmentSavePlan> = runCatching {
         val snapshot=localStore.transactionInvestmentSaveSnapshot(owner)

@@ -1975,6 +1975,13 @@
     <string name="transactions_stored_editor_loading">取引を読み込み中…</string>
     <string name="transactions_stored_editor_unavailable">この取引は現在利用できません。</string>
     <string name="transactions_stored_editor_unsupported">この画面ではこの取引は閲覧のみ可能です。</string>
+    <string name="transactions_transaction_lifecycle_archive_message">この収支をアーカイブしますか？残高と関連する投資資金への影響が更新されます。</string>
+    <string name="transactions_transaction_lifecycle_changed">収支、関連する資金、またはレシートが変更されました。確認してから再度お試しください。</string>
+    <string name="transactions_transaction_lifecycle_delete_message">この収支とレシートを完全に削除しますか？この操作は取り消せません。</string>
+    <string name="transactions_transaction_lifecycle_keep_receipt">レシートを残す</string>
+    <string name="transactions_transaction_lifecycle_receipt_retained">収支は削除されました。レシートは残っています。再試行して削除するか、残すことを選んでください。</string>
+    <string name="transactions_transaction_lifecycle_receipt_retained_title">レシートが残っています</string>
+    <string name="transactions_transaction_lifecycle_restore_message">この収支を復元しますか？残高と関連する投資資金への影響が更新されます。</string>
     <string name="transactions_transactioneditor_add_a_note_if_needed">必要ならメモを追加</string>
     <string name="transactions_transactioneditor_add_receipt_image">レシート画像を追加</string>
     <string name="transactions_transactioneditor_amount">金額</string>

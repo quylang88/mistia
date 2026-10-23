@@ -121,13 +121,14 @@ internal fun TransactionEditorSheet(
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
     saveSessionKey:Any?=null,
+    onArchive:(()->Unit)?=null,
 ) {
     if (transaction != null && transaction.ownerUserId != ownerId) return
     val primary = primaryCurrencyCode.trim().uppercase(Locale.ROOT)
     // The generated creation identity is saved inside the editor, not part of its restoration group key.
     key(ownerId, transaction?.id, initialState?.copy(creationIdentity=null), primary) {
         OwnedTransactionEditorSheet(ownerId, transaction, wallets.filter { it.ownerUserId == ownerId }, categories.filter { it.ownerUserId == ownerId },
-            exchangeRates, now, primary, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave,saveSessionKey)
+            exchangeRates, now, primary, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave,saveSessionKey,onArchive)
     }
 }
 
@@ -150,6 +151,7 @@ private fun OwnedTransactionEditorSheet(
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
     saveSessionKey:Any?,
+    onArchive:(()->Unit)?,
 ) {
     var state by rememberSaveable(ownerId, transaction?.id, initialState?.copy(creationIdentity=null), primaryCurrencyCode, stateSaver = TransactionEditorState.scopedSaver(ownerId, transaction?.id, primaryCurrencyCode)) {
         val initial = transaction?.let(TransactionEditorState::edit) ?: initialState ?: TransactionEditorState.new(now)
@@ -525,6 +527,11 @@ private fun OwnedTransactionEditorSheet(
                     loadFailed = receiptLoadFailed,
                     onRemove = onRemoveReceipt,
                 )
+            }
+
+            if(transaction!=null && onArchive!=null)TextButton(onClick=onArchive,enabled=!isSaving,
+                modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("transaction.archive")) {
+                Text(stringResource(R.string.transactions_transactioneditor_archive_transaction),color=MaterialTheme.colorScheme.error)
             }
 
             (if(fundCurrencyError)stringResource(R.string.investment_error_fund_usage_currency_mismatch) else

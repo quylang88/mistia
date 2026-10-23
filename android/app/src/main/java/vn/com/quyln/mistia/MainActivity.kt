@@ -320,6 +320,7 @@ private fun SignedInRoot(
                         onOpenCreditCardStatements = { walletId -> navController.navigate("credit-card-statements/$walletId") },
                         onOpenNotificationSettings={navController.navigate("notification-settings")},
                         onOpenCurrencySettings={navController.navigate("currency-settings")},
+                        onOpenArchivedTransactions={navController.navigate("archived-transactions")},
                         modifier = modifier,
                     )
                 }
@@ -329,6 +330,10 @@ private fun SignedInRoot(
             val walletId = entry.arguments?.getString("walletId") ?: return@composable
             vn.com.quyln.mistia.feature.management.CreditCardStatementScreen(
                 authState.session.userId, walletId, financeRepository, onBack = { navController.popBackStack() })
+        }
+        composable("archived-transactions") {
+            vn.com.quyln.mistia.feature.transactions.ArchivedTransactionsRoute(authState.session.userId,financeRepository,
+                receiptImageRepository,{deviceIdStore.getOrCreate()},currencySettings.primaryCurrencyCode,onDismiss={navController.popBackStack()})
         }
         composable("currency-settings") {
             vn.com.quyln.mistia.feature.settings.CurrencySettingsScreen(currencyPreferences, exchangeRateRepository,

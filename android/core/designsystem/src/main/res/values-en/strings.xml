@@ -1975,6 +1975,13 @@
     <string name="transactions_stored_editor_loading">Loading cashflow item…</string>
     <string name="transactions_stored_editor_unavailable">This cashflow item is no longer available.</string>
     <string name="transactions_stored_editor_unsupported">This cashflow item is read-only here.</string>
+    <string name="transactions_transaction_lifecycle_archive_message">Archive this cashflow item? Its effect on balances and investment funds will be updated.</string>
+    <string name="transactions_transaction_lifecycle_changed">This cashflow item, its funds or its receipt changed. Review it and try again.</string>
+    <string name="transactions_transaction_lifecycle_delete_message">Permanently delete this cashflow item and its receipt? This can\'t be undone.</string>
+    <string name="transactions_transaction_lifecycle_keep_receipt">Keep receipt</string>
+    <string name="transactions_transaction_lifecycle_receipt_retained">Cashflow item deleted. Receipt still stored. Retry to delete the receipt, or choose to keep it.</string>
+    <string name="transactions_transaction_lifecycle_receipt_retained_title">Receipt still stored</string>
+    <string name="transactions_transaction_lifecycle_restore_message">Restore this cashflow item? Its effect on balances and investment funds will be updated.</string>
     <string name="transactions_transactioneditor_add_a_note_if_needed">Add a note if needed</string>
     <string name="transactions_transactioneditor_add_receipt_image">Add receipt image</string>
     <string name="transactions_transactioneditor_amount">Amount</string>

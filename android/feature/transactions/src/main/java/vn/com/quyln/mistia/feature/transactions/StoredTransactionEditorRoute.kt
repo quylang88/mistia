@@ -67,8 +67,11 @@ private sealed interface StoredEditorLoad {
     }
     val locked=transaction!=null && records!=null && transaction.isLockedByPaidCreditCardStatement(records.wallets,records.cards,records.categories,typedRecords,records.occurrences)
     val supported=transaction?.supportsNativeTransactionEditor()==true
+    var archiveTarget by remember(repository,receiptImages){mutableStateOf<LedgerTransactionRecord?>(null)}
+    archiveTarget?.let{expected->TransactionLifecycleActionDialog(owner,expected,TransactionLifecycleAction.ARCHIVE,repository,receiptImages,
+        records?.wallets.orEmpty(),deviceIdProvider,primaryCurrencyCode,onDone={archiveTarget=null;onDismiss()},onDismiss={archiveTarget=null})}
     if(load !is StoredEditorLoad.Ready || transaction==null || locked || !supported) {
-        StoredEditorStatus(loading=load==StoredEditorLoad.Loading,failed=load==StoredEditorLoad.Failed,
+        if(archiveTarget==null)StoredEditorStatus(loading=load==StoredEditorLoad.Loading,failed=load==StoredEditorLoad.Failed,
             message=when {locked -> R.string.transactions_transactioneditor_this_transaction_is_part_of_a_paid
                 transaction!=null && !supported -> R.string.transactions_stored_editor_unsupported
                 else -> R.string.transactions_stored_editor_unavailable},onRetry={retry++},onDismiss=onDismiss)
@@ -95,7 +98,7 @@ private sealed interface StoredEditorLoad {
     TransactionEditorSheet(owner.value,transaction,records.wallets,records.categories,rates,Instant.now().toString(),primaryCurrencyCode,
         receiptState=receipt,receiptLoading=receiptLoading,receiptLoadFailed=receiptError,
         onRemoveReceipt={receipt=receipt.remove();receiptError=false},onDismiss=onDismiss,
-        saveSessionKey=repository to receiptImages,onSave={draft ->
+        saveSessionKey=repository to receiptImages,onArchive={archiveTarget=transaction},onSave={draft ->
             currentCoroutineContext().ensureActive()
             require(draft.id==recordId) {"Stored transaction identity changed"}
             val saved=saveInvestmentAwareEditorTransaction(owner,draft,primaryCurrencyCode,investmentAdjustmentTitle,

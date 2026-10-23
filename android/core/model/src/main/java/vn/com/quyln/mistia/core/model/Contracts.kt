@@ -181,6 +181,10 @@ interface AuthRepository {
 }
 
 interface FinanceRepository : InstallmentPaymentRepository, InstallmentRepository, AppNotificationRepository, BillMaintenanceRepository, BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
+    suspend fun prepareTransactionLifecycle(owner:UserId,request:TransactionInvestmentLifecycleRequest,deviceId:String,now:String):Result<TransactionInvestmentSavePlan> =
+        Result.failure(UnsupportedOperationException("Ordinary transaction lifecycle preparation unavailable"))
+    suspend fun saveTransactionLifecycle(owner:UserId,request:TransactionInvestmentLifecycleRequest,deviceId:String,now:String):Result<LedgerTransactionRecord> =
+        Result.failure(UnsupportedOperationException("Ordinary transaction lifecycle persistence unavailable"))
     fun observeOverviewFinancialReadSnapshot(owner:UserId):Flow<OverviewFinancialReadSnapshot> =
         throw UnsupportedOperationException("Consistent Overview financial snapshot unavailable")
     /** A consistent raw read set; implementations must not fabricate partial loaded snapshots. */
@@ -272,6 +276,9 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun commitTransactionInvestmentLifecycle(expected:TransactionInvestmentSaveSnapshot,request:TransactionInvestmentLifecycleRequest,
+        deviceId:String,now:String,statementZone:java.time.ZoneId=java.time.ZoneId.systemDefault()):LedgerTransactionRecord =
+        throw UnsupportedOperationException("Conditional transaction lifecycle unavailable")
     suspend fun commitInvestmentCashTransfer(expected:InvestmentCashReadSnapshot,request:InvestmentCashTransferRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment cash transfer unavailable")
     suspend fun commitInvestmentCashReconciliation(expected:InvestmentCashReadSnapshot,request:InvestmentCashReconciliationRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment reconciliation unavailable")
     suspend fun commitInvestmentCashTransferLifecycle(expected:InvestmentCashReadSnapshot,request:InvestmentCashTransferLifecycleRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional investment cash transfer lifecycle unavailable")

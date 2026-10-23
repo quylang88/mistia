@@ -24,6 +24,7 @@ dependencies {
     implementation(platform(libs.compose.bom)); implementation(libs.compose.ui); implementation(libs.compose.material3); implementation(libs.compose.icons)
     testImplementation(libs.junit)
     androidTestImplementation(project(":feature:overview"))
+    androidTestImplementation(project(":feature:management"))
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test)
     androidTestImplementation("androidx.test:core:1.7.0")

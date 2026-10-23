@@ -1975,6 +1975,13 @@
     <string name="transactions_stored_editor_loading">Đang tải giao dịch…</string>
     <string name="transactions_stored_editor_unavailable">Giao dịch này không còn khả dụng.</string>
     <string name="transactions_stored_editor_unsupported">Giao dịch này chỉ có thể xem tại đây.</string>
+    <string name="transactions_transaction_lifecycle_archive_message">Lưu trữ giao dịch này? Số dư và phần quỹ đầu tư liên quan sẽ được cập nhật.</string>
+    <string name="transactions_transaction_lifecycle_changed">Giao dịch, quỹ liên quan hoặc ảnh hóa đơn đã thay đổi. Hãy kiểm tra rồi thử lại.</string>
+    <string name="transactions_transaction_lifecycle_delete_message">Xóa vĩnh viễn giao dịch này và ảnh hóa đơn của giao dịch? Không thể hoàn tác thao tác này.</string>
+    <string name="transactions_transaction_lifecycle_keep_receipt">Giữ ảnh hóa đơn</string>
+    <string name="transactions_transaction_lifecycle_receipt_retained">Giao dịch đã xóa. Ảnh hóa đơn vẫn còn. Thử xóa ảnh lại hoặc chọn giữ ảnh.</string>
+    <string name="transactions_transaction_lifecycle_receipt_retained_title">Ảnh hóa đơn vẫn còn</string>
+    <string name="transactions_transaction_lifecycle_restore_message">Khôi phục giao dịch này? Số dư và phần quỹ đầu tư liên quan sẽ được cập nhật.</string>
     <string name="transactions_transactioneditor_add_a_note_if_needed">Thêm ghi chú nếu cần</string>
     <string name="transactions_transactioneditor_add_receipt_image">Thêm ảnh bill</string>
     <string name="transactions_transactioneditor_amount">Số tiền</string>

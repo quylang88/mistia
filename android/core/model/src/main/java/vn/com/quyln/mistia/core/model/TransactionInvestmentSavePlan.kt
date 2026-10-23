@@ -61,7 +61,7 @@ private fun sameOrdinaryFields(expected:JsonObject,stored:JsonObject):Boolean=ex
     normalized(value)==normalized(stored[key])
 }
 
-private fun requireExactOrdinaryAffordability(snapshot:TransactionInvestmentSaveSnapshot,primary:LedgerTransactionRecord,
+internal fun requireExactOrdinaryAffordability(snapshot:TransactionInvestmentSaveSnapshot,primary:LedgerTransactionRecord,
     profiles:List<CreditCardProfileRecord>,excludingId:String?) {
     if(primary.entryStatus!=TransactionEntryStatus.POSTED || primary.primaryKind==TransactionPrimaryKind.INCOME)return
     if(primary.primaryKind!=TransactionPrimaryKind.EXPENSE && primary.transferSubtype!=TransactionTransferSubtype.INTERNAL_TRANSFER &&

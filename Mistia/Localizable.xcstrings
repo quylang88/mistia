@@ -45469,6 +45469,167 @@
         }
       }
     },
+    "transactions.transactionLifecycle.archiveMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive this cashflow item? Its effect on balances and investment funds will be updated."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu trữ giao dịch này? Số dư và phần quỹ đầu tư liên quan sẽ được cập nhật."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この収支をアーカイブしますか？残高と関連する投資資金への影響が更新されます。"
+          }
+        }
+      }
+    },
+    "transactions.transactionLifecycle.changed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This cashflow item, its funds or its receipt changed. Review it and try again."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch, quỹ liên quan hoặc ảnh hóa đơn đã thay đổi. Hãy kiểm tra rồi thử lại."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "収支、関連する資金、またはレシートが変更されました。確認してから再度お試しください。"
+          }
+        }
+      }
+    },
+    "transactions.transactionLifecycle.deleteMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permanently delete this cashflow item and its receipt? This can't be undone."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa vĩnh viễn giao dịch này và ảnh hóa đơn của giao dịch? Không thể hoàn tác thao tác này."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この収支とレシートを完全に削除しますか？この操作は取り消せません。"
+          }
+        }
+      }
+    },
+    "transactions.transactionLifecycle.receiptRetained": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cashflow item deleted. Receipt still stored. Retry to delete the receipt, or choose to keep it."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giao dịch đã xóa. Ảnh hóa đơn vẫn còn. Thử xóa ảnh lại hoặc chọn giữ ảnh."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "収支は削除されました。レシートは残っています。再試行して削除するか、残すことを選んでください。"
+          }
+        }
+      }
+    },
+    "transactions.transactionLifecycle.receiptRetainedTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receipt still stored"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ảnh hóa đơn vẫn còn"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レシートが残っています"
+          }
+        }
+      }
+    },
+    "transactions.transactionLifecycle.keepReceipt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep receipt"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giữ ảnh hóa đơn"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レシートを残す"
+          }
+        }
+      }
+    },
+    "transactions.transactionLifecycle.restoreMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore this cashflow item? Its effect on balances and investment funds will be updated."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khôi phục giao dịch này? Số dư và phần quỹ đầu tư liên quan sẽ được cập nhật."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この収支を復元しますか？残高と関連する投資資金への影響が更新されます。"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.archiveTransaction" : {
       "extractionState" : "stale",
       "localizations" : {

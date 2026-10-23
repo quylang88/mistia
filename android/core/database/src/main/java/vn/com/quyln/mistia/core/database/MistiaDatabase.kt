@@ -947,6 +947,28 @@ class RoomLocalStore(
         snapshot
     }
 
+    override suspend fun commitTransactionInvestmentLifecycle(expected:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot,
+        request:vn.com.quyln.mistia.core.model.TransactionInvestmentLifecycleRequest,deviceId:String,now:String,
+        statementZone:java.time.ZoneId):vn.com.quyln.mistia.core.model.LedgerTransactionRecord {
+        val caller=kotlinx.coroutines.currentCoroutineContext()
+        caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current=transactionInvestmentSaveSnapshot(expected.owner)
+            expected.requireUnchanged(current)
+            val plan=vn.com.quyln.mistia.core.model.planTransactionInvestmentLifecycle(current,request,deviceId,now,statementZone)
+            for((record,_) in plan.mutations) {
+                val previous=current.recordsByEntity.values.flatten().singleOrNull{it.entity==record.entity && it.id==record.id}
+                require(previous!=null || database.syncOutboxDao().record(expected.owner.value,record.entity,record.id)==null) {"Transaction lifecycle identity has an orphan queue"}
+            }
+            plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+            ensureCurrentFinanceOwner(expected.owner)
+            caller.ensureActive()
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            plan.record
+        }
+    }
+
     override suspend fun commitTransactionInvestmentSave(expected:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot,
         request:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveRequest,deviceId:String,now:String,
         statementZone:java.time.ZoneId):vn.com.quyln.mistia.core.model.LedgerTransactionRecord {

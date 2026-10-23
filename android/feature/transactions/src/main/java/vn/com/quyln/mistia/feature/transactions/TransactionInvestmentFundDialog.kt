@@ -14,7 +14,7 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
-@Composable internal fun TransactionInvestmentFundDialog(review:InvestmentFundUsageReview,wallets:List<LedgerWalletRecord>,onDismiss:()->Unit,onConfirm:()->Unit) {
+@Composable internal fun TransactionInvestmentFundDialog(review:InvestmentFundUsageReview,wallets:List<LedgerWalletRecord>,onDismiss:()->Unit,onConfirm:()->Unit,isSaving:Boolean=false) {
     val comparison=review.comparison
     val rows=comparison.changes.ifEmpty {
         val prior=comparison.current.usages[review.consent.transactionId]
@@ -32,7 +32,7 @@ import vn.com.quyln.mistia.core.model.*
     val mode=if(rows.size==1)kind(rows.single().previousMinor,rows.single().proposedMinor) else 1
     val title=when(mode){0->R.string.investment_wallet_use_funds_title;1->R.string.investment_wallet_update_funds_title;else->R.string.investment_wallet_restore_funds_title}
     val action=when(mode){0->R.string.investment_wallet_use_funds_action;1->R.string.investment_wallet_update_funds_action;else->R.string.investment_wallet_restore_funds_action}
-    AlertDialog(modifier=Modifier.testTag("transaction.funds.review"),onDismissRequest=onDismiss,title={Text(stringResource(title),Modifier.testTag("transaction.funds.title"))},
+    AlertDialog(modifier=Modifier.testTag("transaction.funds.review"),onDismissRequest={if(!isSaving)onDismiss()},title={Text(stringResource(title),Modifier.testTag("transaction.funds.title"))},
         text={Column(Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             rows.forEach{row->Column(Modifier.fillMaxWidth().testTag("transaction.funds.wallet."+row.walletId),verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 Text(wallets.firstOrNull{it.id==row.walletId}?.name.orEmpty(),Modifier.testTag("transaction.funds.name."+row.walletId),style=MaterialTheme.typography.titleSmall)
@@ -44,6 +44,6 @@ import vn.com.quyln.mistia.core.model.*
                 },Modifier.testTag("transaction.funds.message."+row.walletId))
             }}
         }},
-        confirmButton={TextButton(onClick=onConfirm,enabled=rows.isNotEmpty(),modifier=Modifier.heightIn(min=48.dp).testTag("transaction.funds.confirm")){Text(stringResource(action),Modifier.testTag("transaction.funds.confirm.text"))}},
-        dismissButton={TextButton(onClick=onDismiss,modifier=Modifier.heightIn(min=48.dp).testTag("transaction.funds.cancel")){Text(stringResource(R.string.common_cancel),Modifier.testTag("transaction.funds.cancel.text"))}})
+        confirmButton={TextButton(onClick=onConfirm,enabled=rows.isNotEmpty() && !isSaving,modifier=Modifier.heightIn(min=48.dp).testTag("transaction.funds.confirm")){Text(stringResource(action),Modifier.testTag("transaction.funds.confirm.text"))}},
+        dismissButton={TextButton(onClick=onDismiss,enabled=!isSaving,modifier=Modifier.heightIn(min=48.dp).testTag("transaction.funds.cancel")){Text(stringResource(R.string.common_cancel),Modifier.testTag("transaction.funds.cancel.text"))}})
 }

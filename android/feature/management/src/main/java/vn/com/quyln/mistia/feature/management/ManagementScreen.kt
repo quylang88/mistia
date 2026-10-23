@@ -80,6 +80,7 @@ fun ManagementScreen(
     onOpenNotificationSettings:()->Unit={},
     onOpenCurrencySettings:()->Unit={},
     enabledCurrencyCodes: List<String> = listOf("JPY", "VND"),
+    onOpenArchivedTransactions:()->Unit={},
 ) {
     val walletFlow = remember(ownerUserId,repository) {repository.observeWallets(ownerUserId)}
     val categoryFlow = remember(ownerUserId,repository) {repository.observeCategories(ownerUserId)}
@@ -189,6 +190,14 @@ fun ManagementScreen(
         item {
             OutlinedButton(onClick=onOpenCurrencySettings,modifier=Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.settings_currency_title))
+            }
+        }
+        item {
+            OutlinedButton(onClick=onOpenArchivedTransactions,modifier=Modifier.fillMaxWidth().testTag("management.archived.transactions")) {
+                Column {
+                    Text(stringResource(R.string.management_managementarchiveditems_archived_items))
+                    Text(stringResource(R.string.management_managementarchiveditems_transactions),style=MaterialTheme.typography.labelSmall)
+                }
             }
         }
         item {

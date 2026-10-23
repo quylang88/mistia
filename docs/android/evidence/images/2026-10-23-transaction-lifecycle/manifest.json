@@ -1,0 +1,189 @@
+{
+  "device": "API36 ARM64 emulator",
+  "systemFontScale": 1.3,
+  "widthDp": 320,
+  "density": 2.75,
+  "note": "24 archive/restore/delete/list views; six cleanup presentation views use a proven-result repository fixture, real cleanup/keep flows covered separately with actual Room/files.",
+  "screenshots": [
+    {
+      "file": "transaction-lifecycle-archive-en-dark-font130-width320.png",
+      "sha256": "8e953b6c9940d4e1f61ee69a3700f58ff42dbb2707dc9126ef0a98e932859cac",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-archive-en-light-font130-width320.png",
+      "sha256": "925862842f0d0bbe0a71d1979641f3593adfd402bd4b4ce28a61afbcaa202548",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-archive-ja-dark-font130-width320.png",
+      "sha256": "9de0b5309432248d061607846e396c2e9788717db15110720113527f0de18844",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-archive-ja-light-font130-width320.png",
+      "sha256": "47b30868c3188369ceb621d7b43b8f86e59561248092a87ce15f5373fef105ba",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-archive-vi-dark-font130-width320.png",
+      "sha256": "002be65262170fffd38452721fe9d8c5a82efbdf66f081facf45c803db9d9319",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-archive-vi-light-font130-width320.png",
+      "sha256": "3cb67d621309d31473677d902342bf1f7bf48cfec80e7cd214990382566f923e",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-cleanup-en-dark-font130-width320.png",
+      "sha256": "f8d4f3d6becaf50fed1547ae9d500fe7e8e344f6aac8656beee0029663835780",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-cleanup-en-light-font130-width320.png",
+      "sha256": "1a5bb1f68884335b17ca813cf376e96051901d3a597d92d812a72238c96fd1a2",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-cleanup-ja-dark-font130-width320.png",
+      "sha256": "e88d721e3f571f75d46e38d3c08c391448c6c75367817e7aa9afb485905dc4ec",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-cleanup-ja-light-font130-width320.png",
+      "sha256": "fb0b074ab20f25219f7704a14aa8d822b449b74dbcbe5a8289311d724225ffde",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-cleanup-vi-dark-font130-width320.png",
+      "sha256": "405c02034c1cab771cff60a9bf59906c3a20a37960bcea18ce2188ff5e80315c",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-cleanup-vi-light-font130-width320.png",
+      "sha256": "6f3251e0d9255b58fde926abce5d152928f3d68501893d4efd60649929968315",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-delete-en-dark-font130-width320.png",
+      "sha256": "78006935c4ba09fedc7eea6355246967c706d333eab2717af7c87923ad248ef2",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-delete-en-light-font130-width320.png",
+      "sha256": "63490f2bc8262544205940216207267e7b6d44b5e18f8f211c2f00f4f0d7fe45",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-delete-ja-dark-font130-width320.png",
+      "sha256": "e73cc5f7f9e8ca2c603c9a3faebb4939f808850e7e78bbaa79adae40909936c2",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-delete-ja-light-font130-width320.png",
+      "sha256": "43408469c0d228a496abccc98cd05920651bbaad22d6b4fcd5fcd2f61fe566c0",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-delete-vi-dark-font130-width320.png",
+      "sha256": "13076262ffffac74266b6a428f66873eb54605ee4055cf91fd6775f90b2bde49",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-delete-vi-light-font130-width320.png",
+      "sha256": "a51b48f5ea12f3f635e9ba07982b7b0c758b9882826589ed91f39ec4481908bb",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-list-en-dark-font130-width320.png",
+      "sha256": "eff42b0809dc3ebca3d9cb3de5a3a1b7c54667ce1c9f580dbc3eb2f037d632b2",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-list-en-light-font130-width320.png",
+      "sha256": "ebab2308ecb980f8959739be553ca1b6c3e95fe20f97d74bcf0218ec4e4cd5ac",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-list-ja-dark-font130-width320.png",
+      "sha256": "2ee07c782bcc3112625246afa46bbb0a0217fcaa9ca7ba0fecc5f4187f19adb6",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-list-ja-light-font130-width320.png",
+      "sha256": "c209bfd612afd5f216aeed678286ffde95c589ea28a6f7ba588908f438d39acf",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-list-vi-dark-font130-width320.png",
+      "sha256": "b910c14914286f293346397bfdd2ce55cb27dfafcd90fdf07d79e116efa64ae0",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-list-vi-light-font130-width320.png",
+      "sha256": "2c295329dbe41928d1f75dc10ce31a5c9c52764d50a8b3720f4942ee6ee162ed",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-restore-en-dark-font130-width320.png",
+      "sha256": "1786c381492d5bed5d7c7359736f9eb523b3b32381d6710aac7fe3a25e58c428",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-restore-en-light-font130-width320.png",
+      "sha256": "299af923088dbbfa5c368eb31f4193f54a4101238b3670e03b395692f7e23d75",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-restore-ja-dark-font130-width320.png",
+      "sha256": "7c950f1fedcb87b3472ad8ffcde8413df3ebaddf1de1ef0f6c2242b8dad14eea",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-restore-ja-light-font130-width320.png",
+      "sha256": "374e2f02f7e1903072f7b3b410c2126a3fabf4f26d86f6dabbc8666609f5cb84",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-restore-vi-dark-font130-width320.png",
+      "sha256": "0ac724ccae75bb1baccd111c0cdd219d6edbd7d374e4595c1296931872e6d512",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-lifecycle-restore-vi-light-font130-width320.png",
+      "sha256": "fba7ec3ccefc5dd60ec1d17c2e9e301b2540d3e70e9c0e98c576a29ebf4041be",
+      "width": 880,
+      "height": 2340
+    }
+  ]
+}

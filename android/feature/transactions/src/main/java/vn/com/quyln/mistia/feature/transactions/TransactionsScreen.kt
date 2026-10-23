@@ -1,5 +1,8 @@
 package vn.com.quyln.mistia.feature.transactions
 
+import vn.com.quyln.mistia.core.model.LedgerTransactionRecord
+import vn.com.quyln.mistia.core.model.TransactionLifecycleAction
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -88,6 +91,7 @@ private fun OwnedTransactionsScreen(
     }
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editorTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var archiveTarget by remember(repository,receiptImageRepository){mutableStateOf<LedgerTransactionRecord?>(null)}
     var editorInitialState by remember { mutableStateOf<TransactionEditorState?>(null) }
     var editorReceiptState by rememberSaveable(stateSaver = TransactionReceiptEditorState.Saver) {
         mutableStateOf(TransactionReceiptEditorState.none())
@@ -279,7 +283,11 @@ private fun OwnedTransactionsScreen(
                         deviceIdProvider(),Instant.now().toString(),repository,receiptImageRepository,editorReceiptState)
                 },
                 saveSessionKey=repository to receiptImageRepository,
+                onArchive=transaction?.let{expected->{archiveTarget=expected}},
             )
         }
     }
+    archiveTarget?.let{expected->TransactionLifecycleActionDialog(ownerUserId,expected,TransactionLifecycleAction.ARCHIVE,repository,receiptImageRepository,
+        wallets,deviceIdProvider,primaryCurrencyCode,onDone={archiveTarget=null;editorOpen=false;editorTransactionId=null;editorInitialState=null;
+            editorReceiptState=TransactionReceiptEditorState.none();editorReceiptLoadFailed=false;pendingReceiptGroupId=null},onDismiss={archiveTarget=null})}
 }
