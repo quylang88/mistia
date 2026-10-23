@@ -98,3 +98,8 @@ Evidence/docs: android/README.md; contracts/*;
 docs/android/android-parity-progress.md;
 docs/android/evidence/2026-09-21-google-login.md (resolution supersedes earlier
 pending status); docs/android/google-oauth-setup.md.
+
+
+## Slice138 checkpoint — 2026-10-23
+
+Latest ordinary editor investment-fund consent/atomic seven-entity save/receipt CAS flow is complete; see android-parity-progress.md slice138 and evidence/2026-10-22-transaction-investment-funds.md for final checks, review rulings, artifacts and scope. VersionCode137/main SHA2795fdb2311b98ed9aa4c3148aba4021552b497b073cafd07d4ca109837f6693 installed on API36 ARM64 emulator only, no Samsung. Final1996JVM/627Swift/70Transactions+261Room native accepted; separate18font130/320dp views. All11gatesfalse/Room6/SwiftDataV11, no production write/deploy/migration/push. APK1–4/RC remains active. Continue ordinary transaction lifecycle archive/restore/delete with derived fund effects and actual routes, then payment protections and remaining full goal. Do not repeat Google OAuth/account-switch setup.

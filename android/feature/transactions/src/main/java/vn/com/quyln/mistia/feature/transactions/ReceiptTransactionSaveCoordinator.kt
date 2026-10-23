@@ -25,10 +25,19 @@ internal suspend fun <Record> saveReceiptBackedTransaction(
     persistReceipt: suspend (String, PreparedReceiptImage) -> Result<Unit>,
     saveTransaction: suspend (TransactionDraft) -> Result<Record>,
     deleteReceipt: suspend (String) -> Result<Unit>,
+    preflight:suspend (TransactionDraft)->Result<Record?> = {Result.success(null)},
+    recoverCommitted:(suspend (TransactionDraft)->Result<Record?>)? = null,
 ): Result<Record> {
+    val prepared=try{preflight(draft)}catch(error:Throwable){if(error is CancellationException)throw error;Result.failure(error)}
+    prepared.exceptionOrNull()?.let{if(it is CancellationException)throw it;return Result.failure(it)}
+    prepared.getOrNull()?.let{return Result.success(it)}
     val transactionId = runCatching {
         require(draft.id == null) { "Receipt-backed coordinator only creates new transactions" }
-        transactionIdProvider().trim().also { require(it.isNotEmpty()) }
+        draft.creationIdentity?.let { identity ->
+            require(java.util.UUID.fromString(identity.id).toString()==identity.id)
+            java.time.Instant.parse(identity.createdAt)
+            identity.id
+        } ?: transactionIdProvider().trim().also { require(it.isNotEmpty()) }
     }.getOrElse { return Result.failure(it) }
     val receiptFailure = try {
         persistReceipt(transactionId, receiptImage).exceptionOrNull()
@@ -50,11 +59,21 @@ internal suspend fun <Record> saveReceiptBackedTransaction(
     }
 
     val transactionResult = try {
-        saveTransaction(draft.copy(id = transactionId))
+        saveTransaction(if(draft.creationIdentity==null)draft.copy(id=transactionId) else draft)
     } catch (error: Throwable) {
         Result.failure(error)
     }
     val transactionFailure = transactionResult.exceptionOrNull() ?: return transactionResult
+    if(recoverCommitted!=null) {
+        val recovered=withContext(NonCancellable) {
+            try{recoverCommitted(draft)}catch(error:Throwable){Result.failure(error)}
+        }
+        recovered.getOrNull()?.let {
+            if(transactionFailure is CancellationException)throw transactionFailure
+            return Result.success(it)
+        }
+        recovered.exceptionOrNull()?.takeUnless{it===transactionFailure}?.let(transactionFailure::addSuppressed)
+    }
     val cleanupFailure = if (transactionFailure is CancellationException) {
         withContext(NonCancellable) { receiptCleanupFailure(transactionId, deleteReceipt) }
     } else {

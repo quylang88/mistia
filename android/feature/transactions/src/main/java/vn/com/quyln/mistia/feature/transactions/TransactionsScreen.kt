@@ -27,7 +27,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
-import java.util.UUID
 import java.util.concurrent.CancellationException
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.MistiaRecordRow
@@ -73,6 +72,7 @@ private fun OwnedTransactionsScreen(
     modifier: Modifier = Modifier,
     primaryCurrencyCode: String,
 ) {
+    val investmentAdjustmentTitle=stringResource(R.string.investment_wallet_history_adjustment)
     val records by repository.observeTransactions(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val wallets by repository.observeWallets(ownerUserId).collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeCategories(ownerUserId).collectAsStateWithLifecycle(emptyList())
@@ -275,69 +275,10 @@ private fun OwnedTransactionsScreen(
                     pendingReceiptGroupId = null
                 },
                 onSave = { draft ->
-                    val now = Instant.now().toString()
-                    val deviceId = deviceIdProvider()
-                    editorReceiptState.newReceiptImageForSave().fold(
-                        onSuccess = { receiptImage ->
-                            if (receiptImage == null) {
-                                if (editorReceiptState.deleteStoredOnSave) {
-                                    val transactionId = draft.id
-                                    if (transactionId == null) {
-                                        Result.failure(
-                                            IllegalStateException("Stored receipt deletion requires a transaction ID"),
-                                        )
-                                    } else {
-                                        saveTransactionThenDeleteReceipt(
-                                            transactionId = transactionId,
-                                            saveTransaction = {
-                                                repository.saveTransaction(
-                                                    ownerUserId = ownerUserId,
-                                                    draft = draft,
-                                                    deviceId = deviceId,
-                                                    now = now,
-                                                )
-                                            },
-                                            deleteReceipt = receiptImageRepository::deleteReceipt,
-                                        )
-                                    }
-                                } else {
-                                    repository.saveTransaction(
-                                        ownerUserId = ownerUserId,
-                                        draft = draft,
-                                        deviceId = deviceId,
-                                        now = now,
-                                    )
-                                }
-                            } else {
-                                saveReceiptBackedTransaction(
-                                    draft = draft,
-                                    receiptImage = receiptImage,
-                                    transactionIdProvider = { UUID.randomUUID().toString().lowercase() },
-                                    persistReceipt = { transactionId, image ->
-                                        receiptImageRepository.replaceReceipt(
-                                            ownerUserId = ownerUserId,
-                                            transactionId = transactionId,
-                                            imageData = image.imageData,
-                                            thumbnailData = image.thumbnailData,
-                                            contentType = image.mimeType,
-                                            now = now,
-                                        ).map { Unit }
-                                    },
-                                    saveTransaction = { transactionDraft ->
-                                        repository.saveTransaction(
-                                            ownerUserId = ownerUserId,
-                                            draft = transactionDraft,
-                                            deviceId = deviceId,
-                                            now = now,
-                                        )
-                                    },
-                                    deleteReceipt = receiptImageRepository::deleteReceipt,
-                                )
-                            }
-                        },
-                        onFailure = { Result.failure(it) },
-                    )
+                    saveInvestmentAwareEditorReceiptState(ownerUserId,draft,primaryCurrencyCode,investmentAdjustmentTitle,
+                        deviceIdProvider(),Instant.now().toString(),repository,receiptImageRepository,editorReceiptState)
                 },
+                saveSessionKey=repository to receiptImageRepository,
             )
         }
     }

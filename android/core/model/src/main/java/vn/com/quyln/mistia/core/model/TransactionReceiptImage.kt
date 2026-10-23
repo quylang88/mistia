@@ -15,6 +15,12 @@ data class TransactionReceiptImageRecord(
 interface TransactionReceiptImageRepository {
     suspend fun receipt(transactionId: String): TransactionReceiptImageRecord?
 
+    suspend fun createReceiptIfAbsent(ownerUserId:UserId,transactionId:String,imageData:ByteArray,thumbnailData:ByteArray,contentType:String,now:String):Result<TransactionReceiptImageRecord> =
+        Result.failure(UnsupportedOperationException("Conditional receipt creation unavailable"))
+
+    suspend fun deleteReceiptIfUnchanged(ownerUserId:UserId,expected:TransactionReceiptImageRecord):Result<Unit> =
+        Result.failure(UnsupportedOperationException("Conditional receipt deletion unavailable"))
+
     suspend fun replaceReceipt(
         ownerUserId: UserId,
         transactionId: String,

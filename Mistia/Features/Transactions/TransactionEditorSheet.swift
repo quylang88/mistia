@@ -3281,6 +3281,14 @@ struct TransactionEditorSheet: View {
                 context: modelContext
             )
             let preview = changePreview.proposed
+            if preview.investmentToUseMinor > 0 {
+                try InvestmentPersistenceService.validateFundUsageCurrency(
+                    ownerUserID: ownerUserID,
+                    sourceWallet: wallet,
+                    destinationWallet: draft.primaryKind == .transfer && draft.transferSubtype == .internalTransfer ? selectedDestinationWallet : nil,
+                    context: modelContext
+                )
+            }
             switch preview.outcome {
             case .ordinaryFundsOnly:
                 guard changePreview.requiresConfirmation else {

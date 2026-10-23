@@ -60,6 +60,7 @@ private fun JsonObject.timelineInstant(key:String)=runCatching{Instant.parse(tim
 private fun JsonObject.timelineReference(key:String)=financeRawReference(key).let{if(!it.readable)timelineFail() else it.id}
 private data class FundTimelineEvent(val id:String,val occurred:Instant,val created:Instant,val priority:Int,
     val ledger:CloudRecord?=null,val walletId:String?=null,val bucket:String?=null,val amount:BigInteger=BigInteger.ZERO,
+    val localAmount:BigInteger=BigInteger.ZERO,
     val deltas:Map<String,BigInteger> = emptyMap())
 
 private class FundTimelineSource(val snapshot:InvestmentCashReadSnapshot,accountingCurrency:String) {
@@ -106,8 +107,7 @@ private class FundTimelineSource(val snapshot:InvestmentCashReadSnapshot,account
             val local=p.financeRawLong("amount_minor")?.let(BigInteger::valueOf) ?: timelineFail()
             val amount=p.financeRawLong("accounting_amount_minor")?.let(BigInteger::valueOf) ?: timelineFail()
             if(accountCode!=code || localCode!=w.currencyCode || (localCode==code && local!=amount))timelineFail()
-            if(localCode!=code)timelineFail(InvestmentFundTimelineError.UNSUPPORTED_CURRENCY_CONVERSION)
-            events+=FundTimelineEvent(raw.id,p.timelineInstant("occurred_at"),p.timelineInstant("created_at"),0,walletId=wallet,bucket=bucket,amount=amount)
+            events+=FundTimelineEvent(raw.id,p.timelineInstant("occurred_at"),p.timelineInstant("created_at"),0,walletId=wallet,bucket=bucket,amount=amount,localAmount=local)
         }
         val transactions=snapshot.rows.filter{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id!=replacing}+listOfNotNull(proposed)
         for(raw in transactions) {
@@ -130,20 +130,28 @@ private class FundTimelineSource(val snapshot:InvestmentCashReadSnapshot,account
         val actual=wallets.values.filter{it.kind!=WalletKind.CREDIT_CARD}.associate{it.id to BigInteger.valueOf(it.openingBalanceMinor)}.toMutableMap()
         val booked=actual.keys.associateWith{BigInteger.ZERO}.toMutableMap()
         val unreconciled=actual.keys.associateWith{BigInteger.ZERO}.toMutableMap()
+        val localBooked=actual.keys.associateWith{BigInteger.ZERO}.toMutableMap()
+        val localUnreconciled=actual.keys.associateWith{BigInteger.ZERO}.toMutableMap()
         val usages=linkedMapOf<String,InvestmentFundTimelineUsage>()
         fun add(target:MutableMap<String,BigInteger>,id:String,amount:BigInteger){target[id]=(target[id] ?: BigInteger.ZERO)+amount}
         for(event in events) {
             val raw=event.ledger
             if(raw==null) {
                 add(if(event.bucket=="booked")booked else unreconciled,requireNotNull(event.walletId),event.amount)
+                add(if(event.bucket=="booked")localBooked else localUnreconciled,event.walletId,event.localAmount)
                 continue
             }
             if(!requiresInvestmentLedgerDomain(raw.payload))for((wallet,delta) in event.deltas.filterValues{it.signum()<0}) {
                 val w=wallets.getValue(wallet);if(w.kind==WalletKind.CREDIT_CARD)continue
                 val request=delta.negate();val beforeBooked=(booked[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)
                 val beforeUnreconciled=(unreconciled[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)
-                val ordinary=((actual[wallet] ?: BigInteger.ZERO)-beforeBooked).max(BigInteger.ZERO)
+                val ordinary=((actual[wallet] ?: BigInteger.ZERO)-(localBooked[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)).max(BigInteger.ZERO)
                 val needed=(request-ordinary).max(BigInteger.ZERO)
+                if(w.currencyCode!=code) {
+                    val localReserve=(localBooked[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)+(localUnreconciled[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)
+                    if(needed.signum()>0 && localReserve.signum()>0)timelineFail(InvestmentFundTimelineError.UNSUPPORTED_CURRENCY_CONVERSION)
+                    continue
+                }
                 val useBooked=beforeBooked.min(needed);val useUnreconciled=beforeUnreconciled.min(needed-useBooked)
                 val use=useBooked+useUnreconciled
                 if(use.signum()==0)continue
@@ -153,7 +161,8 @@ private class FundTimelineSource(val snapshot:InvestmentCashReadSnapshot,account
                     p.timelineReference("destination_wallet_id")?.let(wallets::get)?.takeIf{it.kind!=WalletKind.CREDIT_CARD} else null
                 if(destination!=null && destination.currencyCode!=code)timelineFail(InvestmentFundTimelineError.UNSUPPORTED_CURRENCY_CONVERSION)
                 add(booked,wallet,-useBooked);add(unreconciled,wallet,-useUnreconciled)
-                if(destination!=null)add(booked,destination.id,use)
+                add(localBooked,wallet,-useBooked);add(localUnreconciled,wallet,-useUnreconciled)
+                if(destination!=null){add(booked,destination.id,use);add(localBooked,destination.id,use)}
                 if(useUnreconciled.signum()>0) {
                     val system=investmentSystemWalletId(owner)
                     val systemWallet=wallets[system] ?: timelineFail()

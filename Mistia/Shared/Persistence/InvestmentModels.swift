@@ -621,6 +621,7 @@ nonisolated struct InvestmentWalletCashLocation: Identifiable, Equatable, Sendab
     let unreconciledMinor: Int64
     let originalBookedMinor: Int64
     let originalUnreconciledMinor: Int64
+    var originalAmountsOverflowed: Bool = false
 
     var id: UUID { walletID }
     var totalMinor: Int64 { bookedMinor + unreconciledMinor }

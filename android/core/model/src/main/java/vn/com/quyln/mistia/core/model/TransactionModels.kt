@@ -244,6 +244,8 @@ data class TransactionDraft(
     val exchangeRateDate: String? = null,
     val reportingCurrencyCode: String? = null,
     val reportingAmountMinor: Long? = null,
+    val creationIdentity:TransactionCreationIdentity? = null,
+    val investmentConsent:InvestmentFundUsageConsent? = null,
 ) {
     fun toMutation(
         ownerUserId: UserId,

@@ -382,7 +382,7 @@ private fun SignedInRoot(
         val row=notificationRows!!.singleOrNull {it.key==notificationActionKey}
         if(row==null) LaunchedEffect(notificationActionKey) {notificationActionKey=null}
         else NotificationActionHost(authState.session.userId,row,financeRepository,exchangeRateRepository,
-            {deviceIdStore.getOrCreate()},{notificationActionKey=null})
+            {deviceIdStore.getOrCreate()},{notificationActionKey=null},currencySettings.primaryCurrencyCode)
     }
 }
 

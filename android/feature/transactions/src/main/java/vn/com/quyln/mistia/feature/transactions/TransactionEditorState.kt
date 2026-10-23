@@ -40,6 +40,7 @@ data class TransactionEditorState(
     val exchangeRateDate: String?,
     val reportingAmountText: String = "",
     val reportingAmountCurrencyCode: String? = null,
+    val creationIdentity:vn.com.quyln.mistia.core.model.TransactionCreationIdentity? = null,
 ) {
     fun withAmount(text: String, currency: String?): TransactionEditorState = copy(amountText = currencyAmountInput(text, currency.orEmpty()))
 
@@ -149,6 +150,7 @@ data class TransactionEditorState(
         return TransactionEditorDraftResult(
             draft = TransactionDraft(
                 id = id,
+                creationIdentity = creationIdentity,
                 primaryKind = primaryKind,
                 transferSubtype = transferSubtype,
                 debtIntent = debtIntent,
@@ -253,6 +255,7 @@ data class TransactionEditorState(
 
         fun new(now: String): TransactionEditorState = TransactionEditorState(
             id = null,
+            creationIdentity = vn.com.quyln.mistia.core.model.TransactionCreationIdentity(java.util.UUID.randomUUID().toString(),java.time.Instant.parse(now).toString()),
             primaryKind = TransactionPrimaryKind.EXPENSE,
             transferSubtype = null,
             debtIntent = null,
@@ -324,6 +327,8 @@ data class TransactionEditorState(
                     it.exchangeRateDate.orEmpty(),
                     it.reportingAmountText,
                     it.reportingAmountCurrencyCode.orEmpty(),
+                    it.creationIdentity?.id.orEmpty(),
+                    it.creationIdentity?.createdAt.orEmpty(),
                 )
             },
             restore = { values ->
@@ -350,6 +355,12 @@ data class TransactionEditorState(
                     exchangeRateDate = (values[17] as String).takeIf(String::isNotEmpty),
                     reportingAmountText = if (values.size < 20) "" else values[18] as String,
                     reportingAmountCurrencyCode = if (values.size < 20) null else (values[19] as String).takeIf(String::isNotEmpty),
+                    creationIdentity = if(values.size>=22 && (values[20] as String).isNotEmpty()) {
+                        val key=values[20] as String;val created=values[21] as String
+                        require(java.util.UUID.fromString(key).toString()==key);java.time.Instant.parse(created)
+                        require((values[0] as String).isEmpty())
+                        vn.com.quyln.mistia.core.model.TransactionCreationIdentity(key,created)
+                    } else if((values[0] as String).isEmpty())vn.com.quyln.mistia.core.model.TransactionCreationIdentity(java.util.UUID.randomUUID().toString(),java.time.Instant.now().toString()) else null,
                 )
             },
         )
@@ -403,6 +414,7 @@ internal fun ReceiptItemTransactionDraft.toTransactionEditorState(
     if (!isExpense && !isLend) return null
     return TransactionEditorState(
         id = null,
+        creationIdentity = vn.com.quyln.mistia.core.model.TransactionCreationIdentity(java.util.UUID.randomUUID().toString(),java.time.Instant.now().toString()),
         primaryKind = primaryKind,
         transferSubtype = transferSubtype,
         debtIntent = debtIntent,

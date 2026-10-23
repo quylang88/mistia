@@ -311,6 +311,7 @@
     <string name="investment_error_asset_history_locks_accounting">Channel and currency cannot change after this asset has transaction history.</string>
     <string name="investment_error_close_positions_before_archive">Please sell or settle all remaining inventory before archiving.</string>
     <string name="investment_error_close_positions_before_delete">Please sell or settle all remaining inventory before deleting this asset.</string>
+    <string name="investment_error_fund_usage_currency_mismatch">Use investment funds only with wallets in the accounting currency.</string>
     <string name="investment_error_image_too_large">Image size is too large (exceeds 4 MB). Please select another image.</string>
     <string name="investment_error_insufficient_funds">The selected wallet has insufficient available funds.</string>
     <string name="investment_error_insufficient_position">This change would leave a sale without enough purchased inventory. Adjust or delete the related sale first.</string>

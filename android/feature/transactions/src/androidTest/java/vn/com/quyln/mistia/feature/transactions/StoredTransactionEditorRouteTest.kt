@@ -146,8 +146,8 @@ class StoredTransactionEditorRouteTest {
         var id by mutableStateOf(first.id);var dismissed=false
         val started=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>();val finished=CompletableDeferred<Unit>()
         val wrapped=object:FinanceRepository by repo {
-            override suspend fun saveTransaction(ownerUserId:UserId,draft:TransactionDraft,deviceId:String,now:String):Result<LedgerTransactionRecord> {
-                val result=repo.saveTransaction(ownerUserId,draft,deviceId,now);started.complete(Unit)
+            override suspend fun saveTransactionWithInvestmentFunds(owner:UserId,request:TransactionInvestmentSaveRequest,deviceId:String,now:String):Result<LedgerTransactionRecord> {
+                val result=repo.saveTransactionWithInvestmentFunds(owner,request,deviceId,now);started.complete(Unit)
                 withContext(NonCancellable) {release.await()};finished.complete(Unit);return result
             }
         }

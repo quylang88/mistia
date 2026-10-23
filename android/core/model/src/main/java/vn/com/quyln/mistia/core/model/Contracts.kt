@@ -216,6 +216,10 @@ interface FinanceRepository : InstallmentPaymentRepository, InstallmentRepositor
         deviceId: String,
         now: String,
     ): Result<LedgerTransactionRecord>
+    suspend fun prepareTransactionWithInvestmentFunds(owner:UserId,request:TransactionInvestmentSaveRequest,deviceId:String,now:String):Result<TransactionInvestmentSavePlan> =
+        Result.failure(UnsupportedOperationException("Investment-aware transaction preparation unavailable"))
+    suspend fun saveTransactionWithInvestmentFunds(owner:UserId,request:TransactionInvestmentSaveRequest,deviceId:String,now:String):Result<LedgerTransactionRecord> =
+        Result.failure(UnsupportedOperationException("Investment-aware transaction save unavailable"))
     suspend fun saveCategory(
         ownerUserId: UserId,
         draft: CategoryDraft,
@@ -389,6 +393,11 @@ interface LocalStore {
     suspend fun commitMutation(record: CloudRecord, mutation: PendingMutation)
     suspend fun transactionSaveSnapshot(owner: UserId): TransactionSaveSnapshot =
         throw UnsupportedOperationException("Atomic transaction dependency snapshot unavailable")
+    suspend fun transactionInvestmentSaveSnapshot(owner:UserId):TransactionInvestmentSaveSnapshot =
+        throw UnsupportedOperationException("Atomic ordinary/investment dependency snapshot unavailable")
+    suspend fun commitTransactionInvestmentSave(expected:TransactionInvestmentSaveSnapshot,request:TransactionInvestmentSaveRequest,
+        deviceId:String,now:String,statementZone:java.time.ZoneId=java.time.ZoneId.systemDefault()):LedgerTransactionRecord =
+        throw UnsupportedOperationException("Atomic ordinary/investment save unavailable")
     suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {
         throw UnsupportedOperationException("Atomic validated transaction save unavailable")
     }

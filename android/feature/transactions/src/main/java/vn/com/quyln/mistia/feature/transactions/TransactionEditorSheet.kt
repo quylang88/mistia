@@ -39,6 +39,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +71,10 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -77,6 +82,10 @@ import kotlinx.coroutines.withContext
 import vn.com.quyln.mistia.core.designsystem.AmountCalculatorDialog
 import vn.com.quyln.mistia.core.designsystem.MistiaGlassCard
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.model.InvestmentFundUsageConfirmationRequired
+import vn.com.quyln.mistia.core.model.InvestmentFundUsageReview
+import vn.com.quyln.mistia.core.model.InvestmentFundUsageException
+import vn.com.quyln.mistia.core.model.InvestmentFundUsageError
 import vn.com.quyln.mistia.core.model.CategoryHierarchyRole
 import vn.com.quyln.mistia.core.model.CurrencyConversionMode
 import vn.com.quyln.mistia.core.model.ExchangeRateSnapshot
@@ -111,12 +120,14 @@ internal fun TransactionEditorSheet(
     onSaveSuccess: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
+    saveSessionKey:Any?=null,
 ) {
     if (transaction != null && transaction.ownerUserId != ownerId) return
     val primary = primaryCurrencyCode.trim().uppercase(Locale.ROOT)
-    key(ownerId, transaction?.id, initialState, primary) {
+    // The generated creation identity is saved inside the editor, not part of its restoration group key.
+    key(ownerId, transaction?.id, initialState?.copy(creationIdentity=null), primary) {
         OwnedTransactionEditorSheet(ownerId, transaction, wallets.filter { it.ownerUserId == ownerId }, categories.filter { it.ownerUserId == ownerId },
-            exchangeRates, now, primary, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave)
+            exchangeRates, now, primary, initialState, receiptState, receiptLoading, receiptLoadFailed, onRemoveReceipt, onSaveSuccess, onDismiss, onSave,saveSessionKey)
     }
 }
 
@@ -138,20 +149,25 @@ private fun OwnedTransactionEditorSheet(
     onSaveSuccess: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: suspend (TransactionDraft) -> Result<LedgerTransactionRecord>,
+    saveSessionKey:Any?,
 ) {
-    var state by rememberSaveable(ownerId, transaction?.id, initialState, primaryCurrencyCode, stateSaver = TransactionEditorState.scopedSaver(ownerId, transaction?.id, primaryCurrencyCode)) {
+    var state by rememberSaveable(ownerId, transaction?.id, initialState?.copy(creationIdentity=null), primaryCurrencyCode, stateSaver = TransactionEditorState.scopedSaver(ownerId, transaction?.id, primaryCurrencyCode)) {
         val initial = transaction?.let(TransactionEditorState::edit) ?: initialState ?: TransactionEditorState.new(now)
         val initialCurrency = wallets.firstOrNull { it.id == initial.sourceWalletId && !it.isArchived && it.deletedAt == null }?.currencyCode
         mutableStateOf(if (initial.primaryKind != TransactionPrimaryKind.TRANSFER)
             initial.forReportingCurrency(initialCurrency, primaryCurrencyCode, exchangeRates) else initial)
     }
     var validation by remember { mutableStateOf<TransactionEditorValidation?>(null) }
-    var operationError by remember { mutableStateOf<TransactionValidationError?>(null) }
-    var genericFailure by remember { mutableStateOf(false) }
-    var isSaving by remember { mutableStateOf(false) }
+    var operationError by remember(saveSessionKey) { mutableStateOf<TransactionValidationError?>(null) }
+    var genericFailure by remember(saveSessionKey) { mutableStateOf(false) }
+    var fundCurrencyError by remember(saveSessionKey) {mutableStateOf(false)}
+    var isSaving by remember(saveSessionKey) { mutableStateOf(false) }
+    var fundConfirmation by remember(saveSessionKey) {mutableStateOf<Pair<TransactionDraft,InvestmentFundUsageReview>?>(null)}
     var showsDatePicker by remember { mutableStateOf(false) }
     var showsTimePicker by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    val parentScope = rememberCoroutineScope()
+    val scope=remember(parentScope,saveSessionKey){CoroutineScope(parentScope.coroutineContext+SupervisorJob(parentScope.coroutineContext[Job]))}
+    DisposableEffect(scope){onDispose{scope.cancel()}}
     val activeWallets = wallets.filter { !it.isArchived && it.deletedAt == null && it.kind != null }
     val isDebtLend = state.primaryKind == TransactionPrimaryKind.TRANSFER &&
         state.transferSubtype == TransactionTransferSubtype.DEBT &&
@@ -200,6 +216,27 @@ private fun OwnedTransactionEditorSheet(
         state = state.withAmount(value, sourceWallet?.currencyCode)
             .withCurrentAppRate(sourceWallet?.currencyCode, conversionTarget, exchangeRates, reporting = isReporting)
     }
+    fun submitDraft(draft:TransactionDraft) {
+        if(isSaving)return
+        fundCurrencyError=false
+        isSaving=true
+        scope.launch {
+            try {
+                val saved=try{onSave(draft)}catch(error:kotlinx.coroutines.CancellationException){throw error}catch(error:Throwable){Result.failure(error)}
+                currentCoroutineContext().ensureActive()
+                saved.fold(onSuccess={onSaveSuccess();onDismiss()},onFailure={error->
+                    val review=(error as? InvestmentFundUsageConfirmationRequired)?.review
+                    if(review!=null && review.consent.ownerUserId==ownerId && review.consent.transactionId==(draft.id ?: draft.creationIdentity?.id)) {
+                        fundConfirmation=draft.copy(investmentConsent=null) to review
+                    } else {
+                        operationError=(error as? TransactionValidationException)?.reason
+                        fundCurrencyError=(error as? InvestmentFundUsageException)?.reason==InvestmentFundUsageError.CURRENCY_MISMATCH
+                        genericFailure=operationError==null && !fundCurrencyError
+                    }
+                })
+            } finally {isSaving=false}
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = { if (!isSaving) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -210,54 +247,15 @@ private fun OwnedTransactionEditorSheet(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onDismiss, enabled = !isSaving) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-                Text(
-                    stringResource(
-                        if (transaction == null) R.string.shared_sync_mistiasynccoordinator_new_transaction
-                        else R.string.transactions_transactioneditor_edit_transaction
-                    ),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Button(
-                    enabled = !isSaving,
-                    onClick = {
-                        val result = state.toDraft(
-                            sourceCurrencyCode = sourceWallet?.currencyCode,
-                            destinationCurrencyCode = destinationWallet?.currencyCode,
-                            rates = exchangeRates,
-                            primaryCurrencyCode = primaryCurrencyCode,
-                        )
-                        validation = result.validation
-                        operationError = null
-                        genericFailure = false
-                        val draft = result.draft ?: return@Button
-                        isSaving = true
-                        scope.launch {
-                            val saved = onSave(draft)
-                            currentCoroutineContext().ensureActive()
-                            saved.fold(
-                                onSuccess = {
-                                    onSaveSuccess()
-                                    onDismiss()
-                                },
-                                onFailure = { error ->
-                                    isSaving = false
-                                    operationError = (error as? TransactionValidationException)?.reason
-                                    genericFailure = operationError == null
-                                },
-                            )
-                        }
-                    },
-                ) { Text(stringResource(R.string.common_save)) }
-            }
+            TransactionEditorHeading(
+                title=stringResource(if(transaction==null)R.string.shared_sync_mistiasynccoordinator_new_transaction else R.string.transactions_transactioneditor_edit_transaction),
+                isSaving=isSaving,onDismiss=onDismiss,onSave={
+                    val result=state.toDraft(sourceCurrencyCode=sourceWallet?.currencyCode,destinationCurrencyCode=destinationWallet?.currencyCode,
+                        rates=exchangeRates,primaryCurrencyCode=primaryCurrencyCode)
+                    validation=result.validation;operationError=null;genericFailure=false;fundCurrencyError=false
+                    result.draft?.let(::submitDraft)
+                },
+            )
 
             MistiaGlassCard { padding ->
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -529,7 +527,8 @@ private fun OwnedTransactionEditorSheet(
                 )
             }
 
-            transactionEditorError(validation, operationError, genericFailure, state.occurredAt)?.let { message ->
+            (if(fundCurrencyError)stringResource(R.string.investment_error_fund_usage_currency_mismatch) else
+                transactionEditorError(validation, operationError, genericFailure, state.occurredAt))?.let { message ->
                 Text(
                     text = message,
                     color = MaterialTheme.colorScheme.error,
@@ -543,6 +542,13 @@ private fun OwnedTransactionEditorSheet(
                 modifier = Modifier.padding(bottom = 24.dp),
             )
         }
+    }
+
+    fundConfirmation?.let {(draft,review)->
+        TransactionInvestmentFundDialog(review,wallets,onDismiss={fundConfirmation=null},onConfirm={
+            fundConfirmation=null
+            submitDraft(draft.copy(investmentConsent=review.consent))
+        })
     }
 
     val calculatesSource = calculatorField == "source" && sourceCalculatorAvailable

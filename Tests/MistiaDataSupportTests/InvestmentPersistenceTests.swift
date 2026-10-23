@@ -4,6 +4,132 @@ import XCTest
 
 @MainActor
 final class InvestmentPersistenceTests: XCTestCase {
+    private func foreignFundUsageFixture() throws -> Fixture {
+        let fixture=try makeFixture()
+        fixture.fundingWallet.currencyCode="VND";fixture.fundingWallet.openingBalanceMinor=100_000
+        try MistiaRecordOwnershipStore.upsert(entity:.wallet,recordID:fixture.fundingWallet.id,ownerUserID:fixture.ownerID,context:fixture.context)
+        try MistiaRecordOwnershipStore.upsert(entity:.wallet,recordID:fixture.capitalWallet.id,ownerUserID:fixture.ownerID,context:fixture.context)
+        let event=UUID()
+        let posting=InvestmentWalletPosting(ownerUserID:fixture.ownerID,eventID:event,walletID:fixture.fundingWallet.id,ledgerTransactionID:event,role:.cashAccrual,amountMinor:40_000,currencyCode:"VND",accountingAmountMinor:2,accountingCurrencyCode:"JPY",occurredAt:fixture.start)
+        fixture.context.insert(posting)
+        fixture.context.insert(InvestmentCashPostingMetadata(id:posting.id,ownerUserID:fixture.ownerID,cashBucket:.booked,cashOrigin:.manual))
+        try fixture.context.save()
+        return fixture
+    }
+    func testFundUsageCurrencyRejectsForeignReserveUsingLocalEarmarks() throws {
+        let fixture=try foreignFundUsageFixture()
+        XCTAssertThrowsError(try InvestmentPersistenceService.fundUsagePreview(ownerUserID:fixture.ownerID,wallet:fixture.fundingWallet,requestedMinor:70_000,visibleWalletBalanceMinor:100_000,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertFalse(fixture.context.hasChanges)
+    }
+    func testFundUsageCurrencyEditorPreflightRejectsForeignSourceAndOwnedDestinationWithoutChanges() throws {
+        let fixture=try foreignFundUsageFixture()
+        XCTAssertThrowsError(try InvestmentPersistenceService.validateFundUsageCurrency(ownerUserID:fixture.ownerID,sourceWallet:fixture.fundingWallet,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertThrowsError(try InvestmentPersistenceService.validateFundUsageCurrency(ownerUserID:fixture.ownerID,sourceWallet:fixture.capitalWallet,destinationWallet:fixture.fundingWallet,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        try InvestmentPersistenceService.validateFundUsageCurrency(ownerUserID:fixture.ownerID,sourceWallet:fixture.capitalWallet,context:fixture.context)
+        XCTAssertFalse(fixture.context.hasChanges)
+    }
+    func testFundUsageCurrencyRejectsBeforeOverflowingTheForeignLocalReserveTotal() throws {
+        let fixture=try foreignFundUsageFixture();let event=UUID()
+        let posting=InvestmentWalletPosting(ownerUserID:fixture.ownerID,eventID:event,walletID:fixture.fundingWallet.id,ledgerTransactionID:event,role:.cashAccrual,amountMinor:Int64.max,currencyCode:"VND",accountingAmountMinor:2,accountingCurrencyCode:"JPY",occurredAt:fixture.start)
+        fixture.context.insert(posting);fixture.context.insert(InvestmentCashPostingMetadata(id:posting.id,ownerUserID:fixture.ownerID,cashBucket:.unreconciled,cashOrigin:.manual))
+        try fixture.context.save()
+        XCTAssertThrowsError(try InvestmentPersistenceService.fundUsagePreview(ownerUserID:fixture.ownerID,wallet:fixture.fundingWallet,requestedMinor:70_000,visibleWalletBalanceMinor:100_000,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        let expense=LedgerTransaction(primaryKind:.expense,title:"Foreign",amountMinor:70_000,sourceCurrencyCode:"VND",occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.fundingWallet)
+        fixture.context.insert(expense);try fixture.context.save()
+        XCTAssertThrowsError(try InvestmentPersistenceService.reconcileFundUsageTimeline(ownerUserID:fixture.ownerID,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+    }
+    func testFundUsageCurrencyCannotInventOrdinaryMoneyAfterLocalReserveAggregationOverflows() throws {
+        let fixture=try foreignFundUsageFixture()
+        fixture.fundingWallet.openingBalanceMinor = .max
+        let first=try XCTUnwrap(fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).first)
+        first.amountMinor = .max; first.accountingAmountMinor=10
+        for (index,amount) in [Int64(100),Int64(-100)].enumerated() {
+            let event=UUID()
+            let posting=InvestmentWalletPosting(ownerUserID:fixture.ownerID,eventID:event,walletID:fixture.fundingWallet.id,ledgerTransactionID:event,role:.cashAccrual,amountMinor:amount,currencyCode:"VND",accountingAmountMinor:index==0 ? 1 : -1,accountingCurrencyCode:"JPY",occurredAt:fixture.start.addingTimeInterval(Double(index+1)/10))
+            fixture.context.insert(posting)
+            fixture.context.insert(InvestmentCashPostingMetadata(id:posting.id,ownerUserID:fixture.ownerID,cashBucket:.booked,cashOrigin:.manual))
+        }
+        try fixture.context.save()
+        XCTAssertThrowsError(try InvestmentPersistenceService.fundUsagePreview(ownerUserID:fixture.ownerID,wallet:fixture.fundingWallet,requestedMinor:50,visibleWalletBalanceMinor:.max,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        let expense=LedgerTransaction(primaryKind:.expense,title:"Foreign exact reserve",amountMinor:50,sourceCurrencyCode:"VND",occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.fundingWallet)
+        fixture.context.insert(expense);try fixture.context.save()
+        XCTAssertThrowsError(try InvestmentPersistenceService.reconcileFundUsageTimeline(ownerUserID:fixture.ownerID,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertFalse(fixture.context.hasChanges)
+    }
+    func testFundUsageCurrencyDoesNotLabelLegacyAccountingRestorationAsForeignLocalMoney() throws {
+        let fixture=try foreignFundUsageFixture()
+        let expense=LedgerTransaction(primaryKind:.expense,title:"Legacy foreign use",amountMinor:70_000,sourceCurrencyCode:"VND",occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.fundingWallet)
+        fixture.context.insert(expense)
+        let posting=InvestmentWalletPosting(ownerUserID:fixture.ownerID,eventID:expense.id,walletID:fixture.fundingWallet.id,ledgerTransactionID:expense.id,role:.cashConsumption,amountMinor:-10_000,currencyCode:"VND",accountingAmountMinor:-1,accountingCurrencyCode:"JPY",occurredAt:expense.occurredAt)
+        fixture.context.insert(posting);fixture.context.insert(InvestmentCashPostingMetadata(id:posting.id,ownerUserID:fixture.ownerID,cashBucket:.booked,cashOrigin:.derived));try fixture.context.save()
+        XCTAssertThrowsError(try InvestmentPersistenceService.fundUsageChangePreview(ownerUserID:fixture.ownerID,wallet:fixture.fundingWallet,requestedMinor:50_000,visibleWalletBalanceMinor:100_000,transactionID:expense.id,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertFalse(fixture.context.hasChanges)
+    }
+    func testFundUsageCurrencyAllowsOrdinaryOnlyFxWithAForeignReserve() throws {
+        let fixture=try foreignFundUsageFixture()
+        let preview=try InvestmentPersistenceService.fundUsagePreview(ownerUserID:fixture.ownerID,wallet:fixture.fundingWallet,requestedMinor:50_000,visibleWalletBalanceMinor:100_000,context:fixture.context)
+        XCTAssertEqual(preview.outcome,.ordinaryFundsOnly);XCTAssertEqual(preview.ordinaryAvailableMinor,60_000)
+        let transfer=LedgerTransaction(primaryKind:.transfer,transferSubtype:.internalTransfer,title:"Ordinary FX",amountMinor:50_000,sourceCurrencyCode:"VND",destinationCurrencyCode:"JPY",destinationAmountMinor:1_000,occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.fundingWallet,destinationWallet:fixture.capitalWallet)
+        fixture.context.insert(transfer)
+        try MistiaRecordOwnershipStore.upsert(entity:.transaction,recordID:transfer.id,ownerUserID:fixture.ownerID,context:fixture.context)
+        try fixture.context.save()
+        let result=try InvestmentPersistenceService.reconcileFundUsageTimeline(ownerUserID:fixture.ownerID,context:fixture.context)
+        XCTAssertTrue(result.postingIDs.isEmpty);XCTAssertTrue(result.ledgerTransactionIDs.isEmpty)
+        XCTAssertEqual(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).count,1)
+    }
+    func testFundUsageCurrencyGuardsDirectWriterBeforeTheFirstPosting() throws {
+        let fixture=try foreignFundUsageFixture()
+        let expense=LedgerTransaction(primaryKind:.expense,title:"Foreign",amountMinor:70_000,sourceCurrencyCode:"VND",occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.fundingWallet)
+        fixture.context.insert(expense);try fixture.context.save()
+        let preview=InvestmentCashAllocationLogic.usagePreview(requestedMinor:70,visibleWalletBalanceMinor:100,bookedInvestmentMinor:60,unreconciledInvestmentMinor:0,investmentInWalletMinor:60)
+        let before=Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id))
+        XCTAssertThrowsError(try InvestmentPersistenceService.recordFundUsage(ownerUserID:fixture.ownerID,transaction:expense,preview:preview,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertEqual(Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id)),before);XCTAssertFalse(fixture.context.hasChanges)
+    }
+    func testFundUsageCurrencyGuardsForeignFxDestinationBeforeTheFirstPosting() throws {
+        let fixture=try foreignFundUsageFixture()
+        let transfer=LedgerTransaction(primaryKind:.transfer,transferSubtype:.internalTransfer,title:"Reserved FX",amountMinor:70,sourceCurrencyCode:"JPY",destinationCurrencyCode:"VND",destinationAmountMinor:70_000,occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.capitalWallet,destinationWallet:fixture.fundingWallet)
+        fixture.context.insert(transfer);try fixture.context.save()
+        let preview=InvestmentCashAllocationLogic.usagePreview(requestedMinor:70,visibleWalletBalanceMinor:100,bookedInvestmentMinor:60,unreconciledInvestmentMinor:0,investmentInWalletMinor:60)
+        let before=Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id))
+        XCTAssertThrowsError(try InvestmentPersistenceService.recordFundUsage(ownerUserID:fixture.ownerID,transaction:transfer,preview:preview,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertEqual(Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id)),before);XCTAssertFalse(fixture.context.hasChanges)
+    }
+    func testFundUsageCurrencyPreflightsTheWholeTimelineBeforeWritingAnEarlierValidUsage() throws {
+        let fixture=try foreignFundUsageFixture();fixture.capitalWallet.openingBalanceMinor=100
+        let event=UUID()
+        let posting=InvestmentWalletPosting(ownerUserID:fixture.ownerID,eventID:event,walletID:fixture.capitalWallet.id,ledgerTransactionID:event,role:.cashAccrual,amountMinor:60,currencyCode:"JPY",accountingAmountMinor:60,accountingCurrencyCode:"JPY",occurredAt:fixture.start)
+        fixture.context.insert(posting);fixture.context.insert(InvestmentCashPostingMetadata(id:posting.id,ownerUserID:fixture.ownerID,cashBucket:.booked,cashOrigin:.manual))
+        let first=LedgerTransaction(primaryKind:.expense,title:"Earlier JPY",amountMinor:70,sourceCurrencyCode:"JPY",occurredAt:fixture.start.addingTimeInterval(2),sourceWallet:fixture.capitalWallet)
+        let second=LedgerTransaction(primaryKind:.expense,title:"Later VND",amountMinor:70_000,sourceCurrencyCode:"VND",occurredAt:fixture.start.addingTimeInterval(3),sourceWallet:fixture.fundingWallet)
+        for transaction in [first,second] {fixture.context.insert(transaction);try MistiaRecordOwnershipStore.upsert(entity:.transaction,recordID:transaction.id,ownerUserID:fixture.ownerID,context:fixture.context)}
+        try fixture.context.save()
+        let before=Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id))
+        XCTAssertThrowsError(try InvestmentPersistenceService.reconcileFundUsageTimeline(ownerUserID:fixture.ownerID,context:fixture.context)) {
+            XCTAssertEqual($0 as? InvestmentPersistenceError,.fundUsageCurrencyMismatch)
+        }
+        XCTAssertEqual(Set(try fixture.context.fetch(FetchDescriptor<InvestmentWalletPosting>()).map(\.id)),before);XCTAssertFalse(fixture.context.hasChanges)
+    }
     func testAssetSaveCreatesAndEditsProductMetadata() throws {
         let fixture = try makeFixture()
         let assetID = UUID()

@@ -13,7 +13,7 @@ import vn.com.quyln.mistia.feature.transactions.NotificationTopUpSheet
 private data class ReadyNotificationAction(val action:NotificationBillAction?)
 @Composable
 internal fun NotificationActionHost(owner:UserId,row:AppNotificationRecord,repository:FinanceRepository,
-    rates:ExchangeRateRepository,deviceId:suspend ()->String,onDismiss:()->Unit) {
+    rates:ExchangeRateRepository,deviceId:suspend ()->String,onDismiss:()->Unit,primaryCurrencyCode:String="JPY") {
     key(owner.value,row.key) {
         val ready by produceState<ReadyNotificationAction?>(null,owner,row.key) {
             combine(repository.observeRecurringBills(owner),repository.observeDueOccurrences(owner),repository.observeWallets(owner)) {bills,occurrences,wallets ->
@@ -22,7 +22,7 @@ internal fun NotificationActionHost(owner:UserId,row:AppNotificationRecord,repos
         }
         when(val action=ready?.action) {
             is NotificationBillAction.Pay -> NotificationBillPaymentSheet(owner,action,repository,deviceId,onDismiss)
-            is NotificationBillAction.TopUp -> NotificationTopUpSheet(owner,action.walletId,repository,rates,deviceId,onDismiss)
+            is NotificationBillAction.TopUp -> NotificationTopUpSheet(owner,action.walletId,repository,rates,deviceId,onDismiss,primaryCurrencyCode)
             null -> if(ready==null) AlertDialog(onDismissRequest=onDismiss,text={CircularProgressIndicator()},confirmButton={})
                 else AlertDialog(onDismissRequest=onDismiss,text={Text(stringResource(R.string.planning_duepayment_could_not_find_the_due_item))},
                     confirmButton={TextButton(onClick=onDismiss) {Text(stringResource(R.string.common_ok))}})

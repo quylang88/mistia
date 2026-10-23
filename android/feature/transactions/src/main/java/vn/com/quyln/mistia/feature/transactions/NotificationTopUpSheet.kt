@@ -11,8 +11,9 @@ import vn.com.quyln.mistia.core.model.*
 
 @Composable
 fun NotificationTopUpSheet(owner:UserId,destinationWalletId:String,repository:FinanceRepository,
-    exchangeRateRepository:ExchangeRateRepository,deviceIdProvider:suspend ()->String,onDismiss:()->Unit) {
+    exchangeRateRepository:ExchangeRateRepository,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,primaryCurrencyCode:String="JPY") {
     key(owner.value,destinationWalletId) {
+        val adjustmentTitle=stringResource(R.string.investment_wallet_history_adjustment)
         val data by produceState<Pair<List<LedgerWalletRecord>,List<TransactionCategoryRecord>>?>(null,owner) {
             combine(repository.observeWallets(owner),repository.observeCategories(owner)) {wallets,categories -> wallets to categories}.collect {value=it}
         }
@@ -24,7 +25,7 @@ fun NotificationTopUpSheet(owner:UserId,destinationWalletId:String,repository:Fi
         else if(snapshot.first.none {it.id==destinationWalletId && it.ownerUserId==owner.value && !it.isArchived && it.deletedAt==null}) {
             AlertDialog(onDismissRequest=onDismiss,text={Text(stringResource(R.string.planning_planning_a_matching_payment_wallet_could_not_be))},
                 confirmButton={TextButton(onClick=onDismiss) {Text(stringResource(R.string.common_ok))}})
-        } else TransactionEditorSheet(owner.value,null,snapshot.first,snapshot.second,rates,initial.occurredAt,initialState=initial,onDismiss=onDismiss,
-            onSave={draft -> repository.saveTransaction(owner,draft,deviceIdProvider(),Instant.now().toString())})
+        } else TransactionEditorSheet(owner.value,null,snapshot.first,snapshot.second,rates,initial.occurredAt,primaryCurrencyCode,initialState=initial,onDismiss=onDismiss,
+            saveSessionKey=repository,onSave={draft -> repository.saveTransactionWithInvestmentFunds(owner,TransactionInvestmentSaveRequest(draft,draft.creationIdentity,draft.investmentConsent,adjustmentTitle,primaryCurrencyCode),deviceIdProvider(),Instant.now().toString())})
     }
 }

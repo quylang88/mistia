@@ -1,0 +1,116 @@
+{
+  "device": "Android emulator API 36 ARM64",
+  "systemFontScale": 1.3,
+  "widthDp": 320,
+  "density": 2.75,
+  "screenshots": [
+    {
+      "file": "transaction-funds-restore-en-dark-font130-width320.png",
+      "sha256": "2d52a45d475d3617f30811f7cca8a2116e95043e2cd30f576c6b735ddc530df0",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-restore-en-light-font130-width320.png",
+      "sha256": "5a1afb861e0a05092feac61780c74edb2c0c71c604f455f82f903b9e95322dad",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-restore-ja-dark-font130-width320.png",
+      "sha256": "467807dbbf8a3f9ba5ad3e40fe23238bc006a1f769ad2a11de34c946ad2562a0",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-restore-ja-light-font130-width320.png",
+      "sha256": "fa9904d828bde76064b65e3a7c671cce4e777a91e25b2b3cc4a41bda7f78fc61",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-restore-vi-dark-font130-width320.png",
+      "sha256": "2593caa43876538d06273d2b452eef20f89396240bba887df738887e69c1694a",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-restore-vi-light-font130-width320.png",
+      "sha256": "f64879488add9731e4fb9a1e78f60ba71d9c037114cfb0cef79d6f7150b4569a",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-update-en-dark-font130-width320.png",
+      "sha256": "78a3a18655fb2bf7d053116ecb03e02002d5a61bfe01688dd5905a5a60aa2ff8",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-update-en-light-font130-width320.png",
+      "sha256": "12c6a1a1354c940773b03d55a22cedd3402bfa1402d1a36bc96b77fc2068e650",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-update-ja-dark-font130-width320.png",
+      "sha256": "a2e687ba13a7717f33a09f163058f9a94b1b3de04209ec13d55d88b940c87bbe",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-update-ja-light-font130-width320.png",
+      "sha256": "4a9d7e1f298c04a13b586f97aefa02a9b1b4c3db4f677859be9d54191f90a0f8",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-update-vi-dark-font130-width320.png",
+      "sha256": "bb1c6ffb5746188de473cf8cbcb86590f6ce6f71ce06b6b2f6a77d2c8c19a874",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-update-vi-light-font130-width320.png",
+      "sha256": "721edc112f3ed83c3fcca8b33ced7d56e9c9644bcbd949e08ddcc7518fd547d4",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-use-en-dark-font130-width320.png",
+      "sha256": "d0e7bd0cd1344ae45f27310eb4ea0ca33aeea8ff5550b042336f140f02bcffbc",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-use-en-light-font130-width320.png",
+      "sha256": "5b401349a0fad7e744446d6310000db28bbbaaee711bf12e5d876637ff8285e4",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-use-ja-dark-font130-width320.png",
+      "sha256": "45cc28166baeedfc5e9b47b865d47588545bf0229c04270405bcd7fec3d68aa3",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-use-ja-light-font130-width320.png",
+      "sha256": "77467979b6e1b8b975d6e81d4ba7329ab701c7b236498a492a2c7f18ce3a0527",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-use-vi-dark-font130-width320.png",
+      "sha256": "b979118338829dd1bfb16eab42c374dc9050396cc42d1e7e93b0ad6977f1de3e",
+      "width": 880,
+      "height": 2340
+    },
+    {
+      "file": "transaction-funds-use-vi-light-font130-width320.png",
+      "sha256": "747aaca0eef82ce1b779f852b1f6b36d6caa93c4a75377477ad547c18784d54b",
+      "width": 880,
+      "height": 2340
+    }
+  ]
+}

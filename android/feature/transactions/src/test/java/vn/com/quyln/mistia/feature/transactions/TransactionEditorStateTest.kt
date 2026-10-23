@@ -15,6 +15,17 @@ import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 import vn.com.quyln.mistia.core.model.TransactionTransferSubtype
 
 class TransactionEditorStateTest {
+    @Test fun newEditorKeepsStableCreationIdentitySeparateFromEditIdAcrossDraftChangesAndRestore() {
+        val state=TransactionEditorState.new("2026-10-22T00:00:00Z").copy(title="Expense",amountText="70",sourceWalletId=SOURCE_WALLET_ID,categoryId=CATEGORY_ID)
+        val identity=requireNotNull(state.creationIdentity)
+        assertEquals("2026-10-22T00:00:00Z",identity.createdAt);assertEquals(identity.id,java.util.UUID.fromString(identity.id).toString());assertNull(state.id)
+        val changed=state.copy(occurredAt="2020-01-01T00:00:00Z",amountText="50")
+        val saver=TransactionEditorState.scopedSaver(OWNER,null,"JPY");val saved=with(saver){SaverScope{true}.save(changed)}!!
+        val restored=requireNotNull(saver.restore(saved));val draft=requireNotNull(restored.toDraft("JPY",null,primaryCurrencyCode="JPY").draft)
+        assertEquals(identity,restored.creationIdentity);assertEquals(identity,draft.creationIdentity);assertNull(draft.id);assertNull(draft.investmentConsent)
+        assertFalse(identity==TransactionEditorState.new("2026-10-22T00:00:00Z").creationIdentity)
+        assertNull(TransactionEditorState.scopedSaver("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",null,"JPY").restore(saved))
+    }
     @Test fun `manual reporting draft maps exact source and converted inputs`() {
         val state = reportingState().copy(amountText = "9,007,199,254,740,993", reportingAmountText = "18,014,398,509,481,986", conversionMode = CurrencyConversionMode.MANUAL)
         val draft = state.toDraft("JPY", null, primaryCurrencyCode = "VND").draft

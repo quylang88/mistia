@@ -218,6 +218,21 @@ class OfflineFirstFinanceRepository(
         CreditCardAccount(mutation.wallet.record, mutation.profile.record)
     }
 
+    override suspend fun prepareTransactionWithInvestmentFunds(owner:UserId,
+        request:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveRequest,deviceId:String,now:String):Result<vn.com.quyln.mistia.core.model.TransactionInvestmentSavePlan> = runCatching {
+        val snapshot=localStore.transactionInvestmentSaveSnapshot(owner)
+        vn.com.quyln.mistia.core.model.planTransactionInvestmentSave(snapshot,request,deviceId,now)
+    }
+
+    override suspend fun saveTransactionWithInvestmentFunds(owner:UserId,
+        request:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveRequest,deviceId:String,now:String):Result<LedgerTransactionRecord> = runCatching {
+        val zone=ZoneId.systemDefault()
+        val snapshot=localStore.transactionInvestmentSaveSnapshot(owner)
+        // Preview and persistence share the same plan; the store rechecks it inside its owner transaction.
+        vn.com.quyln.mistia.core.model.planTransactionInvestmentSave(snapshot,request,deviceId,now,zone)
+        localStore.commitTransactionInvestmentSave(snapshot,request,deviceId,now,zone)
+    }
+
     override suspend fun saveTransaction(
         ownerUserId: UserId,
         draft: TransactionDraft,

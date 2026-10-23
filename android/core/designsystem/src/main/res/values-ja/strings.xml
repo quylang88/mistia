@@ -311,6 +311,7 @@
     <string name="investment_error_asset_history_locks_accounting">取引履歴がある商品のチャンネルと通貨は変更できません。</string>
     <string name="investment_error_close_positions_before_archive">アーカイブする前に残っている在庫をすべて販売または精算してください。</string>
     <string name="investment_error_close_positions_before_delete">この商品を削除する前に、残っている在庫をすべて販売または精算してください。</string>
+    <string name="investment_error_fund_usage_currency_mismatch">投資資金は会計通貨と同じ通貨のウォレットでのみ使用できます。</string>
     <string name="investment_error_image_too_large">画像サイズが大きすぎます（4MB超過）。別の画像を選択してください。</string>
     <string name="investment_error_insufficient_funds">選択したウォレットの残高が不足しています。</string>
     <string name="investment_error_insufficient_position">この変更を行うと、後の売却に必要な仕入れ在庫が不足します。関連する売却を先に修正または削除してください。</string>

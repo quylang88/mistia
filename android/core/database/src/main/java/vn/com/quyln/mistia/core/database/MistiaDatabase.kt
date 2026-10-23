@@ -23,6 +23,7 @@ import androidx.room.withTransaction
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.map
 import vn.com.quyln.mistia.core.model.WalletReminderSnapshot
 import vn.com.quyln.mistia.core.model.applyBillReminderPreference
@@ -446,6 +447,8 @@ interface SyncCursorDao {
 
 @Dao
 interface TransactionReceiptImageDao {
+    @Query("SELECT * FROM transaction_receipt_images WHERE id = :id LIMIT 1")
+    suspend fun receiptById(id:String):TransactionReceiptImageEntity?
     @Query(
         """
         SELECT * FROM transaction_receipt_images
@@ -576,13 +579,37 @@ abstract class MistiaDatabase : RoomDatabase() {
 }
 
 internal class RoomTransactionReceiptMetadataStore(
-    private val dao: TransactionReceiptImageDao,
+    private val database:MistiaDatabase,
 ) : TransactionReceiptMetadataStore {
+    private val dao=database.transactionReceiptImageDao()
     override suspend fun receipt(transactionId: String): TransactionReceiptImageRecord? =
         dao.receipt(transactionId)?.toRecord()
 
     override suspend fun replace(record: TransactionReceiptImageRecord) {
         dao.replace(record.toEntity())
+    }
+
+    override suspend fun replaceIfCurrent(expected:TransactionReceiptImageRecord?,record:TransactionReceiptImageRecord):Boolean {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            if(expected!=null && (expected.ownerUserId!=record.ownerUserId || expected.transactionId!=record.transactionId))return@withTransaction false
+            if(dao.receipt(record.transactionId)?.toRecord()!=expected)return@withTransaction false
+            val occupied=dao.receiptById(record.id)?.toRecord()
+            if(occupied!=null && occupied!=expected)return@withTransaction false
+            dao.replace(record.toEntity())
+            caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+
+    override suspend fun deleteIfCurrent(expected:TransactionReceiptImageRecord):Boolean {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            if(dao.receipt(expected.transactionId)?.toRecord()!=expected)return@withTransaction false
+            dao.delete(expected.transactionId)
+            caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
     }
 
     override suspend fun delete(transactionId: String) {
@@ -903,12 +930,43 @@ class RoomLocalStore(
     override suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord? =
         database.cloudRecordDao().record(ownerUserId.value, entity, recordId)?.toCloudRecord()
 
+    override suspend fun transactionInvestmentSaveSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot = database.withTransaction {
+        ensureCurrentFinanceOwner(owner)
+        val snapshot=vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot(owner,
+            vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot.entities.associateWith{recordsIncludingDeleted(owner,it.table)})
+        snapshot.requireValid()
+        ensureCurrentFinanceOwner(owner)
+        snapshot
+    }
+
     override suspend fun transactionSaveSnapshot(owner: UserId): TransactionSaveSnapshot = database.withTransaction {
         ensureCurrentFinanceOwner(owner)
         val snapshot = TransactionSaveSnapshot(owner, TransactionSaveSnapshot.entities.associateWith { recordsIncludingDeleted(owner, it.table) })
         snapshot.requireValid()
         ensureCurrentFinanceOwner(owner)
         snapshot
+    }
+
+    override suspend fun commitTransactionInvestmentSave(expected:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot,
+        request:vn.com.quyln.mistia.core.model.TransactionInvestmentSaveRequest,deviceId:String,now:String,
+        statementZone:java.time.ZoneId):vn.com.quyln.mistia.core.model.LedgerTransactionRecord {
+        val caller=kotlinx.coroutines.currentCoroutineContext()
+        caller.ensureActive()
+        return database.withTransaction {
+        ensureCurrentFinanceOwner(expected.owner)
+        val current=transactionInvestmentSaveSnapshot(expected.owner)
+        expected.requireUnchanged(current)
+        val plan=vn.com.quyln.mistia.core.model.planTransactionInvestmentSave(current,request,deviceId,now,statementZone)
+        for((record,_) in plan.mutations) {
+            val previous=current.recordsByEntity.values.flatten().singleOrNull{it.entity==record.entity && it.id==record.id}
+            require(previous!=null || database.syncOutboxDao().record(expected.owner.value,record.entity,record.id)==null) {"Ordinary/investment identity has an orphan queue"}
+        }
+        plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+        ensureCurrentFinanceOwner(expected.owner)
+        caller.ensureActive()
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        plan.record
+        }
     }
 
     override suspend fun commitTransactionMutation(expected: TransactionSaveSnapshot, record: CloudRecord, mutation: PendingMutation) {

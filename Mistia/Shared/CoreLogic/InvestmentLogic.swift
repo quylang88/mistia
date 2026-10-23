@@ -620,6 +620,7 @@ nonisolated enum InvestmentCashAllocationLogic {
             var unreconciled: Int64 = 0
             var originalBooked: Int64 = 0
             var originalUnreconciled: Int64 = 0
+            var originalAmountsOverflowed = false
         }
 
         let normalizedAccountingCurrency = MistiaCurrencyLogic.normalizedCode(accountingCurrencyCode)
@@ -630,10 +631,14 @@ nonisolated enum InvestmentCashAllocationLogic {
             switch posting.bucket {
             case .booked:
                 totals.booked = saturatingAdd(totals.booked, posting.accountingAmountMinor)
-                totals.originalBooked = saturatingAdd(totals.originalBooked, posting.amountMinor)
+                let (original, overflow) = totals.originalBooked.addingReportingOverflow(posting.amountMinor)
+                totals.originalAmountsOverflowed = totals.originalAmountsOverflowed || overflow
+                totals.originalBooked = overflow ? (posting.amountMinor >= 0 ? .max : .min) : original
             case .unreconciled:
                 totals.unreconciled = saturatingAdd(totals.unreconciled, posting.accountingAmountMinor)
-                totals.originalUnreconciled = saturatingAdd(totals.originalUnreconciled, posting.amountMinor)
+                let (original, overflow) = totals.originalUnreconciled.addingReportingOverflow(posting.amountMinor)
+                totals.originalAmountsOverflowed = totals.originalAmountsOverflowed || overflow
+                totals.originalUnreconciled = overflow ? (posting.amountMinor >= 0 ? .max : .min) : original
             }
             totalsByWallet[posting.walletID] = totals
         }
@@ -645,7 +650,8 @@ nonisolated enum InvestmentCashAllocationLogic {
                 bookedMinor: totals.booked,
                 unreconciledMinor: totals.unreconciled,
                 originalBookedMinor: totals.originalBooked,
-                originalUnreconciledMinor: totals.originalUnreconciled
+                originalUnreconciledMinor: totals.originalUnreconciled,
+                originalAmountsOverflowed: totals.originalAmountsOverflowed
             )
         }
         .filter { $0.totalMinor != 0 || $0.bookedMinor != 0 || $0.unreconciledMinor != 0 }

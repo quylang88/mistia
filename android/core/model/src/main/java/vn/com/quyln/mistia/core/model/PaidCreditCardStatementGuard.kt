@@ -4,6 +4,7 @@ import java.text.Normalizer
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
+import java.math.BigInteger
 import java.util.Locale
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -95,9 +96,22 @@ private fun LedgerTransactionRecord.isPaidStatementExpense(
     val wallet=wallets.firstOrNull {it.ownerUserId==ownerUserId && it.id==cardWalletId && it.deletedAt==null} ?: return false
     val profile=creditCardProfiles.firstOrNull {it.ownerUserId==ownerUserId && it.walletId==cardWalletId && it.deletedAt==null} ?: return false
     val month=occurredYearMonth(zoneId) ?: return false
-    val occurrences=dueOccurrences.filter {it.isOwnedCreditOccurrence(ownerUserId)}.mapNotNull {runCatching {DueOccurrenceRecord.fromCloudRecord(it)}.getOrNull()}
-    return creditCardStatementItems(UserId(ownerUserId),listOf(CreditCardAccount(wallet,profile)),transactions,occurrences,listOf(month),referenceDate,zoneId,categories)
-        .firstOrNull()?.state==CreditCardStatementState.PAID
+    val records=transactions.filter {it.ownerUserId==ownerUserId && it.isActivePostedTransaction()}
+    val excluded=categories.filter {it.ownerUserId==ownerUserId && (it.isBalanceAdjustmentSystemCategory || it.systemKey=="loan_repayment")}.map{it.id}.toSet()+
+        setOf(TransactionCategoryRecord.BALANCE_ADJUSTMENT_EXPENSE_ID,TransactionCategoryRecord.BALANCE_ADJUSTMENT_INCOME_ID,"d872b8af-d28a-5b90-8822-839dfa097b23")
+    val adjustmentTitles=setOf("điều chỉnh số dư","balance adjustment","残高調整")
+    // This is a read-only predicate. A month's charges may exceed a wire Long even when its current debt does not.
+    val amount=records.asSequence().filter {it.sourceWalletId==cardWalletId && it.occurredYearMonth(zoneId)==month}.filter {
+        (it.primaryKind==TransactionPrimaryKind.EXPENSE && it.categoryId !in excluded && it.title.trim().lowercase(Locale.ROOT) !in adjustmentTitles) ||
+            (it.primaryKind==TransactionPrimaryKind.TRANSFER && it.transferSubtype==TransactionTransferSubtype.DEBT && it.debtIntent==TransactionDebtIntent.LEND)
+    }.fold(BigInteger.ZERO){sum,record->sum+BigInteger.valueOf(record.amountMinor)}
+    val closing=creditCardStatementClosingDate(month,profile.statementClosingDay,zoneId)
+    if(amount.signum()<=0) {
+        val monthEnd=month.plusMonths(1).atDay(1).atStartOfDay(zoneId).toInstant().minusSeconds(1)
+        return Instant.parse(wallet.createdAt).epochSecond<=monthEnd.epochSecond && referenceDate.atZone(zoneId).toLocalDate()>=closing.atZone(zoneId).toLocalDate()
+    }
+    return records.any {it.primaryKind==TransactionPrimaryKind.TRANSFER && it.transferSubtype==TransactionTransferSubtype.INTERNAL_TRANSFER &&
+        it.destinationWalletId==cardWalletId && Instant.parse(it.occurredAt)>=closing && BigInteger.valueOf(it.destinationAmountMinor ?: it.amountMinor)>=amount}
 }
 
 private fun LedgerTransactionRecord.isActivePostedTransaction(): Boolean =

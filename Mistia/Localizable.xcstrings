@@ -7154,6 +7154,29 @@
         }
       }
     },
+    "investment.error.fundUsageCurrencyMismatch" : {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use investment funds only with wallets in the accounting currency."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "投資資金は会計通貨と同じ通貨のウォレットでのみ使用できます。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chỉ dùng tiền đầu tư với các ví cùng tiền tệ kế toán."
+          }
+        }
+      }
+    },
     "investment.error.insufficientFunds" : {
       "extractionState" : "stale",
       "localizations" : {

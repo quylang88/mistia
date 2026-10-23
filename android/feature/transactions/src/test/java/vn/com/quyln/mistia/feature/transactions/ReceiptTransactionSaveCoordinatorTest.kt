@@ -12,6 +12,30 @@ import vn.com.quyln.mistia.core.model.TransactionDraft
 import vn.com.quyln.mistia.core.model.TransactionPrimaryKind
 
 class ReceiptTransactionSaveCoordinatorTest {
+    @Test fun fundPreflightFailureNeverPersistsUploadsDeletesOrSavesAReceipt()=runBlocking {
+        val expected=IllegalStateException("fund confirmation required")
+        val result=saveReceiptBackedTransaction<String>(draft(),image(),{error("No ID side effect before preflight")},
+            persistReceipt={_,_->error("No image before confirmation")},saveTransaction={error("No transaction")},deleteReceipt={error("No cleanup")},preflight={Result.failure(expected)})
+        assertSame(expected,result.exceptionOrNull())
+    }
+    @Test fun stableCreationStillHasNullEditIdAndUsesItsOriginalReceiptIdentity()=runBlocking {
+        val identity=vn.com.quyln.mistia.core.model.TransactionCreationIdentity(TRANSACTION_ID,"2026-10-22T00:00:00Z")
+        val d=draft().copy(creationIdentity=identity)
+        val result=saveReceiptBackedTransaction(d,image(),{error("Stable identity already exists")},
+            persistReceipt={key,_->assertEquals(TRANSACTION_ID,key);Result.success(Unit)},
+            saveTransaction={assertEquals(d,it);Result.success("saved")},deleteReceipt={error("No cleanup")})
+        assertEquals("saved",result.getOrThrow())
+    }
+    @Test fun completedPreflightSkipsReceiptReplacementAndFinancialResave()=runBlocking {
+        val result=saveReceiptBackedTransaction(draft(),image(),{error("Already completed")},persistReceipt={_,_->error("No replacement")},
+            saveTransaction={error("No resave")},deleteReceipt={error("No cleanup")},preflight={Result.success("stored")})
+        assertEquals("stored",result.getOrThrow())
+    }
+    @Test fun lostResponseAfterCommitUsesProofAndNeverDeletesTheSavedImage()=runBlocking {
+        val result=saveReceiptBackedTransaction(draft(),image(),{TRANSACTION_ID},persistReceipt={_,_->Result.success(Unit)},
+            saveTransaction={Result.failure<String>(IllegalStateException("lost response"))},deleteReceipt={error("Committed image must survive")},recoverCommitted={Result.success("stored")})
+        assertEquals("stored",result.getOrThrow())
+    }
     @Test
     fun `recreated receipt editor refuses save when required image was not retained`() {
         val result = resolveReceiptImageForSave(

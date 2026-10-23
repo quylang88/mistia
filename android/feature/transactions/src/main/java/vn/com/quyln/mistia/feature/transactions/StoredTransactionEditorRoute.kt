@@ -38,6 +38,7 @@ private sealed interface StoredEditorLoad {
 
 @Composable private fun OwnedStoredTransactionEditor(owner:UserId,recordId:String,repository:FinanceRepository,exchangeRates:ExchangeRateRepository,
     receiptImages:TransactionReceiptImageRepository,deviceIdProvider:suspend ()->String,primaryCurrencyCode:String,onDismiss:()->Unit) {
+    val investmentAdjustmentTitle=stringResource(R.string.investment_wallet_history_adjustment)
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     var retry by remember {mutableIntStateOf(0)}
     val load by produceState<StoredEditorLoad>(StoredEditorLoad.Loading,repository,retry,lifecycle) {
@@ -94,18 +95,11 @@ private sealed interface StoredEditorLoad {
     TransactionEditorSheet(owner.value,transaction,records.wallets,records.categories,rates,Instant.now().toString(),primaryCurrencyCode,
         receiptState=receipt,receiptLoading=receiptLoading,receiptLoadFailed=receiptError,
         onRemoveReceipt={receipt=receipt.remove();receiptError=false},onDismiss=onDismiss,
-        onSave={draft ->
+        saveSessionKey=repository to receiptImages,onSave={draft ->
             currentCoroutineContext().ensureActive()
             require(draft.id==recordId) {"Stored transaction identity changed"}
-            val removesReceipt=receipt.deleteStoredOnSave
-            val saved=if(removesReceipt) saveTransactionThenDeleteReceipt(recordId,
-                saveTransaction={repository.saveTransaction(owner,draft,deviceIdProvider(),Instant.now().toString())},
-                deleteReceipt={id ->
-                    val stored=receiptImages.receipt(id)
-                    currentCoroutineContext().ensureActive()
-                    require(stored==null || (stored.ownerUserId==owner.value && stored.transactionId==recordId)) {"Receipt ownership mismatch"}
-                    if(stored==null) Result.success(Unit) else receiptImages.deleteReceipt(id)
-                }) else repository.saveTransaction(owner,draft,deviceIdProvider(),Instant.now().toString())
+            val saved=saveInvestmentAwareEditorTransaction(owner,draft,primaryCurrencyCode,investmentAdjustmentTitle,
+                deviceIdProvider(),Instant.now().toString(),repository,receiptImages,deleteStoredReceipt=receipt.deleteStoredOnSave)
             currentCoroutineContext().ensureActive()
             saved
         })

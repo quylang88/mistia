@@ -311,6 +311,7 @@
     <string name="investment_error_asset_history_locks_accounting">Không thể đổi kênh hoặc tiền tệ sau khi tài sản đã có lịch sử giao dịch.</string>
     <string name="investment_error_close_positions_before_archive">Vui lòng bán hoặc tất toán hết hàng còn lại trước khi lưu trữ.</string>
     <string name="investment_error_close_positions_before_delete">Vui lòng bán hoặc tất toán hết hàng còn lại trước khi xóa tài sản này.</string>
+    <string name="investment_error_fund_usage_currency_mismatch">Chỉ dùng tiền đầu tư với các ví cùng tiền tệ kế toán.</string>
     <string name="investment_error_image_too_large">Kích thước hình ảnh quá lớn (vượt quá 4MB). Vui lòng chọn ảnh khác.</string>
     <string name="investment_error_insufficient_funds">Số dư trong ví đã chọn không đủ để thực hiện giao dịch.</string>
     <string name="investment_error_insufficient_position">Thay đổi này sẽ khiến một giao dịch bán không còn đủ số lượng đã mua. Vui lòng chỉnh hoặc xóa giao dịch bán liên quan trước.</string>

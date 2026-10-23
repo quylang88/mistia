@@ -309,6 +309,7 @@
   "investment.error.assetHistoryLocksAccounting": "investment_error_asset_history_locks_accounting",
   "investment.error.closePositionsBeforeArchive": "investment_error_close_positions_before_archive",
   "investment.error.closePositionsBeforeDelete": "investment_error_close_positions_before_delete",
+  "investment.error.fundUsageCurrencyMismatch": "investment_error_fund_usage_currency_mismatch",
   "investment.error.imageTooLarge": "investment_error_image_too_large",
   "investment.error.insufficientFunds": "investment_error_insufficient_funds",
   "investment.error.insufficientPosition": "investment_error_insufficient_position",

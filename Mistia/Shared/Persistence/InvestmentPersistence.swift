@@ -124,6 +124,7 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
     case cashTransferExceedsLimit
     case cashTransferHasDependents
     case cashTransferDirectionLocked
+    case fundUsageCurrencyMismatch
 
     var errorDescription: String? {
         switch self {
@@ -151,6 +152,8 @@ nonisolated enum InvestmentPersistenceError: LocalizedError, Equatable {
             return L10n.investment.cashTransfer.error.hasDependents
         case .cashTransferDirectionLocked:
             return L10n.investment.cashTransfer.error.directionLocked
+        case .fundUsageCurrencyMismatch:
+            return L10n.investment.error.fundUsageCurrencyMismatch
         }
     }
 }
@@ -2421,6 +2424,16 @@ nonisolated enum InvestmentPersistenceService {
         return MistiaStableUUIDOrdering.precedes(id, beforeID)
     }
 
+    static func validateFundUsageCurrency(ownerUserID:UUID,sourceWallet:LedgerWallet,destinationWallet:LedgerWallet?=nil,context:ModelContext) throws {
+        let systemID=InvestmentSystemWalletIdentity.walletID(ownerUserID:ownerUserID)
+        guard let system=try context.fetch(FetchDescriptor<LedgerWallet>(predicate:#Predicate<LedgerWallet>{$0.id==systemID})).first else {throw InvestmentPersistenceError.missingWallet}
+        let scopes=try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let destination=destinationWallet.flatMap {wallet in
+            wallet.kind != .creditCard && TransactionAuditStore.resolveOwnerUserID(forWalletID:wallet.id,ownershipScopes:scopes)==ownerUserID ? wallet : nil
+        }
+        try requireFundUsageCurrency(source:sourceWallet,destination:destination,accountingCurrency:system.currencyCode)
+    }
+
     static func fundUsagePreview(
         ownerUserID: UUID,
         wallet: LedgerWallet,
@@ -2477,7 +2490,23 @@ nonisolated enum InvestmentPersistenceService {
             )
         }
         let location = snapshot.locations.first { $0.walletID == wallet.id }
-        return InvestmentCashAllocationLogic.usagePreview(
+        let sameCurrency = wallet.currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            == systemWallet.currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if !sameCurrency {
+            guard location?.originalAmountsOverflowed != true else { throw InvestmentPersistenceError.fundUsageCurrencyMismatch }
+            let booked=max(location?.originalBookedMinor ?? 0,0)
+            let unreconciled=max(location?.originalUnreconciledMinor ?? 0,0)
+            let visible=max(effectiveVisibleBalanceMinor,0)
+            let ordinary=visible>=booked ? visible-booked : 0
+            if requestedMinor>ordinary && (booked>0 || unreconciled>0) {
+                throw InvestmentPersistenceError.fundUsageCurrencyMismatch
+            }
+            let (total,overflow)=booked.addingReportingOverflow(unreconciled)
+            return InvestmentCashAllocationLogic.usagePreview(requestedMinor:requestedMinor,visibleWalletBalanceMinor:visible,
+                bookedInvestmentMinor:booked,unreconciledInvestmentMinor:unreconciled,investmentInWalletMinor:overflow ? .max : total,
+                spendableWalletBalanceMinor:occurredAt==nil ? nil : visibleWalletBalanceMinor)
+        }
+        let preview = InvestmentCashAllocationLogic.usagePreview(
             requestedMinor: requestedMinor,
             visibleWalletBalanceMinor: effectiveVisibleBalanceMinor,
             bookedInvestmentMinor: location?.bookedMinor ?? 0,
@@ -2485,6 +2514,10 @@ nonisolated enum InvestmentPersistenceService {
             investmentInWalletMinor: location?.totalMinor ?? 0,
             spendableWalletBalanceMinor: occurredAt == nil ? nil : visibleWalletBalanceMinor
         )
+        if preview.investmentToUseMinor > 0 {
+            try requireFundUsageCurrency(source: wallet, destination: nil, accountingCurrency: systemWallet.currencyCode)
+        }
+        return preview
     }
 
     static func fundUsageChangePreview(
@@ -2533,6 +2566,9 @@ nonisolated enum InvestmentPersistenceService {
                 : -posting.accountingAmountMinor
             let (sum, overflow) = partial.addingReportingOverflow(magnitude)
             return overflow ? .max : sum
+        }
+        if previousInvestmentToUseMinor > 0 {
+            try validateFundUsageCurrency(ownerUserID:ownerUserID,sourceWallet:wallet,context:context)
         }
         return InvestmentFundUsageChangePreview(
             proposed: proposed,
@@ -2590,6 +2626,7 @@ nonisolated enum InvestmentPersistenceService {
                 ownershipScopes: ownershipScopes
             ) == ownerUserID ? wallet : nil
         }
+        try requireFundUsageCurrency(source: sourceWallet, destination: destinationWallet, accountingCurrency: systemWallet.currencyCode)
 
         for (bucket, amount, component) in [
             (InvestmentCashBucket.booked, preview.bookedToUseMinor, "booked"),
@@ -2756,8 +2793,8 @@ nonisolated enum InvestmentPersistenceService {
         context: ModelContext
     ) throws -> InvestmentFundUsageTimelineChangePreview? {
         let source = try fundUsageTimelineSource(ownerUserID: ownerUserID, context: context)
-        let current = fundUsageTimelineSnapshot(source: source)
-        let proposed = fundUsageTimelineSnapshot(
+        let current = try fundUsageTimelineSnapshot(source: source)
+        let proposed = try fundUsageTimelineSnapshot(
             source: source,
             replacingTransactionID: replacingTransactionID,
             proposedTransaction: proposedTransaction
@@ -2830,7 +2867,7 @@ nonisolated enum InvestmentPersistenceService {
         context: ModelContext
     ) throws -> InvestmentPersistenceResult {
         let source = try fundUsageTimelineSource(ownerUserID: ownerUserID, context: context)
-        let timeline = fundUsageTimelineSnapshot(source: source)
+        let timeline = try fundUsageTimelineSnapshot(source: source)
         var result = InvestmentPersistenceResult()
         var desiredPostingIDs: Set<UUID> = []
         var desiredAdjustmentIDs: Set<UUID> = []
@@ -2992,7 +3029,7 @@ nonisolated enum InvestmentPersistenceService {
         source: FundUsageTimelineSource,
         replacingTransactionID: UUID? = nil,
         proposedTransaction: TransactionRecordSnapshot? = nil
-    ) -> FundUsageTimelineSnapshot {
+    ) throws -> FundUsageTimelineSnapshot {
         let ownedInvestmentLedgerIDs = Set(source.postings.map(\.ledgerTransactionID))
         let replacedEventIDs = replacingTransactionID.map { Set([$0]) } ?? []
         let basePostingEvents: [FundUsageTimelineEvent] = source.postings.compactMap { posting in
@@ -3052,11 +3089,25 @@ nonisolated enum InvestmentPersistenceService {
         )
         var bookedByWalletID: [UUID: Int64] = [:]
         var unreconciledByWalletID: [UUID: Int64] = [:]
+        var localBookedByWalletID: [UUID: Int64] = [:]
+        var localUnreconciledByWalletID: [UUID: Int64] = [:]
         var expectations: [UUID: FundUsageTimelineExpectation] = [:]
 
         func add(_ delta: Int64, to value: inout Int64) {
             let (sum, overflow) = value.addingReportingOverflow(delta)
             value = overflow ? (delta >= 0 ? .max : .min) : sum
+        }
+
+        func addLocal(_ delta: Int64, to value: inout Int64, walletID: UUID) throws {
+            let (sum, overflow) = value.addingReportingOverflow(delta)
+            if overflow {
+                let currency=source.walletsByID[walletID]?.currencyCode.trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
+                if currency != source.walletsByID[source.systemWalletID]?.currencyCode.trimmingCharacters(in:.whitespacesAndNewlines).uppercased() {
+                    throw InvestmentPersistenceError.fundUsageCurrencyMismatch
+                }
+                throw InvestmentAccountingError.arithmeticOverflow
+            }
+            value=sum
         }
 
         for event in events {
@@ -3066,8 +3117,10 @@ nonisolated enum InvestmentPersistenceService {
                 switch bucket {
                 case .booked:
                     add(posting.accountingAmountMinor, to: &bookedByWalletID[posting.walletID, default: 0])
+                    try addLocal(posting.amountMinor, to: &localBookedByWalletID[posting.walletID, default: 0], walletID:posting.walletID)
                 case .unreconciled:
                     add(posting.accountingAmountMinor, to: &unreconciledByWalletID[posting.walletID, default: 0])
+                    try addLocal(posting.amountMinor, to: &localUnreconciledByWalletID[posting.walletID, default: 0], walletID:posting.walletID)
                 }
 
             case .transaction(let transaction, let record):
@@ -3102,18 +3155,31 @@ nonisolated enum InvestmentPersistenceService {
                             continue
                         }
                         let requested = delta == .min ? Int64.max : -delta
-                        let booked = max(bookedByWalletID[walletID, default: 0], 0)
-                        let unreconciled = max(unreconciledByWalletID[walletID, default: 0], 0)
+                        let booked = max(localBookedByWalletID[walletID, default: 0], 0)
+                        let unreconciled = max(localUnreconciledByWalletID[walletID, default: 0], 0)
+                        let visible=max(actualByWalletID[walletID, default:0],0)
+                        let ordinary=visible>=booked ? visible-booked : 0
+                        let destination = record.primaryKind == .transfer && record.transferSubtype == .internalTransfer && record.destinationWalletKind != .creditCard
+                            ? record.destinationWalletID.flatMap { source.walletOwnerMap[$0] == source.ownerUserID ? source.walletsByID[$0] : nil } : nil
+                        if requested>ordinary && (booked>0 || unreconciled>0) {
+                            guard let systemWallet=source.walletsByID[source.systemWalletID] else {throw InvestmentPersistenceError.missingWallet}
+                            try requireFundUsageCurrency(source:wallet,destination:destination,accountingCurrency:systemWallet.currencyCode)
+                        }
+                        let (total,overflow)=booked.addingReportingOverflow(unreconciled)
                         let preview = InvestmentCashAllocationLogic.usagePreview(
                             requestedMinor: requested,
-                            visibleWalletBalanceMinor: actualByWalletID[walletID, default: 0],
+                            visibleWalletBalanceMinor: visible,
                             bookedInvestmentMinor: booked,
                             unreconciledInvestmentMinor: unreconciled,
-                            investmentInWalletMinor: booked + unreconciled
+                            investmentInWalletMinor: overflow ? .max : total
                         )
                         guard preview.investmentToUseMinor > 0 else { continue }
+                        guard let systemWallet=source.walletsByID[source.systemWalletID] else {throw InvestmentPersistenceError.missingWallet}
+                        try requireFundUsageCurrency(source: wallet, destination: destination, accountingCurrency: systemWallet.currencyCode)
                         bookedByWalletID[walletID, default: 0] -= preview.bookedToUseMinor
                         unreconciledByWalletID[walletID, default: 0] -= preview.unreconciledToUseMinor
+                        localBookedByWalletID[walletID, default: 0] -= preview.bookedToUseMinor
+                        localUnreconciledByWalletID[walletID, default: 0] -= preview.unreconciledToUseMinor
 
                         if record.primaryKind == .transfer,
                            record.transferSubtype == .internalTransfer,
@@ -3124,6 +3190,7 @@ nonisolated enum InvestmentPersistenceService {
                                 preview.investmentToUseMinor,
                                 to: &bookedByWalletID[destinationWalletID, default: 0]
                             )
+                            try addLocal(preview.investmentToUseMinor, to: &localBookedByWalletID[destinationWalletID, default: 0], walletID:destinationWalletID)
                         }
                         if preview.unreconciledToUseMinor > 0 {
                             add(
@@ -3159,6 +3226,14 @@ nonisolated enum InvestmentPersistenceService {
             expectations: expectations,
             availableByWalletID: availableByWalletID
         )
+    }
+
+    private static func requireFundUsageCurrency(source: LedgerWallet, destination: LedgerWallet?, accountingCurrency: String) throws {
+        let accounting=accountingCurrency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let codes=([source.currencyCode]+(destination.map {[$0.currencyCode]} ?? [])).map {$0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()}
+        guard Locale.commonISOCurrencyCodes.contains(accounting), codes.allSatisfy({$0==accounting}) else {
+            throw InvestmentPersistenceError.fundUsageCurrencyMismatch
+        }
     }
 
     private static func validateWalletSelection(
