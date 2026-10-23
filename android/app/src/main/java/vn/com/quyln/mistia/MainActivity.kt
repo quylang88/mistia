@@ -381,7 +381,7 @@ private fun SignedInRoot(
     upcomingPaymentTarget?.let {target ->
         val openedToken=upcomingPaymentToken
         vn.com.quyln.mistia.feature.planning.UpcomingRecurringPaymentSheet(authState.session.userId,target,financeRepository,
-            {deviceIdStore.getOrCreate()},onDismiss={if(upcomingPaymentToken==openedToken) upcomingPaymentToken=null})
+            {deviceIdStore.getOrCreate()},onDismiss={if(upcomingPaymentToken==openedToken) upcomingPaymentToken=null},primaryCurrencyCode=currencySettings.primaryCurrencyCode)
     }
     if(notificationActionKey!=null && notificationRows!=null) {
         val row=notificationRows!!.singleOrNull {it.key==notificationActionKey}

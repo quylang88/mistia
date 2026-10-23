@@ -15,8 +15,8 @@ private data class NotificationBillData(val bills:List<RecurringBillPlanRecord>,
 
 @Composable
 fun NotificationBillPaymentSheet(owner:UserId,target:NotificationBillAction.Pay,repository:FinanceRepository,
-    deviceIdProvider:suspend ()->String,onDismiss:()->Unit) {
-    key(owner.value,target.billId,target.month) {
+    deviceIdProvider:suspend ()->String,onDismiss:()->Unit,primaryCurrencyCode:String="JPY") {
+    key(owner.value,target.billId,target.month,repository,primaryCurrencyCode) {
         val data by produceState<NotificationBillData?>(null,owner,target) {
             combine(repository.observeRecurringBills(owner),repository.observeDueOccurrences(owner),repository.observeWallets(owner),repository.observeCategories(owner)) {
                 bills,occurrences,wallets,categories -> NotificationBillData(bills,occurrences,wallets,categories)
@@ -34,7 +34,7 @@ fun NotificationBillPaymentSheet(owner:UserId,target:NotificationBillAction.Pay,
             BillPaymentSheet(owner.value,row,target.month,snapshot.wallets,false,
                 onPay={request -> repository.payRecurringBill(owner,request,deviceIdProvider(),Instant.now().toString())},
                 onUndo={Result.failure(IllegalStateException("Notification payment cannot undo"))},onDismiss=onDismiss,
-                category=snapshot.categories.firstOrNull {it.id==row.bill.categoryId})
+                category=snapshot.categories.firstOrNull {it.id==row.bill.categoryId},primaryCurrencyCode=primaryCurrencyCode,operationScopeKey=repository)
         }
     }
 }

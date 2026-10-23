@@ -49471,6 +49471,29 @@
         }
       }
     },
+    "planning.bill.payment.changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This bill or its funds changed. Review and confirm again."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thông tin hóa đơn hoặc quỹ đã thay đổi. Hãy kiểm tra và xác nhận lại."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求または関連する資金が変更されました。確認してから再度承認してください。"
+          }
+        }
+      }
+    },
     "planning.bill.payment.currencyMismatch" : {
       "extractionState" : "manual",
       "localizations" : {

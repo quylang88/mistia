@@ -18,12 +18,42 @@ internal class OfflineBillPaymentRepository(
     private val automaticText: ((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)? = null,
     private val sourceKind: DueSourceKind = DueSourceKind.RECURRING_BILL,
     private val expectedInstallment: InstallmentPlanRecord? = null,
+    private val automaticInvestmentSettings:(()->BillInvestmentSettings)? = null,
 ) : BillPaymentRepository {
     constructor(store:LocalStore,zone:ZoneId,catalog:SystemCategoryCatalog?,automaticText:((RecurringBillPlanRecord,Long)->BillAutomaticPaymentText)?=null):
         this(store,{zone},catalog,automaticText)
 
     override suspend fun payRecurringBill(owner: UserId, request: BillPaymentRequest, deviceId: String, now: String): Result<SavedBillPayment> = result {
         val zone=currentZone()
+        if(request.automatic && automaticInvestmentSettings!=null && sourceKind==DueSourceKind.RECURRING_BILL) {
+            if(request.investment!=null)fail(BillPaymentError.INVALID_AUTO_PAY_OVERRIDE)
+            val settings=automaticInvestmentSettings.invoke()
+            val snapshot=store.billInvestmentMoneySnapshot(owner,request.billId,request.month)
+            val context=BillInvestmentOperationContext(TransactionCreationIdentity(UUID.randomUUID().toString(),Instant.parse(now).toString()),settings.accountingCurrency,settings.adjustmentTitle)
+            val accepted=request.copy(investment=context)
+            val definitions=requireNotNull(catalog){"System category catalog unavailable"}
+            // Validate money and pause reserved-fund use before producing success presentation/notification.
+            val prepared=planBillInvestmentMoney(snapshot,BillInvestmentMoneyOperation.Pay(accepted),definitions,deviceId,now,zone)
+            val payment=requireNotNull(prepared.payment)
+            val source=RecurringBillPlanRecord.fromCloudRecord(snapshot.bill)
+            val presentation=automaticText?.invoke(source,payment.transaction.amountMinor)
+            val due=recurringBillDueRows(owner,listOf(source),snapshot.recordsByEntity.getValue(CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord).filter{it.deletedAt==null},request.month,zone).single()
+            val companion=presentation?.takeIf{it.emitNotification}?.let{
+                billInvestmentSuccessNotification(owner,source,request.month,payment.transaction.amountMinor,requireNotNull(payment.transaction.sourceWalletId),due.dueDate.toString(),it,now)
+            }
+            val operation=BillInvestmentMoneyOperation.Pay(accepted,presentation)
+            val expected=snapshot.copy(automaticPaymentNotification=companion)
+            planBillInvestmentMoney(expected,operation,definitions,deviceId,now,zone)
+            return@result requireNotNull(store.commitBillInvestmentMoney(expected,operation,definitions,deviceId,now,zone).payment)
+        }
+        if(request.investment!=null) {
+            if(sourceKind!=DueSourceKind.RECURRING_BILL)fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
+            val snapshot=store.billInvestmentMoneySnapshot(owner,request.billId,request.month)
+            val operation=BillInvestmentMoneyOperation.Pay(request)
+            val definitions=requireNotNull(catalog){"System category catalog unavailable"}
+            planBillInvestmentMoney(snapshot,operation,definitions,deviceId,now,zone)
+            return@result requireNotNull(store.commitBillInvestmentMoney(snapshot,operation,definitions,deviceId,now,zone).payment)
+        }
         val snapshot = snapshot(owner, request.billId, request.month)
         val bill = ScheduledExpenseSource(snapshot.bill, sourceKind)
         if(sourceKind==DueSourceKind.RECURRING_BILL && !request.automatic) {
@@ -143,6 +173,17 @@ internal class OfflineBillPaymentRepository(
             })}
         store.commitBillMoneyMutations(snapshot.copy(automaticPaymentNotification=notification), writes.map { preservePayloadExtensions(snapshot, it) })
         SavedBillPayment(mutation.record, paid)
+    }
+
+    override suspend fun undoRecurringBillPaymentWithInvestmentFunds(owner:UserId,request:BillInvestmentUndoRequest,deviceId:String,now:String):Result<Unit> = result {
+        if(sourceKind!=DueSourceKind.RECURRING_BILL)fail(BillPaymentError.UNSUPPORTED_LINKED_STATE)
+        val zone=currentZone()
+        val snapshot=store.billInvestmentMoneySnapshot(owner,RecordId(request.expected.id),request.month)
+        val operation=BillInvestmentMoneyOperation.Undo(request)
+        val definitions=requireNotNull(catalog){"System category catalog unavailable"}
+        planBillInvestmentMoney(snapshot,operation,definitions,deviceId,now,zone)
+        store.commitBillInvestmentMoney(snapshot,operation,definitions,deviceId,now,zone)
+        Unit
     }
 
     override suspend fun undoRecurringBillPayment(owner: UserId, billId: RecordId, month: YearMonth, deviceId: String, now: String): Result<Unit> = result {

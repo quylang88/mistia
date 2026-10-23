@@ -979,6 +979,7 @@
     <string name="overview_overview_you_do_not_have_permission_to_edit">このメンバーの取引を編集する権限がありません。</string>
     <string name="placeholder_placeholdertab_this_tab_is_intentionally_empty_while_we">まずホーム画面の仕上げを優先しているため、このタブは現在空になっています。</string>
     <string name="planning_bill_archive_unpaid_cycles_message">この請求には、今月または過去の月に未払いの支払いが残っています。すべての支払いを完了してからアーカイブしてください。</string>
+    <string name="planning_bill_payment_changed">請求または関連する資金が変更されました。確認してから再度承認してください。</string>
     <string name="planning_bill_payment_currency_mismatch">請求書と同じ通貨のウォレットで支払ってください。</string>
     <string name="planning_budget_editor_branch_currency_mismatch">同じ分類と月の予算は、同じ通貨を使用してください。</string>
     <string name="planning_budget_editor_discard">変更を破棄</string>

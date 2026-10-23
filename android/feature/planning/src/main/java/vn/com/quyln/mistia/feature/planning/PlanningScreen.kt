@@ -209,11 +209,13 @@ fun PlanningScreen(
         if(paymentNavigation.billId!=null && billSnapshot!=null && occurrenceSnapshot!=null && paymentRow==null)
             paymentNavigation=paymentNavigation.copy(billId=null)
     }
-    if(paymentRow!=null && billSnapshot!=null && occurrenceSnapshot!=null) key(ownerUserId.value,paymentRow.bill.id,paymentMonth,paymentNavigation.undo) {
+    if(paymentRow!=null && billSnapshot!=null && occurrenceSnapshot!=null) key(ownerUserId.value,paymentRow.bill.id,paymentMonth,paymentNavigation.undo,repository,reportingCurrency) {
         BillPaymentSheet(ownerUserId.value,paymentRow,paymentMonth,historicalWallets,paymentNavigation.undo,
             onPay={repository.payRecurringBill(ownerUserId,it,deviceIdProvider(),Instant.now().toString())},
             onUndo={repository.undoRecurringBillPayment(ownerUserId,RecordId(paymentRow.bill.id),paymentMonth,deviceIdProvider(),Instant.now().toString())},
-            onDismiss={paymentNavigation=paymentNavigation.copy(billId=null)},category=categories.firstOrNull {it.id==paymentRow.bill.categoryId && it.ownerUserId==ownerUserId.value})
+            onDismiss={paymentNavigation=paymentNavigation.copy(billId=null)},category=categories.firstOrNull {it.id==paymentRow.bill.categoryId && it.ownerUserId==ownerUserId.value},
+            primaryCurrencyCode=reportingCurrency,operationScopeKey=repository,
+            onInvestmentUndo={repository.undoRecurringBillPaymentWithInvestmentFunds(ownerUserId,it,deviceIdProvider(),Instant.now().toString())})
     }
     cycleAction?.let {action ->
         val title=if(action.third) R.string.planning_duepayment_undo_skip else R.string.planning_duepayment_skip_this_month

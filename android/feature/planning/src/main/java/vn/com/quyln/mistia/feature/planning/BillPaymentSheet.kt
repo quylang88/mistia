@@ -7,6 +7,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import vn.com.quyln.mistia.core.designsystem.InvestmentFundUsageDialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -30,7 +32,19 @@ import vn.com.quyln.mistia.core.model.*
     owner:String,row:RecurringBillDueRow,month:YearMonth,wallets:List<LedgerWalletRecord>,undo:Boolean,
     onPay:suspend (BillPaymentRequest)->Result<SavedBillPayment>,onUndo:suspend ()->Result<Unit>,onDismiss:()->Unit,
     category:TransactionCategoryRecord?=null,dataReady:Boolean=true,loadFailed:Boolean=false,targetCurrent:Boolean=true,onRetryLoad:()->Unit={},
+    primaryCurrencyCode:String="JPY",operationScopeKey:Any?=null,onInvestmentUndo:(suspend (BillInvestmentUndoRequest)->Result<Unit>)?=null,
 ) {
+    if(row.bill.ownerUserId!=owner)return
+    key(owner,row.bill.id,month,undo,operationScopeKey,primaryCurrencyCode) {
+        OwnedBillPaymentSheet(owner,row,month,wallets,undo,onPay,onUndo,onDismiss,category,dataReady,loadFailed,targetCurrent,onRetryLoad,primaryCurrencyCode,onInvestmentUndo)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun OwnedBillPaymentSheet(owner:String,row:RecurringBillDueRow,month:YearMonth,wallets:List<LedgerWalletRecord>,undo:Boolean,
+    onPay:suspend (BillPaymentRequest)->Result<SavedBillPayment>,onUndo:suspend ()->Result<Unit>,onDismiss:()->Unit,
+    category:TransactionCategoryRecord?,dataReady:Boolean,loadFailed:Boolean,targetCurrent:Boolean,onRetryLoad:()->Unit,
+    primaryCurrencyCode:String,onInvestmentUndo:(suspend (BillInvestmentUndoRequest)->Result<Unit>)?) {
     val initial=remember(owner,row.bill.id,month) {BillPaymentState.initial(owner,row,month,wallets)}
     var state by rememberSaveable(owner,row.bill.id,month,stateSaver=BillPaymentState.saver(owner,row.bill.id,month.toString())) {mutableStateOf(initial)}
     var busy by remember {mutableStateOf(false)}
@@ -38,8 +52,19 @@ import vn.com.quyln.mistia.core.model.*
     var chooseWallet by remember {mutableStateOf(false)}
     var discard by remember {mutableStateOf(false)}
     var confirmedRequest by remember {mutableStateOf<BillPaymentRequest?>(null)}
+    val adjustmentTitle=stringResource(R.string.investment_wallet_history_adjustment)
+    val creation by rememberSaveable(owner,row.bill.id,month,stateSaver=listSaver<TransactionCreationIdentity,Any>(
+        save={listOf(owner,row.bill.id,month.toString(),it.id,it.createdAt)},restore={values->runCatching {
+            if(values.size!=5 || values[0]!=owner || values[1]!=row.bill.id || values[2]!=month.toString())return@runCatching null
+            TransactionCreationIdentity(values[3] as String,values[4] as String).also{require(financeRawUuid(it.id)==it.id);java.time.Instant.parse(it.createdAt)}
+        }.getOrNull()})) {mutableStateOf(TransactionCreationIdentity(java.util.UUID.randomUUID().toString(),java.time.Instant.now().toString()))}
+    val investment=BillInvestmentOperationContext(creation,primaryCurrencyCode,adjustmentTitle)
+    var fundReview by remember {mutableStateOf<InvestmentFundUsageReview?>(null)}
+    var fundPayment by remember {mutableStateOf<BillPaymentRequest?>(null)}
+    var fundUndo by remember {mutableStateOf<BillInvestmentUndoRequest?>(null)}
     val scope=rememberCoroutineScope()
     val currentPay by rememberUpdatedState(onPay)
+    val currentInvestmentUndo by rememberUpdatedState(onInvestmentUndo)
     val currentUndo by rememberUpdatedState(onUndo)
     val currentDismiss by rememberUpdatedState(onDismiss)
     val changed=!undo && state!=initial
@@ -49,20 +74,28 @@ import vn.com.quyln.mistia.core.model.*
     })
     val choices=eligibleBillPaymentWallets(owner,row.bill.currencyCode,wallets)
     val selected=choices.firstOrNull {it.id==state.walletId}
-    val request=if(dataReady && targetCurrent) runCatching {state.request(row,wallets)}.getOrNull() else null
-    fun execute(payment:BillPaymentRequest?) {
-        if(busy || !dataReady || !targetCurrent) return
-        if(!undo && (payment==null || !payment.matchesBillPaymentConsent(request))) {
-            confirmedRequest=null;error=R.string.planning_duepayment_could_not_find_the_due_item;return
+    val request=if(dataReady && targetCurrent) runCatching {state.request(row,wallets).copy(investment=investment)}.getOrNull() else null
+    fun execute(payment:BillPaymentRequest?,undoRequest:BillInvestmentUndoRequest?=null) {
+        if(busy || !dataReady || !targetCurrent)return
+        val frozenUndo=if(undo)undoRequest ?: BillInvestmentUndoRequest(row.bill,month,row.amountMinor,row.linkedTransactionId,investment)else null
+        if((!undo && (payment==null || !payment.matchesBillPaymentConsent(request) || payment.investment?.creation!=creation)) ||
+            (frozenUndo!=null && (!row.bill.matchesBillPaymentSource(frozenUndo.expected) || frozenUndo.expectedAmountMinor!=row.amountMinor || frozenUndo.expectedLinkedTransactionId!=row.linkedTransactionId))) {
+            confirmedRequest=null;fundReview=null;fundPayment=null;fundUndo=null;error=R.string.planning_bill_payment_changed;return
         }
         busy=true;error=null
         scope.launch {
+            fun failed(failure:Throwable) {
+                val review=(failure as? InvestmentFundUsageConfirmationRequired)?.review
+                if(review!=null && review.consent.ownerUserId==owner && review.consent.transactionId==creation.id) {
+                    fundReview=review;fundPayment=payment;fundUndo=frozenUndo
+                } else {fundReview=null;fundPayment=null;fundUndo=null;error=billPaymentErrorResource(failure)}
+            }
             try {
-                val result=if(undo) currentUndo() else currentPay(requireNotNull(payment)).map {Unit}
+                val result=if(undo)currentInvestmentUndo?.invoke(requireNotNull(frozenUndo)) ?: currentUndo() else currentPay(requireNotNull(payment)).map{Unit}
                 currentCoroutineContext().ensureActive()
-                result.fold(onSuccess={currentDismiss()},onFailure={error=billPaymentErrorResource(it)})
-            } catch(cancelled:CancellationException) {throw cancelled}
-              catch(failure:Exception) {error=billPaymentErrorResource(failure)}
+                result.fold(onSuccess={currentDismiss()},onFailure={failed(it)})
+            } catch(cancelled:CancellationException){throw cancelled}
+              catch(failure:Exception){currentCoroutineContext().ensureActive();failed(failure)}
               finally {busy=false;confirmedRequest=null}
         }
     }
@@ -111,6 +144,14 @@ import vn.com.quyln.mistia.core.model.*
             TextButton(enabled=!busy,onClick={close()},modifier=Modifier.testTag("bill.closePayment")) {Text(stringResource(R.string.common_close))}
         }
     }
+    fundReview?.let{review->
+        val payable=if(undo)fundUndo?.let{row.bill.matchesBillPaymentSource(it.expected) && row.amountMinor==it.expectedAmountMinor && row.linkedTransactionId==it.expectedLinkedTransactionId}==true
+            else fundPayment?.matchesBillPaymentConsent(request)==true
+        InvestmentFundUsageDialog(review,wallets,onDismiss={fundReview=null;fundPayment=null;fundUndo=null;confirmedRequest=null},onConfirm={
+            if(undo)fundUndo?.let{execute(null,it.copy(investment=it.investment.copy(consent=review.consent)))}
+            else fundPayment?.let{execute(it.copy(investment=it.investment!!.copy(consent=review.consent)))}
+        },isSaving=busy,tagPrefix="bill.funds",canConfirm=dataReady && targetCurrent && payable)
+    }
     if(chooseWallet) AlertDialog(onDismissRequest={chooseWallet=false},title={Text(stringResource(R.string.planning_duepayment_choose_wallet))},
         text={Column(Modifier.verticalScroll(rememberScrollState())) {choices.forEach {wallet ->
             TextButton(onClick={state=state.copy(walletId=wallet.id);error=null;chooseWallet=false},modifier=Modifier.testTag("bill.payWallet.${wallet.id}")) {Text("${wallet.name} · ${wallet.currencyCode}")}
@@ -128,9 +169,15 @@ import vn.com.quyln.mistia.core.model.*
 }
 
 internal fun billPaymentErrorResource(error:Throwable):Int = when(error) {
+    is InvestmentFundUsageException -> when(error.reason) {
+        InvestmentFundUsageError.CURRENCY_MISMATCH->R.string.investment_error_fund_usage_currency_mismatch
+        InvestmentFundUsageError.STALE_CONSENT,InvestmentFundUsageError.EVENT_CONFLICT->R.string.planning_bill_payment_changed
+        else->R.string.planning_duepayment_payment_failed
+    }
     is BillPaymentException -> when(error.reason) {
         BillPaymentError.WALLET_CURRENCY_MISMATCH -> R.string.planning_bill_payment_currency_mismatch
         BillPaymentError.MISSING_AMOUNT -> R.string.planning_duepayment_enter_amount
+        BillPaymentError.SOURCE_CHANGED -> R.string.planning_bill_payment_changed
         BillPaymentError.INVALID_WALLET -> R.string.planning_duepayment_choose_wallet
         BillPaymentError.NOT_FOUND,BillPaymentError.NOT_SCHEDULED,BillPaymentError.CYCLE_NOT_PENDING -> R.string.planning_duepayment_could_not_find_the_due_item
         else -> R.string.planning_duepayment_payment_failed

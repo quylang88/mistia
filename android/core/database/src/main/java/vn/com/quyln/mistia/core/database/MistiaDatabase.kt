@@ -1275,6 +1275,53 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun billInvestmentMoneySnapshot(owner:UserId,billId:vn.com.quyln.mistia.core.model.RecordId,month:java.time.YearMonth):BillMoneySnapshot {
+        val caller=kotlinx.coroutines.currentCoroutineContext()
+        caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner)
+            val records=CloudEntity.entries.associateWith{recordsIncludingDeleted(owner,it.table)}
+            val bill=records.getValue(CloudEntity.RECURRING_BILL_PLAN).singleOrNull{it.id==billId.value}
+                ?: throw vn.com.quyln.mistia.core.model.BillPaymentException(vn.com.quyln.mistia.core.model.BillPaymentError.NOT_FOUND)
+            val snapshot=BillMoneySnapshot(owner,bill,month,records,billMoneyReceiptTransactionIds(owner))
+            ensureCurrentFinanceOwner(owner)
+            caller.ensureActive()
+            snapshot
+        }
+    }
+
+    override suspend fun commitBillInvestmentMoney(expected:BillMoneySnapshot,operation:vn.com.quyln.mistia.core.model.BillInvestmentMoneyOperation,
+        catalog:vn.com.quyln.mistia.core.model.SystemCategoryCatalog,deviceId:String,now:String,zone:java.time.ZoneId):vn.com.quyln.mistia.core.model.BillInvestmentMoneyPlan {
+        val caller=kotlinx.coroutines.currentCoroutineContext()
+        caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current=billInvestmentMoneySnapshot(expected.owner,vn.com.quyln.mistia.core.model.RecordId(expected.bill.id),expected.month)
+            expected.requireUnchanged(current.recordsByEntity)
+            require(expected.bill==current.bill && expected.sourceKind==current.sourceKind && expected.receiptTransactionIds==current.receiptTransactionIds){"Bill investment source changed"}
+            val planning=current.copy(automaticPaymentNotification=expected.automaticPaymentNotification)
+            val plan=vn.com.quyln.mistia.core.model.planBillInvestmentMoney(planning,operation,catalog,deviceId,now,zone)
+            for((record,_) in plan.mutations) {
+                val old=current.recordsByEntity.values.flatten().singleOrNull{it.entity==record.entity && it.id==record.id}
+                require(old!=null || database.syncOutboxDao().record(expected.owner.value,record.entity,record.id)==null){"Bill investment identity has an orphan queue"}
+            }
+            plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+            if(plan.mutations.isNotEmpty()) {
+                resolveBillNotificationsInTransaction(current.bill,current.month.toString(),plan.mutations.map{it.first})
+                planning.automaticPaymentNotification?.takeIf{billRemindersEnabled()}?.let{incoming->
+                    val existing=localNotifications(current.owner).singleOrNull{it.key==incoming.key}
+                    val notification=upsertLocalNotification(existing,incoming)
+                    database.localNotificationDao().upsert(listOf(LocalNotificationEntity(current.owner.value,notification.key,
+                        json.encodeToString(AppNotificationRecord.serializer(),notification))))
+                }
+            }
+            ensureCurrentFinanceOwner(expected.owner)
+            caller.ensureActive()
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            plan
+        }
+    }
+
     override suspend fun commitBillMoneyMutations(snapshot: BillMoneySnapshot, mutations: List<Pair<CloudRecord, PendingMutation>>) {
         snapshot.requireValidMutations(mutations)
         database.withTransaction {

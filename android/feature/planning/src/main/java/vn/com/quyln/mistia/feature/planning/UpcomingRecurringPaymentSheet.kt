@@ -40,8 +40,8 @@ private fun paymentData(owner:UserId,snapshot:UpcomingDueReadSnapshot):UpcomingP
 /** Identity-only entry point: reload the original cycle and never turn a stale Pay target into Undo/Create. */
 @Composable
 fun UpcomingRecurringPaymentSheet(owner:UserId,target:UpcomingDuePaymentTarget,repository:FinanceRepository,
-    deviceIdProvider:suspend ()->String,onDismiss:()->Unit) {
-    if(target.ownerUserId==owner.value) key(owner.value,target) {
+    deviceIdProvider:suspend ()->String,onDismiss:()->Unit,primaryCurrencyCode:String="JPY") {
+    if(target.ownerUserId==owner.value) key(owner.value,target,repository,primaryCurrencyCode) {
         val lifecycle=LocalLifecycleOwner.current.lifecycle
         var retry by remember {mutableIntStateOf(0)}
         val load by key(repository,retry,lifecycle) {
@@ -76,7 +76,7 @@ fun UpcomingRecurringPaymentSheet(owner:UserId,target:UpcomingDuePaymentTarget,r
                 onPay={repository.payRecurringBill(owner,it,deviceIdProvider(),Instant.now().toString())},
                 onUndo={Result.failure(IllegalStateException("Pay target cannot undo"))},onDismiss=onDismiss,
                 category=data?.categories?.firstOrNull {it.id==billRow.bill.categoryId},
-                dataReady=data!=null,loadFailed=failed,targetCurrent=bill!=null,onRetryLoad={retry++})
+                dataReady=data!=null,loadFailed=failed,targetCurrent=bill!=null,onRetryLoad={retry++},primaryCurrencyCode=primaryCurrencyCode,operationScopeKey=repository)
             target.sourceKind==DueSourceKind.INSTALLMENT && installmentRow!=null -> InstallmentPaymentSheet(owner.value,installmentRow,data?.wallets.orEmpty(),
                 dataReady=data!=null,loadFailed=failed,targetCurrent=installmentPaymentTargetIsCurrent(installmentRow,installment),onRetryLoad={retry++},
                 onPay={repository.payInstallment(owner,it,deviceIdProvider(),Instant.now().toString())},

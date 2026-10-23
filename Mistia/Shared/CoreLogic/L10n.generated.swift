@@ -2479,6 +2479,8 @@ nonisolated enum L10n {
             }
 
             nonisolated enum payment {
+                static var changed: String { L10n.tr("planning.bill.payment.changed", vi: "Thông tin hóa đơn hoặc quỹ đã thay đổi. Hãy kiểm tra và xác nhận lại.", en: "This bill or its funds changed. Review and confirm again.", ja: "請求または関連する資金が変更されました。確認してから再度承認してください。") }
+                static func changed(language: MistiaAppLanguage) -> String { L10n.tr("planning.bill.payment.changed", vi: "Thông tin hóa đơn hoặc quỹ đã thay đổi. Hãy kiểm tra và xác nhận lại.", en: "This bill or its funds changed. Review and confirm again.", ja: "請求または関連する資金が変更されました。確認してから再度承認してください。", language: language) }
                 static var currencyMismatch: String { L10n.tr("planning.bill.payment.currencyMismatch", vi: "Chỉ có thể thanh toán hóa đơn bằng ví cùng tiền tệ.", en: "Pay this bill using a wallet with the same currency.", ja: "請求書と同じ通貨のウォレットで支払ってください。") }
                 static func currencyMismatch(language: MistiaAppLanguage) -> String { L10n.tr("planning.bill.payment.currencyMismatch", vi: "Chỉ có thể thanh toán hóa đơn bằng ví cùng tiền tệ.", en: "Pay this bill using a wallet with the same currency.", ja: "請求書と同じ通貨のウォレットで支払ってください。", language: language) }
             }

@@ -11,6 +11,7 @@ data class BillPaymentRequest(
     val automatic: Boolean = false,
     val expectedBill: RecurringBillPlanRecord? = null,
     val expectedDueAmountMinor: Long? = expectedBill?.amountMinor,
+    val investment: BillInvestmentOperationContext? = null,
 )
 
 data class BillAutomaticPaymentText(val transactionTitle:String,val successTitle:String,val successBody:String,val emitNotification:Boolean=true)
@@ -30,6 +31,8 @@ enum class BillPaymentError {
 class BillPaymentException(val reason: BillPaymentError) : IllegalArgumentException(reason.name)
 
 interface BillPaymentRepository {
+    suspend fun undoRecurringBillPaymentWithInvestmentFunds(owner:UserId,request:BillInvestmentUndoRequest,deviceId:String,now:String):Result<Unit> =
+        Result.failure(UnsupportedOperationException("Bill investment payment undo unavailable"))
     suspend fun payRecurringBill(owner: UserId, request: BillPaymentRequest, deviceId: String, now: String): Result<SavedBillPayment>
     suspend fun undoRecurringBillPayment(owner: UserId, billId: RecordId, month: YearMonth, deviceId: String, now: String): Result<Unit>
 }
@@ -125,7 +128,7 @@ fun RecurringBillPlanRecord.matchesBillPaymentSource(expected:RecurringBillPlanR
 }
 
 fun BillPaymentRequest.matchesBillPaymentConsent(other:BillPaymentRequest?):Boolean {
-    if(other==null || copy(expectedBill=null)!=other.copy(expectedBill=null)) return false
+    if(other==null || copy(expectedBill=null,investment=null)!=other.copy(expectedBill=null,investment=null)) return false
     val source=expectedBill;val next=other.expectedBill
     return if(source==null || next==null) source==null && next==null else source.matchesBillPaymentSource(next)
 }
