@@ -10949,6 +10949,75 @@
         }
       }
     },
+    "investment.wallet.reallocateFundsAction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Allocation"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "割り当てを更新"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cập nhật phân bổ"
+          }
+        }
+      }
+    },
+    "investment.wallet.reallocateFundsMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving this transaction updates the allocation of investment cash across transactions in this wallet. Total usage stays at %@; %@ will remain available. These changes will be saved together."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この取引を保存すると、このウォレットの取引間で投資資金の割り当てが更新されます。使用額の合計は%@のままで、利用可能な投資資金は%@です。これらの変更は一緒に保存されます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lưu giao dịch này sẽ cập nhật cách phân bổ tiền đầu tư giữa các giao dịch trong ví này. Tổng tiền đã dùng vẫn là %@; ví còn %@ tiền đầu tư khả dụng. Những thay đổi này sẽ được lưu cùng nhau."
+          }
+        }
+      }
+    },
+    "investment.wallet.reallocateFundsTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update investment cash allocation?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投資資金の割り当てを更新しますか？"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cập nhật phân bổ tiền đầu tư?"
+          }
+        }
+      }
+    },
     "investment.wallet.restoreFundsAction" : {
       "extractionState" : "stale",
       "localizations" : {

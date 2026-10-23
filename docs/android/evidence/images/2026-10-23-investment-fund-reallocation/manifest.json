@@ -1,0 +1,32 @@
+[
+  {
+    "file": "transaction-funds-reallocation-en-dark-font130-width320.png",
+    "bytes": 162976,
+    "sha256": "951a14c45eee6557484bdcc976efad483f920efffbff37935a95a3f1b1468bdc"
+  },
+  {
+    "file": "transaction-funds-reallocation-en-light-font130-width320.png",
+    "bytes": 160202,
+    "sha256": "c4de25dd204f9c590614b247a96754b283429d0d5ea7f32bd74f172386bbf94b"
+  },
+  {
+    "file": "transaction-funds-reallocation-ja-dark-font130-width320.png",
+    "bytes": 214772,
+    "sha256": "7e550efa5fa05ea57c04c1723e6e8d3132bf68108f260c0b4dfca5d85ff3dda6"
+  },
+  {
+    "file": "transaction-funds-reallocation-ja-light-font130-width320.png",
+    "bytes": 210369,
+    "sha256": "84f123276d8ffa2d7a75c21c9bc7c34df05cec4156554c12959357cefe8163da"
+  },
+  {
+    "file": "transaction-funds-reallocation-vi-dark-font130-width320.png",
+    "bytes": 158954,
+    "sha256": "4ccafc2c1f36cc430eae7f9c1f73a5278e54545e450d5a10b529204c2552c99f"
+  },
+  {
+    "file": "transaction-funds-reallocation-vi-light-font130-width320.png",
+    "bytes": 155752,
+    "sha256": "40167feb6e10f880bac232ed79abefdf97462f981c53ad2058b7ff0041958eba"
+  }
+]

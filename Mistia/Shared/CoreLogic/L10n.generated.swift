@@ -1205,6 +1205,16 @@ nonisolated enum L10n {
             }
             static var realTransfers: String { L10n.tr("investment.wallet.realTransfers", vi: "Chuyển khoản thật cần thực hiện", en: "Transfers to make", ja: "実行する振替") }
             static func realTransfers(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.realTransfers", vi: "Chuyển khoản thật cần thực hiện", en: "Transfers to make", ja: "実行する振替", language: language) }
+            static var reallocateFundsAction: String { L10n.tr("investment.wallet.reallocateFundsAction", vi: "Cập nhật phân bổ", en: "Update Allocation", ja: "割り当てを更新") }
+            static func reallocateFundsAction(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.reallocateFundsAction", vi: "Cập nhật phân bổ", en: "Update Allocation", ja: "割り当てを更新", language: language) }
+            static func reallocateFundsMessage(_ arg1: String, _ arg2: String) -> String {
+                L10n.format("investment.wallet.reallocateFundsMessage", vi: "Lưu giao dịch này sẽ cập nhật cách phân bổ tiền đầu tư giữa các giao dịch trong ví này. Tổng tiền đã dùng vẫn là %@; ví còn %@ tiền đầu tư khả dụng. Những thay đổi này sẽ được lưu cùng nhau.", en: "Saving this transaction updates the allocation of investment cash across transactions in this wallet. Total usage stays at %@; %@ will remain available. These changes will be saved together.", ja: "この取引を保存すると、このウォレットの取引間で投資資金の割り当てが更新されます。使用額の合計は%@のままで、利用可能な投資資金は%@です。これらの変更は一緒に保存されます。", arg1, arg2)
+            }
+            static func reallocateFundsMessage(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.wallet.reallocateFundsMessage", vi: "Lưu giao dịch này sẽ cập nhật cách phân bổ tiền đầu tư giữa các giao dịch trong ví này. Tổng tiền đã dùng vẫn là %@; ví còn %@ tiền đầu tư khả dụng. Những thay đổi này sẽ được lưu cùng nhau.", en: "Saving this transaction updates the allocation of investment cash across transactions in this wallet. Total usage stays at %@; %@ will remain available. These changes will be saved together.", ja: "この取引を保存すると、このウォレットの取引間で投資資金の割り当てが更新されます。使用額の合計は%@のままで、利用可能な投資資金は%@です。これらの変更は一緒に保存されます。", language: language, arg1, arg2)
+            }
+            static var reallocateFundsTitle: String { L10n.tr("investment.wallet.reallocateFundsTitle", vi: "Cập nhật phân bổ tiền đầu tư?", en: "Update investment cash allocation?", ja: "投資資金の割り当てを更新しますか？") }
+            static func reallocateFundsTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.reallocateFundsTitle", vi: "Cập nhật phân bổ tiền đầu tư?", en: "Update investment cash allocation?", ja: "投資資金の割り当てを更新しますか？", language: language) }
             static var reconcile: String { L10n.tr("investment.wallet.reconcile", vi: "Chuyển về ví liên kết", en: "Move to linked wallet", ja: "リンク済みウォレットへ移動") }
             static func reconcile(language: MistiaAppLanguage) -> String { L10n.tr("investment.wallet.reconcile", vi: "Chuyển về ví liên kết", en: "Move to linked wallet", ja: "リンク済みウォレットへ移動", language: language) }
             static var reconcileAll: String { L10n.tr("investment.wallet.reconcileAll", vi: "Chuyển tất cả về ví liên kết", en: "Move all to linked wallet", ja: "すべてリンク済みウォレットへ移動") }

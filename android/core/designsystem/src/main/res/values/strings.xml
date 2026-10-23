@@ -474,6 +474,9 @@
     <string name="investment_wallet_original_amount_reference">Số tiền gốc tham khảo: %1$s</string>
     <string name="investment_wallet_real_transfer_instruction">Chuyển từ %1$s sang %2$s</string>
     <string name="investment_wallet_real_transfers">Chuyển khoản thật cần thực hiện</string>
+    <string name="investment_wallet_reallocate_funds_action">Cập nhật phân bổ</string>
+    <string name="investment_wallet_reallocate_funds_message">Lưu giao dịch này sẽ cập nhật cách phân bổ tiền đầu tư giữa các giao dịch trong ví này. Tổng tiền đã dùng vẫn là %1$s; ví còn %2$s tiền đầu tư khả dụng. Những thay đổi này sẽ được lưu cùng nhau.</string>
+    <string name="investment_wallet_reallocate_funds_title">Cập nhật phân bổ tiền đầu tư?</string>
     <string name="investment_wallet_reconcile">Chuyển về ví liên kết</string>
     <string name="investment_wallet_reconcile_all">Chuyển tất cả về ví liên kết</string>
     <string name="investment_wallet_refill_action">Bù tiền</string>

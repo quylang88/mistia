@@ -97,7 +97,7 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
     val afterRows=snapshot.rows.filterNot{row->changed.any{it.entity==row.entity && it.id==row.id}}+changed
     val afterCash=InvestmentCashReadSnapshot(snapshot.owner,afterRows.filter{CloudEntity.fromTable(it.entity) in InvestmentCashReadSnapshot.entities})
     val afterTimeline=investmentFundUsageTimeline(afterCash,code)
-    val comparison=tradeComparison(beforeTimeline,afterTimeline,snapshot.rows)
+    val comparison=compareInvestmentFundTimelines(beforeTimeline,afterTimeline){id->snapshot.rows.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==id}.payload.financeRawString("currency_code")!!}
     val fundingUsage=if(buying)afterTimeline.usages[investmentLedgerIdentity(d.id,"funding")] else null
     val effects=planInvestmentFundEffects(afterCash,code,afterTimeline,request.adjustmentTitle,deviceId,now)
     val token=RecordConflictResolver.semanticFingerprint(buildJsonObject {
@@ -137,27 +137,6 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
 
 
 private val purchaseAckFields=setOf("updated_at","sync_version","last_modified_by_device_id","last_modified_by_user_id")
-private fun tradeComparison(before:InvestmentFundTimeline,after:InvestmentFundTimeline,rows:List<CloudRecord>):InvestmentFundTimelineComparison {
-    fun totals(t:InvestmentFundTimeline)=t.usages.values.groupBy{it.walletId}.mapValues{(_,values)->values.fold(BigInteger.ZERO){sum,use->sum+use.investmentToUseMinor}}
-    val previous=totals(before);val next=totals(after)
-    // Equal wallet totals can hide moving booked/unreconciled consumption
-    // between transactions. Those derived records still need explicit consent.
-    val reallocated=buildSet {
-        (before.usages.keys+after.usages.keys).forEach{id->
-            val old=before.usages[id];val new=after.usages[id]
-            fun reserved(use:InvestmentFundTimelineUsage?)=use?.takeIf{it.investmentToUseMinor.signum()>0}?.let{Triple(it.walletId,it.bookedToUseMinor,it.unreconciledToUseMinor)}
-            if(reserved(old)!=reserved(new)) {
-                old?.takeIf{it.investmentToUseMinor.signum()>0}?.let{add(it.walletId)}
-                new?.takeIf{it.investmentToUseMinor.signum()>0}?.let{add(it.walletId)}
-            }
-        }
-    }
-    val changes=(previous.keys+next.keys).mapNotNull{id ->
-        val old=previous[id] ?: BigInteger.ZERO;val new=next[id] ?: BigInteger.ZERO
-        if(old==new && id !in reallocated)null else InvestmentFundTimelineWalletChange(id,rows.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==id}.payload.financeRawString("currency_code")!!,old,new,after.availableByWalletId[id] ?: BigInteger.ZERO)
-    }.sortedWith(compareByDescending<InvestmentFundTimelineWalletChange>{(it.proposedMinor-it.previousMinor).abs()}.thenByDescending{it.walletId})
-    return InvestmentFundTimelineComparison(before,after,changes)
-}
 
 private fun purchaseSemantic(value:JsonElement?,key:String):JsonElement?=if(key in setOf("created_at","occurred_at","deleted_at","archived_at") && value is JsonPrimitive && value.isString)
     runCatching{JsonPrimitive(Instant.parse(value.content).toString())}.getOrDefault(value) else value

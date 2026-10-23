@@ -157,4 +157,22 @@ class InvestmentFundUsagePlanTest {
         val adjustment=after.rows.single{it.payload.financeRawString("settlement_role_raw_value")=="investmentReserveUse"}
         assertEquals(JsonPrimitive(id(78)),adjustment.payload["last_modified_by_user_id"])
     }
+    @Test fun anIncomeMovingTheSameReservedTotalBetweenExpensesRequiresExplicitConsent() {
+        val first=expense(900)
+        val second=expense(50).let{it.copy(id=id(21),payload=JsonObject(it.payload+buildJsonObject{put("id",id(21));put("occurred_at","2026-10-22T00:00:03Z")}))}
+        val raw=source(900,50).let{it.copy(rows=it.rows+first+second)}
+        val current=applied(raw,first,planInvestmentFundEffects(raw,"JPY",investmentFundUsageTimeline(raw,"JPY"),"Automatic cash reconciliation",device,now))
+        val income=expense(50,"income").let{it.copy(id=id(22),payload=JsonObject(it.payload+buildJsonObject{put("id",id(22));put("occurred_at","2026-10-22T00:00:01.500Z")}))}
+        val review=review(current,income)
+        assertTrue("A different transaction consumes the same reserved total",review.requiresConfirmation)
+        val change=review.comparison.changes.single();assertEquals(50.toBigInteger(),change.previousMinor);assertEquals(50.toBigInteger(),change.proposedMinor)
+        assertEquals(50.toBigInteger(),review.comparison.current.usages[first.id]?.investmentToUseMinor)
+        assertEquals(50.toBigInteger(),review.comparison.proposed.usages[second.id]?.investmentToUseMinor)
+        assertTrue(runCatching{plan(current,income,null)}.exceptionOrNull() is InvestmentFundUsageConfirmationRequired)
+        val accepted=plan(current,income,review.consent);val after=applied(current,income,accepted)
+        assertEquals(MutationKind.DELETE,accepted.mutations.single{it.first.id==investmentLedgerIdentity(first.id,"cash-consumption-booked")}.second.kind)
+        assertEquals(-50L,accepted.mutations.single{it.first.id==investmentLedgerIdentity(second.id,"cash-consumption-booked")}.first.payload.financeRawLong("amount_minor"))
+        assertTrue(plan(after,income,review.consent).mutations.isEmpty())
+    }
+
 }

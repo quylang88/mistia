@@ -145,4 +145,39 @@ class TransactionInvestmentSaveRoomTest {
         Assert.assertTrue(error.toString(),error is IllegalArgumentException)
         Assert.assertEquals(current,store.transactionInvestmentSaveSnapshot(owner));Assert.assertEquals(pending,queues())
     }
+    private suspend fun seedEqualTotalHistory() {
+        for((key,amount) in listOf(21 to 100L,22 to 60L)) {
+            val date=if(key==21)"2026-10-22T00:00:02Z" else "2026-10-22T00:00:03Z"
+            val raw=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,id(key),owner.value,buildJsonObject {
+                put("id",id(key));put("user_id",owner.value);put("created_at",now);put("updated_at",now);put("occurred_at",date);put("deleted_at",JsonNull);put("sync_version",0L)
+                put("primary_kind_raw_value","expense");put("entry_status_raw_value","posted");put("settlement_role_raw_value",JsonNull);put("title","Existing expense "+key)
+                put("amount_minor",amount);put("source_wallet_id",id(1));put("source_currency_code","JPY");put("destination_wallet_id",JsonNull);put("category_id",id(31));put("is_archived",false)
+                put("reporting_currency_code","JPY");put("reporting_amount_minor",amount);put("reporting_expense_minor",amount);put("reporting_income_minor",0L)
+            },now,null,0)
+            store.commitMutation(raw,PendingMutation(CloudEntity.LEDGER_TRANSACTION,raw.id,owner.value,MutationKind.UPSERT,raw.payload,now,0,device))
+        }
+        val cash=store.investmentCashSnapshot(owner)
+        val first=cash.rows.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==id(21)}
+        for((row,pending) in planInvestmentFundUsage(cash,"JPY",first,reviewInvestmentFundUsage(cash,"JPY",first).consent,"Automatic adjustment",device,now).mutations)store.commitMutation(row,pending)
+    }
+
+    @Test fun equalTotalReallocationCannotWriteWithoutConsentAndMovesBothQueuesAtomically()=runBlocking {
+        seed();seedEqualTotalHistory()
+        val parent=CategoryDraft(id=id(40),name="Income",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.PARENT).toMutation(owner,null,null,device,now).record
+        val child=CategoryDraft(id=id(41),name="Income child",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=id(40)).toMutation(owner,null,parent,device,now).record
+        for(row in listOf(parent.toCloudRecord(),child.toCloudRecord()))store.commitMutation(row,PendingMutation(CloudEntity.TRANSACTION_CATEGORY,row.id,owner.value,MutationKind.UPSERT,row.payload,now,0,device))
+        val r=TransactionInvestmentSaveRequest(TransactionDraft(primaryKind=TransactionPrimaryKind.INCOME,title="Income",amountMinor=60,occurredAt="2026-10-22T00:00:01.500Z",sourceWalletId=id(1),categoryId=id(41)),TransactionCreationIdentity(id(20),now),null,"Automatic adjustment","JPY")
+        val before=store.transactionInvestmentSaveSnapshot(owner);val pending=queues()
+        val error=runCatching{store.commitTransactionInvestmentSave(before,r,device,now)}.exceptionOrNull()
+        Assert.assertTrue("Equal total still changes the consuming transaction: "+error,error is InvestmentFundUsageConfirmationRequired)
+        Assert.assertEquals(before,store.transactionInvestmentSaveSnapshot(owner));Assert.assertEquals(pending,queues())
+        val review=(error as InvestmentFundUsageConfirmationRequired).review;Assert.assertEquals(60.toBigInteger(),review.comparison.primaryChange!!.previousMinor);Assert.assertEquals(60.toBigInteger(),review.comparison.primaryChange!!.proposedMinor)
+        val accepted=r.copy(consent=review.consent);store.commitTransactionInvestmentSave(before,accepted,device,now)
+        val after=store.transactionInvestmentSaveSnapshot(owner);val rows=after.recordsByEntity.getValue(CloudEntity.INVESTMENT_POSTING)
+        Assert.assertNotNull(rows.single{it.id==investmentLedgerIdentity(id(21),"cash-consumption-booked")}.deletedAt)
+        Assert.assertEquals(-60L,rows.single{it.id==investmentLedgerIdentity(id(22),"cash-consumption-booked")}.payload.financeRawLong("amount_minor"))
+        val afterQueues=queues();store.commitTransactionInvestmentSave(after,accepted,device,now)
+        Assert.assertEquals(after,store.transactionInvestmentSaveSnapshot(owner));Assert.assertEquals(afterQueues,queues())
+    }
+
 }

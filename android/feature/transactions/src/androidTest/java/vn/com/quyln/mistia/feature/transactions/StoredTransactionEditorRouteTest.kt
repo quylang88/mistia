@@ -1,6 +1,9 @@
 package vn.com.quyln.mistia.feature.transactions
 
 import android.content.Context
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -66,10 +69,17 @@ class StoredTransactionEditorRouteTest {
     @Test fun realOverviewTapOpensStoredFormAndSavesExactAmountAndMatchingOutbox() {
         val original=seed();var selected by mutableStateOf<String?>(null)
         compose.setContent {MistiaTheme(darkTheme=false) {
-            OverviewScreen(owner,repo,MutableStateFlow(SyncStatus.Idle),primaryCurrencyCode="VND",onOpenTransaction={selected=it})
+            OverviewScreen(owner,repo,MutableStateFlow(SyncStatus.Idle),modifier=Modifier.height(400.dp),primaryCurrencyCode="VND",onOpenTransaction={selected=it})
             selected?.let {id -> StoredTransactionEditorRoute(owner,id,repo,exchange,Receipts(),{device},"VND",onDismiss={selected=null})}
         }}
-        compose.waitUntil(5000) {compose.onAllNodesWithTag("overview.recent.${original.id}").fetchSemanticsNodes().isNotEmpty()}
+        try{compose.waitUntil(5000) {runCatching {
+            compose.onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange))
+                .performScrollToNode(hasTestTag("overview.recent.${original.id}"));true
+        }.getOrDefault(false)}}catch(error:Throwable){
+            val screenshot=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            screenshot?.let{image->java.io.File(context.getExternalFilesDir(null),"overview-recent-compact-failure.png").outputStream().use{image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};image.recycle()}
+            throw AssertionError(compose.onRoot().printToString(),error)
+        }
         compose.onNodeWithTag("overview.recent.${original.id}").performScrollTo().performClick();awaitTitle("Original")
         compose.onNodeWithTag("transaction.amount").performScrollTo().assertTextContains("9,007,199,254,740,993")
         title().performScrollTo().performTextReplacement("Edited from Overview");save()

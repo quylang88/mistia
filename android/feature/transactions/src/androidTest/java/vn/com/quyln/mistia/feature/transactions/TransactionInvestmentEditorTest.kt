@@ -21,13 +21,14 @@ import org.junit.runner.RunWith
 import vn.com.quyln.mistia.core.database.*
 import vn.com.quyln.mistia.core.designsystem.MistiaTheme
 import vn.com.quyln.mistia.core.designsystem.R
+import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
 @RunWith(AndroidJUnit4::class)
 class TransactionInvestmentEditorTest {
     private val compose=createComposeRule()
     @get:Rule val rules=RuleChain.outerRule(org.junit.rules.TestRule{base,description->object:org.junit.runners.model.Statement(){override fun evaluate(){
-        if(description.methodName!="fundDialogsFitThreeLanguagesBothThemesAtActual130And320Dp"){base.evaluate();return}
+        if(description.methodName !in setOf("fundDialogsFitThreeLanguagesBothThemesAtActual130And320Dp","reallocationReviewFitsThreeLanguagesBothThemesAtActual130And320Dp")){base.evaluate();return}
         val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
         fun shell(command:String)=android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use{it.readText().trim()}
         val font=shell("settings get system font_scale").takeUnless{it=="null"} ?: "1.0"
@@ -292,4 +293,110 @@ class TransactionInvestmentEditorTest {
             }
         }finally{compose.runOnIdle{originals.forEach{(resource,configuration)->resource.updateConfiguration(configuration,resource.displayMetrics)}}}
     }
+    private suspend fun seedEqualTotalHistory(firstAmount:Long=100,secondAmount:Long=60) {
+        for((key,amount) in listOf(21 to firstAmount,22 to secondAmount)) {
+            val date=if(key==21)"2026-10-22T00:00:02Z" else "2026-10-22T00:00:03Z"
+            val raw=CloudRecord(CloudEntity.LEDGER_TRANSACTION.table,id(key),owner.value,buildJsonObject {
+                put("id",id(key));put("user_id",owner.value);put("created_at",now);put("updated_at",now);put("occurred_at",date);put("deleted_at",JsonNull);put("sync_version",0L)
+                put("primary_kind_raw_value","expense");put("entry_status_raw_value","posted");put("settlement_role_raw_value",JsonNull);put("title","Existing expense "+key)
+                put("amount_minor",amount);put("source_wallet_id",id(1));put("source_currency_code","JPY");put("destination_wallet_id",JsonNull);put("category_id",id(31));put("is_archived",false)
+                put("reporting_currency_code","JPY");put("reporting_amount_minor",amount);put("reporting_expense_minor",amount);put("reporting_income_minor",0L)
+            },now,null,0)
+            store.commitMutation(raw,PendingMutation(CloudEntity.LEDGER_TRANSACTION,raw.id,owner.value,MutationKind.UPSERT,raw.payload,now,0,device))
+        }
+        val cash=store.investmentCashSnapshot(owner)
+        val first=cash.rows.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==id(21)}
+        for((row,pending) in planInvestmentFundUsage(cash,"JPY",first,reviewInvestmentFundUsage(cash,"JPY",first).consent,"Automatic adjustment",device,now).mutations)store.commitMutation(row,pending)
+    }
+
+    @Test fun incomeReallocatingTheSameReservedTotalRequiresReviewAndCancelWritesNothing() {
+        runBlocking {
+            seedEqualTotalHistory()
+            val parent=repository.saveCategory(owner,CategoryDraft(id=id(40),name="Income",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.PARENT),device,now).getOrThrow()
+            val child=repository.saveCategory(owner,CategoryDraft(id=id(41),name="Income child",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=parent.id),device,now).getOrThrow()
+            categories=categories+listOf(parent,child)
+        }
+        val before=runBlocking{store.transactionInvestmentSaveSnapshot(owner)}
+        val pending=runBlocking{TransactionInvestmentSaveSnapshot.entities.associateWith{store.pendingMutations(owner,it,Long.MAX_VALUE)}}
+        val draft=initial().copy(primaryKind=TransactionPrimaryKind.INCOME,title="Income",amountText="60",categoryId=id(41),occurredAt="2026-10-22T00:00:01.500Z")
+        compose.setContent{Editor(initialOverride=draft)};save();review()
+        compose.onNodeWithTag("transaction.funds.title").assertTextEquals(context.getString(R.string.investment_wallet_reallocate_funds_title))
+        compose.onNodeWithTag("transaction.funds.message."+id(1)).assertTextEquals(context.getString(R.string.investment_wallet_reallocate_funds_message,formatMinorUnits(60,"JPY"),formatMinorUnits(0,"JPY")))
+        Assert.assertNull(primary());Assert.assertFalse(dismissed)
+        compose.onNodeWithTag("transaction.funds.cancel").performClick()
+        Assert.assertEquals(before,runBlocking{store.transactionInvestmentSaveSnapshot(owner)})
+        Assert.assertEquals(pending,runBlocking{TransactionInvestmentSaveSnapshot.entities.associateWith{store.pendingMutations(owner,it,Long.MAX_VALUE)}})
+        save();review();compose.onNodeWithTag("transaction.funds.confirm").performClick();compose.waitUntil(5000){dismissed}
+        Assert.assertEquals(60L,primary()!!.payload.financeRawLong("amount_minor"))
+        val rows=runBlocking{store.recordsIncludingDeleted(owner,CloudEntity.INVESTMENT_POSTING.table)}
+        Assert.assertNotNull(rows.single{it.id==investmentLedgerIdentity(id(21),"cash-consumption-booked")}.deletedAt)
+        Assert.assertEquals(-60L,rows.single{it.id==investmentLedgerIdentity(id(22),"cash-consumption-booked")}.payload.financeRawLong("amount_minor"))
+    }
+
+    @Test fun reallocationReviewFitsThreeLanguagesBothThemesAtActual130And320Dp() {
+        runBlocking {
+            wallet=wallet.copy(openingBalanceMinor=Long.MAX_VALUE,name="Cash / 共同ウォレット / Ví chung")
+            val raw=wallet.toCloudRecord();store.commitMutation(raw,PendingMutation(CloudEntity.LEDGER_WALLET,raw.id,owner.value,MutationKind.UPSERT,raw.payload,now,0,device))
+            val old=store.record(owner,CloudEntity.INVESTMENT_POSTING.table,id(10))!!
+            val posting=old.copy(payload=JsonObject(old.payload+buildJsonObject{put("amount_minor",Long.MAX_VALUE);put("accounting_amount_minor",Long.MAX_VALUE)}))
+            store.commitMutation(posting,PendingMutation(CloudEntity.INVESTMENT_POSTING,posting.id,owner.value,MutationKind.UPSERT,posting.payload,now,0,device))
+            seedEqualTotalHistory(Long.MAX_VALUE,Long.MAX_VALUE)
+            val parent=repository.saveCategory(owner,CategoryDraft(id=id(40),name="Income",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.PARENT),device,now).getOrThrow()
+            val child=repository.saveCategory(owner,CategoryDraft(id=id(41),name="Income child",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=parent.id),device,now).getOrThrow();categories=categories+listOf(parent,child)
+        }
+        var language by mutableStateOf("en");var dark by mutableStateOf(false)
+        val before=runBlocking{store.transactionInvestmentSaveSnapshot(owner)}
+        val originals=linkedMapOf<android.content.res.Resources,android.content.res.Configuration>()
+        fun configure(code:String) {
+            val windows=android.view.inspector.WindowInspector.getGlobalWindowViews()
+            (windows.map{it.context.resources}+context.resources).distinct().forEach{resource->
+                originals.putIfAbsent(resource,android.content.res.Configuration(resource.configuration))
+                resource.updateConfiguration(android.content.res.Configuration(resource.configuration).apply{setLocale(java.util.Locale.forLanguageTag(code))},resource.displayMetrics)
+            };windows.forEach{it.dispatchConfigurationChanged(android.content.res.Configuration(it.resources.configuration))}
+        }
+        compose.setContent {
+            val config=android.content.res.Configuration(context.resources.configuration).apply{setLocale(java.util.Locale.forLanguageTag(language))}
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides context.createConfigurationContext(config),androidx.compose.ui.platform.LocalConfiguration provides config) {
+                key(language,dark){MistiaTheme(darkTheme=dark){TransactionEditorSheet(owner.value,null,listOf(wallet),categories,emptyList(),now,"JPY",
+                    initialState=initial().copy(primaryKind=TransactionPrimaryKind.INCOME,title="Income",amountText=Long.MAX_VALUE.toString(),categoryId=id(41),occurredAt="2026-10-22T00:00:01.500Z"),
+                    onDismiss={},onSave={draft->saveInvestmentAwareEditorTransaction(owner,draft,"JPY","Automatic adjustment",device,now,repository,receipts)})}}
+            }
+        }
+        fun complete(tag:String){
+            val results=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            compose.onNodeWithTag(tag,useUnmergedTree=true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(results)}
+            val result=results.single();Assert.assertEquals(1.3f,result.layoutInput.density.fontScale,0.0001f)
+            Assert.assertFalse(result.didOverflowHeight);Assert.assertEquals(result.layoutInput.text.length,result.getLineEnd(result.lineCount-1,true))
+            for(line in 0 until result.lineCount){Assert.assertFalse(result.isLineEllipsized(line));Assert.assertTrue(result.getLineLeft(line)>=-1f);Assert.assertTrue(result.getLineRight(line)<=result.size.width+1f)}
+            val paint=android.graphics.Paint();result.layoutInput.text.text.codePoints().forEach{c->if(!Character.isWhitespace(c))Assert.assertTrue("Missing glyph "+c,paint.hasGlyph(String(Character.toChars(c))))}
+        }
+        try{for(code in listOf("en","vi","ja"))for(theme in listOf(false,true)){
+            compose.runOnIdle{configure(code);language=code;dark=theme}
+            compose.onNodeWithTag("transaction.save").performClick();review();compose.runOnIdle{configure(code)}
+            listOf("transaction.funds.title","transaction.funds.name."+id(1),"transaction.funds.message."+id(1),"transaction.funds.confirm.text","transaction.funds.cancel.text").forEach(::complete)
+            val confirm=compose.onNodeWithTag("transaction.funds.confirm").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val cancel=compose.onNodeWithTag("transaction.funds.cancel").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            Assert.assertTrue(confirm.height>=48*context.resources.displayMetrics.density-1);Assert.assertTrue(cancel.height>=48*context.resources.displayMetrics.density-1)
+            Assert.assertTrue(confirm.left>=cancel.right || confirm.bottom<=cancel.top || cancel.bottom<=confirm.top)
+            val screenshot=checkNotNull(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            java.io.File(context.getExternalFilesDir(null),"transaction-funds-reallocation-"+code+"-"+(if(theme)"dark" else "light")+"-font130-width320.png").outputStream().use{Assert.assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it))};screenshot.recycle()
+            compose.onNodeWithTag("transaction.funds.cancel").performClick();Assert.assertEquals(before,runBlocking{store.transactionInvestmentSaveSnapshot(owner)})
+        }}finally{compose.runOnIdle{originals.forEach{(resource,config)->resource.updateConfiguration(config,resource.displayMetrics)}}}
+    }
+
+    @Test fun renamingAnExpenseWithUnchangedReservedUsageKeepsTheExistingUseConfirmation() {
+        val original=runBlocking {
+            val draft=initial().toDraft("JPY",null,primaryCurrencyCode="JPY").draft!!
+            val r=TransactionInvestmentSaveRequest(draft,draft.creationIdentity,null,"Automatic adjustment","JPY")
+            val consent=(repository.prepareTransactionWithInvestmentFunds(owner,r,device,now).exceptionOrNull() as InvestmentFundUsageConfirmationRequired).review.consent
+            repository.saveTransactionWithInvestmentFunds(owner,r.copy(consent=consent),device,now).getOrThrow()
+        }
+        val postings=runBlocking{store.recordsIncludingDeleted(owner,CloudEntity.INVESTMENT_POSTING.table)}
+        compose.setContent{Editor(original.copy(title="Renamed expense"))};save();review()
+        compose.onNodeWithTag("transaction.funds.title").assertTextEquals(context.getString(R.string.investment_wallet_use_funds_title))
+        compose.onNodeWithTag("transaction.funds.confirm").performClick();compose.waitUntil(5000){dismissed}
+        Assert.assertEquals("Renamed expense",primary()!!.payload.financeRawString("title"))
+        Assert.assertEquals(postings,runBlocking{store.recordsIncludingDeleted(owner,CloudEntity.INVESTMENT_POSTING.table)})
+    }
+
 }

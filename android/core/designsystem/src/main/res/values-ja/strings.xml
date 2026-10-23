@@ -474,6 +474,9 @@
     <string name="investment_wallet_original_amount_reference">参考元金額：%1$s</string>
     <string name="investment_wallet_real_transfer_instruction">%1$sから%2$sへ振替</string>
     <string name="investment_wallet_real_transfers">実行する振替</string>
+    <string name="investment_wallet_reallocate_funds_action">割り当てを更新</string>
+    <string name="investment_wallet_reallocate_funds_message">この取引を保存すると、このウォレットの取引間で投資資金の割り当てが更新されます。使用額の合計は%1$sのままで、利用可能な投資資金は%2$sです。これらの変更は一緒に保存されます。</string>
+    <string name="investment_wallet_reallocate_funds_title">投資資金の割り当てを更新しますか？</string>
     <string name="investment_wallet_reconcile">リンク済みウォレットへ移動</string>
     <string name="investment_wallet_reconcile_all">すべてリンク済みウォレットへ移動</string>
     <string name="investment_wallet_refill_action">補充</string>

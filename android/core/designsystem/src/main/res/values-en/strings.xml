@@ -474,6 +474,9 @@
     <string name="investment_wallet_original_amount_reference">Original amount for reference: %1$s</string>
     <string name="investment_wallet_real_transfer_instruction">Transfer from %1$s to %2$s</string>
     <string name="investment_wallet_real_transfers">Transfers to make</string>
+    <string name="investment_wallet_reallocate_funds_action">Update Allocation</string>
+    <string name="investment_wallet_reallocate_funds_message">Saving this transaction updates the allocation of investment cash across transactions in this wallet. Total usage stays at %1$s; %2$s will remain available. These changes will be saved together.</string>
+    <string name="investment_wallet_reallocate_funds_title">Update investment cash allocation?</string>
     <string name="investment_wallet_reconcile">Move to linked wallet</string>
     <string name="investment_wallet_reconcile_all">Move all to linked wallet</string>
     <string name="investment_wallet_refill_action">Refill</string>

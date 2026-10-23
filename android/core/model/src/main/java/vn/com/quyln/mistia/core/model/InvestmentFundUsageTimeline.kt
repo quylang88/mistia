@@ -44,14 +44,30 @@ fun compareInvestmentFundUsageTimeline(snapshot:InvestmentCashReadSnapshot,accou
             timelineFail(InvestmentFundTimelineError.INVALID_REPLACEMENT)
     } else if(old==null)timelineFail(InvestmentFundTimelineError.INVALID_REPLACEMENT)
     val current=source.replay();val next=source.replay(replacingTransactionId,proposed)
-    fun totals(timeline:InvestmentFundTimeline)=timeline.usages.values.groupBy{it.walletId}.mapValues{(_,values)->
-        values.fold(BigInteger.ZERO){sum,it->sum+it.investmentToUseMinor}}
-    val previous=totals(current);val future=totals(next)
-    val changes=(previous.keys+future.keys).mapNotNull{id ->
-        val before=previous[id] ?: BigInteger.ZERO;val after=future[id] ?: BigInteger.ZERO
-        if(before==after)null else InvestmentFundTimelineWalletChange(id,source.wallets.getValue(id).currencyCode,before,after,next.availableByWalletId[id] ?: BigInteger.ZERO)
+    return compareInvestmentFundTimelines(current,next){id->source.wallets.getValue(id).currencyCode}
+}
+
+/** Reserved allocation identity and buckets matter even when wallet totals agree. */
+internal fun compareInvestmentFundTimelines(before:InvestmentFundTimeline,after:InvestmentFundTimeline,currencyForWallet:(String)->String):InvestmentFundTimelineComparison {
+    fun totals(t:InvestmentFundTimeline)=t.usages.values.groupBy{it.walletId}.mapValues{(_,values)->values.fold(BigInteger.ZERO){sum,use->sum+use.investmentToUseMinor}}
+    val previous=totals(before);val next=totals(after)
+    // Equal wallet totals can hide moving booked/unreconciled consumption
+    // between transactions. Those derived records still need explicit consent.
+    val reallocated=buildSet {
+        (before.usages.keys+after.usages.keys).forEach{id->
+            val old=before.usages[id];val new=after.usages[id]
+            fun reserved(use:InvestmentFundTimelineUsage?)=use?.takeIf{it.investmentToUseMinor.signum()>0}?.let{Triple(it.walletId,it.bookedToUseMinor,it.unreconciledToUseMinor)}
+            if(reserved(old)!=reserved(new)) {
+                old?.takeIf{it.investmentToUseMinor.signum()>0}?.let{add(it.walletId)}
+                new?.takeIf{it.investmentToUseMinor.signum()>0}?.let{add(it.walletId)}
+            }
+        }
+    }
+    val changes=(previous.keys+next.keys).mapNotNull{id ->
+        val old=previous[id] ?: BigInteger.ZERO;val new=next[id] ?: BigInteger.ZERO
+        if(old==new && id !in reallocated)null else InvestmentFundTimelineWalletChange(id,currencyForWallet(id),old,new,after.availableByWalletId[id] ?: BigInteger.ZERO)
     }.sortedWith(compareByDescending<InvestmentFundTimelineWalletChange>{(it.proposedMinor-it.previousMinor).abs()}.thenByDescending{it.walletId})
-    return InvestmentFundTimelineComparison(current,next,changes)
+    return InvestmentFundTimelineComparison(before,after,changes)
 }
 
 private fun timelineFail(reason:InvestmentFundTimelineError=InvestmentFundTimelineError.UNREADABLE_SOURCE):Nothing=throw InvestmentFundTimelineException(reason)
