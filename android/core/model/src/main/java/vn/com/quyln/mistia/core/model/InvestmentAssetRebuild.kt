@@ -17,6 +17,7 @@ fun investmentLedgerIdentity(eventId:String,component:String):String {
 
 internal fun rebuildInvestmentAssetUnitHistory(
     snapshot:InvestmentAssetSnapshot,asset:InvestmentAssetRecord,unit:String,device:String,now:String,
+    resolveZeroBuyFunding:Boolean=true,
 ):List<CloudRecord> {
     fun fail(reason:InvestmentAssetError=InvestmentAssetError.INVALID_ACCOUNTING):Nothing=investmentAssetFail(reason)
     fun JsonObject.text(key:String)=financeRawString(key) ?: fail()
@@ -144,14 +145,14 @@ internal fun rebuildInvestmentAssetUnitHistory(
         if(p.text("kind_raw_value")=="buy") {
             // Swift's legacy rebuild resolves funding before reconciling even
             // a zero-cost buy; a missing dependency must not be invented.
-            val funding=wallet(p.reference("funding_wallet_id"))
-            val local=convert(accounting,accountingCode,code(funding.payload.text("currency_code")),p.financeRawString("funding_to_accounting_rate_decimal_string"),true)
+            val funding=if(gross==0L && !resolveZeroBuyFunding)null else wallet(p.reference("funding_wallet_id"))
+            val local=if(funding==null)0L else convert(accounting,accountingCode,code(funding.payload.text("currency_code")),p.financeRawString("funding_to_accounting_rate_decimal_string"),true)
             if(gross==0L) {
                 if(accounting!=0L)fail()
                 clear("funding_wallet_id","funding_wallet_currency_code","funding_wallet_amount_minor","funding_ledger_transaction_id","capital_return_ledger_transaction_id","profit_loss_ledger_transaction_id")
             } else {
                 fields["funding_wallet_amount_minor"]=JsonPrimitive(local)
-                val id=ledger(raw,"funding","expense","investmentFunding",local,funding,accounting,accountingCode)
+                val id=ledger(raw,"funding","expense","investmentFunding",local,requireNotNull(funding),accounting,accountingCode)
                 ledgerIds+=id;set("funding_ledger_transaction_id",id);clear("capital_return_ledger_transaction_id","profit_loss_ledger_transaction_id")
                 postingIds+=posting(raw,"funding-posting","funding",funding,id,Math.negateExact(local),Math.negateExact(accounting))
             }

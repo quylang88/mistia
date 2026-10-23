@@ -255,7 +255,24 @@ class InvestmentCashHistoryScreenTest {
         compose.onNodeWithTag("investment.cash.transfer.wallet").performScrollTo().performClick();await("investment.cash.transfer.wallet.option."+selected)
         compose.onNodeWithTag("investment.cash.transfer.wallet.option."+selected).performClick()
         compose.onNodeWithTag("investment.cash.transfer.amount").performScrollTo().performTextReplacement("400")
-        compose.onNodeWithTag("investment.cash.transfer.delete").performScrollTo().assertIsEnabled().performClick();await("investment.cash.transfer.delete.confirm")
+        // Finish text entry before scrolling: an arriving IME may otherwise
+        // bring the still-focused amount back onscreen after the test scroll.
+        compose.runOnIdle {
+            android.view.inspector.WindowInspector.getGlobalWindowViews().forEach{view->
+                view.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                    .hideSoftInputFromWindow(view.windowToken,0)
+            }
+        }
+        compose.waitUntil(5000){android.view.inspector.WindowInspector.getGlobalWindowViews().none{view->
+            view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())==true
+        }}
+        compose.onNodeWithTag("investment.cash.transfer.delete").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        try{await("investment.cash.transfer.delete.confirm")}catch(failure:Throwable){
+            val context=ApplicationProvider.getApplicationContext<Context>()
+            val bitmap=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            java.io.File(context.getExternalFilesDir(null),"slice143-history-confirm-timeout.png").outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+            throw AssertionError(compose.onAllNodes(isRoot(),useUnmergedTree=true).printToString(),failure)
+        }
         compose.onNodeWithTag("investment.cash.transfer.delete.confirm").performClick();compose.waitUntil(5000){snapshot().rows.single{it.id==event}.deletedAt!=null}
         val read=snapshot();val ledger=read.rows.single{it.id==event};Assert.assertEquals(500L,ledger.payload.financeRawLong("amount_minor"));Assert.assertEquals(linked,ledger.payload.financeRawString("source_wallet_id"))
         val balances=financeWalletBalancesRaw(owner,read.rows.filter{it.entity==CloudEntity.LEDGER_TRANSACTION.table},read.rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table})!!

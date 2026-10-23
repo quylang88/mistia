@@ -250,6 +250,9 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    fun observePurchaseSnapshot(owner:UserId):Flow<InvestmentPurchaseSnapshot> = throw UnsupportedOperationException("Consistent purchase read unavailable")
+    suspend fun savePurchase(owner:UserId,request:InvestmentPurchaseRequest,deviceId:String,now:String):Result<CloudRecord> = Result.failure(UnsupportedOperationException("Purchase unavailable"))
+
     suspend fun reconcileCash(owner:UserId,request:InvestmentCashReconciliationRequest,deviceId:String,now:String):Result<Unit> =
         Result.failure(UnsupportedOperationException("Investment reconciliation unavailable"))
     /** Read-only historical comparison; never grants consent or writes derived financial rows. */
@@ -276,6 +279,10 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    fun observeInvestmentPurchaseSnapshot(owner:UserId):Flow<InvestmentPurchaseSnapshot> = throw UnsupportedOperationException("Consistent purchase read unavailable")
+    suspend fun investmentPurchaseSnapshot(owner:UserId):InvestmentPurchaseSnapshot = throw UnsupportedOperationException("Atomic purchase read unavailable")
+    suspend fun commitInvestmentPurchase(expected:InvestmentPurchaseSnapshot,request:InvestmentPurchaseRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional purchase unavailable")
+
     suspend fun commitTransactionInvestmentLifecycle(expected:TransactionInvestmentSaveSnapshot,request:TransactionInvestmentLifecycleRequest,
         deviceId:String,now:String,statementZone:java.time.ZoneId=java.time.ZoneId.systemDefault()):LedgerTransactionRecord =
         throw UnsupportedOperationException("Conditional transaction lifecycle unavailable")

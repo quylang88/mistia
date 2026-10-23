@@ -490,6 +490,9 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    private val purchases=OfflineInvestmentPurchaseRepository(localStore)
+    override fun observePurchaseSnapshot(owner:UserId)=purchases.observe(owner)
+    override suspend fun savePurchase(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String)=purchases.save(owner,request,deviceId,now)
     private val reconciliation=OfflineInvestmentCashReconciliationRepository(localStore)
     override suspend fun reconcileCash(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentCashReconciliationRequest,deviceId:String,now:String)=reconciliation.reconcile(owner,request,deviceId,now)
 

@@ -86,6 +86,16 @@ internal object InvestmentDecimalMath {
 
     fun subtract(lhs: BigDecimal, rhs: BigDecimal): BigDecimal = add(lhs,rhs.negate())
 
+    fun divide(lhs:BigDecimal,rhs:BigDecimal):BigDecimal {
+        var left=parts(lhs);var right=parts(rhs)
+        if(left.exponent-right.exponent>=19) {
+            val (a,b)=normalized(lhs,rhs)
+            if(a.coefficient.signum()!=0 && b.coefficient.signum()!=0){left=a;right=b}
+        }
+        val quotient=left.coefficient.multiply(ten38).divide(right.coefficient)
+        return fit(quotient,Math.subtractExact(Math.subtractExact(left.exponent,right.exponent),38))
+    }
+
     fun proportionalMinor(total: Long, numerator: BigDecimal, denominator: BigDecimal): Long {
         val amount = parts(BigDecimal.valueOf(total))
         val part = parts(numerator)

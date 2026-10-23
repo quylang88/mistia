@@ -1,0 +1,92 @@
+[
+  {
+    "file": "investment-purchase-bottom-en-dark-font130-width320.png",
+    "bytes": 94446,
+    "sha256": "38ba7c96b9b1200ab4f39e594ced4786b08f49ed26734087a426ed50535aa721"
+  },
+  {
+    "file": "investment-purchase-bottom-en-light-font130-width320.png",
+    "bytes": 93204,
+    "sha256": "e1584fce093fdb81f02b1822f8488045a62704d10f7f970a2863205ca3ab3536"
+  },
+  {
+    "file": "investment-purchase-bottom-ja-dark-font130-width320.png",
+    "bytes": 90524,
+    "sha256": "c6d76a52d907ee526f97fdc5deabbcfb48234c209d3137b48e2e58feddd7a722"
+  },
+  {
+    "file": "investment-purchase-bottom-ja-light-font130-width320.png",
+    "bytes": 89112,
+    "sha256": "9b641f161b17a05cea93aa541deadf7f05710839185d9d9d75b7a5a4cce3fddd"
+  },
+  {
+    "file": "investment-purchase-bottom-vi-dark-font130-width320.png",
+    "bytes": 85314,
+    "sha256": "900c4658315b0c8ccc55d92e19026deb86d5edc7c7faf49ce2fc57df8cc90926"
+  },
+  {
+    "file": "investment-purchase-bottom-vi-light-font130-width320.png",
+    "bytes": 84466,
+    "sha256": "2328ea580bc3caef8650b794e67dd37ffb9a7be85c3813369f3825626a9bafa2"
+  },
+  {
+    "file": "investment-purchase-review-en-dark-font130-width320.png",
+    "bytes": 100895,
+    "sha256": "03a1b1c7a8d7e8bb34cdd0a0fa50f27dd4739ac07a39d852a646c3b0b4a0a13a"
+  },
+  {
+    "file": "investment-purchase-review-en-light-font130-width320.png",
+    "bytes": 98450,
+    "sha256": "3b228dfab4db9945283dca50812929043a9b7dd45d8fc397ff4e1de541ac96ad"
+  },
+  {
+    "file": "investment-purchase-review-ja-dark-font130-width320.png",
+    "bytes": 141470,
+    "sha256": "bb87223cb8f260ac64b3bd148be534d962e16ee87dfa344945f0cde07179594b"
+  },
+  {
+    "file": "investment-purchase-review-ja-light-font130-width320.png",
+    "bytes": 137201,
+    "sha256": "1ad82e88f129207ab38188599c1b370b038b5227b75a340eb2a25514c9f43360"
+  },
+  {
+    "file": "investment-purchase-review-vi-dark-font130-width320.png",
+    "bytes": 87793,
+    "sha256": "cfd6976df8128c8267b7f23782280eb6bfc58d1364cfc47cf959400b2aea579a"
+  },
+  {
+    "file": "investment-purchase-review-vi-light-font130-width320.png",
+    "bytes": 85817,
+    "sha256": "43ef44e35a58e43936c2883c4352350a6bd2e7bc2dc1e6736fda1dcbcda27e89"
+  },
+  {
+    "file": "investment-purchase-top-en-dark-font130-width320.png",
+    "bytes": 84945,
+    "sha256": "1f4e10768ed6e485a4d19193e7f819aafd9c403653d045cc3d69963350d33261"
+  },
+  {
+    "file": "investment-purchase-top-en-light-font130-width320.png",
+    "bytes": 83833,
+    "sha256": "eeafd35ecb838caddc23f2cee2d3050f403744639236c9e88c4196ef9d44ee88"
+  },
+  {
+    "file": "investment-purchase-top-ja-dark-font130-width320.png",
+    "bytes": 83475,
+    "sha256": "c4a01ffbafaa1c166b534856fddea0a3b0a36d8725f0c15aecd429de8fa3a825"
+  },
+  {
+    "file": "investment-purchase-top-ja-light-font130-width320.png",
+    "bytes": 81989,
+    "sha256": "a92a9d6ad508c45c76393caf35e3bf3e7ec9cc62023b482505e82c76ff3e137a"
+  },
+  {
+    "file": "investment-purchase-top-vi-dark-font130-width320.png",
+    "bytes": 78129,
+    "sha256": "03964b6fc80000d8aac5cbe1371bc12283a3b35eecb64fc5dcbb445a7ec0eea8"
+  },
+  {
+    "file": "investment-purchase-top-vi-light-font130-width320.png",
+    "bytes": 77139,
+    "sha256": "f044dd6792564fe7060284d31c862ee7da03322747b9c18126bb15df4232de50"
+  }
+]

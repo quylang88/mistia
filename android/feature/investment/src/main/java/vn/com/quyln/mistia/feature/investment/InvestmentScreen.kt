@@ -24,14 +24,14 @@ import vn.com.quyln.mistia.core.model.*
 
 @Composable
 fun InvestmentScreen(ownerUserId:UserId,repository:InvestmentRepository,onBack:()->Unit,modifier:Modifier=Modifier,
-    primaryCurrencyCode:String="JPY",deviceIdProvider:suspend ()->String={throw UnsupportedOperationException("Device identity unavailable")},enabledCurrencyCodes:List<String> = listOf(primaryCurrencyCode)) {
-    key(ownerUserId.value){OwnedInvestmentScreen(ownerUserId,repository,onBack,modifier,primaryCurrencyCode,deviceIdProvider,enabledCurrencyCodes)}
+    primaryCurrencyCode:String="JPY",deviceIdProvider:suspend ()->String={throw UnsupportedOperationException("Device identity unavailable")},enabledCurrencyCodes:List<String> = listOf(primaryCurrencyCode),exchangeRates:List<ExchangeRateSnapshot> = emptyList()) {
+    key(ownerUserId.value){OwnedInvestmentScreen(ownerUserId,repository,onBack,modifier,primaryCurrencyCode,deviceIdProvider,enabledCurrencyCodes,exchangeRates)}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,onBack:()->Unit,modifier:Modifier,
-    primaryCurrency:String,deviceIdProvider:suspend ()->String,enabledCurrencies:List<String>) {
+    primaryCurrency:String,deviceIdProvider:suspend ()->String,enabledCurrencies:List<String>,exchangeRates:List<ExchangeRateSnapshot>) {
     var retry by remember{mutableIntStateOf(0)}
     val load by investmentChannelReadLoad(owner,repository,retry)
     val snapshot=(load as? InvestmentChannelReadLoad.Loaded)?.snapshot
@@ -84,6 +84,9 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     var actionError by remember{mutableStateOf<Int?>(null)}
     var archiveToken by rememberSaveable{mutableStateOf<String?>(null)}
     var actionRunning by remember{mutableStateOf(false)}
+    var purchaseId by rememberSaveable{mutableStateOf<String?>(null)}
+    var purchaseAssetId by rememberSaveable{mutableStateOf<String?>(null)}
+    fun openPurchase(asset:String?){purchaseAssetId=asset;purchaseId=UUID.randomUUID().toString()}
     var assetEditorId by rememberSaveable{mutableStateOf<String?>(null)}
     var assetExpectedToken by rememberSaveable{mutableStateOf<String?>(null)}
     var assetArchiveToken by rememberSaveable{mutableStateOf<String?>(null)}
@@ -169,6 +172,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
             modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}
+        item{Button(onClick={openPurchase(null)},enabled=assetReadable && assets.orEmpty().any{!it.isArchived && it.defaultUnitLabel!=null},modifier=Modifier.testTag("investment.purchase.add")){Text(stringResource(R.string.investment_hub_buy))}}
         if(load==InvestmentChannelReadLoad.Loading)item{CircularProgressIndicator(Modifier.size(24.dp).testTag("investment.channels.loading"))}
         if(load==InvestmentChannelReadLoad.Failed || parsed?.isFailure==true)item{
             Text(stringResource(R.string.common_error),Modifier.testTag("investment.channels.unavailable"),color=MaterialTheme.colorScheme.error)
@@ -196,7 +200,17 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             MistiaGlassCard{padding ->Column(Modifier.fillMaxWidth().padding(padding),verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text(asset.name,style=MaterialTheme.typography.titleMedium)
                 Text(listOfNotNull(asset.defaultUnitLabel,asset.currencyCode).joinToString(" · "),style=MaterialTheme.typography.bodyMedium)
+                val stock=remember(snapshot,asset.id){runCatching {
+                    val inputs=snapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty().filter{it.financeRawDeleted()==false && it.payload.financeRawReference("asset_id").id==asset.id}.map{row->
+                        val p=row.payload
+                        InvestmentTradeInput(UUID.fromString(row.id),when(p.financeRawString("kind_raw_value")){"buy"->InvestmentTradeKind.BUY;"sell"->InvestmentTradeKind.SELL;else->error("Unreadable trade")},
+                            java.math.BigDecimal(requireNotNull(p.financeRawString("quantity_decimal_string"))),p.financeRawString("unit_label") ?: asset.defaultUnitLabel,requireNotNull(p.financeRawLong("accounting_gross_amount_minor")),Instant.parse(p.financeRawString("occurred_at")),Instant.parse(p.financeRawString("created_at")))
+                    }
+                    InvestmentAccountingEngine.projection(inputs).unitPositions.joinToString(" · "){it.quantity.toPlainString()+" "+it.unitLabel.orEmpty()}
+                }.getOrNull()}
+                Text(stock ?: "—",Modifier.testTag("investment.asset.stock."+asset.id))
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    if(!asset.isArchived)TextButton(onClick={openPurchase(asset.id)},enabled=asset.defaultUnitLabel!=null && !actionRunning,modifier=Modifier.testTag("investment.asset.buy."+asset.id)){Text(stringResource(R.string.investment_hub_buy))}
                     TextButton(onClick={editAsset(asset)},enabled=!actionRunning,modifier=Modifier.testTag("investment.asset.edit."+asset.id)){
                         Text(stringResource(R.string.management_management_edit))
                     }
@@ -212,11 +226,12 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         items(trades.take(20),key={"trade-${it.id}"}){trade ->
             val currency=trade.payload.financeRawString("currency_code")?.financeReportingCode()
             val amount=trade.payload.financeRawLong("gross_amount_minor")
-            MistiaGlassCard{padding ->MistiaRecordRow(trade.string("kind_raw_value") ?: stringResource(R.string.investment_hub_activity),
-                subtitle=trade.string("occurred_at"),trailing=if(currency==null || amount==null) "—" else formatMinorUnits(amount,currency),modifier=Modifier.padding(padding))}
+            MistiaGlassCard{padding ->MistiaRecordRow(stringResource(if(trade.string("kind_raw_value")=="buy")R.string.investment_hub_buy else R.string.investment_hub_sell),
+                subtitle=trade.string("occurred_at"),trailing=if(currency==null || amount==null) "—" else formatMinorUnits(amount,currency),modifier=Modifier.padding(padding).testTag("investment.trade."+trade.id))}
         }
         item{Spacer(Modifier.height(32.dp))}
     }
+    purchaseId?.let{id->key(owner.value,id){InvestmentPurchaseSheet(owner,repository,id,purchaseAssetId,exchangeRates,deviceIdProvider,{purchaseId=null;purchaseAssetId=null})}}
     assetActionError?.let{resource ->AlertDialog(onDismissRequest={assetActionError=null},title={Text(stringResource(R.string.common_error))},
         text={Text(stringResource(resource),Modifier.testTag("investment.assets.error"))},
         confirmButton={TextButton(onClick={assetActionError=null}){Text(stringResource(R.string.common_ok))}})}

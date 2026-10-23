@@ -57,6 +57,7 @@ import vn.com.quyln.mistia.core.model.TransactionSaveSnapshot
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
 import vn.com.quyln.mistia.core.model.requireValidMutations
 import vn.com.quyln.mistia.core.model.requireUnchanged
+import vn.com.quyln.mistia.core.model.financeRawReference
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.EntityCount
@@ -844,6 +845,54 @@ class RoomLocalStore(
         plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
         ensureCurrentFinanceOwner(expected.owner)
         true
+    }
+
+    override fun observeInvestmentPurchaseSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot> =
+        database.cloudRecordDao().observeInvestmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot.entities.map{it.table})
+            .map{rows->vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot(owner,rows.map{it.toCloudRecord()})}
+
+    override suspend fun investmentPurchaseSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner)
+            val rows=database.cloudRecordDao().investmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot.entities.map{it.table})
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot(owner,rows.map{it.toCloudRecord()})
+        }
+    }
+
+    override suspend fun commitInvestmentPurchase(expected:vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String):Boolean {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner)
+            val current=investmentPurchaseSnapshot(expected.owner)
+            if(expected.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id))!=current.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id)))return@withTransaction false
+            val plan=vn.com.quyln.mistia.core.model.planInvestmentPurchase(current,request,deviceId,now)
+            val historyIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id==request.draft.assetId}.map{it.id}.toSet()
+            val historyLedgerIds=historyIds.flatMap{id->listOf("funding","capital-return","profit-loss").map{component->vn.com.quyln.mistia.core.model.investmentLedgerIdentity(id,component)}}.toSet()
+            val protectedRows=current.rows.filter{row->
+                (row.entity==CloudEntity.INVESTMENT_TRADE.table && row.id in historyIds) ||
+                    (row.entity==CloudEntity.LEDGER_TRANSACTION.table && (row.id in historyLedgerIds || row.payload["settlement_role_raw_value"]==JsonPrimitive("investmentReserveUse"))) ||
+                    (row.entity==CloudEntity.INVESTMENT_POSTING.table && (row.payload.financeRawReference("trade_id").id in historyIds ||
+                        (row.payload["cash_origin_raw_value"]==JsonPrimitive("derived") && row.payload["role_raw_value"] in setOf(JsonPrimitive("cashConsumption"),JsonPrimitive("cashTransfer"))))) ||
+                    plan.mutations.any{it.first.entity==row.entity && it.first.id==row.id}
+            }
+            for(row in protectedRows) {
+                val queued=database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)
+                val stored=database.cloudRecordDao().record(expected.owner.value,row.entity,row.id)!!
+                require(!stored.hasPendingMutation || queued!=null){"Purchase pending record has no outbox"}
+                if(queued!=null)require(stored.hasPendingMutation && queued.baseVersion==row.syncVersion &&
+                    queued.kind==(if(row.deletedAt==null)"upsert" else "delete") && queued.modifiedAt==row.updatedAt &&
+                    queued.payloadJson?.let{json.parseToJsonElement(it)}==row.payload){"Purchase outbox differs from current source"}
+            }
+            for((row,_) in plan.mutations) {
+                require(current.rows.any{it.entity==row.entity && it.id==row.id} || database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)==null){"Purchase identity has orphan outbox"}
+            }
+            plan.mutations.forEach{(row,mutation)->commitMutationRows(row,mutation)}
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
     }
 
     override fun observeInvestmentAssetSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot> =

@@ -41,12 +41,26 @@ fun planInvestmentFundUsage(snapshot:InvestmentCashReadSnapshot,accountingCurren
     consent:InvestmentFundUsageConsent?,adjustmentTitle:String,deviceId:String,now:String):InvestmentFundUsagePlan {
     if(financeRawUuid(deviceId)!=deviceId || runCatching{Instant.parse(now)}.isFailure || adjustmentTitle.isBlank())fundUsageFail()
     val review=reviewInvestmentFundUsage(snapshot,accountingCurrency,proposed)
+    val next=snapshot.copy(rows=snapshot.rows.filterNot{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==proposed.id}+proposed)
+    val result=planInvestmentFundEffects(next,accountingCurrency,review.comparison.proposed,adjustmentTitle,deviceId,now)
+    if(consent==null && review.requiresConfirmation)throw InvestmentFundUsageConfirmationRequired(review)
+    if(consent!=null && consent!=review.consent) {
+        val existing=snapshot.rows.singleOrNull{row->row.entity==CloudEntity.LEDGER_TRANSACTION.table && row.id==proposed.id && fundUsageProposalToken(row)==fundUsageProposalToken(proposed)}
+        val complete=result.mutations.isEmpty() && existing!=null && consent.ownerUserId==review.consent.ownerUserId && consent.transactionId==review.consent.transactionId && consent.proposalToken==review.consent.proposalToken
+        if(!complete)fundUsageFail(InvestmentFundUsageError.STALE_CONSENT)
+    }
+    return result
+}
+
+/** Internal effect builder: callers own exact primary/snapshot/consent validation and atomic commit. */
+internal fun planInvestmentFundEffects(snapshot:InvestmentCashReadSnapshot,accountingCurrency:String,timeline:InvestmentFundTimeline,
+    adjustmentTitle:String,deviceId:String,now:String):InvestmentFundUsagePlan {
     val code=investmentAssetCurrency(accountingCurrency) ?: fundUsageFail()
-    val transactions=(snapshot.rows.filter{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id!=proposed.id}+proposed).associateBy{it.id}
+    val transactions=snapshot.rows.filter{it.entity==CloudEntity.LEDGER_TRANSACTION.table}.associateBy{it.id}
     val wallets=snapshot.rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table}.associateBy{it.id}
     val desired=linkedMapOf<Pair<CloudEntity,String>,JsonObject>()
     fun wire(value:BigInteger)=try{value.longValueExact()}catch(_:ArithmeticException){fundUsageFail(InvestmentFundUsageError.ARITHMETIC_RANGE)}
-    for(use in review.comparison.proposed.usages.values) {
+    for(use in timeline.usages.values) {
         val transaction=transactions[use.transactionId] ?: fundUsageFail();val p=transaction.payload
         val occurred=p.financeRawString("occurred_at") ?: fundUsageFail()
         val destination=if(p.financeRawString("primary_kind_raw_value")=="transfer" && p.financeRawString("transfer_subtype_raw_value")=="internalTransfer")
@@ -131,12 +145,6 @@ fun planInvestmentFundUsage(snapshot:InvestmentCashReadSnapshot,accountingCurren
         validateExisting(row)
         val deleted=try{investmentAssetChanged(row,buildJsonObject{put("deleted_at",now)},deviceId,now).copy(deletedAt=now)}catch(_:Exception){fundUsageFail()}
         queue(deleted,MutationKind.DELETE)
-    }
-    if(consent==null && review.requiresConfirmation)throw InvestmentFundUsageConfirmationRequired(review)
-    if(consent!=null && consent!=review.consent) {
-        val existing=transactions[proposed.id]?.takeIf{snapshot.rows.any{row->row.entity==CloudEntity.LEDGER_TRANSACTION.table && row.id==proposed.id && fundUsageProposalToken(row)==fundUsageProposalToken(proposed)}}
-        val complete=changes.isEmpty() && existing!=null && consent.ownerUserId==review.consent.ownerUserId && consent.transactionId==review.consent.transactionId && consent.proposalToken==review.consent.proposalToken
-        if(!complete)fundUsageFail(InvestmentFundUsageError.STALE_CONSENT)
     }
     return InvestmentFundUsagePlan(changes)
 }

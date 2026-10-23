@@ -82,6 +82,21 @@ private class FundTimelineSource(val snapshot:InvestmentCashReadSnapshot,account
         zeroWallets=activeWallets.map{it.copy(payload=JsonObject(it.payload+("opening_balance_minor" to JsonPrimitive(0L))))}
         postings=snapshot.rows.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}
     }
+    private fun validatedFunding(raw:CloudRecord):Boolean {
+        val p=raw.payload
+        if(p.financeRawString("settlement_role_raw_value")!="investmentFunding")return false
+        val candidates=snapshot.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("funding_ledger_transaction_id").id==raw.id}
+        if(candidates.isEmpty())return false
+        val trade=candidates.singleOrNull() ?: timelineFail();val t=trade.payload
+        if(trade.financeRawDeleted(true)!=false || t.financeRawString("kind_raw_value")!="buy" || raw.id!=investmentLedgerIdentity(trade.id,"funding") ||
+            p.financeRawString("primary_kind_raw_value")!="expense" || p.financeRawString("entry_status_raw_value")!="posted" ||
+            p.financeRawReference("source_wallet_id").id!=t.financeRawReference("funding_wallet_id").id ||
+            p.financeRawLong("amount_minor")!=t.financeRawLong("funding_wallet_amount_minor") || p.financeRawLong("amount_minor")?.let{it>0}!=true ||
+            p.financeRawString("source_currency_code")!=t.financeRawString("funding_wallet_currency_code") ||
+            p.financeRawString("reporting_currency_code")!=t.financeRawString("accounting_currency_code") ||
+            p.financeRawLong("reporting_amount_minor")!=t.financeRawLong("accounting_gross_amount_minor"))timelineFail()
+        return true
+    }
     fun replay(replacing:String?=null,proposed:CloudRecord?=null):InvestmentFundTimeline {
         val events=mutableListOf<FundTimelineEvent>()
         val noncash=setOf("funding","capitalReturn","realizedProfit","transferOut","transferIn")
@@ -141,7 +156,7 @@ private class FundTimelineSource(val snapshot:InvestmentCashReadSnapshot,account
                 add(if(event.bucket=="booked")localBooked else localUnreconciled,event.walletId,event.localAmount)
                 continue
             }
-            if(!requiresInvestmentLedgerDomain(raw.payload))for((wallet,delta) in event.deltas.filterValues{it.signum()<0}) {
+            if(!requiresInvestmentLedgerDomain(raw.payload) || validatedFunding(raw))for((wallet,delta) in event.deltas.filterValues{it.signum()<0}) {
                 val w=wallets.getValue(wallet);if(w.kind==WalletKind.CREDIT_CARD)continue
                 val request=delta.negate();val beforeBooked=(booked[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)
                 val beforeUnreconciled=(unreconciled[wallet] ?: BigInteger.ZERO).max(BigInteger.ZERO)

@@ -229,6 +229,7 @@ private fun SignedInRoot(
     openedFromFamilyInvite: Boolean,
 ) {
     val currencySettings by currencyPreferences.state.collectAsStateWithLifecycle()
+    val investmentRates by exchangeRateRepository.rates.collectAsStateWithLifecycle()
     var overviewEditor by rememberSaveable(authState.session.userId.value,stateSaver=vn.com.quyln.mistia.feature.transactions.StoredTransactionEditorNavigation.saver(authState.session.userId.value)) {
         mutableStateOf(vn.com.quyln.mistia.feature.transactions.StoredTransactionEditorNavigation(authState.session.userId.value,null))
     }
@@ -364,6 +365,7 @@ private fun SignedInRoot(
             )
         }
         composable("investment") {
+            LaunchedEffect(exchangeRateRepository){exchangeRateRepository.refreshIfStale()}
             InvestmentScreen(
                 ownerUserId = authState.session.userId,
                 repository = investmentRepository,
@@ -371,6 +373,7 @@ private fun SignedInRoot(
                 primaryCurrencyCode=currencySettings.primaryCurrencyCode,
                 deviceIdProvider={deviceIdStore.getOrCreate()},
                 enabledCurrencyCodes=currencySettings.enabledCurrencyCodes,
+                exchangeRates=investmentRates,
             )
         }
     }
