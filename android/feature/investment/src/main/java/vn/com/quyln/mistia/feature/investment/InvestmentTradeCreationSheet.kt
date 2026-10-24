@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -18,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -35,11 +37,28 @@ private fun TradeFormRequest.withConsent(consent:InvestmentTradeCreationConsent?
     is TradeFormRequest.Buy->copy(value=value.copy(consent=consent))
     is TradeFormRequest.Sell->copy(value=value.copy(consent=consent))
 }
+private fun sameTradeFormWallet(a:LedgerWalletRecord?,b:LedgerWalletRecord?):Boolean=
+    if(a==null)b==null else b!=null && a.matchesVisibleInvestmentWallet(b)
+private fun TradeFormRequest.matchesIntent(other:TradeFormRequest?):Boolean=when(this){
+    is TradeFormRequest.Buy->other is TradeFormRequest.Buy &&
+        value.expectedAsset.matchesVisibleInvestmentAsset(other.value.expectedAsset) && sameTradeFormWallet(value.expectedWallet,other.value.expectedWallet) &&
+        value.copy(expectedAsset=other.value.expectedAsset,expectedWallet=other.value.expectedWallet,consent=null)==other.value.copy(consent=null)
+    is TradeFormRequest.Sell->other is TradeFormRequest.Sell &&
+        value.expectedAsset.matchesVisibleInvestmentAsset(other.value.expectedAsset) && sameTradeFormWallet(value.expectedWallet,other.value.expectedWallet) &&
+        value.copy(expectedAsset=other.value.expectedAsset,expectedWallet=other.value.expectedWallet,consent=null)==other.value.copy(consent=null)
+}
+private class TradeFormReview(val request:TradeFormRequest,val review:InvestmentTradeCreationReview)
+private class TradeFormFailure(val request:TradeFormRequest)
 private class TradeFormSession {
+    var open=true
+    var sourceAvailable=false
+    var sourceEpoch by mutableStateOf(Any())
     var saving by mutableStateOf(false)
     var error by mutableStateOf<Throwable?>(null)
-    var review by mutableStateOf<Pair<TradeFormRequest,InvestmentTradeCreationReview>?>(null)
-    var failed by mutableStateOf<TradeFormRequest?>(null)
+    var review by mutableStateOf<TradeFormReview?>(null)
+    var failed by mutableStateOf<TradeFormFailure?>(null)
+    fun revokeReadAuthority(){sourceEpoch=Any();review=null;failed=failed?.let{TradeFormFailure(it.request)}}
+    fun invalidateSource(){sourceAvailable=false;revokeReadAuthority()}
 }
 
 @Composable internal fun InvestmentPurchaseSheet(owner:UserId,repository:InvestmentRepository,id:String,initialAssetId:String?,
@@ -70,10 +89,14 @@ private class TradeFormSession {
     val session=remember(owner,repository,id,kind){TradeFormSession()}
     val scope=key(repository){rememberCoroutineScope()}
     val lifecycle=LocalLifecycleOwner.current.lifecycle
-    val snapshot by key(owner,repository,retry,lifecycle,kind){produceState<InvestmentTradeCreationSnapshot?>(null){
-        try{lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED){value=null;(if(buying)repository.observePurchaseSnapshot(owner) else repository.observeSaleSnapshot(owner)).collect{source ->
-            value=source.takeIf{it.owner==owner && it.rows.all{row->CloudEntity.fromTable(row.entity)?.let{entity->entity in InvestmentPurchaseSnapshot.entities && row.financeRawIdentity(owner,entity,true)}==true}}
-        }}}catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}catch(error:Exception){value=null;session.error=error}
+    val snapshot by key(owner,repository,id,retry,lifecycle,kind){produceState<InvestmentTradeCreationSnapshot?>(null){
+        try{lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED){
+            value=null;session.invalidateSource()
+            try{(if(buying)repository.observePurchaseSnapshot(owner) else repository.observeSaleSnapshot(owner)).collect{source ->
+                value=source.takeIf{it.owner==owner && it.rows.all{row->CloudEntity.fromTable(row.entity)?.let{entity->entity in InvestmentPurchaseSnapshot.entities && row.financeRawIdentity(owner,entity,true)}==true}}
+                if(value==null)session.invalidateSource() else session.sourceAvailable=true
+            }}finally{if(!kotlinx.coroutines.currentCoroutineContext().isActive){value=null;session.invalidateSource()}}
+        }}catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}catch(error:Exception){value=null;session.invalidateSource();session.error=error}
     }}
     val parsed=remember(snapshot){snapshot?.let{source->runCatching {
         val channels=source.rows.filter{it.entity==CloudEntity.INVESTMENT_CHANNEL.table && it.financeRawDeleted()==false}.map(InvestmentChannelRecord::fromCloudRecord).filterNot{it.isArchived}.map{it.id}.toSet()
@@ -82,6 +105,12 @@ private class TradeFormSession {
         Triple(assets,wallets.filter{!it.isArchived && it.kind!=null && it.kind!=WalletKind.INVESTMENT && (buying || it.kind!=WalletKind.CREDIT_CARD)},wallets.single{it.id==investmentSystemWalletId(owner)})
     }}}
     val data=parsed?.getOrNull()
+    val latestSnapshot by rememberUpdatedState(snapshot)
+    val latestData by rememberUpdatedState(data)
+    val latestRates by rememberUpdatedState(rates)
+    val latestResources by rememberUpdatedState(LocalContext.current.resources)
+    val latestReadable by rememberUpdatedState(data!=null && snapshot!=null)
+    LaunchedEffect(data==null){if(data==null)session.revokeReadAuthority()}
     val positions=remember(snapshot,data?.first){data?.first?.associate{a->a.id to runCatching{investmentTradePositions(snapshot?.rows.orEmpty(),a)}.getOrNull()}}
     val assets=data?.first.orEmpty().filter{a->buying || a.id==assetId || positions?.get(a.id)?.any{it.quantity.signum()>0}==true}
     val wallets=data?.second.orEmpty()
@@ -91,38 +120,57 @@ private class TradeFormSession {
         else if(unit.isEmpty())unit=asset?.defaultUnitLabel.orEmpty()
         if(walletId==null)walletId=wallets.firstOrNull()?.id
     }
-    val ledgerTitle=stringResource(R.string.investment_cash_automatic_reconciliation_title)
-    val promotionalNote=stringResource(R.string.investment_trade_promotional_free_badge)
-    val lossNote=stringResource(R.string.investment_trade_total_loss_badge,formatMinorUnits(0,asset?.currencyCode ?: "JPY"))
     val available=positions?.get(assetId)?.let{values->
         values.firstOrNull{InvestmentUnitLabel.comparisonKey(it.unitLabel)==InvestmentUnitLabel.comparisonKey(unit)}?.quantity ?: BigDecimal.ZERO
     }
     val candidate=snapshot?.rows?.any{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id}==true
     val desiredQuantity=investmentTradeQuantity(quantity.trim().replace(',','.'))
     val enoughStock=buying || (available!=null && desiredQuantity!=null && desiredQuantity<=available)
-    val request=remember(asset,wallet,quantity,unit,amount,free,note,occurredAt,createdAt,rates,data?.third,ledgerTitle,promotionalNote,lossNote,kind){runCatching {
-        val a=requireNotNull(asset);val code=requireNotNull(data?.third?.currencyCode)
+    fun currentRequest():TradeFormRequest?=runCatching {
+        val view=requireNotNull(latestData)
+        val a=requireNotNull(view.first.singleOrNull{it.id==assetId});val code=view.third.currencyCode
+        val selectedWallet=view.second.singleOrNull{it.id==walletId}
+        val currentRates=latestRates;val resources=latestResources
+        val ledgerTitle=resources.getString(R.string.investment_cash_automatic_reconciliation_title)
         val q=requireNotNull(investmentTradeQuantity(quantity.trim().replace(',','.')))
         require(InvestmentUnitLabel.normalizedDisplay(unit)!=null && a.defaultUnitLabel!=null)
         val gross=if(free)0L else purchaseInputMinor(amount,a.currencyCode)?.takeIf{it>0} ?: error("Invalid amount")
-        val sourceRate=if(free)null else purchaseRate(a.currencyCode,code,rates)
+        val sourceRate=if(free)null else purchaseRate(a.currencyCode,code,currentRates)
         val account=if(a.currencyCode==code || free)gross else investmentPurchaseConvertedMinor(gross,a.currencyCode,code,sourceRate?.first ?: error("Missing rate"))
-        val w=if(free)null else requireNotNull(wallet)
-        val effectiveNote=if(free && investmentCashTrimmedText(note)==null){if(buying)promotionalNote else lossNote} else note
+        val w=if(free)null else requireNotNull(selectedWallet)
+        val effectiveNote=if(free && investmentCashTrimmedText(note)==null){
+            if(buying)resources.getString(R.string.investment_trade_promotional_free_badge)
+            else resources.getString(R.string.investment_trade_total_loss_badge,formatMinorUnits(0,a.currencyCode))
+        } else note
         if(buying) {
-            val fundingRate=w?.let{purchaseRate(it.currencyCode,code,rates)}
+            val fundingRate=w?.let{purchaseRate(it.currencyCode,code,currentRates)}
             val funding=w?.let{if(it.currencyCode==code)account else investmentPurchaseConvertedMinor(account,code,it.currencyCode,fundingRate?.first ?: error("Missing rate"),true)}
             TradeFormRequest.Buy(InvestmentPurchaseRequest(InvestmentPurchaseDraft(id,a.id,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRate?.first,sourceRate?.second?.provider,sourceRate?.second?.rateDate,
                 w?.id,funding,fundingRate?.first,effectiveNote,occurredAt,createdAt),a,w,null,ledgerTitle))
         } else {
-            val capitalRate=w?.let{purchaseRate(code,it.currencyCode,rates)}
+            val capitalRate=w?.let{purchaseRate(code,it.currencyCode,currentRates)}
             if(w!=null && w.currencyCode!=code)investmentPurchaseConvertedMinor(account,code,w.currencyCode,capitalRate?.first ?: error("Missing rate"))
             TradeFormRequest.Sell(InvestmentSaleRequest(InvestmentSaleDraft(id,a.id,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRate?.first,sourceRate?.second?.provider,sourceRate?.second?.rateDate,
                 w?.id,capitalRate?.first,effectiveNote,occurredAt,createdAt),a,w,null,ledgerTitle))
         }
-    }.getOrNull()}
+    }.getOrNull()
+    val request=currentRequest()
+    val saveEpoch=session.sourceEpoch
+    fun currentCanSubmit(r:TradeFormRequest):Boolean=runCatching {
+        val rows=requireNotNull(latestSnapshot).rows
+        if(r is TradeFormRequest.Buy || rows.any{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id})true
+        else {
+            val draft=(r as TradeFormRequest.Sell).value.draft
+            val currentAsset=requireNotNull(latestData?.first?.singleOrNull{it.id==draft.assetId})
+            val stock=investmentTradePositions(rows,currentAsset).firstOrNull{
+                InvestmentUnitLabel.comparisonKey(it.unitLabel)==InvestmentUnitLabel.comparisonKey(draft.unit)
+            }?.quantity ?: BigDecimal.ZERO
+            requireNotNull(investmentTradeQuantity(draft.quantity))<=stock
+        }
+    }.getOrDefault(false)
     fun execute(r:TradeFormRequest) {
-        if(session.saving || request==null || r.withConsent(null)!=request || (!enoughStock && !candidate))return
+        if(!session.open || !session.sourceAvailable || !latestReadable || session.saving || !r.matchesIntent(currentRequest()) || !currentCanSubmit(r))return
+        val sourceEpoch=session.sourceEpoch
         session.saving=true;session.error=null;session.review=null;session.failed=null
         scope.launch {
             try {
@@ -132,25 +180,35 @@ private class TradeFormSession {
                     is TradeFormRequest.Sell->repository.saveSale(owner,r.value,device,now())
                 };coroutineContext.ensureActive()
                 val error=result.exceptionOrNull()
+                val requestedReview=when(error){
+                    is InvestmentPurchaseConfirmationRequired->error.review
+                    is InvestmentSaleConfirmationRequired->error.review
+                    else->null
+                }
                 when {
-                    result.isSuccess->onDismiss()
-                    error is InvestmentPurchaseConfirmationRequired->if(error.review.requiresConfirmation)session.review=r.withConsent(null) to error.review else session.error=InvestmentAssetException(InvestmentAssetError.STALE_RECORD)
-                    error is InvestmentSaleConfirmationRequired->if(error.review.requiresConfirmation)session.review=r.withConsent(null) to error.review else session.error=InvestmentAssetException(InvestmentAssetError.STALE_RECORD)
-                    else->{session.error=error;session.failed=r}
+                    result.isSuccess->{session.open=false;onDismiss()}
+                    requestedReview!=null->if(session.open)when {
+                        !session.sourceAvailable || !latestReadable->session.error=InvestmentAssetException(InvestmentAssetError.UNREADABLE_SOURCE)
+                        session.sourceEpoch!==sourceEpoch->session.error=InvestmentAssetException(InvestmentAssetError.STALE_RECORD)
+                        requestedReview.requiresConfirmation->session.review=TradeFormReview(r.withConsent(null),requestedReview)
+                        else->session.error=InvestmentAssetException(InvestmentAssetError.STALE_RECORD)
+                    }
+                    else->{session.error=error;session.failed=TradeFormFailure(r)}
                 }
             }catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}
-            catch(error:Exception){session.error=error;session.failed=r}
+            catch(error:Exception){session.error=error;session.failed=TradeFormFailure(r)}
             finally{session.saving=false}
         }
     }
+    fun dismiss(){if(!session.saving && session.open){session.open=false;session.review=null;session.failed=null;onDismiss()}}
     val sheet=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={it!=SheetValue.Hidden || !session.saving})
-    ModalBottomSheet(onDismissRequest={if(!session.saving)onDismiss()},sheetState=sheet) {
+    ModalBottomSheet(onDismissRequest=::dismiss,sheetState=sheet) {
         Column(Modifier.fillMaxWidth().testTag(prefix+".sheet")) {
             Column(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(if(buying)R.string.investment_trade_new_buy_title else R.string.investment_trade_new_sell_title),Modifier.testTag(prefix+".title"),style=MaterialTheme.typography.titleLarge)
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
-                    TextButton(onClick=onDismiss,enabled=!session.saving,modifier=Modifier.heightIn(min=48.dp).testTag(prefix+".cancel")){Text(stringResource(R.string.common_cancel))}
-                    Button(onClick={request?.let(::execute)},enabled=request!=null && (enoughStock || candidate) && !session.saving,modifier=Modifier.heightIn(min=48.dp).testTag(prefix+".save")){Text(stringResource(R.string.common_save))}
+                    TextButton(onClick=::dismiss,enabled=!session.saving,modifier=Modifier.heightIn(min=48.dp).testTag(prefix+".cancel")){Text(stringResource(R.string.common_cancel))}
+                    key(saveEpoch){Button(onClick={if(session.sourceEpoch===saveEpoch)currentRequest()?.let(::execute)},enabled=request!=null && (enoughStock || candidate) && !session.saving,modifier=Modifier.heightIn(min=48.dp).testTag(prefix+".save")){Text(stringResource(R.string.common_save))}}
                 }
             }
             Column(Modifier.fillMaxWidth().weight(1f,false).verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
@@ -197,14 +255,15 @@ private class TradeFormSession {
                 OutlinedTextField(note,{note=it;session.review=null;session.failed=null;session.error=null},enabled=!session.saving,label={Text(stringResource(R.string.investment_trade_note))},modifier=Modifier.fillMaxWidth().testTag(prefix+".note"))
                 if(data==null){Text(stringResource(R.string.common_error));TextButton(onClick={session.error=null;retry++},modifier=Modifier.testTag(prefix+".reload")){Text(stringResource(R.string.planning_installment_retry))}}
                 session.error?.let{Text(stringResource(investmentTradeErrorResource(it)),Modifier.testTag(prefix+".error"),color=MaterialTheme.colorScheme.error)}
-                session.failed?.let{failed->TextButton(onClick={execute(failed)},enabled=!session.saving && failed.withConsent(null)==request && (enoughStock || candidate),modifier=Modifier.testTag(prefix+".retry")){Text(stringResource(R.string.planning_installment_retry))}}
+                session.failed?.let{failed->key(failed){TextButton(onClick={if(session.failed===failed)execute(failed.request)},enabled=!session.saving && failed.request.matchesIntent(request) && (enoughStock || candidate),modifier=Modifier.testTag(prefix+".retry")){Text(stringResource(R.string.planning_installment_retry))}}}
                 if(session.saving)CircularProgressIndicator(Modifier.size(24.dp))
             }
         }
     }
-    session.review?.let{(frozen,review)->
+    session.review?.let{prompt->
+        val frozen=prompt.request;val review=prompt.review
         val adapter=InvestmentFundUsageReview(InvestmentFundUsageConsent(owner.value,if(buying)investmentLedgerIdentity(id,"funding") else id,"",""),review.comparison,review.requiresConfirmation)
-        InvestmentFundUsageDialog(adapter,wallets,onDismiss={session.review=null},onConfirm={execute(frozen.withConsent(review.consent))},isSaving=session.saving,tagPrefix=prefix+".funds",canConfirm=frozen==request && (enoughStock || candidate),tradeAction=InvestmentTradeFundAction.SAVE,contextMessage=if(buying)null else stringResource(R.string.investment_trade_sale_cash_review_context))
+        InvestmentFundUsageDialog(adapter,wallets,onDismiss={if(session.review===prompt)session.review=null},onConfirm={if(session.review===prompt)execute(frozen.withConsent(review.consent))},isSaving=session.saving,tagPrefix=prefix+".funds",canConfirm=frozen.matchesIntent(request) && (enoughStock || candidate),tradeAction=InvestmentTradeFundAction.SAVE,contextMessage=if(buying)null else stringResource(R.string.investment_trade_sale_cash_review_context))
     }
 }
 private fun purchaseInputMinor(text:String,code:String):Long?=runCatching{BigDecimal(text.trim().replace(",","")).movePointRight(Currency.getInstance(code).defaultFractionDigits).setScale(0,RoundingMode.UNNECESSARY).longValueExact()}.getOrNull()

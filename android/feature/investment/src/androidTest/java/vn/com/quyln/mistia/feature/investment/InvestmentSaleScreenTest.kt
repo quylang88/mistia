@@ -306,4 +306,154 @@ class InvestmentSaleScreenTest {
         save();closed();Assert.assertEquals(1,rows().rows.count{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawString("kind_raw_value")=="sell"})
     }
 
+
+    @Test fun cancellingFundConsentRevokesQueuedCallbacksEvenAfterAnIdenticalReopen() {
+        futureExpense(80);var calls=0
+        val source=object:InvestmentRepository by repo {
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{
+                calls++;return if(request.consent==null)repo.saveSale(owner,request,deviceId,now) else Result.failure(IllegalStateException("Canceled presentation must not submit consent"))
+            }
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill();save();await("investment.sale.funds.review")
+        var oldConfirm:(()->Boolean)?=null;var oldCancel:(()->Boolean)?=null
+        compose.onNodeWithTag("investment.sale.funds.confirm").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){oldConfirm=it}
+        compose.onNodeWithTag("investment.sale.funds.cancel").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){oldCancel=it}
+        compose.runOnIdle{oldCancel!!.invoke();oldConfirm!!.invoke()};compose.waitForIdle();compose.runOnIdle{Assert.assertEquals(1,calls)}
+        save();await("investment.sale.funds.review")
+        compose.runOnIdle{oldConfirm!!.invoke();oldCancel!!.invoke()};compose.waitForIdle();compose.runOnIdle{Assert.assertEquals(2,calls)}
+        compose.onNodeWithTag("investment.sale.funds.review").assertIsDisplayed()
+        compose.onNodeWithTag("investment.sale.funds.confirm").performClick();await("investment.sale.retry");compose.runOnIdle{Assert.assertEquals(3,calls)}
+        Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+    }
+
+    @Test fun closingTheFormRevokesAnAlreadyQueuedSaveCallbackBeforeCompositionDisposal() {
+        var calls=0
+        val source=object:InvestmentRepository by repo {
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{calls++;return Result.failure(IllegalStateException("Closed form must not submit"))}
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill()
+        var saveClick:(()->Boolean)?=null;var cancelClick:(()->Boolean)?=null
+        compose.onNodeWithTag("investment.sale.save").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){saveClick=it}
+        compose.onNodeWithTag("investment.sale.cancel").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){cancelClick=it}
+        compose.runOnIdle{cancelClick!!.invoke();saveClick!!.invoke()};compose.waitForIdle()
+        compose.runOnIdle{Assert.assertEquals(0,calls)};closed();Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+    }
+    @Test fun editingAndRestoringTheSameValuesDoesNotReviveAnOldFailureRetryCallback() {
+        var calls=0
+        val source=object:InvestmentRepository by repo {
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{calls++;return Result.failure(IllegalStateException("Explicit failure"))}
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill();save();await("investment.sale.retry")
+        var retryClick:(()->Boolean)?=null
+        compose.onNodeWithTag("investment.sale.retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){retryClick=it}
+        compose.onNodeWithTag("investment.sale.amount").performScrollTo().performTextReplacement("80")
+        compose.onNodeWithTag("investment.sale.amount").performScrollTo().performTextReplacement("50")
+        compose.runOnIdle{retryClick!!.invoke()};compose.waitForIdle();compose.runOnIdle{Assert.assertEquals(1,calls)}
+        Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+    }
+
+    @Test fun readFailureRevokesAnOpenFinancialReview() {
+        futureExpense(80);val failure=CompletableDeferred<Unit>()
+        val source=object:InvestmentRepository by repo {
+            override fun observeSaleSnapshot(owner:UserId):Flow<InvestmentSaleSnapshot> = flow{emit(repo.observeSaleSnapshot(owner).first());failure.await();throw java.io.IOException("Form observer lost")}
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill();save();await("investment.sale.funds.review")
+        compose.runOnIdle{failure.complete(Unit)};await("investment.sale.reload")
+        compose.onNodeWithTag("investment.sale.funds.review").assertDoesNotExist();Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+    }
+    @Test fun lateUncancellablePreflightCannotPresentConsentAfterTheReadFailed() {
+        futureExpense(80);val failure=CompletableDeferred<Unit>();val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>();val returned=CompletableDeferred<Unit>()
+        val source=object:InvestmentRepository by repo {
+            override fun observeSaleSnapshot(owner:UserId):Flow<InvestmentSaleSnapshot> = flow{emit(repo.observeSaleSnapshot(owner).first());failure.await();throw java.io.IOException("Form observer lost")}
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord> = withContext(NonCancellable){entered.complete(Unit);release.await();repo.saveSale(owner,request,deviceId,now).also{returned.complete(Unit)}}
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill();save()
+        try {
+            compose.waitUntil(5000){entered.isCompleted};compose.runOnIdle{failure.complete(Unit)};await("investment.sale.reload")
+            compose.runOnIdle{release.complete(Unit)}
+            compose.waitUntil(5000){returned.isCompleted && compose.onAllNodes(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().isEmpty()}
+            compose.onNodeWithTag("investment.sale.funds.review").assertDoesNotExist();Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+        }finally{release.complete(Unit);failure.complete(Unit)}
+    }
+
+
+    @Test fun reloadingAfterReadFailureDoesNotReviveTheOldPreflight() {
+        futureExpense(80);var reads=0;var calls=0
+        val failure=CompletableDeferred<Unit>();val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>();val returned=CompletableDeferred<Unit>()
+        val source=object:InvestmentRepository by repo {
+            override fun observeSaleSnapshot(owner:UserId):Flow<InvestmentSaleSnapshot> = if(reads++==0)flow{emit(repo.observeSaleSnapshot(owner).first());failure.await();throw java.io.IOException("Read lost before recovery")} else repo.observeSaleSnapshot(owner)
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord> = if(calls++==0)withContext(NonCancellable){entered.complete(Unit);release.await();repo.saveSale(owner,request,deviceId,now).also{returned.complete(Unit)}} else repo.saveSale(owner,request,deviceId,now)
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill();save()
+        try {
+            compose.waitUntil(5000){entered.isCompleted};compose.runOnIdle{failure.complete(Unit)};await("investment.sale.reload")
+            compose.onNodeWithTag("investment.sale.reload").performScrollTo().performClick()
+            compose.waitUntil(5000){reads>=2 && compose.onAllNodesWithTag("investment.sale.reload").fetchSemanticsNodes().isEmpty()}
+            compose.runOnIdle{release.complete(Unit)}
+            compose.waitUntil(5000){returned.isCompleted && compose.onAllNodes(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().isEmpty()}
+            compose.onNodeWithTag("investment.sale.funds.review").assertDoesNotExist();Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+            save();await("investment.sale.funds.review");compose.runOnIdle{Assert.assertEquals(2,calls)}
+            compose.onNodeWithTag("investment.sale.funds.cancel").performClick();Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+        }finally{release.complete(Unit);failure.complete(Unit)}
+    }
+
+
+    @Test fun aCurrentCommittedRetrySurvivesMetadataOnlyAssetAndWalletAcks() {
+        futureExpense(80);var successes=0
+        val frozen=CompletableDeferred<InvestmentSaleRequest>();val observed=CompletableDeferred<Unit>();val version=Long.MAX_VALUE-9
+        val source=object:InvestmentRepository by repo {
+            override fun observeSaleSnapshot(owner:UserId):Flow<InvestmentSaleSnapshot> = repo.observeSaleSnapshot(owner).onEach{snapshot->if(snapshot.rows.any{it.entity==CloudEntity.INVESTMENT_ASSET.table && it.id==assetId && it.syncVersion==version})observed.complete(Unit)}
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{
+                val result=repo.saveSale(owner,request,deviceId,now)
+                if(result.isSuccess && successes++==0){frozen.complete(request);return Result.failure(IllegalStateException("Committed response lost"))};return result
+            }
+        }
+        compose.setContent{Screen(source)};open();fill();save();await("investment.sale.funds.review")
+        compose.onNodeWithTag("investment.sale.funds.confirm").performClick();await("investment.sale.retry")
+        runBlocking {
+            val ackAt=java.time.Instant.now().toString()
+            val changes=listOf(CloudEntity.INVESTMENT_ASSET to assetId,CloudEntity.LEDGER_WALLET to walletId).map{(entity,id)->
+                val raw=store.record(owner,entity.table,id)!!
+                val ack=raw.copy(payload=JsonObject(raw.payload+buildJsonObject{put("sync_version",version);put("updated_at",ackAt)}),syncVersion=version,updatedAt=ackAt)
+                ack to PendingMutation(entity,id,owner.value,MutationKind.UPSERT,ack.payload,ackAt,version,device)
+            };store.commitMutations(changes)
+        }
+        compose.waitUntil(5000){observed.isCompleted};compose.waitForIdle()
+        val afterAck=rows();val pending=queues()
+        Assert.assertTrue(planInvestmentSale(afterAck,runBlocking{frozen.await()},device,now).mutations.isEmpty())
+        compose.onNodeWithTag("investment.sale.retry").performScrollTo().assertIsEnabled().performClick();closed()
+        Assert.assertEquals(2,successes);Assert.assertEquals(afterAck,rows());Assert.assertEquals(pending,queues())
+    }
+
+
+    @Test fun aFailedReadAndRecoveryRevokesThePreviousRetryCallback() {
+        var reads=0;var calls=0;val failure=CompletableDeferred<Unit>()
+        val source=object:InvestmentRepository by repo {
+            override fun observeSaleSnapshot(owner:UserId):Flow<InvestmentSaleSnapshot> = if(reads++==0)flow{emit(repo.observeSaleSnapshot(owner).first());failure.await();throw java.io.IOException("Retry read lost")} else repo.observeSaleSnapshot(owner)
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{calls++;return Result.failure(IllegalStateException("Explicit retry failure"))}
+        }
+        val before=rows();val pending=queues();compose.setContent{Screen(source)};open();fill();save();await("investment.sale.retry")
+        var oldRetry:(()->Boolean)?=null
+        compose.onNodeWithTag("investment.sale.retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){oldRetry=it}
+        compose.runOnIdle{failure.complete(Unit)};await("investment.sale.reload")
+        compose.onNodeWithTag("investment.sale.reload").performScrollTo().performClick()
+        compose.waitUntil(5000){reads>=2 && compose.onAllNodes(hasTestTag("investment.sale.save") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
+        compose.runOnIdle{oldRetry!!.invoke()};compose.waitForIdle();compose.runOnIdle{Assert.assertEquals(1,calls)}
+        compose.onNodeWithTag("investment.sale.retry").performScrollTo().assertIsEnabled().performClick();compose.waitForIdle();compose.runOnIdle{Assert.assertEquals(2,calls)}
+        Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+    }
+    @Test fun aQueuedSaveUsesTheCurrentAmountBeforeTheNextComposition() {
+        val received=CompletableDeferred<InvestmentSaleRequest>()
+        val source=object:InvestmentRepository by repo {
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{received.complete(request);return repo.saveSale(owner,request,deviceId,now)}
+        }
+        compose.setContent{Screen(source)};open();fill()
+        var saveClick:(()->Boolean)?=null;var replace:((androidx.compose.ui.text.AnnotatedString)->Boolean)?=null
+        compose.onNodeWithTag("investment.sale.save").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){saveClick=it}
+        compose.onNodeWithTag("investment.sale.amount").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetText){replace=it}
+        compose.runOnIdle{replace!!.invoke(androidx.compose.ui.text.AnnotatedString("80"));saveClick!!.invoke()};closed()
+        val request=runBlocking{received.await()};Assert.assertEquals(80L,request.draft.grossMinor)
+        Assert.assertEquals(80L,rows().rows.single{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==request.draft.id}.payload.financeRawLong("gross_amount_minor"))
+    }
+
 }
