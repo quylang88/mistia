@@ -84,12 +84,18 @@ private class TradeDetailSession {
     var error by mutableStateOf<Throwable?>(null)
 }
 @Composable internal fun InvestmentTradeDetailSheet(owner:UserId,repository:InvestmentRepository,id:String,deviceIdProvider:suspend ()->String,
-    onDismiss:()->Unit,now:()->String={Instant.now().toString()}) {
-    key(owner.value,repository,id){OwnedTradeDetailSheet(owner,repository,id,deviceIdProvider,onDismiss,now)}
+    onDismiss:()->Unit,now:()->String={Instant.now().toString()},rates:List<ExchangeRateSnapshot> = emptyList(),onSetupLinked:()->Unit={}) {
+    key(owner.value,repository,id){OwnedTradeDetailSheet(owner,repository,id,deviceIdProvider,onDismiss,now,rates,onSetupLinked)}
 }
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun OwnedTradeDetailSheet(owner:UserId,repository:InvestmentRepository,id:String,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,now:()->String) {
+@Composable private fun OwnedTradeDetailSheet(owner:UserId,repository:InvestmentRepository,id:String,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,now:()->String,rates:List<ExchangeRateSnapshot>,onSetupLinked:()->Unit) {
     val prefix="investment.trade.detail"
+    var editToken by androidx.compose.runtime.saveable.rememberSaveable{mutableStateOf<String?>(null)}
+    val editing=remember(editToken){editToken?.let{runCatching{Json.decodeFromString(CloudRecord.serializer(),it)}.getOrNull()}}
+    if(editing!=null) {
+        key(editToken){InvestmentTradeEditingSheet(owner,repository,editing,rates,deviceIdProvider,{editToken=null},onSetupLinked,now)}
+        return
+    }
     var retry by remember{mutableIntStateOf(0)}
     val load by tradeDetailRead(owner,repository,retry)
     val snapshot=(load as? TradeDetailRead.Loaded)?.snapshot
@@ -162,6 +168,8 @@ private class TradeDetailSession {
                     if(rates.isNotEmpty())TradeDetailValue(stringResource(R.string.investment_trade_exchange_rate),(rates+listOfNotNull(p.financeRawString("exchange_rate_provider"),p.financeRawString("exchange_rate_date"))).joinToString("\n"),prefix+".rates")
                     detail.note?.takeIf{it.isNotBlank()}?.let{TradeDetailValue(stringResource(R.string.investment_trade_note),it,prefix+".note")}
                     if(!detail.explicitUnit)Text(stringResource(R.string.investment_trade_resolve_unit_before_trading),color=MaterialTheme.colorScheme.error)
+                    TextButton(onClick={active?.let{editToken=Json.encodeToString(CloudRecord.serializer(),it)}},enabled=active!=null && detail.explicitUnit && !session.saving,
+                        modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag(prefix+".edit")){Text(stringResource(R.string.management_management_edit))}
                     Text(stringResource(R.string.investment_trade_delete_description),Modifier.testTag(prefix+".delete.description"),style=MaterialTheme.typography.bodyMedium)
                     TextButton(onClick={active?.let{session.confirmation=TradeDeletePrompt(it);session.error=null;session.failed=null}},enabled=active!=null && detail.explicitUnit && !session.saving,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag(prefix+".delete"),colors=ButtonDefaults.textButtonColors(contentColor=MaterialTheme.colorScheme.error)){Text(stringResource(R.string.investment_trade_delete_action),Modifier.testTag(prefix+".delete.text"))}
                 } else if(load==TradeDetailRead.Loading)CircularProgressIndicator(Modifier.size(24.dp).testTag(prefix+".loading"))

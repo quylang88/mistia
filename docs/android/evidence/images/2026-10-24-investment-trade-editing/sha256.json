@@ -1,0 +1,92 @@
+[
+  {
+    "file": "investment-edit-top-en-light-font130-width320.png",
+    "bytes": 83971,
+    "sha256": "5cf015fc7ae8f1580164f67eda54ac4b254bc9d4d14a44649d63df5e30105720"
+  },
+  {
+    "file": "investment-edit-bottom-en-light-font130-width320.png",
+    "bytes": 85874,
+    "sha256": "ce7d8452698cb6ec6111fe1c4d6e513d21db09dd6756556aba756e518815e32f"
+  },
+  {
+    "file": "investment-edit-review-en-light-font130-width320.png",
+    "bytes": 113895,
+    "sha256": "b080c500e4182d3b18e23ebed53edf10e4ee0ea954018cee546b7f1f81f8d552"
+  },
+  {
+    "file": "investment-edit-top-en-dark-font130-width320.png",
+    "bytes": 85286,
+    "sha256": "015545b5ad17a296986ad3f76fd08f9cf5b5a7729c77d4fad064cc4f16a32f15"
+  },
+  {
+    "file": "investment-edit-bottom-en-dark-font130-width320.png",
+    "bytes": 87085,
+    "sha256": "6437c24da50ea1963b06b7f8e8b79bd444a2c1790626c2b9efd73e692b193b81"
+  },
+  {
+    "file": "investment-edit-review-en-dark-font130-width320.png",
+    "bytes": 116245,
+    "sha256": "788f5edd0d6dc2058cc134f875eaad1b964908156eef7f1f94b66f6141d04279"
+  },
+  {
+    "file": "investment-edit-top-vi-light-font130-width320.png",
+    "bytes": 81689,
+    "sha256": "4ac0a035e4907a6644179bdddb4d8e063d2be5e70b8c66ef3935564d7045af92"
+  },
+  {
+    "file": "investment-edit-bottom-vi-light-font130-width320.png",
+    "bytes": 80633,
+    "sha256": "9b2aee49939ed233afb5ce40696d24e97346dded3ceb486d2088bab4a728c394"
+  },
+  {
+    "file": "investment-edit-review-vi-light-font130-width320.png",
+    "bytes": 117457,
+    "sha256": "69f3f8e56af1eddf2b5b1ac669cf61505de5784581e8fe38e34891fa9d294a0d"
+  },
+  {
+    "file": "investment-edit-top-vi-dark-font130-width320.png",
+    "bytes": 82703,
+    "sha256": "d5b889ae20ebc4b2e3c4309ce261fa82b5d37aedf72e7ac67f5ffd19ca5aefe6"
+  },
+  {
+    "file": "investment-edit-bottom-vi-dark-font130-width320.png",
+    "bytes": 81528,
+    "sha256": "b2f942290ed72ccfb7ed941e99e9b0119ac2267b671e0de232182aea6a26e235"
+  },
+  {
+    "file": "investment-edit-review-vi-dark-font130-width320.png",
+    "bytes": 120054,
+    "sha256": "d31444654d3da7fec37d92127958b06e9dff5552c330a3c96960f28181035ece"
+  },
+  {
+    "file": "investment-edit-top-ja-light-font130-width320.png",
+    "bytes": 83149,
+    "sha256": "60cebec6ba169e288c807ede7a7e66e00b55323740daccb05359e06e6913c71f"
+  },
+  {
+    "file": "investment-edit-bottom-ja-light-font130-width320.png",
+    "bytes": 79662,
+    "sha256": "3032b81a828d8eecb2738042f84f08fcb4e60fbab097538369dd128af6f5fd69"
+  },
+  {
+    "file": "investment-edit-review-ja-light-font130-width320.png",
+    "bytes": 167007,
+    "sha256": "80c25d1accc3c6af54a4e4aba62dac011c7872bcb9b49de547179e76dafc259b"
+  },
+  {
+    "file": "investment-edit-top-ja-dark-font130-width320.png",
+    "bytes": 84739,
+    "sha256": "1151906d7b6e2e28bb1adf7b6a069fc5f422d95193fd1707e27539835c3fb64c"
+  },
+  {
+    "file": "investment-edit-bottom-ja-dark-font130-width320.png",
+    "bytes": 81288,
+    "sha256": "a92c5c18e68aac2031359bd22a081924e6b294a43a120fe8ec42186d98f98d6e"
+  },
+  {
+    "file": "investment-edit-review-ja-dark-font130-width320.png",
+    "bytes": 172805,
+    "sha256": "72729667353024c94dd6f1021a80b5472febd2d99fe46f9e8c5f32f0a85636bf"
+  }
+]

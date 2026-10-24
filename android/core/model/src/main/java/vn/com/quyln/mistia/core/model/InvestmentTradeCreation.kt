@@ -20,7 +20,12 @@ internal data class InvestmentTradeCreationDraft(val id:String,val assetId:Strin
 internal data class InvestmentTradeCreationRequest(val draft:InvestmentTradeCreationDraft,val expectedAsset:InvestmentAssetRecord,val expectedWallet:LedgerWalletRecord?,
     val consent:InvestmentTradeCreationConsent?,val adjustmentTitle:String)
 
-internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapshot,request:InvestmentTradeCreationRequest,deviceId:String,now:String):InvestmentTradeCreationPlan {
+internal sealed interface InvestmentTradeWriteIntent {
+    data object Create:InvestmentTradeWriteIntent
+    data class Edit(val expected:CloudRecord):InvestmentTradeWriteIntent
+}
+internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapshot,request:InvestmentTradeCreationRequest,deviceId:String,now:String,
+    intent:InvestmentTradeWriteIntent=InvestmentTradeWriteIntent.Create):InvestmentTradeCreationPlan {
     val buying=request.draft.kind==InvestmentTradeKind.BUY
     val d=request.draft
     investmentAssetIdentity(snapshot.owner.value);investmentAssetIdentity(deviceId);investmentAssetIdentity(d.id);investmentAssetIdentity(d.assetId)
@@ -70,26 +75,71 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
         for(key in listOf("funding_ledger_transaction_id","capital_return_ledger_transaction_id","profit_loss_ledger_transaction_id"))put(key,JsonNull)
     }
     val old=snapshot.rows.singleOrNull{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==d.id}
-    if(old!=null && (old.financeRawDeleted(true)!=false || fields.filterKeys{it !in setOf("funding_ledger_transaction_id","capital_return_ledger_transaction_id","profit_loss_ledger_transaction_id")+(if(buying)emptySet() else setOf("capital_return_wallet_amount_minor"))}.any{(k,v)->purchaseSemantic(old.payload[k],k)!=purchaseSemantic(v,k)} ||
-        Instant.parse(old.payload.financeRawString("created_at"))!=Instant.parse(d.createdAt)))fail(InvestmentAssetError.STALE_RECORD)
+    val expected=(intent as? InvestmentTradeWriteIntent.Edit)?.expected
+    val proposalFields=fields.filterKeys{it !in setOf("funding_ledger_transaction_id","capital_return_ledger_transaction_id","profit_loss_ledger_transaction_id")+(if(buying)emptySet() else setOf("capital_return_wallet_amount_minor"))}
+    val sameProposal=old!=null && proposalFields.all{(k,v)->purchaseSemantic(old.payload[k],k)==purchaseSemantic(v,k)} &&
+        Instant.parse(old.payload.financeRawString("created_at"))==Instant.parse(d.createdAt)
+    if(old!=null && old.financeRawDeleted(true)!=false)fail(InvestmentAssetError.STALE_RECORD)
+    if(expected==null) {
+        if(old!=null && !sameProposal)fail(InvestmentAssetError.STALE_RECORD)
+    } else {
+        if(expected.entity!=CloudEntity.INVESTMENT_TRADE.table || !expected.financeRawIdentity(snapshot.owner,CloudEntity.INVESTMENT_TRADE,true) || expected.financeRawDeleted(true)!=false ||
+            expected.id!=d.id || old==null || expected.payload.financeRawString("kind_raw_value")!=(if(buying)"buy" else "sell") ||
+            old.payload.financeRawString("kind_raw_value")!=expected.payload.financeRawString("kind_raw_value") ||
+            purchaseSemantic(expected.payload["created_at"],"created_at")!=JsonPrimitive(Instant.parse(d.createdAt).toString()) ||
+            purchaseSemantic(old.payload["created_at"],"created_at")!=purchaseSemantic(expected.payload["created_at"],"created_at"))fail(InvestmentAssetError.STALE_RECORD)
+        if(!expected.matchesVisibleInvestmentTrade(old) && !sameProposal)fail(InvestmentAssetError.STALE_RECORD)
+    }
+    if(expected!=null) {
+        for((key,component) in mapOf("funding_ledger_transaction_id" to "funding","capital_return_ledger_transaction_id" to "capital-return","profit_loss_ledger_transaction_id" to "profit-loss")) {
+            val ref=expected.payload.financeRawReference(key)
+            if(!ref.readable)fail(InvestmentAssetError.UNREADABLE_SOURCE)
+            ref.id?.let{id->
+                if(id!=investmentLedgerIdentity(d.id,component))fail()
+                val leg=snapshot.rows.singleOrNull{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==id} ?: fail()
+                val role=when(component){"funding"->"investmentFunding";"capital-return"->"investmentCapitalReturn";else->"investmentRealizedProfit"}
+                if(leg.payload.financeRawString("settlement_role_raw_value")!=role)fail()
+                val postingRoles=if(component=="profit-loss")mapOf("profit-loss-posting" to "realizedProfit","cash-accrual-posting" to "cashAccrual") else
+                    mapOf(component+"-posting" to if(component=="funding")"funding" else "capitalReturn")
+                for((part,postingRole) in postingRoles) {
+                    val posting=snapshot.rows.singleOrNull{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.id==investmentLedgerIdentity(d.id,part)} ?: fail()
+                    if(posting.payload.financeRawReference("trade_id").id!=d.id || posting.payload.financeRawString("role_raw_value")!=postingRole)fail()
+                }
+            }
+        }
+    }
+    if(expected!=null)requireInvestmentTradeRetiredProof(snapshot,expected)
+    val originalAsset=expected?.payload?.financeRawReference("asset_id")?.let{ref->
+        if(!ref.readable || ref.id==null)fail(InvestmentAssetError.UNREADABLE_SOURCE)
+        snapshot.rows.singleOrNull{it.entity==CloudEntity.INVESTMENT_ASSET.table && it.id==ref.id}?.let(::investmentAssetDecode) ?: fail(InvestmentAssetError.NOT_FOUND)
+    }
     val assetSource=InvestmentAssetSnapshot(snapshot.owner,snapshot.rows.filter{CloudEntity.fromTable(it.entity) in InvestmentAssetSnapshot.entities})
     fun same(a:CloudRecord,b:CloudRecord)=a.payload.filterKeys{it !in purchaseAckFields}.mapValues{(key,value)->purchaseSemantic(value,key)}==b.payload.filterKeys{it !in purchaseAckFields}.mapValues{(key,value)->purchaseSemantic(value,key)}
-    val baseline=rebuildInvestmentAssetUnitHistory(assetSource,asset,asset.defaultUnitLabel,deviceId,now,resolveZeroBuyFunding=false)
-    if(baseline.any{row->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(row,it)}!=true})fail(InvestmentAssetError.INVALID_ACCOUNTING)
+    for(baselineAsset in listOfNotNull(asset,originalAsset).distinctBy{it.id}) {
+        val baselineUnit=baselineAsset.defaultUnitLabel ?: expected?.payload?.financeRawString("unit_label")?.let(InvestmentUnitLabel::normalizedDisplay) ?: fail(InvestmentAssetError.UNIT_REQUIRED)
+        val baseline=rebuildInvestmentAssetUnitHistory(assetSource,baselineAsset,baselineUnit,deviceId,now,resolveZeroBuyFunding=false)
+        if(baseline.any{row->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(row,it)}!=true})fail(InvestmentAssetError.INVALID_ACCOUNTING)
+    }
     if(old==null) {
         val ledgerIds=setOf("funding","capital-return","profit-loss").map{investmentLedgerIdentity(d.id,it)}.toSet()
         val postingIds=setOf("funding-posting","capital-return-posting","profit-loss-posting","cash-accrual-posting").map{investmentLedgerIdentity(d.id,it)}.toSet()
         if(snapshot.rows.any{row->(row.entity==CloudEntity.LEDGER_TRANSACTION.table && row.id in ledgerIds) ||
             (row.entity==CloudEntity.INVESTMENT_POSTING.table && (row.id in postingIds || row.payload.financeRawReference("trade_id").id==d.id || row.payload.financeRawReference("event_id").id==d.id))})fail(InvestmentAssetError.STALE_RECORD)
     }
-    val primary=old ?: CloudRecord(CloudEntity.INVESTMENT_TRADE.table,d.id,snapshot.owner.value,buildJsonObject {
+    val primary=if(expected!=null)investmentAssetChanged(requireNotNull(old),fields,deviceId,now) else old ?: CloudRecord(CloudEntity.INVESTMENT_TRADE.table,d.id,snapshot.owner.value,buildJsonObject {
         put("id",d.id);put("user_id",snapshot.owner.value);put("created_at",Instant.parse(d.createdAt).toString());put("updated_at",now);put("deleted_at",JsonNull);put("sync_version",0L);put("last_modified_by_device_id",deviceId)
         fields.forEach{put(it.key,it.value)}
     },now,null,0L)
     val source=InvestmentAssetSnapshot(snapshot.owner,snapshot.rows.filter{CloudEntity.fromTable(it.entity) in InvestmentAssetSnapshot.entities && !(it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==d.id)}+primary)
-    val rebuilt=rebuildInvestmentAssetUnitHistory(source,asset,unit,deviceId,now,resolveZeroBuyFunding=false,preserveAccountingErrors=!buying)
+    val rebuiltRows=linkedMapOf<Pair<String,String>,CloudRecord>()
+    for(target in listOfNotNull(originalAsset?.takeIf{it.id!=asset.id},asset)) {
+        val targetUnit=if(target.id==asset.id)unit else target.defaultUnitLabel ?: expected?.payload?.financeRawString("unit_label") ?: fail(InvestmentAssetError.UNIT_REQUIRED)
+        for(row in rebuildInvestmentAssetUnitHistory(source,target,targetUnit,deviceId,now,resolveZeroBuyFunding=false,preserveAccountingErrors=expected!=null || !buying))rebuiltRows[row.entity to row.id]=row
+    }
+    val rebuilt=rebuiltRows.values.toList()
     val changed=rebuilt.filter{row ->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(row,it)}!=true}
-    if(old!=null && changed.isNotEmpty())fail(InvestmentAssetError.STALE_RECORD)
+    val knownResult=old!=null && (expected==null || !expected.matchesVisibleInvestmentTrade(old) || changed.isEmpty())
+    if(knownResult && changed.isNotEmpty())fail(InvestmentAssetError.STALE_RECORD)
     val trade=rebuilt.single{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==d.id}
     val cash=InvestmentCashReadSnapshot(snapshot.owner,snapshot.rows.filter{CloudEntity.fromTable(it.entity) in InvestmentCashReadSnapshot.entities})
     val beforeTimeline=investmentFundUsageTimeline(cash,code)
@@ -103,24 +153,27 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
     val token=RecordConflictResolver.semanticFingerprint(buildJsonObject {
         put("proposal",JsonObject(fields+("created_at" to JsonPrimitive(Instant.parse(d.createdAt).toString()))+("id" to JsonPrimitive(d.id))))
         put("owner",snapshot.owner.value)
+        if(expected!=null){put("operation","editInvestmentTrade");put("original",JsonObject(expected.payload.filterKeys{it !in purchaseAckFields}))}
         put("source",JsonArray(snapshot.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id)).map{row->buildJsonObject {
             put("entity",row.entity);put("id",row.id);put("owner",row.ownerUserId);put("fields",JsonObject(row.payload.filterKeys{it !in purchaseAckFields}))
         }}))
     })
     val review=InvestmentTradeCreationReview(InvestmentTradeCreationConsent(token),comparison,fundingUsage,comparison.changes.isNotEmpty() || fundingUsage?.investmentToUseMinor?.signum()==1)
-    if(old!=null) {
+    if(knownResult) {
         if(effects.mutations.isNotEmpty())fail(InvestmentAssetError.INVALID_ACCOUNTING)
-        return InvestmentTradeCreationPlan(old,emptyList(),review)
+        return InvestmentTradeCreationPlan(requireNotNull(old),emptyList(),review)
     }
     if(buying && wallet!=null) {
+        val excludedLedgerIds=if(expected==null)emptySet() else setOf("funding","capital-return","profit-loss").map{investmentLedgerIdentity(d.id,it)}.toSet()
+        val capacityRows=snapshot.rows.filterNot{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id in excludedLedgerIds}
         val amount=requireNotNull(d.walletMinor)
         if(wallet.kind==WalletKind.CREDIT_CARD) {
-            val full=TransactionInvestmentSaveSnapshot(snapshot.owner,TransactionInvestmentSaveSnapshot.entities.associateWith{entity->snapshot.rows.filter{it.entity==entity.table}})
+            val full=TransactionInvestmentSaveSnapshot(snapshot.owner,TransactionInvestmentSaveSnapshot.entities.associateWith{entity->capacityRows.filter{it.entity==entity.table}})
             val ledger=rebuilt.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==investmentLedgerIdentity(d.id,"funding")}
             val profiles=full.transactionSnapshot().active(CloudEntity.CREDIT_CARD_PROFILE).map(CreditCardProfileRecord::fromCloudRecord)
             requireExactOrdinaryAffordability(full,LedgerTransactionRecord.fromCloudRecord(ledger),profiles,null)
         } else {
-            val actual=financeWalletBalancesRaw(snapshot.owner,cash.rows.filter{it.entity==CloudEntity.LEDGER_TRANSACTION.table},cash.rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table},setOf(wallet.id))?.get(wallet.id)
+            val actual=financeWalletBalancesRaw(snapshot.owner,capacityRows.filter{it.entity==CloudEntity.LEDGER_TRANSACTION.table},cash.rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table},setOf(wallet.id))?.get(wallet.id)
                 ?: fail(InvestmentAssetError.UNREADABLE_SOURCE)
             val unrecorded=if(wallet.currencyCode==code)investmentCashAllocation(cash.walletSnapshot(),code).locations.singleOrNull{it.walletId==wallet.id}?.originalUnreconciledMinor?.max(BigInteger.ZERO) ?: BigInteger.ZERO else BigInteger.ZERO
             if(BigInteger.valueOf(amount)>actual+unrecorded || fundingUsage?.outcome==InvestmentFundUsageOutcome.INSUFFICIENT_FUNDS)
@@ -128,7 +181,7 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
         }
     }
     if((review.requiresConfirmation || request.consent!=null) && request.consent!=review.consent) {
-        if(buying)throw InvestmentPurchaseConfirmationRequired(review) else throw InvestmentSaleConfirmationRequired(review)
+        if(expected!=null)throw InvestmentTradeEditConfirmationRequired(review) else if(buying)throw InvestmentPurchaseConfirmationRequired(review) else throw InvestmentSaleConfirmationRequired(review)
     }
     val writes=changed.map{it to PendingMutation(CloudEntity.fromTable(it.entity)!!,it.id,snapshot.owner.value,if(it.deletedAt==null)MutationKind.UPSERT else MutationKind.DELETE,it.payload,now,it.syncVersion,deviceId)}+effects.mutations
     require(writes.map{it.first.entity to it.first.id}.distinct().size==writes.size)

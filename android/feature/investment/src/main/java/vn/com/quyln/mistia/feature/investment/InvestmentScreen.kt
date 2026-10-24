@@ -239,7 +239,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         }
         item{Spacer(Modifier.height(32.dp))}
     }
-    tradeDetailId?.let{id->InvestmentTradeDetailSheet(owner,repository,id,deviceIdProvider,onDismiss={tradeDetailId=null})}
+    tradeDetailId?.let{id->InvestmentTradeDetailSheet(owner,repository,id,deviceIdProvider,onDismiss={tradeDetailId=null},rates=exchangeRates,onSetupLinked={scope.launch{listState.scrollToItem(3);pickRequest++}})}
     saleId?.let{id->key(owner.value,id){InvestmentSaleSheet(owner,repository,id,saleAssetId,exchangeRates,deviceIdProvider,{saleId=null;saleAssetId=null},onSetupLinked={scope.launch{
         // This fixed section precedes every variable channel/asset/activity row.
         listState.scrollToItem(3);pickRequest++

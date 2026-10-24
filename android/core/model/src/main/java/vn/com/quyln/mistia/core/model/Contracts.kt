@@ -250,6 +250,8 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    suspend fun editTrade(owner:UserId,request:InvestmentTradeEditRequest,deviceId:String,now:String):Result<CloudRecord> = Result.failure(UnsupportedOperationException("Trade editing unavailable"))
+
     fun observeTradeDeletionSnapshot(owner:UserId):Flow<InvestmentTradeDeletionSnapshot> = observePurchaseSnapshot(owner)
     suspend fun deleteTrade(owner:UserId,request:InvestmentTradeDeletionRequest,deviceId:String,now:String):Result<CloudRecord> = Result.failure(UnsupportedOperationException("Trade deletion unavailable"))
 
@@ -285,6 +287,8 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun commitInvestmentTradeEdit(expected:InvestmentTradeCreationSnapshot,request:InvestmentTradeEditRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional trade editing unavailable")
+
     suspend fun commitInvestmentTradeDeletion(expected:InvestmentTradeDeletionSnapshot,request:InvestmentTradeDeletionRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional trade deletion unavailable")
 
     suspend fun commitInvestmentSale(expected:InvestmentSaleSnapshot,request:InvestmentSaleRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional sale unavailable")

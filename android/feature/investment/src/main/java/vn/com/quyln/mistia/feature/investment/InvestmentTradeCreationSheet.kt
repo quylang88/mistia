@@ -32,10 +32,12 @@ import vn.com.quyln.mistia.core.designsystem.R
 private sealed interface TradeFormRequest {
     data class Buy(val value:InvestmentPurchaseRequest):TradeFormRequest
     data class Sell(val value:InvestmentSaleRequest):TradeFormRequest
+    data class Edit(val value:InvestmentTradeEditRequest):TradeFormRequest
 }
 private fun TradeFormRequest.withConsent(consent:InvestmentTradeCreationConsent?):TradeFormRequest=when(this){
     is TradeFormRequest.Buy->copy(value=value.copy(consent=consent))
     is TradeFormRequest.Sell->copy(value=value.copy(consent=consent))
+    is TradeFormRequest.Edit->copy(value=value.copy(consent=consent))
 }
 private fun sameTradeFormWallet(a:LedgerWalletRecord?,b:LedgerWalletRecord?):Boolean=
     if(a==null)b==null else b!=null && a.matchesVisibleInvestmentWallet(b)
@@ -43,6 +45,9 @@ private fun TradeFormRequest.matchesIntent(other:TradeFormRequest?):Boolean=when
     is TradeFormRequest.Buy->other is TradeFormRequest.Buy &&
         value.expectedAsset.matchesVisibleInvestmentAsset(other.value.expectedAsset) && sameTradeFormWallet(value.expectedWallet,other.value.expectedWallet) &&
         value.copy(expectedAsset=other.value.expectedAsset,expectedWallet=other.value.expectedWallet,consent=null)==other.value.copy(consent=null)
+    is TradeFormRequest.Edit->other is TradeFormRequest.Edit && value.expectedTrade.matchesVisibleInvestmentTrade(other.value.expectedTrade) &&
+        value.expectedAsset.matchesVisibleInvestmentAsset(other.value.expectedAsset) && sameTradeFormWallet(value.expectedWallet,other.value.expectedWallet) &&
+        value.copy(expectedTrade=other.value.expectedTrade,expectedAsset=other.value.expectedAsset,expectedWallet=other.value.expectedWallet,consent=null)==other.value.copy(consent=null)
     is TradeFormRequest.Sell->other is TradeFormRequest.Sell &&
         value.expectedAsset.matchesVisibleInvestmentAsset(other.value.expectedAsset) && sameTradeFormWallet(value.expectedWallet,other.value.expectedWallet) &&
         value.copy(expectedAsset=other.value.expectedAsset,expectedWallet=other.value.expectedWallet,consent=null)==other.value.copy(consent=null)
@@ -69,20 +74,26 @@ private class TradeFormSession {
     rates:List<ExchangeRateSnapshot>,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,onSetupLinked:()->Unit,now:()->String={Instant.now().toString()}) =
     InvestmentTradeCreationSheet(owner,repository,id,initialAssetId,rates,deviceIdProvider,onDismiss,now,InvestmentTradeKind.SELL,onSetupLinked)
 
+@Composable internal fun InvestmentTradeEditingSheet(owner:UserId,repository:InvestmentRepository,expected:CloudRecord,
+    rates:List<ExchangeRateSnapshot>,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,onSetupLinked:()->Unit,now:()->String={Instant.now().toString()}) {
+    val kind=if(expected.payload.financeRawString("kind_raw_value")=="buy")InvestmentTradeKind.BUY else InvestmentTradeKind.SELL
+    InvestmentTradeCreationSheet(owner,repository,expected.id,expected.payload.financeRawString("asset_id"),rates,deviceIdProvider,onDismiss,now,kind,onSetupLinked,expected)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun InvestmentTradeCreationSheet(owner:UserId,repository:InvestmentRepository,id:String,initialAssetId:String?,
-    rates:List<ExchangeRateSnapshot>,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,now:()->String,kind:InvestmentTradeKind,onSetupLinked:()->Unit) {
+    rates:List<ExchangeRateSnapshot>,deviceIdProvider:suspend ()->String,onDismiss:()->Unit,now:()->String,kind:InvestmentTradeKind,onSetupLinked:()->Unit,expected:CloudRecord?=null) {
     val buying=kind==InvestmentTradeKind.BUY
-    val prefix=if(buying)"investment.purchase" else "investment.sale"
-    var createdAt by rememberSaveable{mutableStateOf(now())}
-    var occurredAt by rememberSaveable{mutableStateOf(createdAt)}
+    val prefix=if(expected!=null)"investment.edit" else if(buying)"investment.purchase" else "investment.sale"
+    var createdAt by rememberSaveable{mutableStateOf(expected?.payload?.financeRawString("created_at") ?: now())}
+    var occurredAt by rememberSaveable{mutableStateOf(expected?.payload?.financeRawString("occurred_at") ?: createdAt)}
     var assetId by rememberSaveable{mutableStateOf(initialAssetId)}
-    var walletId by rememberSaveable{mutableStateOf<String?>(null)}
-    var quantity by rememberSaveable{mutableStateOf("")}
-    var unit by rememberSaveable{mutableStateOf("")}
-    var amount by rememberSaveable{mutableStateOf("")}
-    var free by rememberSaveable{mutableStateOf(false)}
-    var note by rememberSaveable{mutableStateOf("")}
+    var walletId by rememberSaveable{mutableStateOf(expected?.payload?.financeRawString(if(buying)"funding_wallet_id" else "capital_return_wallet_id"))}
+    var quantity by rememberSaveable{mutableStateOf(expected?.payload?.financeRawString("quantity_decimal_string").orEmpty())}
+    var unit by rememberSaveable{mutableStateOf(expected?.payload?.financeRawString("unit_label").orEmpty())}
+    var amount by rememberSaveable{mutableStateOf(expected?.payload?.let{p->p.financeRawLong("gross_amount_minor")?.toBigDecimal()?.movePointLeft(Currency.getInstance(p.financeRawString("currency_code")).defaultFractionDigits)?.toPlainString()}.orEmpty())}
+    var free by rememberSaveable{mutableStateOf(expected?.payload?.financeRawLong("gross_amount_minor")==0L)}
+    var note by rememberSaveable{mutableStateOf(expected?.payload?.financeRawString("note").orEmpty())}
     var assetMenu by remember{mutableStateOf(false)}
     var walletMenu by remember{mutableStateOf(false)}
     var retry by remember{mutableIntStateOf(0)}
@@ -111,7 +122,7 @@ private class TradeFormSession {
     val latestResources by rememberUpdatedState(LocalContext.current.resources)
     val latestReadable by rememberUpdatedState(data!=null && snapshot!=null)
     LaunchedEffect(data==null){if(data==null)session.revokeReadAuthority()}
-    val positions=remember(snapshot,data?.first){data?.first?.associate{a->a.id to runCatching{investmentTradePositions(snapshot?.rows.orEmpty(),a)}.getOrNull()}}
+    val positions=remember(snapshot,data?.first){data?.first?.associate{a->a.id to runCatching{investmentTradePositions(snapshot?.rows.orEmpty().filterNot{expected!=null && it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id},a)}.getOrNull()}}
     val assets=data?.first.orEmpty().filter{a->buying || a.id==assetId || positions?.get(a.id)?.any{it.quantity.signum()>0}==true}
     val wallets=data?.second.orEmpty()
     val asset=assets.singleOrNull{it.id==assetId};val wallet=wallets.singleOrNull{it.id==walletId}
@@ -123,7 +134,7 @@ private class TradeFormSession {
     val available=positions?.get(assetId)?.let{values->
         values.firstOrNull{InvestmentUnitLabel.comparisonKey(it.unitLabel)==InvestmentUnitLabel.comparisonKey(unit)}?.quantity ?: BigDecimal.ZERO
     }
-    val candidate=snapshot?.rows?.any{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id}==true
+    val candidate=expected==null && snapshot?.rows?.any{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id}==true
     val desiredQuantity=investmentTradeQuantity(quantity.trim().replace(',','.'))
     val enoughStock=buying || (available!=null && desiredQuantity!=null && desiredQuantity<=available)
     fun currentRequest():TradeFormRequest?=runCatching {
@@ -135,8 +146,13 @@ private class TradeFormSession {
         val q=requireNotNull(investmentTradeQuantity(quantity.trim().replace(',','.')))
         require(InvestmentUnitLabel.normalizedDisplay(unit)!=null && a.defaultUnitLabel!=null)
         val gross=if(free)0L else purchaseInputMinor(amount,a.currencyCode)?.takeIf{it>0} ?: error("Invalid amount")
-        val sourceRate=if(free)null else purchaseRate(a.currencyCode,code,currentRates)
-        val account=if(a.currencyCode==code || free)gross else investmentPurchaseConvertedMinor(gross,a.currencyCode,code,sourceRate?.first ?: error("Missing rate"))
+        val preservesRate=expected!=null && expected.payload.financeRawLong("gross_amount_minor")?.let{it>0}==true && expected.payload.financeRawString("currency_code")==a.currencyCode && expected.payload.financeRawString("accounting_currency_code")==code
+        val storedRate=expected?.payload?.financeRawString("exchange_rate_decimal_string")
+        val sourceRate=if(free || preservesRate)null else purchaseRate(a.currencyCode,code,currentRates)
+        val sourceRateValue=if(free)null else if(preservesRate)storedRate else sourceRate?.first
+        val provider=if(free)null else if(preservesRate)expected?.payload?.financeRawString("exchange_rate_provider") else sourceRate?.second?.provider
+        val rateDate=if(free)null else if(preservesRate)expected?.payload?.financeRawString("exchange_rate_date") else sourceRate?.second?.rateDate
+        val account=if(a.currencyCode==code || free)gross else investmentPurchaseConvertedMinor(gross,a.currencyCode,code,sourceRateValue ?: error("Missing rate"))
         val w=if(free)null else requireNotNull(selectedWallet)
         val effectiveNote=if(free && investmentCashTrimmedText(note)==null){
             if(buying)resources.getString(R.string.investment_trade_promotional_free_badge)
@@ -145,12 +161,14 @@ private class TradeFormSession {
         if(buying) {
             val fundingRate=w?.let{purchaseRate(it.currencyCode,code,currentRates)}
             val funding=w?.let{if(it.currencyCode==code)account else investmentPurchaseConvertedMinor(account,code,it.currencyCode,fundingRate?.first ?: error("Missing rate"),true)}
-            TradeFormRequest.Buy(InvestmentPurchaseRequest(InvestmentPurchaseDraft(id,a.id,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRate?.first,sourceRate?.second?.provider,sourceRate?.second?.rateDate,
+            if(expected!=null)TradeFormRequest.Edit(InvestmentTradeEditRequest(expected,InvestmentTradeEditDraft(id,a.id,kind,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRateValue,provider,rateDate,w?.id,funding,fundingRate?.first,effectiveNote,occurredAt,createdAt),a,w,null,ledgerTitle))
+            else TradeFormRequest.Buy(InvestmentPurchaseRequest(InvestmentPurchaseDraft(id,a.id,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRateValue,provider,rateDate,
                 w?.id,funding,fundingRate?.first,effectiveNote,occurredAt,createdAt),a,w,null,ledgerTitle))
         } else {
             val capitalRate=w?.let{purchaseRate(code,it.currencyCode,currentRates)}
             if(w!=null && w.currencyCode!=code)investmentPurchaseConvertedMinor(account,code,w.currencyCode,capitalRate?.first ?: error("Missing rate"))
-            TradeFormRequest.Sell(InvestmentSaleRequest(InvestmentSaleDraft(id,a.id,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRate?.first,sourceRate?.second?.provider,sourceRate?.second?.rateDate,
+            if(expected!=null)TradeFormRequest.Edit(InvestmentTradeEditRequest(expected,InvestmentTradeEditDraft(id,a.id,kind,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRateValue,provider,rateDate,w?.id,null,capitalRate?.first,effectiveNote,occurredAt,createdAt),a,w,null,ledgerTitle))
+            else TradeFormRequest.Sell(InvestmentSaleRequest(InvestmentSaleDraft(id,a.id,q.stripTrailingZeros().toPlainString(),unit,gross,account,code,sourceRateValue,provider,rateDate,
                 w?.id,capitalRate?.first,effectiveNote,occurredAt,createdAt),a,w,null,ledgerTitle))
         }
     }.getOrNull()
@@ -158,14 +176,16 @@ private class TradeFormSession {
     val saveEpoch=session.sourceEpoch
     fun currentCanSubmit(r:TradeFormRequest):Boolean=runCatching {
         val rows=requireNotNull(latestSnapshot).rows
-        if(r is TradeFormRequest.Buy || rows.any{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id})true
+        if(buying || (expected==null && rows.any{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id}))true
         else {
-            val draft=(r as TradeFormRequest.Sell).value.draft
-            val currentAsset=requireNotNull(latestData?.first?.singleOrNull{it.id==draft.assetId})
-            val stock=investmentTradePositions(rows,currentAsset).firstOrNull{
-                InvestmentUnitLabel.comparisonKey(it.unitLabel)==InvestmentUnitLabel.comparisonKey(draft.unit)
+            val selectedAssetId=when(r){is TradeFormRequest.Sell->r.value.draft.assetId;is TradeFormRequest.Edit->r.value.draft.assetId;else->error("Invalid sale")}
+            val selectedUnit=when(r){is TradeFormRequest.Sell->r.value.draft.unit;is TradeFormRequest.Edit->r.value.draft.unit;else->error("Invalid sale")}
+            val selectedQuantity=when(r){is TradeFormRequest.Sell->r.value.draft.quantity;is TradeFormRequest.Edit->r.value.draft.quantity;else->error("Invalid sale")}
+            val currentAsset=requireNotNull(latestData?.first?.singleOrNull{it.id==selectedAssetId})
+            val stock=investmentTradePositions(rows.filterNot{expected!=null && it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id},currentAsset).firstOrNull{
+                InvestmentUnitLabel.comparisonKey(it.unitLabel)==InvestmentUnitLabel.comparisonKey(selectedUnit)
             }?.quantity ?: BigDecimal.ZERO
-            requireNotNull(investmentTradeQuantity(draft.quantity))<=stock
+            requireNotNull(investmentTradeQuantity(selectedQuantity))<=stock
         }
     }.getOrDefault(false)
     fun execute(r:TradeFormRequest) {
@@ -178,11 +198,13 @@ private class TradeFormSession {
                 val result=when(r){
                     is TradeFormRequest.Buy->repository.savePurchase(owner,r.value,device,now())
                     is TradeFormRequest.Sell->repository.saveSale(owner,r.value,device,now())
+                    is TradeFormRequest.Edit->repository.editTrade(owner,r.value,device,now())
                 };coroutineContext.ensureActive()
                 val error=result.exceptionOrNull()
                 val requestedReview=when(error){
                     is InvestmentPurchaseConfirmationRequired->error.review
                     is InvestmentSaleConfirmationRequired->error.review
+                    is InvestmentTradeEditConfirmationRequired->error.review
                     else->null
                 }
                 when {
@@ -205,7 +227,8 @@ private class TradeFormSession {
     ModalBottomSheet(onDismissRequest=::dismiss,sheetState=sheet) {
         Column(Modifier.fillMaxWidth().testTag(prefix+".sheet")) {
             Column(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(if(buying)R.string.investment_trade_new_buy_title else R.string.investment_trade_new_sell_title),Modifier.testTag(prefix+".title"),style=MaterialTheme.typography.titleLarge)
+                Text(stringResource(if(expected!=null)R.string.investment_trade_detail_title else if(buying)R.string.investment_trade_new_buy_title else R.string.investment_trade_new_sell_title),Modifier.testTag(prefix+".title"),style=MaterialTheme.typography.titleLarge)
+                if(expected!=null)Text(stringResource(if(buying)R.string.investment_hub_buy else R.string.investment_hub_sell),Modifier.testTag(prefix+".kind"),style=MaterialTheme.typography.labelLarge)
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
                     TextButton(onClick=::dismiss,enabled=!session.saving,modifier=Modifier.heightIn(min=48.dp).testTag(prefix+".cancel")){Text(stringResource(R.string.common_cancel))}
                     key(saveEpoch){Button(onClick={if(session.sourceEpoch===saveEpoch)currentRequest()?.let(::execute)},enabled=request!=null && (enoughStock || candidate) && !session.saving,modifier=Modifier.heightIn(min=48.dp).testTag(prefix+".save")){Text(stringResource(R.string.common_save))}}
@@ -243,6 +266,7 @@ private class TradeFormSession {
                     when(val r=request) {
                         is TradeFormRequest.Buy->r.value.draft.let{draft->Text(formatMinorUnits(draft.accountingMinor,draft.accountingCurrency),Modifier.testTag(prefix+".accounting"));draft.fundingMinor?.let{Text(formatMinorUnits(it,wallet?.currencyCode.orEmpty()),Modifier.testTag(prefix+".funding"))}}
                         is TradeFormRequest.Sell->r.value.draft.let{draft->Text(formatMinorUnits(draft.accountingMinor,draft.accountingCurrency),Modifier.testTag(prefix+".accounting"))}
+                        is TradeFormRequest.Edit->r.value.draft.let{draft->Text(formatMinorUnits(draft.accountingMinor,draft.accountingCurrency),Modifier.testTag(prefix+".accounting"));if(buying)draft.walletMinor?.let{Text(formatMinorUnits(it,wallet?.currencyCode.orEmpty()),Modifier.testTag(prefix+".funding"))}}
                         null->Unit
                     }
                     if(request==null && amount.isNotEmpty() && quantity.isNotEmpty()) {

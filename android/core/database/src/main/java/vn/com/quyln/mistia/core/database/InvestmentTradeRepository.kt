@@ -16,6 +16,8 @@ internal class OfflineInvestmentTradeRepository(private val store:LocalStore) {
         save(owner,{planInvestmentPurchase(it,request,device,now).trade},{store.commitInvestmentPurchase(it,request,device,now)})
     suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,device:String,now:String)=
         save(owner,{planInvestmentSale(it,request,device,now).trade},{store.commitInvestmentSale(it,request,device,now)})
+    suspend fun editTrade(owner:UserId,request:InvestmentTradeEditRequest,device:String,now:String)=
+        save(owner,{planInvestmentTradeEdit(it,request,device,now).trade},{store.commitInvestmentTradeEdit(it,request,device,now)})
     suspend fun deleteTrade(owner:UserId,request:InvestmentTradeDeletionRequest,device:String,now:String)=
         save(owner,{planInvestmentTradeDeletion(it,request,device,now).trade},{store.commitInvestmentTradeDeletion(it,request,device,now)})
     private suspend fun save(owner:UserId,prepare:(InvestmentTradeCreationSnapshot)->CloudRecord,

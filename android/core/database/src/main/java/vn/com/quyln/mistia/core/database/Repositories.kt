@@ -493,6 +493,7 @@ class OfflineFirstInvestmentRepository(private val localStore: LocalStore,system
     private val trades=OfflineInvestmentTradeRepository(localStore)
     override fun observePurchaseSnapshot(owner:UserId)=trades.observe(owner)
     override fun observeSaleSnapshot(owner:UserId)=trades.observe(owner)
+    override suspend fun editTrade(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentTradeEditRequest,deviceId:String,now:String)=trades.editTrade(owner,request,deviceId,now)
     override suspend fun saveSale(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentSaleRequest,deviceId:String,now:String)=trades.saveSale(owner,request,deviceId,now)
     override suspend fun savePurchase(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String)=trades.savePurchase(owner,request,deviceId,now)
     override fun observeTradeDeletionSnapshot(owner:UserId)=trades.observe(owner)

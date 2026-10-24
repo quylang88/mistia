@@ -863,20 +863,27 @@ class RoomLocalStore(
 
     override suspend fun commitInvestmentPurchase(expected:vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String):Boolean =
-        commitInvestmentTradeMutation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentPurchase(it,request,deviceId,now).mutations}
+        commitInvestmentTradeMutation(expected,setOf(request.draft.assetId)){vn.com.quyln.mistia.core.model.planInvestmentPurchase(it,request,deviceId,now).mutations}
 
     override suspend fun commitInvestmentSale(expected:vn.com.quyln.mistia.core.model.InvestmentSaleSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentSaleRequest,deviceId:String,now:String):Boolean =
-        commitInvestmentTradeMutation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentSale(it,request,deviceId,now).mutations}
+        commitInvestmentTradeMutation(expected,setOf(request.draft.assetId)){vn.com.quyln.mistia.core.model.planInvestmentSale(it,request,deviceId,now).mutations}
 
     override suspend fun commitInvestmentTradeDeletion(expected:vn.com.quyln.mistia.core.model.InvestmentTradeDeletionSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentTradeDeletionRequest,deviceId:String,now:String):Boolean {
         val assetId=request.expectedTrade.payload.financeRawReference("asset_id").id
             ?: throw vn.com.quyln.mistia.core.model.InvestmentAssetException(vn.com.quyln.mistia.core.model.InvestmentAssetError.UNREADABLE_SOURCE)
-        return commitInvestmentTradeMutation(expected,assetId){vn.com.quyln.mistia.core.model.planInvestmentTradeDeletion(it,request,deviceId,now).mutations}
+        return commitInvestmentTradeMutation(expected,setOf(assetId)){vn.com.quyln.mistia.core.model.planInvestmentTradeDeletion(it,request,deviceId,now).mutations}
     }
 
-    private suspend fun commitInvestmentTradeMutation(expected:vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot,assetId:String,
+    override suspend fun commitInvestmentTradeEdit(expected:vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentTradeEditRequest,deviceId:String,now:String):Boolean {
+        val original=request.expectedTrade.payload.financeRawReference("asset_id").id
+            ?: throw vn.com.quyln.mistia.core.model.InvestmentAssetException(vn.com.quyln.mistia.core.model.InvestmentAssetError.UNREADABLE_SOURCE)
+        return commitInvestmentTradeMutation(expected,setOf(original,request.draft.assetId)){vn.com.quyln.mistia.core.model.planInvestmentTradeEdit(it,request,deviceId,now).mutations}
+    }
+
+    private suspend fun commitInvestmentTradeMutation(expected:vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot,assetIds:Set<String>,
         prepare:(vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot)->List<Pair<CloudRecord,PendingMutation>>):Boolean {
         val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
         return database.withTransaction {
@@ -884,7 +891,7 @@ class RoomLocalStore(
             val current=investmentPurchaseSnapshot(expected.owner)
             if(expected.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id))!=current.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id)))return@withTransaction false
             val mutations=prepare(current)
-            val historyIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id==assetId}.map{it.id}.toSet()
+            val historyIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id in assetIds}.map{it.id}.toSet()
             val historyLedgerIds=historyIds.flatMap{id->listOf("funding","capital-return","profit-loss").map{component->vn.com.quyln.mistia.core.model.investmentLedgerIdentity(id,component)}}.toSet()
             val protectedRows=current.rows.filter{row->
                 (row.entity==CloudEntity.INVESTMENT_TRADE.table && row.id in historyIds) ||
