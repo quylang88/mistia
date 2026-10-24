@@ -34,7 +34,7 @@ import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
 @Composable internal fun InvestmentCashHistoryPreview(load:InvestmentWalletReadLoad,parsed:Result<List<InvestmentCashHistoryItem>>?,
-    wallets:Map<String,String>,assets:Map<String,String>,onAll:()->Unit,onOpen:(InvestmentCashHistoryItem)->Unit,onRetry:()->Unit) {
+    wallets:Map<String,String>,assets:Map<String,String>,onAll:()->Unit,onOpen:(InvestmentCashHistoryItem)->Unit,onRetry:()->Unit,owner:UserId,repository:InvestmentRepository,assetImagePaths:Map<String,String?>) {
     Column(Modifier.fillMaxWidth().testTag("investment.cash.history.preview"),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             Text(stringResource(R.string.investment_wallet_history_title),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
@@ -42,11 +42,11 @@ import vn.com.quyln.mistia.core.model.*
         }
         HistoryReadStatus(load,parsed,onRetry)
         if(parsed?.getOrNull()?.isEmpty()==true)Text(stringResource(R.string.investment_wallet_history_empty))
-        parsed?.getOrNull()?.take(3)?.forEach{CashHistoryRow(it,wallets,assets,onOpen)}
+        parsed?.getOrNull()?.take(3)?.forEach{CashHistoryRow(it,wallets,assets,onOpen,owner,repository,assetImagePaths)}
     }
 }
 @Composable internal fun InvestmentCashHistoryScreen(load:InvestmentWalletReadLoad,parsed:Result<List<InvestmentCashHistoryItem>>?,
-    wallets:Map<String,String>,assets:Map<String,String>,onBack:()->Unit,onOpen:(InvestmentCashHistoryItem)->Unit,onRetry:()->Unit,modifier:Modifier=Modifier) {
+    wallets:Map<String,String>,assets:Map<String,String>,onBack:()->Unit,onOpen:(InvestmentCashHistoryItem)->Unit,onRetry:()->Unit,owner:UserId,repository:InvestmentRepository,assetImagePaths:Map<String,String?>,modifier:Modifier=Modifier) {
     var filterName by rememberSaveable{mutableStateOf(InvestmentCashHistoryFilter.ALL.name)}
     val filter=InvestmentCashHistoryFilter.valueOf(filterName)
     var visibleLimit by rememberSaveable{mutableIntStateOf(50)}
@@ -75,7 +75,7 @@ import vn.com.quyln.mistia.core.model.*
         LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("investment.cash.history.list"),state=listState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             item{HistoryReadStatus(load,parsed,onRetry)}
             if(parsed?.isSuccess==true && values.isEmpty())item{Text(stringResource(R.string.investment_wallet_history_empty))}
-            items(values.take(visibleLimit),key={it.id}){CashHistoryRow(it,wallets,assets,onOpen)}
+            items(values.take(visibleLimit),key={it.id}){CashHistoryRow(it,wallets,assets,onOpen,owner,repository,assetImagePaths)}
         }
     }
 }
@@ -86,7 +86,7 @@ import vn.com.quyln.mistia.core.model.*
         TextButton(onClick=onRetry,modifier=Modifier.testTag("investment.cash.history.retry")){Text(stringResource(R.string.planning_installment_retry))}
     }
 }
-@Composable private fun CashHistoryRow(item:InvestmentCashHistoryItem,wallets:Map<String,String>,assets:Map<String,String>,onOpen:(InvestmentCashHistoryItem)->Unit) {
+@Composable private fun CashHistoryRow(item:InvestmentCashHistoryItem,wallets:Map<String,String>,assets:Map<String,String>,onOpen:(InvestmentCashHistoryItem)->Unit,owner:UserId,repository:InvestmentRepository,assetImagePaths:Map<String,String?>) {
     val title=when(item.kind) {
         InvestmentCashHistoryKind.REALIZED_PROFIT -> assets[item.assetId] ?: stringResource(R.string.investment_wallet_history_realized_profit)
         InvestmentCashHistoryKind.LIQUIDATION -> assets[item.assetId] ?: stringResource(R.string.investment_trade_asset)
@@ -118,7 +118,8 @@ import vn.com.quyln.mistia.core.model.*
     val content:@Composable ()->Unit={
         Column(Modifier.fillMaxWidth().padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                Image(painterResource(image),contentDescription=null,modifier=Modifier.size(42.dp).background(if(item.assetId==null)accent.copy(alpha=0.1f) else Color.Transparent,RoundedCornerShape(10.dp)).testTag("investment.cash.history.icon."+item.id).padding(7.dp))
+                if(item.assetId!=null)InvestmentProductThumbnail(owner,repository,requireNotNull(item.assetId),assetImagePaths[item.assetId],Modifier.testTag("investment.cash.history.icon."+item.id),42.dp)
+                else Image(painterResource(image),contentDescription=null,modifier=Modifier.size(42.dp).background(accent.copy(alpha=0.1f),RoundedCornerShape(10.dp)).testTag("investment.cash.history.icon."+item.id).padding(7.dp))
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)) {
                     Text(title,style=MaterialTheme.typography.titleSmall)
                     flow?.let{Text(it,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}

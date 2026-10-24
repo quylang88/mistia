@@ -57,6 +57,7 @@ data class InvestmentAssetDraft(
     val currencyCode: String,
     val defaultUnitLabel: String,
     val expected: InvestmentAssetRecord? = null,
+    val imageChange: InvestmentAssetImageChange = InvestmentAssetImageChange.Keep,
 )
 
 enum class InvestmentAssetError {
@@ -119,9 +120,14 @@ fun planInvestmentAssetMutation(
             val unit=InvestmentUnitLabel.normalizedDisplay(draft.defaultUnitLabel) ?: investmentAssetFail(InvestmentAssetError.UNIT_REQUIRED)
             val currency=investmentAssetCurrency(draft.currencyCode) ?: investmentAssetFail(InvestmentAssetError.INVALID_CURRENCY)
             draft.expected?.let(::expected)
+            val image=when(val change=draft.imageChange) {
+                InvestmentAssetImageChange.Keep->current?.imagePath
+                InvestmentAssetImageChange.Remove->null
+                is InvestmentAssetImageChange.Replace->InvestmentProductImagePath.parse(snapshot.owner,id,change.path.value).value
+            }
             if(current!=null && draft.expected==null) {
                 if(current.deletedAt==null && !current.isArchived && current.name==name && current.channelId==draft.channelId &&
-                    current.currencyCode==currency && current.defaultUnitLabel==unit)return InvestmentAssetMutationPlan(current,emptyList())
+                    current.currencyCode==currency && current.defaultUnitLabel==unit && current.imagePath==image)return InvestmentAssetMutationPlan(current,emptyList())
                 investmentAssetFail(InvestmentAssetError.STALE_RECORD)
             }
             val channelRaw=snapshot.records(CloudEntity.INVESTMENT_CHANNEL).singleOrNull{it.id==draft.channelId}
@@ -141,11 +147,12 @@ fun planInvestmentAssetMutation(
                     if(!ref.readable)investmentAssetFail(InvestmentAssetError.UNREADABLE_SOURCE)
                     ref.id==draft.channelId
                 }
-                changed=InvestmentAssetRecord(id,snapshot.owner.value,draft.channelId,name,currency,null,unit,count,false,null,now,now,null,0,deviceId).toCloudRecord()
+                changed=InvestmentAssetRecord(id,snapshot.owner.value,draft.channelId,name,currency,image,unit,count,false,null,now,now,null,0,deviceId).toCloudRecord()
                 extras=emptyList()
             } else {
                 changed=investmentAssetChanged(raw,buildJsonObject {
                     put("name",name);put("channel_id",draft.channelId);put("currency_code",currency);put("default_unit_label",unit)
+                    if(draft.imageChange!=InvestmentAssetImageChange.Keep)put("image_path",image?.let(::JsonPrimitive) ?: JsonNull)
                 },deviceId,now)
                 if(current!!.defaultUnitLabel==null && history.any{
                     val value=it.payload["unit_label"]

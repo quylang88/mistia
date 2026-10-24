@@ -240,8 +240,8 @@ private class TradeFormSession {
                     TextButton(onClick=onSetupLinked,enabled=!session.saving,modifier=Modifier.testTag(prefix+".setupLinked")){Text(stringResource(R.string.investment_wallet_set_up_now))}
                 }
                 Box {
-                    OutlinedButton(onClick={assetMenu=true},enabled=data!=null && !session.saving,modifier=Modifier.fillMaxWidth().testTag(prefix+".asset")){Text(asset?.name ?: stringResource(R.string.investment_trade_choose_asset))}
-                    DropdownMenu(expanded=assetMenu,onDismissRequest={assetMenu=false}){assets.forEach{a->DropdownMenuItem(text={Text(a.name)},onClick={assetId=a.id;unit=a.defaultUnitLabel.orEmpty();assetMenu=false;session.review=null;session.failed=null;session.error=null},modifier=Modifier.testTag(prefix+".asset."+a.id))}}
+                    OutlinedButton(onClick={assetMenu=true},enabled=data!=null && !session.saving,modifier=Modifier.fillMaxWidth().testTag(prefix+".asset")){asset?.let{InvestmentProductThumbnail(owner,repository,it.id,it.imagePath,Modifier.padding(end=10.dp),34.dp)};Text(asset?.name ?: stringResource(R.string.investment_trade_choose_asset))}
+                    DropdownMenu(expanded=assetMenu,onDismissRequest={assetMenu=false}){assets.forEach{a->DropdownMenuItem(leadingIcon={InvestmentProductThumbnail(owner,repository,a.id,a.imagePath, size=44.dp)},text={Text(a.name)},onClick={assetId=a.id;unit=a.defaultUnitLabel.orEmpty();assetMenu=false;session.review=null;session.failed=null;session.error=null},modifier=Modifier.testTag(prefix+".asset."+a.id))}}
                 }
                 if(asset?.defaultUnitLabel==null)Text(stringResource(R.string.investment_trade_resolve_unit_before_trading),color=MaterialTheme.colorScheme.error)
                 OutlinedTextField(quantity,{quantity=it;session.review=null;session.failed=null;session.error=null},enabled=!session.saving,label={Text(stringResource(R.string.investment_trade_quantity))},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true,modifier=Modifier.fillMaxWidth().testTag(prefix+".quantity"))

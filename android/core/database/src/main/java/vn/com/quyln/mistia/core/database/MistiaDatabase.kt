@@ -655,6 +655,7 @@ class RoomLocalStore(
     private val billRemindersEnabled:()->Boolean = {true},
     private val walletRemindersEnabled:()->Boolean = {true},
     private val currentBillOwner:(()->UserId?)? = null,
+    private val productImages:FileInvestmentProductImageCache? = null,
 ) : LocalStore {
     private fun ensureCurrentFinanceOwner(owner:UserId) {
         if(currentBillOwner!=null && currentBillOwner.invoke()!=owner)
@@ -928,9 +929,45 @@ class RoomLocalStore(
         vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot(owner,rows.map{it.toCloudRecord()})
     }
 
+    override suspend fun commitInvestmentAssetImageMutation(expected:vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentAssetImageSaveRequest,deviceId:String,now:String):Boolean {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        val images=requireNotNull(productImages){"Product image cache unavailable"}
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive()
+            val current=investmentAssetSnapshot(expected.owner)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val plan=vn.com.quyln.mistia.core.model.planInvestmentAssetImageSave(current,request,deviceId,now)
+            require(images.verifyPublication(expected.owner,request.publication,allowPublished=plan.mutations.isEmpty()).getOrThrow()){"Product image reservation is unavailable"}
+            val tradeIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id==request.draft.id}.map{it.id}.toSet()
+            val ledgerIds=tradeIds.flatMap{id->listOf("funding","capital-return","profit-loss").map{vn.com.quyln.mistia.core.model.investmentLedgerIdentity(id,it)}}.toSet()
+            val protected=current.rows.filter{row->
+                (row.entity==CloudEntity.INVESTMENT_ASSET.table && row.id==request.draft.id) ||
+                (row.entity==CloudEntity.INVESTMENT_TRADE.table && row.id in tradeIds) ||
+                (row.entity==CloudEntity.LEDGER_TRANSACTION.table && row.id in ledgerIds) ||
+                (row.entity==CloudEntity.INVESTMENT_POSTING.table && row.payload.financeRawReference("trade_id").id in tradeIds) ||
+                plan.mutations.any{it.first.entity==row.entity && it.first.id==row.id}
+            }
+            for(row in protected) {
+                val stored=database.cloudRecordDao().record(expected.owner.value,row.entity,row.id)!!
+                val queued=database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)
+                require(!stored.hasPendingMutation || queued!=null){"Asset image source has no outbox"}
+                if(queued!=null)require(stored.hasPendingMutation && queued.baseVersion==row.syncVersion &&
+                    queued.kind==(if(row.deletedAt==null)"upsert" else "delete") && queued.modifiedAt==row.updatedAt &&
+                    queued.payloadJson?.let{json.parseToJsonElement(it)}==row.payload){"Asset image source outbox differs"}
+            }
+            for((row,_) in plan.mutations)require(current.rows.any{it.entity==row.entity && it.id==row.id} ||
+                database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)==null){"Asset image identity has orphan outbox"}
+            plan.mutations.forEach{(row,mutation)->commitMutationRows(row,mutation)}
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+
     override suspend fun commitInvestmentAssetMutation(expected:vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentAssetRequest,deviceId:String,now:String):Boolean = database.withTransaction {
         ensureCurrentFinanceOwner(expected.owner)
+        require(request !is vn.com.quyln.mistia.core.model.InvestmentAssetRequest.Save || request.draft.imageChange==vn.com.quyln.mistia.core.model.InvestmentAssetImageChange.Keep){"Asset images require a reserved publication"}
         val current=investmentAssetSnapshot(expected.owner)
         if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
         val plan=vn.com.quyln.mistia.core.model.planInvestmentAssetMutation(current,request,deviceId,now)

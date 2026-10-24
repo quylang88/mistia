@@ -489,7 +489,13 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
     ) { rows -> rows.flatMap { it } }
 }
 
-class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+class OfflineFirstInvestmentRepository(private val localStore: LocalStore,private val productImages:FileInvestmentProductImageCache?=null,private val productImageRemote:vn.com.quyln.mistia.core.model.InvestmentProductImageRemote?=null,private val productImageThumbnailer:(suspend (ByteArray)->ByteArray)?=null,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
+    private val images=OfflineInvestmentProductImageRepository(localStore,productImages,productImageRemote,productImageThumbnailer)
+    override suspend fun stagedProductImageData(owner:UserId,candidate:vn.com.quyln.mistia.core.model.InvestmentProductImageCandidate)=images.stagedData(owner,candidate)
+    override suspend fun productImageData(owner:UserId,assetId:String,path:String,thumbnail:Boolean)=images.data(owner,assetId,path,thumbnail)
+    override suspend fun stageProductImage(owner:UserId,assetId:String,image:vn.com.quyln.mistia.core.model.PreparedInvestmentProductImage)=images.stage(owner,assetId,image)
+    override suspend fun discardProductImage(owner:UserId,candidate:vn.com.quyln.mistia.core.model.InvestmentProductImageCandidate)=images.discard(owner,candidate)
+    override suspend fun saveAssetImage(owner:UserId,draft:InvestmentAssetDraft,candidate:vn.com.quyln.mistia.core.model.InvestmentProductImageCandidate?,revision:String,deviceId:String,now:String)=images.save(owner,draft,candidate,revision,deviceId,now)
     private val trades=OfflineInvestmentTradeRepository(localStore)
     override fun observePurchaseSnapshot(owner:UserId)=trades.observe(owner)
     override fun observeSaleSnapshot(owner:UserId)=trades.observe(owner)

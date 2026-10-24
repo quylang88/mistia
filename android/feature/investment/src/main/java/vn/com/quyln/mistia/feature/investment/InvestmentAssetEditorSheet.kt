@@ -28,6 +28,20 @@ internal fun InvestmentAssetEditorSheet(
     var unit by rememberSaveable{mutableStateOf(expected?.defaultUnitLabel.orEmpty())}
     var channelId by rememberSaveable{mutableStateOf(expected?.channelId.orEmpty())}
     var currency by rememberSaveable{mutableStateOf(expected?.currencyCode ?: primaryCurrency)}
+    var imageToken by rememberSaveable{mutableStateOf<String?>(null)}
+    var removesImage by rememberSaveable{mutableStateOf(false)}
+    var imageRevision by rememberSaveable{mutableStateOf(java.util.UUID.randomUUID().toString())}
+    var submittedImageToken by rememberSaveable{mutableStateOf<String?>(null)}
+    var imageBusy by remember{mutableStateOf(false)}
+    var active by remember(repository){mutableStateOf(true)}
+    DisposableEffect(repository){onDispose{active=false}}
+    val candidateResult=remember(owner,id,imageToken){imageToken?.let{runCatching{decodeInvestmentImageCandidate(owner,id,it)}}}
+    val candidate=candidateResult?.getOrNull()
+    val imageChange=when {
+        candidate!=null->InvestmentAssetImageChange.Replace(InvestmentProductImagePath.parse(owner,id,candidate.path))
+        removesImage->InvestmentAssetImageChange.Remove
+        else->InvestmentAssetImageChange.Keep
+    }
     var retry by remember{mutableIntStateOf(0)}
     var saving by remember{mutableStateOf(false)}
     var error by remember{mutableStateOf<Int?>(null)}
@@ -59,29 +73,56 @@ internal fun InvestmentAssetEditorSheet(
     }
     val historyLocked=expectedToken!=null && source?.hasHistory==true
     val currencies=(enabledCurrencies.mapNotNull{it.financeReportingCode()}+listOfNotNull(expected?.currencyCode)).distinct()
-    val canSave=readable && consent && selectedChannel!=null && currency in currencies &&
+    val canSave=active && !imageBusy && candidateResult?.isFailure!=true && readable && consent && selectedChannel!=null && currency in currencies &&
         normalizedInvestmentChannelName(name).isNotEmpty() && InvestmentUnitLabel.normalizedDisplay(unit)!=null
     val scope=key(repository){rememberCoroutineScope()}
+    val liveCanSave by rememberUpdatedState(canSave)
+    val liveDraft by rememberUpdatedState(InvestmentAssetDraft(id,channelId,name,currency,unit,expected,imageChange))
+    val liveCandidate by rememberUpdatedState(candidate)
+    val liveRevision by rememberUpdatedState(imageRevision)
+    val submitted=remember(owner,id,expected,submittedImageToken){submittedImageToken?.let{runCatching{decodeSubmittedImage(owner,id,expected,it)}.getOrNull()}}
+    val retryAllowed=remember(snapshot,submitted,liveDraft,liveCandidate,liveRevision,active,imageBusy) {
+        active && !imageBusy && snapshot!=null && submitted!=null && submitted.draft==liveDraft && submitted.candidate==liveCandidate && submitted.revision==liveRevision &&
+            runCatching{planInvestmentAssetImageSave(snapshot,submitted.request(owner),submitted.device,submitted.now)}.isSuccess
+    }
+    val latestRetryAllowed by rememberUpdatedState(retryAllowed)
+    val latestSubmitted by rememberUpdatedState(submitted)
+    fun execute(draft:InvestmentAssetDraft,frozenCandidate:InvestmentProductImageCandidate?,revision:String,previous:SubmittedImageSave?=null) {
+        if(saving || !active)return
+        saving=true;error=null
+        scope.launch {
+            try {
+                val device=previous?.device ?: deviceIdProvider();coroutineContext.ensureActive()
+                val now=previous?.now ?: Instant.now().toString()
+                if(draft.imageChange!=InvestmentAssetImageChange.Keep)
+                    submittedImageToken=encodeSubmittedImage(owner,SubmittedImageSave(draft,frozenCandidate,revision,device,now))
+                val result=if(draft.imageChange==InvestmentAssetImageChange.Keep)repository.saveAsset(owner,draft,device,now)
+                    else repository.saveAssetImage(owner,draft,frozenCandidate,revision,device,now)
+                coroutineContext.ensureActive()
+                if(result.isSuccess){submittedImageToken=null;active=false;onDismiss()}
+                else error=investmentAssetErrorResource(requireNotNull(result.exceptionOrNull()))
+            }catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}
+            catch(failure:Exception){error=investmentAssetErrorResource(failure)}
+            finally{saving=false}
+        }
+    }
+    fun dismiss() {
+        if(!active || saving || imageBusy)return
+        active=false
+        scope.launch {
+            try{candidate?.let{repository.discardProductImage(owner,it)}}finally{onDismiss()}
+        }
+    }
     val sheet=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={it!=SheetValue.Hidden || !saving})
-    ModalBottomSheet(onDismissRequest={if(!saving)onDismiss()},sheetState=sheet) {
+    ModalBottomSheet(onDismissRequest={dismiss()},sheetState=sheet) {
         Column(Modifier.fillMaxWidth().padding(horizontal=20.dp).verticalScroll(rememberScrollState())
             .padding(bottom=24.dp).testTag("investment.asset.sheet"),verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Text(stringResource(R.string.investment_asset_new_title),Modifier.fillMaxWidth(),style=MaterialTheme.typography.titleLarge)
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                TextButton(onClick=onDismiss,enabled=!saving){Text(stringResource(R.string.common_cancel))}
+                TextButton(onClick={dismiss()},enabled=!saving && !imageBusy){Text(stringResource(R.string.common_cancel))}
                 Button(onClick={
-                    if(saving || !canSave)return@Button
-                    saving=true;error=null
-                    val draft=InvestmentAssetDraft(id,channelId,name,currency,unit,expected)
-                    scope.launch {
-                        try {
-                            val result=repository.saveAsset(owner,draft,deviceIdProvider(),Instant.now().toString())
-                            coroutineContext.ensureActive()
-                            if(result.isSuccess)onDismiss() else error=investmentAssetErrorResource(requireNotNull(result.exceptionOrNull()))
-                        }catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}
-                        catch(failure:Exception){error=investmentAssetErrorResource(failure)}
-                        finally{saving=false}
-                    }
+                    if(saving || !active || !liveCanSave)return@Button
+                    execute(liveDraft,liveCandidate,liveRevision)
                 },enabled=!saving && canSave,modifier=Modifier.testTag("investment.asset.save")){Text(stringResource(R.string.common_save))}
             }
             Text(stringResource(R.string.investment_hub_channels),style=MaterialTheme.typography.labelLarge)
@@ -110,12 +151,27 @@ internal fun InvestmentAssetEditorSheet(
                         modifier=Modifier.testTag("investment.asset.currency.option.$code"))}
                 }
             }
+            InvestmentProductImageField(owner,repository,id,when{candidate!=null->candidate.path;removesImage->null;else->expected?.imagePath},candidate,
+                enabled=active && readable && consent && !saving,
+                onCandidate={selected->
+                    val previous=candidate
+                    imageToken=encodeInvestmentImageCandidate(selected);removesImage=false;imageRevision=java.util.UUID.randomUUID().toString();error=null
+                    if(previous!=null && previous!=selected)scope.launch{repository.discardProductImage(owner,previous)}
+                },onRemove={
+                    val previous=candidate;imageToken=null;removesImage=true;imageRevision=java.util.UUID.randomUUID().toString();error=null
+                    if(previous!=null)scope.launch{repository.discardProductImage(owner,previous)}
+                },onBusy={imageBusy=it})
+            if(candidateResult?.isFailure==true)Text(stringResource(R.string.common_error),Modifier.testTag("investment.asset.image.invalid"),color=MaterialTheme.colorScheme.error)
             if(historyLocked)Text(stringResource(R.string.investment_error_asset_history_locks_accounting),Modifier.testTag("investment.asset.historyLocked"),style=MaterialTheme.typography.bodySmall)
             if(!readable || !consent || (channelId.isNotEmpty() && selectedChannel==null))
                 Text(stringResource(R.string.common_error),Modifier.testTag("investment.asset.unavailable"),color=MaterialTheme.colorScheme.error)
             if(load==InvestmentAssetReadLoad.Loading)CircularProgressIndicator(Modifier.size(24.dp).testTag("investment.asset.loading"))
             if(load==InvestmentAssetReadLoad.Failed || parsed?.isFailure==true)
                 TextButton(onClick={retry++},modifier=Modifier.testTag("investment.asset.retry")){Text(stringResource(R.string.planning_installment_retry))}
+            if(submitted!=null)TextButton(onClick={
+                val attempt=latestSubmitted
+                if(attempt!=null && latestRetryAllowed && !saving)execute(attempt.draft,attempt.candidate,attempt.revision,attempt)
+            },enabled=!saving && retryAllowed,modifier=Modifier.testTag("investment.asset.image.retrySave")){Text(stringResource(R.string.planning_installment_retry))}
             error?.let{Text(stringResource(it),Modifier.testTag("investment.asset.error"),color=MaterialTheme.colorScheme.error)}
             if(saving)CircularProgressIndicator(Modifier.size(24.dp))
         }
@@ -136,4 +192,38 @@ internal fun investmentAssetErrorResource(error:Throwable):Int=when((error as? I
     InvestmentAssetError.INVALID_ACCOUNTING->R.string.investment_error_invalid_trade_input
     InvestmentAssetError.STALE_RECORD->R.string.investment_cash_transfer_error_conflict
     else->R.string.common_error
+}
+
+internal fun encodeInvestmentImageCandidate(candidate:InvestmentProductImageCandidate)=buildJsonObject {
+    put("owner",candidate.ownerUserId);put("asset",candidate.assetId);put("path",candidate.path)
+    put("full",candidate.imageSha256);put("thumb",candidate.thumbnailSha256)
+}.toString()
+internal fun decodeInvestmentImageCandidate(owner:UserId,assetId:String,token:String):InvestmentProductImageCandidate {
+    val value=Json.parseToJsonElement(token).jsonObject
+    fun text(key:String)=value.getValue(key).jsonPrimitive.let{require(it.isString);it.content}
+    require(text("owner")==owner.value && text("asset")==assetId)
+    val path=InvestmentProductImagePath.parse(owner,assetId,text("path")).value
+    val full=text("full");val thumb=text("thumb");require(Regex("[0-9a-f]{64}").matches(full) && Regex("[0-9a-f]{64}").matches(thumb))
+    return InvestmentProductImageCandidate(owner.value,assetId,path,full,thumb)
+}
+
+private data class SubmittedImageSave(val draft:InvestmentAssetDraft,val candidate:InvestmentProductImageCandidate?,val revision:String,val device:String,val now:String) {
+    fun request(owner:UserId)=InvestmentAssetImageSaveRequest(draft,InvestmentProductImagePublication(owner.value,draft.id,revision,
+        ownedInvestmentImagePathOrNull(owner,draft.id,draft.expected?.imagePath),candidate))
+}
+private fun encodeSubmittedImage(owner:UserId,attempt:SubmittedImageSave)=buildJsonObject {
+    put("owner",owner.value);put("id",attempt.draft.id);put("channel",attempt.draft.channelId);put("name",attempt.draft.name)
+    put("currency",attempt.draft.currencyCode);put("unit",attempt.draft.defaultUnitLabel)
+    put("candidate",attempt.candidate?.let{JsonPrimitive(encodeInvestmentImageCandidate(it))} ?: JsonNull)
+    put("revision",attempt.revision);put("device",attempt.device);put("now",attempt.now)
+}.toString()
+private fun decodeSubmittedImage(owner:UserId,id:String,expected:InvestmentAssetRecord?,token:String):SubmittedImageSave {
+    val value=Json.parseToJsonElement(token).jsonObject
+    fun text(key:String)=value.getValue(key).jsonPrimitive.let{require(it.isString);it.content}
+    require(text("owner")==owner.value && text("id")==id)
+    val candidate=value["candidate"]?.takeIf{it!=JsonNull}?.let{decodeInvestmentImageCandidate(owner,id,it.jsonPrimitive.content)}
+    val revision=text("revision");val device=text("device");require(financeRawUuid(revision)==revision && financeRawUuid(device)==device)
+    val now=text("now");Instant.parse(now)
+    val change=if(candidate==null)InvestmentAssetImageChange.Remove else InvestmentAssetImageChange.Replace(InvestmentProductImagePath.parse(owner,id,candidate.path))
+    return SubmittedImageSave(InvestmentAssetDraft(id,text("channel"),text("name"),text("currency"),text("unit"),expected,change),candidate,revision,device,now)
 }

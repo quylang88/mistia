@@ -250,6 +250,13 @@ interface FamilyRepository {
 }
 
 interface InvestmentRepository {
+    suspend fun stagedProductImageData(owner:UserId,candidate:InvestmentProductImageCandidate):Result<ByteArray> = Result.failure(UnsupportedOperationException("Staged product image read unavailable"))
+    suspend fun productImageData(owner:UserId,assetId:String,path:String,thumbnail:Boolean=true):Result<ByteArray?> = Result.failure(UnsupportedOperationException("Product image read unavailable"))
+
+    suspend fun stageProductImage(owner:UserId,assetId:String,image:PreparedInvestmentProductImage):Result<InvestmentProductImageCandidate> = Result.failure(UnsupportedOperationException("Product image staging unavailable"))
+    suspend fun discardProductImage(owner:UserId,candidate:InvestmentProductImageCandidate):Result<Boolean> = Result.failure(UnsupportedOperationException("Product image discard unavailable"))
+    suspend fun saveAssetImage(owner:UserId,draft:InvestmentAssetDraft,candidate:InvestmentProductImageCandidate?,revision:String,deviceId:String,now:String):Result<InvestmentAssetRecord> = Result.failure(UnsupportedOperationException("Asset image save unavailable"))
+
     suspend fun editTrade(owner:UserId,request:InvestmentTradeEditRequest,deviceId:String,now:String):Result<CloudRecord> = Result.failure(UnsupportedOperationException("Trade editing unavailable"))
 
     fun observeTradeDeletionSnapshot(owner:UserId):Flow<InvestmentTradeDeletionSnapshot> = observePurchaseSnapshot(owner)
@@ -287,6 +294,8 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun commitInvestmentAssetImageMutation(expected:InvestmentAssetSnapshot,request:InvestmentAssetImageSaveRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional asset image save unavailable")
+
     suspend fun commitInvestmentTradeEdit(expected:InvestmentTradeCreationSnapshot,request:InvestmentTradeEditRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional trade editing unavailable")
 
     suspend fun commitInvestmentTradeDeletion(expected:InvestmentTradeDeletionSnapshot,request:InvestmentTradeDeletionRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional trade deletion unavailable")

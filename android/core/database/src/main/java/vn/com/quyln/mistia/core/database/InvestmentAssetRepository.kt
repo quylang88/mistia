@@ -12,7 +12,7 @@ internal class OfflineInvestmentAssetRepository(private val store:LocalStore) {
         })
     }
     suspend fun save(owner:UserId,draft:InvestmentAssetDraft,device:String,now:String):Result<InvestmentAssetRecord> =
-        result{mutate(owner,InvestmentAssetRequest.Save(draft),device,now)}
+        result{require(draft.imageChange==InvestmentAssetImageChange.Keep){"Asset images require a reserved publication"};mutate(owner,InvestmentAssetRequest.Save(draft),device,now)}
     suspend fun archive(owner:UserId,expected:InvestmentAssetRecord,archived:Boolean,device:String,now:String):Result<Unit> =
         result{mutate(owner,InvestmentAssetRequest.Archive(expected,archived),device,now);Unit}
     private suspend fun mutate(owner:UserId,request:InvestmentAssetRequest,device:String,now:String):InvestmentAssetRecord {

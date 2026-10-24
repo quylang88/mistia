@@ -155,7 +155,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
             .thenByDescending{runCatching{Instant.parse(it.payload.financeRawString("created_at"))}.getOrDefault(Instant.MIN)}.thenByDescending{it.id})}
     androidx.activity.compose.BackHandler(enabled=historyOpen && cashDirection==null && tradeDetailId==null){historyOpen=false}
     if(historyOpen)InvestmentCashHistoryScreen(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
-        onBack={historyOpen=false},onOpen=::editCash,onRetry={cashRetry++},modifier=modifier)
+        onBack={historyOpen=false},onOpen=::editCash,onRetry={cashRetry++},owner=owner,repository=repository,assetImagePaths=assets.orEmpty().associate{it.id to it.imagePath},modifier=modifier)
     else LazyColumn(modifier.fillMaxSize().testTag("investment.list"),state=listState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         item{
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
@@ -182,7 +182,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         item(key="investment.cash.locations"){InvestmentCashLocations(cashLoad,cashSnapshot,cashView,onRetry={cashRetry++},
             reconcilableIds=reconciliationView?.locations.orEmpty().map{it.wallet.id}.toSet(),onReconcile={reconciliationTarget=it})}
         item(key="investment.cash.history"){InvestmentCashHistoryPreview(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
-            onAll={historyOpen=true},onOpen=::editCash,onRetry={cashRetry++})}
+            onAll={historyOpen=true},onOpen=::editCash,onRetry={cashRetry++},owner=owner,repository=repository,assetImagePaths=assets.orEmpty().associate{it.id to it.imagePath})}
         item{Button(onClick={edit(null)},enabled=readable && !actionRunning,modifier=Modifier.testTag("investment.channels.add")){Text(stringResource(R.string.investment_hub_add_channel))}}
         item{Button(onClick={editAsset(null)},enabled=assetReadable && !actionRunning && channels.orEmpty().any{!it.isArchived},
             modifier=Modifier.testTag("investment.assets.add")){Text(stringResource(R.string.investment_hub_add_asset))}}
@@ -213,7 +213,10 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         if(assets.orEmpty().isNotEmpty())item{Text(stringResource(R.string.investment_hub_assets_tab),style=MaterialTheme.typography.titleLarge)}
         items(assets.orEmpty(),key={asset ->"asset-"+asset.id}){asset ->
             MistiaGlassCard{padding ->Column(Modifier.fillMaxWidth().padding(padding),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                Text(asset.name,style=MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    InvestmentProductThumbnail(owner,repository,asset.id,asset.imagePath)
+                    Text(asset.name,Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+                }
                 Text(listOfNotNull(asset.defaultUnitLabel,asset.currencyCode).joinToString(" · "),style=MaterialTheme.typography.bodyMedium)
                 val stock=assetPositions[asset.id]?.joinToString(" · "){it.quantity.toPlainString()+" "+it.unitLabel.orEmpty()}
                 Text(stock ?: "—",Modifier.testTag("investment.asset.stock."+asset.id))
@@ -234,8 +237,13 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         items(trades,key={"trade-${it.id}"}){trade ->
             val currency=trade.payload.financeRawString("currency_code")?.financeReportingCode()
             val amount=trade.payload.financeRawLong("gross_amount_minor")
-            MistiaGlassCard{padding ->MistiaRecordRow(stringResource(if(trade.string("kind_raw_value")=="buy")R.string.investment_hub_buy else R.string.investment_hub_sell),
-                subtitle=trade.string("occurred_at"),trailing=if(currency==null || amount==null) "—" else formatMinorUnits(amount,currency),modifier=Modifier.padding(padding).clickable{tradeDetailId=trade.id}.testTag("investment.trade."+trade.id))}
+            MistiaGlassCard{padding ->Row(Modifier.fillMaxWidth().padding(padding).clickable{tradeDetailId=trade.id}.testTag("investment.trade."+trade.id),
+                verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                val assetId=trade.payload.financeRawReference("asset_id").id
+                assetId?.let{value->InvestmentProductThumbnail(owner,repository,value,assets.orEmpty().singleOrNull{it.id==value}?.imagePath)}
+                MistiaRecordRow(stringResource(if(trade.string("kind_raw_value")=="buy")R.string.investment_hub_buy else R.string.investment_hub_sell),
+                    subtitle=trade.string("occurred_at"),trailing=if(currency==null || amount==null) "—" else formatMinorUnits(amount,currency),modifier=Modifier.weight(1f))
+            }}
         }
         item{Spacer(Modifier.height(32.dp))}
     }

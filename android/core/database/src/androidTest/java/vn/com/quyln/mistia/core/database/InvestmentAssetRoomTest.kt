@@ -161,4 +161,32 @@ class InvestmentAssetRoomTest {
         Assert.assertEquals(before,store.investmentAssetSnapshot(owner));Assert.assertEquals(pending,queues())
     }
 
+    @Test fun imageRemovalAndLegacyUnitResolutionShareOneFinancialCommitAndExactRetryProof()=runBlocking {
+        val asset=legacyAssetWithHistory()
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val directory=java.io.File(context.cacheDir,"legacy-image-room-${java.util.UUID.randomUUID()}")
+        val images=FileInvestmentProductImageCache(directory,{active})
+        val guarded=RoomLocalStore(db,currentBillOwner={active},productImages=images)
+        try {
+            val publication=images.reserveRemoval(owner,id,null,"55555555-5555-5555-5555-555555555555").getOrThrow()
+            val request=InvestmentAssetImageSaveRequest(draft().copy(expected=asset,imageChange=InvestmentAssetImageChange.Remove),publication)
+            Assert.assertTrue(guarded.commitInvestmentAssetImageMutation(guarded.investmentAssetSnapshot(owner),request,device,now))
+            val after=guarded.investmentAssetSnapshot(owner)
+            Assert.assertTrue(after.records(CloudEntity.INVESTMENT_TRADE).all{it.payload.financeRawString("unit_label")=="box"})
+            Assert.assertEquals(3,after.records(CloudEntity.LEDGER_TRANSACTION).size)
+            Assert.assertEquals(4,after.records(CloudEntity.INVESTMENT_POSTING).size)
+            Assert.assertEquals(50L,after.records(CloudEntity.INVESTMENT_POSTING).single{it.payload.financeRawString("role_raw_value")=="cashAccrual"}.payload.financeRawLong("amount_minor"))
+            Assert.assertTrue(images.markLocalPublished(owner,publication).getOrThrow())
+            val queued=queues()
+            Assert.assertTrue(guarded.commitInvestmentAssetImageMutation(after,request,device,"2026-10-24T00:00:00Z"))
+            Assert.assertEquals(after,guarded.investmentAssetSnapshot(owner));Assert.assertEquals(queued,queues())
+            val trade=after.records(CloudEntity.INVESTMENT_TRADE).first()
+            store.commitMutations(listOf(mutation(trade.copy(payload=JsonObject(trade.payload+("unit_label" to JsonNull))))))
+            val damaged=guarded.investmentAssetSnapshot(owner);val pending=queues()
+            val error=runCatching{guarded.commitInvestmentAssetImageMutation(damaged,request,device,now)}.exceptionOrNull()
+            Assert.assertEquals(InvestmentAssetError.INVALID_ACCOUNTING,(error as? InvestmentAssetException)?.reason)
+            Assert.assertEquals(damaged,guarded.investmentAssetSnapshot(owner));Assert.assertEquals(pending,queues())
+        }finally{directory.deleteRecursively()}
+    }
+
 }

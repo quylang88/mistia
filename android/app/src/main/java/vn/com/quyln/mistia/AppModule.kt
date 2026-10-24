@@ -129,10 +129,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideLocalStore(database: MistiaDatabase, json: Json,preferences:NotificationPreferencesStore,auth:AuthRepository): LocalStore =
+    fun provideLocalStore(database: MistiaDatabase, json: Json,preferences:NotificationPreferencesStore,auth:AuthRepository,images:vn.com.quyln.mistia.core.database.FileInvestmentProductImageCache): LocalStore =
         RoomLocalStore(database,json,billRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.BILLS)},
             walletRemindersEnabled={preferences.state.value.reminderEnabled(ReminderKind.WALLETS)},
-            currentBillOwner={(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId})
+            currentBillOwner={(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId},productImages=images)
 
     @Provides
     @Singleton
@@ -432,8 +432,24 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideInvestmentRepository(localStore: LocalStore,@ApplicationContext context:Context): InvestmentRepository =
-        OfflineFirstInvestmentRepository(localStore) {context.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_wallet_name)}
+    fun provideInvestmentRepository(localStore: LocalStore,@ApplicationContext context:Context,
+        images:vn.com.quyln.mistia.core.database.FileInvestmentProductImageCache,
+        remote:vn.com.quyln.mistia.core.model.InvestmentProductImageRemote): InvestmentRepository =
+        OfflineFirstInvestmentRepository(localStore,productImages=images,productImageRemote=remote,
+            productImageThumbnailer={data->vn.com.quyln.mistia.feature.investment.AndroidInvestmentProductImagePreparer(context.contentResolver).prepare(data).thumbnailData}) {context.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_wallet_name)}
+
+    @Provides
+    @Singleton
+    fun provideProductImageCache(@ApplicationContext context:Context,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.database.FileInvestmentProductImageCache(File(context.filesDir,"InvestmentProductImages"),
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session?.userId})
+
+    @Provides
+    @Singleton
+    fun provideProductImageRemote(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository):vn.com.quyln.mistia.core.model.InvestmentProductImageRemote =
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentProductImageClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
 
     @Provides
     @Singleton

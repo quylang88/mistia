@@ -58,8 +58,9 @@ class InvestmentAssetScreenTest {
     private val device="44444444-4444-4444-4444-444444444444"
     private val now="2026-10-21T00:00:00Z"
     @Before fun setup() {
-        db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).allowMainThreadQueries().build();store=RoomLocalStore(db)
-        repo=OfflineFirstInvestmentRepository(store)
+        val images=FileInvestmentProductImageCache(java.io.File(context.cacheDir,"asset-screen-images-${java.util.UUID.randomUUID()}"),{owner})
+        db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).allowMainThreadQueries().build();store=RoomLocalStore(db,productImages=images)
+        repo=OfflineFirstInvestmentRepository(store,productImages=images)
         runBlocking{repo.saveChannel(owner,InvestmentChannelDraft(channel,"Cards"),"VND",device,now).getOrThrow()}
     }
     @Composable private fun Screen(subject:UserId=owner,source:InvestmentRepository=repo,dark:Boolean=false) {
@@ -350,6 +351,25 @@ class InvestmentAssetScreenTest {
             originalResources.forEach{(resource,originalConfig)->resource.updateConfiguration(originalConfig,resource.displayMetrics)}
             android.view.inspector.WindowInspector.getGlobalWindowViews().forEach{it.dispatchConfigurationChanged(android.content.res.Configuration(it.resources.configuration))}
         }}
+    }
+
+    @Test fun actualNewAssetOffersPhotoLibraryAndCameraWithoutSavingAnEmptyDraft() {
+        compose.setContent{Screen()};add()
+        compose.onNodeWithTag("investment.asset.image.add").performScrollTo().performClick()
+        compose.onNodeWithTag("investment.asset.image.library").assertIsDisplayed()
+        compose.onNodeWithTag("investment.asset.image.camera").assertIsDisplayed()
+        Assert.assertTrue(rows().records(CloudEntity.INVESTMENT_ASSET).isEmpty())
+    }
+    @Test fun actualExistingPhotoRemovalIsExplicitAndCancelPreservesTheCurrentReference() {
+        seedAsset();compose.setContent{Screen()};await("investment.asset.edit.$id")
+        compose.onNodeWithTag("investment.asset.edit.$id").performScrollTo().performClick();await("investment.asset.name")
+        compose.onNodeWithTag("investment.asset.image.remove").performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(vn.com.quyln.mistia.core.designsystem.R.string.common_cancel)).performScrollTo().performClick();closed()
+        Assert.assertEquals("private-preserved.jpg",rows().records(CloudEntity.INVESTMENT_ASSET).single().payload.financeRawString("image_path"))
+        await("investment.asset.edit.$id");compose.onNodeWithTag("investment.asset.edit.$id").performScrollTo().performClick();await("investment.asset.name")
+        compose.onNodeWithTag("investment.asset.image.remove").performScrollTo().performClick();save();closed()
+        Assert.assertSame(JsonNull,rows().records(CloudEntity.INVESTMENT_ASSET).single().payload["image_path"])
+        Assert.assertSame(JsonNull,queues().getValue(CloudEntity.INVESTMENT_ASSET).single().mutation.payload!!["image_path"])
     }
 
 }

@@ -143,7 +143,10 @@ private class TradeDetailSession {
             }
             Column(Modifier.fillMaxWidth().weight(1f,false).verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 if(detail!=null) {
-                    TradeDetailValue(stringResource(R.string.investment_trade_asset),detail.asset.name,prefix+".asset")
+                    Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                        InvestmentProductThumbnail(owner,repository,detail.asset.id,detail.asset.imagePath,size=44.dp)
+                        Column(Modifier.weight(1f)){TradeDetailValue(stringResource(R.string.investment_trade_asset),detail.asset.name,prefix+".asset")}
+                    }
                     TradeDetailValue(stringResource(R.string.investment_channel_name),detail.channelName,prefix+".channel")
                     Text(stringResource(if(detail.kind==InvestmentTradeKind.BUY)R.string.investment_hub_buy else R.string.investment_hub_sell),Modifier.testTag(prefix+".kind"),style=MaterialTheme.typography.titleMedium)
                     TradeDetailValue(stringResource(R.string.investment_trade_quantity),detail.quantity.stripTrailingZeros().toPlainString()+" "+detail.unit,prefix+".quantity")

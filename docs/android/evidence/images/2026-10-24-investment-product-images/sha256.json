@@ -1,0 +1,65 @@
+{
+  "source": "Final corrected native PhotoScreen visual matrix, completed within the full Investment run",
+  "images": [
+    {
+      "file": "investment-product-photo-en-light-font130-width320.png",
+      "language": "en",
+      "theme": "light",
+      "fontScale": 1.3,
+      "viewportWidthDp": 320,
+      "view": "actual scrolled asset editor with staged JPEG preview and Remove action",
+      "bytes": 80013,
+      "sha256": "8c778d784787bdafc37df17f7039db94229c56208850b216161ea87ad18e37a0"
+    },
+    {
+      "file": "investment-product-photo-en-dark-font130-width320.png",
+      "language": "en",
+      "theme": "dark",
+      "fontScale": 1.3,
+      "viewportWidthDp": 320,
+      "view": "actual scrolled asset editor with staged JPEG preview and Remove action",
+      "bytes": 82558,
+      "sha256": "8518f66d149fef5aa3ef59fe8666a21c15297a956e10b07b8800946b4ab2cc74"
+    },
+    {
+      "file": "investment-product-photo-vi-light-font130-width320.png",
+      "language": "vi",
+      "theme": "light",
+      "fontScale": 1.3,
+      "viewportWidthDp": 320,
+      "view": "actual scrolled asset editor with staged JPEG preview and Remove action",
+      "bytes": 78563,
+      "sha256": "3aee7726d7b505f47306b1a74a4a35bb397f9206adccd454b0d3ed0898d6a0b3"
+    },
+    {
+      "file": "investment-product-photo-vi-dark-font130-width320.png",
+      "language": "vi",
+      "theme": "dark",
+      "fontScale": 1.3,
+      "viewportWidthDp": 320,
+      "view": "actual scrolled asset editor with staged JPEG preview and Remove action",
+      "bytes": 80792,
+      "sha256": "413036c4e0de110a6741d9415d4ac7bbe5837d6e60f2aa2720e4f3145cc5f818"
+    },
+    {
+      "file": "investment-product-photo-ja-light-font130-width320.png",
+      "language": "ja",
+      "theme": "light",
+      "fontScale": 1.3,
+      "viewportWidthDp": 320,
+      "view": "actual scrolled asset editor with staged JPEG preview and Remove action",
+      "bytes": 79341,
+      "sha256": "866825975aafed8b985eb13c24b57bf457f4b0567a137c868cd3c6f25ace032f"
+    },
+    {
+      "file": "investment-product-photo-ja-dark-font130-width320.png",
+      "language": "ja",
+      "theme": "dark",
+      "fontScale": 1.3,
+      "viewportWidthDp": 320,
+      "view": "actual scrolled asset editor with staged JPEG preview and Remove action",
+      "bytes": 81977,
+      "sha256": "0054d63fd301407c052c394605169ee1b7c83677388038fadba07f37c2737834"
+    }
+  ]
+}
