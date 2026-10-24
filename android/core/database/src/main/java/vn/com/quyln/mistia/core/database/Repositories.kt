@@ -490,11 +490,13 @@ class OfflineFirstFamilyRepository(private val localStore: LocalStore) : FamilyR
 }
 
 class OfflineFirstInvestmentRepository(private val localStore: LocalStore,systemWalletName:()->String={"Investment wallet"}) : InvestmentRepository by OfflineInvestmentChannelRepository(localStore,systemWalletName) {
-    private val purchases=OfflineInvestmentTradeCreationRepository(localStore)
-    override fun observePurchaseSnapshot(owner:UserId)=purchases.observe(owner)
-    override fun observeSaleSnapshot(owner:UserId)=purchases.observe(owner)
-    override suspend fun saveSale(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentSaleRequest,deviceId:String,now:String)=purchases.saveSale(owner,request,deviceId,now)
-    override suspend fun savePurchase(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String)=purchases.save(owner,request,deviceId,now)
+    private val trades=OfflineInvestmentTradeRepository(localStore)
+    override fun observePurchaseSnapshot(owner:UserId)=trades.observe(owner)
+    override fun observeSaleSnapshot(owner:UserId)=trades.observe(owner)
+    override suspend fun saveSale(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentSaleRequest,deviceId:String,now:String)=trades.saveSale(owner,request,deviceId,now)
+    override suspend fun savePurchase(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String)=trades.savePurchase(owner,request,deviceId,now)
+    override fun observeTradeDeletionSnapshot(owner:UserId)=trades.observe(owner)
+    override suspend fun deleteTrade(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentTradeDeletionRequest,deviceId:String,now:String)=trades.deleteTrade(owner,request,deviceId,now)
     private val reconciliation=OfflineInvestmentCashReconciliationRepository(localStore)
     override suspend fun reconcileCash(owner:UserId,request:vn.com.quyln.mistia.core.model.InvestmentCashReconciliationRequest,deviceId:String,now:String)=reconciliation.reconcile(owner,request,deviceId,now)
 

@@ -91,7 +91,7 @@ private class TradeFormSession {
         else if(unit.isEmpty())unit=asset?.defaultUnitLabel.orEmpty()
         if(walletId==null)walletId=wallets.firstOrNull()?.id
     }
-    val ledgerTitle=stringResource(R.string.investment_wallet_history_adjustment)
+    val ledgerTitle=stringResource(R.string.investment_cash_automatic_reconciliation_title)
     val promotionalNote=stringResource(R.string.investment_trade_promotional_free_badge)
     val lossNote=stringResource(R.string.investment_trade_total_loss_badge,formatMinorUnits(0,asset?.currencyCode ?: "JPY"))
     val available=positions?.get(assetId)?.let{values->
@@ -196,7 +196,7 @@ private class TradeFormSession {
                 InvestmentCashDateTime(occurredAt,{occurredAt=it;session.review=null;session.failed=null;session.error=null},!session.saving)
                 OutlinedTextField(note,{note=it;session.review=null;session.failed=null;session.error=null},enabled=!session.saving,label={Text(stringResource(R.string.investment_trade_note))},modifier=Modifier.fillMaxWidth().testTag(prefix+".note"))
                 if(data==null){Text(stringResource(R.string.common_error));TextButton(onClick={session.error=null;retry++},modifier=Modifier.testTag(prefix+".reload")){Text(stringResource(R.string.planning_installment_retry))}}
-                session.error?.let{Text(stringResource(purchaseErrorResource(it)),Modifier.testTag(prefix+".error"),color=MaterialTheme.colorScheme.error)}
+                session.error?.let{Text(stringResource(investmentTradeErrorResource(it)),Modifier.testTag(prefix+".error"),color=MaterialTheme.colorScheme.error)}
                 session.failed?.let{failed->TextButton(onClick={execute(failed)},enabled=!session.saving && failed.withConsent(null)==request && (enoughStock || candidate),modifier=Modifier.testTag(prefix+".retry")){Text(stringResource(R.string.planning_installment_retry))}}
                 if(session.saving)CircularProgressIndicator(Modifier.size(24.dp))
             }
@@ -204,7 +204,7 @@ private class TradeFormSession {
     }
     session.review?.let{(frozen,review)->
         val adapter=InvestmentFundUsageReview(InvestmentFundUsageConsent(owner.value,if(buying)investmentLedgerIdentity(id,"funding") else id,"",""),review.comparison,review.requiresConfirmation)
-        InvestmentFundUsageDialog(adapter,wallets,onDismiss={session.review=null},onConfirm={execute(frozen.withConsent(review.consent))},isSaving=session.saving,tagPrefix=prefix+".funds",canConfirm=frozen==request && (enoughStock || candidate),tradeChanges=true,contextMessage=if(buying)null else stringResource(R.string.investment_trade_sale_cash_review_context))
+        InvestmentFundUsageDialog(adapter,wallets,onDismiss={session.review=null},onConfirm={execute(frozen.withConsent(review.consent))},isSaving=session.saving,tagPrefix=prefix+".funds",canConfirm=frozen==request && (enoughStock || candidate),tradeAction=InvestmentTradeFundAction.SAVE,contextMessage=if(buying)null else stringResource(R.string.investment_trade_sale_cash_review_context))
     }
 }
 private fun purchaseInputMinor(text:String,code:String):Long?=runCatching{BigDecimal(text.trim().replace(",","")).movePointRight(Currency.getInstance(code).defaultFractionDigits).setScale(0,RoundingMode.UNNECESSARY).longValueExact()}.getOrNull()
@@ -215,7 +215,7 @@ internal fun purchaseRate(source:String,destination:String,rates:List<ExchangeRa
     val inverse=rates.firstOrNull{it.baseCurrencyCode==destination && it.quoteCurrencyCode==source && it.rateDecimalString.toBigDecimalOrNull()?.signum()==1} ?: return null
     return runCatching{investmentPurchaseInverseRate(inverse.rateDecimalString) to inverse}.getOrNull()
 }
-private fun purchaseErrorResource(error:Throwable):Int=when(error) {
+internal fun investmentTradeErrorResource(error:Throwable):Int=when(error) {
     is InvestmentAccountingException->when(error.reason){
         InvestmentAccountingError.INSUFFICIENT_POSITION->R.string.investment_error_insufficient_position
         InvestmentAccountingError.INVALID_QUANTITY->R.string.investment_error_invalid_quantity

@@ -389,6 +389,7 @@
     <string name="investment_permission_trade_required_title">Chưa có quyền giao dịch</string>
     <string name="investment_permission_view_message">Danh mục đầu tư này thuộc quyền riêng tư của thành viên. Cần có sự cho phép để truy cập thông tin.</string>
     <string name="investment_title">Đầu tư</string>
+    <string name="investment_trade_accounting_amount">Số tiền hạch toán</string>
     <string name="investment_trade_asset">Tài sản</string>
     <string name="investment_trade_available_quantity">Có thể bán: %1$s</string>
     <string name="investment_trade_buy_total">Tổng tiền mua</string>
@@ -399,8 +400,12 @@
     <string name="investment_trade_choose_asset">Chọn tài sản</string>
     <string name="investment_trade_clear_search">Xóa tìm kiếm</string>
     <string name="investment_trade_delete_action">Xóa giao dịch</string>
+    <string name="investment_trade_delete_cash_review_action">Xóa và cập nhật tiền đã dùng</string>
+    <string name="investment_trade_delete_cash_review_message">Xóa giao dịch này sẽ cập nhật tiền đầu tư đã dùng trong ví này từ %1$s thành %2$s. Sau khi xóa, ví còn %3$s tiền đầu tư khả dụng. Việc xóa và thay đổi tiền đã dùng sẽ được lưu cùng nhau.</string>
     <string name="investment_trade_delete_confirmation">Giao dịch này sẽ bị xóa khỏi lịch sử đầu tư. Bạn có muốn tiếp tục?</string>
     <string name="investment_trade_delete_description">Giao dịch đã xóa sẽ không còn ảnh hưởng đến tính toán vốn và lợi nhuận.</string>
+    <string name="investment_trade_detail_title">Giao dịch đầu tư</string>
+    <string name="investment_trade_exchange_rate">Tỷ giá đã lưu</string>
     <string name="investment_trade_funding_wallet">Ví thanh toán Mua</string>
     <string name="investment_trade_gross_amount">Tổng giá trị giao dịch</string>
     <string name="investment_trade_is_promotional_free">Hàng khuyến mãi</string>
@@ -409,9 +414,11 @@
     <string name="investment_trade_new_buy_title">Ghi nhận mua</string>
     <string name="investment_trade_new_sell_title">Ghi nhận bán</string>
     <string name="investment_trade_note">Ghi chú</string>
+    <string name="investment_trade_position_after">Tồn kho sau giao dịch</string>
     <string name="investment_trade_promotional_free_badge">Khuyến mãi</string>
     <string name="investment_trade_promotional_free_description">Thêm số lượng này vào kho và không trừ tiền từ ví.</string>
     <string name="investment_trade_quantity">Số lượng</string>
+    <string name="investment_trade_released_cost_basis">Giá vốn đã xuất</string>
     <string name="investment_trade_resolve_unit_before_trading">Hãy bổ sung đơn vị mặc định trong phần Sửa tài sản trước khi ghi thêm giao dịch.</string>
     <string name="investment_trade_sale_cash_review_context">Giao dịch bán này cũng làm thay đổi tiền đầu tư mà các giao dịch về sau đã dùng.</string>
     <string name="investment_trade_search_asset">Tìm tài sản hoặc kênh</string>

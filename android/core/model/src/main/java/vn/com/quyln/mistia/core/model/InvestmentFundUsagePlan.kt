@@ -121,8 +121,15 @@ internal fun planInvestmentFundEffects(snapshot:InvestmentCashReadSnapshot,accou
                         "exchange_rate_decimal_string","exchange_rate_provider","exchange_rate_date","counterparty_name","normalized_counterparty_key").any(p::financePresent))
                     fundUsageFail(InvestmentFundUsageError.EVENT_CONFLICT)
             }
-            val preserved=if(entity==CloudEntity.LEDGER_TRANSACTION && "created_by_user_id" in current.payload)
-                JsonObject(fields+("created_by_user_id" to current.payload.getValue("created_by_user_id"))) else fields
+            val preserved=if(entity==CloudEntity.LEDGER_TRANSACTION) {
+                // This is stored record data. A different device language must
+                // not rename an existing adjustment or make its history drift.
+                if(current.payload.financeRawString("title")?.isNotBlank()!=true)fundUsageFail()
+                JsonObject(fields+buildMap {
+                    put("title",current.payload.getValue("title"))
+                    current.payload["created_by_user_id"]?.let{put("created_by_user_id",it)}
+                })
+            } else fields
             val identical=current.financeRawDeleted(true)==false && current.deletedAt==null && preserved.all{(field,value)->
                 if(field=="last_modified_by_user_id")true
                 else if(field=="occurred_at")runCatching{Instant.parse(current.payload.financeRawString(field))==Instant.parse(value.jsonPrimitive.content)}.getOrDefault(false)

@@ -968,6 +968,8 @@ nonisolated enum L10n {
         static func title(language: MistiaAppLanguage) -> String { L10n.tr("investment.title", vi: "Đầu tư", en: "Investments", ja: "投資", language: language) }
 
         nonisolated enum trade {
+            static var accountingAmount: String { L10n.tr("investment.trade.accountingAmount", vi: "Số tiền hạch toán", en: "Accounting Amount", ja: "会計金額") }
+            static func accountingAmount(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.accountingAmount", vi: "Số tiền hạch toán", en: "Accounting Amount", ja: "会計金額", language: language) }
             static var asset: String { L10n.tr("investment.trade.asset", vi: "Tài sản", en: "Asset", ja: "資産") }
             static func asset(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.asset", vi: "Tài sản", en: "Asset", ja: "資産", language: language) }
             static func availableQuantity(_ value: String) -> String {
@@ -996,10 +998,22 @@ nonisolated enum L10n {
             static func clearSearch(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.clearSearch", vi: "Xóa tìm kiếm", en: "Clear Search", ja: "検索をクリア", language: language) }
             static var deleteAction: String { L10n.tr("investment.trade.deleteAction", vi: "Xóa giao dịch", en: "Delete Transaction", ja: "取引を削除") }
             static func deleteAction(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.deleteAction", vi: "Xóa giao dịch", en: "Delete Transaction", ja: "取引を削除", language: language) }
+            static var deleteCashReviewAction: String { L10n.tr("investment.trade.deleteCashReviewAction", vi: "Xóa và cập nhật tiền đã dùng", en: "Delete and Update Usage", ja: "削除して使用額を更新") }
+            static func deleteCashReviewAction(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.deleteCashReviewAction", vi: "Xóa và cập nhật tiền đã dùng", en: "Delete and Update Usage", ja: "削除して使用額を更新", language: language) }
+            static func deleteCashReviewMessage(_ arg1: String, _ arg2: String, _ arg3: String) -> String {
+                L10n.format("investment.trade.deleteCashReviewMessage", vi: "Xóa giao dịch này sẽ cập nhật tiền đầu tư đã dùng trong ví này từ %@ thành %@. Sau khi xóa, ví còn %@ tiền đầu tư khả dụng. Việc xóa và thay đổi tiền đã dùng sẽ được lưu cùng nhau.", en: "Deleting this trade updates the investment cash used in this wallet from %@ to %@. After deletion, %@ will remain available. The deletion and these cash changes will be saved together.", ja: "この取引を削除すると、このウォレットで使用する投資資金が%@から%@に変わります。削除後に利用可能な投資資金は%@です。取引の削除と資金使用額の変更は一緒に保存されます。", arg1, arg2, arg3)
+            }
+            static func deleteCashReviewMessage(_ arg1: String, _ arg2: String, _ arg3: String, language: MistiaAppLanguage) -> String {
+                L10n.format("investment.trade.deleteCashReviewMessage", vi: "Xóa giao dịch này sẽ cập nhật tiền đầu tư đã dùng trong ví này từ %@ thành %@. Sau khi xóa, ví còn %@ tiền đầu tư khả dụng. Việc xóa và thay đổi tiền đã dùng sẽ được lưu cùng nhau.", en: "Deleting this trade updates the investment cash used in this wallet from %@ to %@. After deletion, %@ will remain available. The deletion and these cash changes will be saved together.", ja: "この取引を削除すると、このウォレットで使用する投資資金が%@から%@に変わります。削除後に利用可能な投資資金は%@です。取引の削除と資金使用額の変更は一緒に保存されます。", language: language, arg1, arg2, arg3)
+            }
             static var deleteConfirmation: String { L10n.tr("investment.trade.deleteConfirmation", vi: "Giao dịch này sẽ bị xóa khỏi lịch sử đầu tư. Bạn có muốn tiếp tục?", en: "This transaction will be removed from investment history. Do you want to continue?", ja: "この取引を投資履歴から削除します。続けますか？") }
             static func deleteConfirmation(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.deleteConfirmation", vi: "Giao dịch này sẽ bị xóa khỏi lịch sử đầu tư. Bạn có muốn tiếp tục?", en: "This transaction will be removed from investment history. Do you want to continue?", ja: "この取引を投資履歴から削除します。続けますか？", language: language) }
             static var deleteDescription: String { L10n.tr("investment.trade.deleteDescription", vi: "Giao dịch đã xóa sẽ không còn ảnh hưởng đến tính toán vốn và lợi nhuận.", en: "Deleted transactions will be excluded from cost basis and profit calculations.", ja: "削除された取引は投資元本および損益の計算から除外されます。") }
             static func deleteDescription(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.deleteDescription", vi: "Giao dịch đã xóa sẽ không còn ảnh hưởng đến tính toán vốn và lợi nhuận.", en: "Deleted transactions will be excluded from cost basis and profit calculations.", ja: "削除された取引は投資元本および損益の計算から除外されます。", language: language) }
+            static var detailTitle: String { L10n.tr("investment.trade.detailTitle", vi: "Giao dịch đầu tư", en: "Investment Transaction", ja: "投資取引") }
+            static func detailTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.detailTitle", vi: "Giao dịch đầu tư", en: "Investment Transaction", ja: "投資取引", language: language) }
+            static var exchangeRate: String { L10n.tr("investment.trade.exchangeRate", vi: "Tỷ giá đã lưu", en: "Stored Exchange Rate", ja: "保存された為替レート") }
+            static func exchangeRate(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.exchangeRate", vi: "Tỷ giá đã lưu", en: "Stored Exchange Rate", ja: "保存された為替レート", language: language) }
             static var fundingWallet: String { L10n.tr("investment.trade.fundingWallet", vi: "Ví thanh toán Mua", en: "Funding Wallet", ja: "支払元ウォレット") }
             static func fundingWallet(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.fundingWallet", vi: "Ví thanh toán Mua", en: "Funding Wallet", ja: "支払元ウォレット", language: language) }
             static var grossAmount: String { L10n.tr("investment.trade.grossAmount", vi: "Tổng giá trị giao dịch", en: "Total Transaction Value", ja: "取引総額") }
@@ -1020,12 +1034,16 @@ nonisolated enum L10n {
             static func newSellTitle(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.newSellTitle", vi: "Ghi nhận bán", en: "Record Sale", ja: "売却を記録", language: language) }
             static var note: String { L10n.tr("investment.trade.note", vi: "Ghi chú", en: "Note", ja: "メモ") }
             static func note(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.note", vi: "Ghi chú", en: "Note", ja: "メモ", language: language) }
+            static var positionAfter: String { L10n.tr("investment.trade.positionAfter", vi: "Tồn kho sau giao dịch", en: "Inventory After Transaction", ja: "取引後の在庫") }
+            static func positionAfter(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.positionAfter", vi: "Tồn kho sau giao dịch", en: "Inventory After Transaction", ja: "取引後の在庫", language: language) }
             static var promotionalFreeBadge: String { L10n.tr("investment.trade.promotionalFreeBadge", vi: "Khuyến mãi", en: "Promotional", ja: "販促品") }
             static func promotionalFreeBadge(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.promotionalFreeBadge", vi: "Khuyến mãi", en: "Promotional", ja: "販促品", language: language) }
             static var promotionalFreeDescription: String { L10n.tr("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này vào kho và không trừ tiền từ ví.", en: "Add this quantity to inventory without deducting money from a wallet.", ja: "この数量を在庫に追加し、ウォレットからは差し引きません。") }
             static func promotionalFreeDescription(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.promotionalFreeDescription", vi: "Thêm số lượng này vào kho và không trừ tiền từ ví.", en: "Add this quantity to inventory without deducting money from a wallet.", ja: "この数量を在庫に追加し、ウォレットからは差し引きません。", language: language) }
             static var quantity: String { L10n.tr("investment.trade.quantity", vi: "Số lượng", en: "Quantity", ja: "数量") }
             static func quantity(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.quantity", vi: "Số lượng", en: "Quantity", ja: "数量", language: language) }
+            static var releasedCostBasis: String { L10n.tr("investment.trade.releasedCostBasis", vi: "Giá vốn đã xuất", en: "Released Cost Basis", ja: "払出原価") }
+            static func releasedCostBasis(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.releasedCostBasis", vi: "Giá vốn đã xuất", en: "Released Cost Basis", ja: "払出原価", language: language) }
             static var resolveUnitBeforeTrading: String { L10n.tr("investment.trade.resolveUnitBeforeTrading", vi: "Hãy bổ sung đơn vị mặc định trong phần Sửa tài sản trước khi ghi thêm giao dịch.", en: "Add a default unit in Edit Asset before recording another transaction.", ja: "次の取引を記録する前に、資産の編集でデフォルト単位を追加してください。") }
             static func resolveUnitBeforeTrading(language: MistiaAppLanguage) -> String { L10n.tr("investment.trade.resolveUnitBeforeTrading", vi: "Hãy bổ sung đơn vị mặc định trong phần Sửa tài sản trước khi ghi thêm giao dịch.", en: "Add a default unit in Edit Asset before recording another transaction.", ja: "次の取引を記録する前に、資産の編集でデフォルト単位を追加してください。", language: language) }
             static var saleCashReviewContext: String { L10n.tr("investment.trade.saleCashReviewContext", vi: "Giao dịch bán này cũng làm thay đổi tiền đầu tư mà các giao dịch về sau đã dùng.", en: "This sale also changes how later transactions use investment cash.", ja: "この売却により、後の取引が使用する投資資金も変わります。") }

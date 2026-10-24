@@ -389,6 +389,7 @@
     <string name="investment_permission_trade_required_title">取引権限がありません</string>
     <string name="investment_permission_view_message">このポートフォリオはメンバーの個人データです。承認されたファミリーメンバーのみが投資情報にアクセスできます。</string>
     <string name="investment_title">投資</string>
+    <string name="investment_trade_accounting_amount">会計金額</string>
     <string name="investment_trade_asset">資産</string>
     <string name="investment_trade_available_quantity">売却可能数量：%1$s</string>
     <string name="investment_trade_buy_total">買付総額</string>
@@ -399,8 +400,12 @@
     <string name="investment_trade_choose_asset">資産を選択</string>
     <string name="investment_trade_clear_search">検索をクリア</string>
     <string name="investment_trade_delete_action">取引を削除</string>
+    <string name="investment_trade_delete_cash_review_action">削除して使用額を更新</string>
+    <string name="investment_trade_delete_cash_review_message">この取引を削除すると、このウォレットで使用する投資資金が%1$sから%2$sに変わります。削除後に利用可能な投資資金は%3$sです。取引の削除と資金使用額の変更は一緒に保存されます。</string>
     <string name="investment_trade_delete_confirmation">この取引を投資履歴から削除します。続けますか？</string>
     <string name="investment_trade_delete_description">削除された取引は投資元本および損益の計算から除外されます。</string>
+    <string name="investment_trade_detail_title">投資取引</string>
+    <string name="investment_trade_exchange_rate">保存された為替レート</string>
     <string name="investment_trade_funding_wallet">支払元ウォレット</string>
     <string name="investment_trade_gross_amount">取引総額</string>
     <string name="investment_trade_is_promotional_free">販促品</string>
@@ -409,9 +414,11 @@
     <string name="investment_trade_new_buy_title">買付を記録</string>
     <string name="investment_trade_new_sell_title">売却を記録</string>
     <string name="investment_trade_note">メモ</string>
+    <string name="investment_trade_position_after">取引後の在庫</string>
     <string name="investment_trade_promotional_free_badge">販促品</string>
     <string name="investment_trade_promotional_free_description">この数量を在庫に追加し、ウォレットからは差し引きません。</string>
     <string name="investment_trade_quantity">数量</string>
+    <string name="investment_trade_released_cost_basis">払出原価</string>
     <string name="investment_trade_resolve_unit_before_trading">次の取引を記録する前に、資産の編集でデフォルト単位を追加してください。</string>
     <string name="investment_trade_sale_cash_review_context">この売却により、後の取引が使用する投資資金も変わります。</string>
     <string name="investment_trade_search_asset">資産またはチャンネルを検索</string>

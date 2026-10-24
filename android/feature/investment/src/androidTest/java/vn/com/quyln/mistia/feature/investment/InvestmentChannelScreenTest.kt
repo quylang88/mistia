@@ -97,7 +97,8 @@ class InvestmentChannelScreenTest {
         channel("Private collectibles");var subject by mutableStateOf(owner)
         val source=object:InvestmentRepository by repo{override fun observeChannelSnapshot(owner:UserId)=if(owner==this@InvestmentChannelScreenTest.owner) repo.observeChannelSnapshot(owner) else emptyFlow()}
         compose.setContent{Screen(subject,source)};await("investment.channel.edit.$id");compose.onNodeWithTag("investment.channel.edit.$id").performScrollTo().performClick();await("investment.channel.name")
-        compose.runOnIdle{subject=other};compose.onNodeWithTag("investment.channel.sheet").assertDoesNotExist();compose.onAllNodesWithText("Private collectibles").assertCountEquals(0);compose.onNodeWithTag("investment.channels.add").assertIsNotEnabled()
+        compose.runOnIdle{subject=other};compose.onNodeWithTag("investment.channel.sheet").assertDoesNotExist();compose.onAllNodesWithText("Private collectibles").assertCountEquals(0)
+        await("investment.channels.add");compose.onNodeWithTag("investment.channels.add").performScrollTo().assertIsDisplayed().assertIsNotEnabled()
         Assert.assertTrue(channels(other).isEmpty());Assert.assertTrue(queues(other).values.all{it.isEmpty()})
     }
     @Test fun failedSaveAndSavedStateRestoreKeepTheSameDraftIdentityAndNameForRetry(){

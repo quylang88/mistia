@@ -863,20 +863,27 @@ class RoomLocalStore(
 
     override suspend fun commitInvestmentPurchase(expected:vn.com.quyln.mistia.core.model.InvestmentPurchaseSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentPurchaseRequest,deviceId:String,now:String):Boolean =
-        commitInvestmentTradeCreation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentPurchase(it,request,deviceId,now)}
+        commitInvestmentTradeMutation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentPurchase(it,request,deviceId,now).mutations}
 
     override suspend fun commitInvestmentSale(expected:vn.com.quyln.mistia.core.model.InvestmentSaleSnapshot,
         request:vn.com.quyln.mistia.core.model.InvestmentSaleRequest,deviceId:String,now:String):Boolean =
-        commitInvestmentTradeCreation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentSale(it,request,deviceId,now)}
+        commitInvestmentTradeMutation(expected,request.draft.assetId){vn.com.quyln.mistia.core.model.planInvestmentSale(it,request,deviceId,now).mutations}
 
-    private suspend fun commitInvestmentTradeCreation(expected:vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot,assetId:String,
-        prepare:(vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot)->vn.com.quyln.mistia.core.model.InvestmentTradeCreationPlan):Boolean {
+    override suspend fun commitInvestmentTradeDeletion(expected:vn.com.quyln.mistia.core.model.InvestmentTradeDeletionSnapshot,
+        request:vn.com.quyln.mistia.core.model.InvestmentTradeDeletionRequest,deviceId:String,now:String):Boolean {
+        val assetId=request.expectedTrade.payload.financeRawReference("asset_id").id
+            ?: throw vn.com.quyln.mistia.core.model.InvestmentAssetException(vn.com.quyln.mistia.core.model.InvestmentAssetError.UNREADABLE_SOURCE)
+        return commitInvestmentTradeMutation(expected,assetId){vn.com.quyln.mistia.core.model.planInvestmentTradeDeletion(it,request,deviceId,now).mutations}
+    }
+
+    private suspend fun commitInvestmentTradeMutation(expected:vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot,assetId:String,
+        prepare:(vn.com.quyln.mistia.core.model.InvestmentTradeCreationSnapshot)->List<Pair<CloudRecord,PendingMutation>>):Boolean {
         val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
         return database.withTransaction {
             ensureCurrentFinanceOwner(expected.owner)
             val current=investmentPurchaseSnapshot(expected.owner)
             if(expected.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id))!=current.rows.sortedWith(compareBy(CloudRecord::entity,CloudRecord::id)))return@withTransaction false
-            val plan=prepare(current)
+            val mutations=prepare(current)
             val historyIds=current.rows.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawReference("asset_id").id==assetId}.map{it.id}.toSet()
             val historyLedgerIds=historyIds.flatMap{id->listOf("funding","capital-return","profit-loss").map{component->vn.com.quyln.mistia.core.model.investmentLedgerIdentity(id,component)}}.toSet()
             val protectedRows=current.rows.filter{row->
@@ -884,20 +891,20 @@ class RoomLocalStore(
                     (row.entity==CloudEntity.LEDGER_TRANSACTION.table && (row.id in historyLedgerIds || row.payload["settlement_role_raw_value"]==JsonPrimitive("investmentReserveUse"))) ||
                     (row.entity==CloudEntity.INVESTMENT_POSTING.table && (row.payload.financeRawReference("trade_id").id in historyIds ||
                         (row.payload["cash_origin_raw_value"]==JsonPrimitive("derived") && row.payload["role_raw_value"] in setOf(JsonPrimitive("cashConsumption"),JsonPrimitive("cashTransfer"))))) ||
-                    plan.mutations.any{it.first.entity==row.entity && it.first.id==row.id}
+                    mutations.any{it.first.entity==row.entity && it.first.id==row.id}
             }
             for(row in protectedRows) {
                 val queued=database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)
                 val stored=database.cloudRecordDao().record(expected.owner.value,row.entity,row.id)!!
-                require(!stored.hasPendingMutation || queued!=null){"Purchase pending record has no outbox"}
+                require(!stored.hasPendingMutation || queued!=null){"Trade pending record has no outbox"}
                 if(queued!=null)require(stored.hasPendingMutation && queued.baseVersion==row.syncVersion &&
                     queued.kind==(if(row.deletedAt==null)"upsert" else "delete") && queued.modifiedAt==row.updatedAt &&
-                    queued.payloadJson?.let{json.parseToJsonElement(it)}==row.payload){"Purchase outbox differs from current source"}
+                    queued.payloadJson?.let{json.parseToJsonElement(it)}==row.payload){"Trade outbox differs from current source"}
             }
-            for((row,_) in plan.mutations) {
-                require(current.rows.any{it.entity==row.entity && it.id==row.id} || database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)==null){"Purchase identity has orphan outbox"}
+            for((row,_) in mutations) {
+                require(current.rows.any{it.entity==row.entity && it.id==row.id} || database.syncOutboxDao().record(expected.owner.value,row.entity,row.id)==null){"Trade identity has orphan outbox"}
             }
-            plan.mutations.forEach{(row,mutation)->commitMutationRows(row,mutation)}
+            mutations.forEach{(row,mutation)->commitMutationRows(row,mutation)}
             ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
             true
         }

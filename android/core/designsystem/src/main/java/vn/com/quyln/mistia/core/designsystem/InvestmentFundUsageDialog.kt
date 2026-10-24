@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -14,7 +15,9 @@ import vn.com.quyln.mistia.core.designsystem.R
 import vn.com.quyln.mistia.core.designsystem.formatMinorUnits
 import vn.com.quyln.mistia.core.model.*
 
-@Composable fun InvestmentFundUsageDialog(review:InvestmentFundUsageReview,wallets:List<LedgerWalletRecord>,onDismiss:()->Unit,onConfirm:()->Unit,isSaving:Boolean=false,tagPrefix:String="transaction.funds",canConfirm:Boolean=true,tradeChanges:Boolean=false,contextMessage:String?=null) {
+enum class InvestmentTradeFundAction { SAVE, DELETE }
+
+@Composable fun InvestmentFundUsageDialog(review:InvestmentFundUsageReview,wallets:List<LedgerWalletRecord>,onDismiss:()->Unit,onConfirm:()->Unit,isSaving:Boolean=false,tagPrefix:String="transaction.funds",canConfirm:Boolean=true,tradeAction:InvestmentTradeFundAction?=null,contextMessage:String?=null) {
     val comparison=review.comparison
     val rows=comparison.changes.ifEmpty {
         val prior=comparison.current.usages[review.consent.transactionId]
@@ -31,20 +34,21 @@ import vn.com.quyln.mistia.core.model.*
         else->0
     }
     val mode=if(rows.size==1)kind(rows.single().previousMinor,rows.single().proposedMinor,comparison.changes.isNotEmpty()) else 1
-    val title=if(tradeChanges)R.string.investment_trade_cash_review_title else when(mode){0->R.string.investment_wallet_use_funds_title;1->R.string.investment_wallet_update_funds_title;3->R.string.investment_wallet_reallocate_funds_title;else->R.string.investment_wallet_restore_funds_title}
-    val action=if(tradeChanges)R.string.investment_trade_cash_review_action else when(mode){0->R.string.investment_wallet_use_funds_action;1->R.string.investment_wallet_update_funds_action;3->R.string.investment_wallet_reallocate_funds_action;else->R.string.investment_wallet_restore_funds_action}
+    val title=if(tradeAction!=null)R.string.investment_trade_cash_review_title else when(mode){0->R.string.investment_wallet_use_funds_title;1->R.string.investment_wallet_update_funds_title;3->R.string.investment_wallet_reallocate_funds_title;else->R.string.investment_wallet_restore_funds_title}
+    val action=if(tradeAction==InvestmentTradeFundAction.DELETE)R.string.investment_trade_delete_cash_review_action else if(tradeAction!=null)R.string.investment_trade_cash_review_action else when(mode){0->R.string.investment_wallet_use_funds_action;1->R.string.investment_wallet_update_funds_action;3->R.string.investment_wallet_reallocate_funds_action;else->R.string.investment_wallet_restore_funds_action}
     AlertDialog(modifier=Modifier.testTag(tagPrefix+".review"),onDismissRequest={if(!isSaving)onDismiss()},title={Text(stringResource(title),Modifier.testTag(tagPrefix+".title"))},
         text={Column(Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             contextMessage?.let{Text(it,Modifier.testTag(tagPrefix+".context"))}
             rows.forEach{row->Column(Modifier.fillMaxWidth().testTag(tagPrefix+".wallet."+row.walletId),verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 Text(wallets.firstOrNull{it.id==row.walletId && it.ownerUserId==review.consent.ownerUserId}?.name.orEmpty(),Modifier.testTag(tagPrefix+".name."+row.walletId),style=MaterialTheme.typography.titleSmall)
                 val previous=formatMinorUnits(row.previousMinor,row.currencyCode);val proposed=formatMinorUnits(row.proposedMinor,row.currencyCode);val remaining=formatMinorUnits(row.remainingInvestmentMinor,row.currencyCode)
-                Text(if(tradeChanges)stringResource(R.string.investment_trade_cash_review_message,previous,proposed,remaining) else when(kind(row.previousMinor,row.proposedMinor,row in comparison.changes)) {
+                // Keep drawing and accessibility on the same paragraph layout for localized financial review.
+                Text(AnnotatedString(if(tradeAction!=null)stringResource(if(tradeAction==InvestmentTradeFundAction.DELETE)R.string.investment_trade_delete_cash_review_message else R.string.investment_trade_cash_review_message,previous,proposed,remaining) else when(kind(row.previousMinor,row.proposedMinor,row in comparison.changes)) {
                     0->stringResource(R.string.investment_wallet_use_funds_message,proposed,remaining)
                     1->stringResource(R.string.investment_wallet_update_funds_message,previous,proposed,remaining)
                     3->stringResource(R.string.investment_wallet_reallocate_funds_message,proposed,remaining)
                     else->stringResource(R.string.investment_wallet_restore_funds_message,previous,remaining)
-                },Modifier.testTag(tagPrefix+".message."+row.walletId))
+                }),Modifier.testTag(tagPrefix+".message."+row.walletId))
             }}
         }},
         confirmButton={TextButton(onClick=onConfirm,enabled=rows.isNotEmpty() && !isSaving && canConfirm,modifier=Modifier.heightIn(min=48.dp).testTag(tagPrefix+".confirm")){Text(stringResource(action),Modifier.testTag(tagPrefix+".confirm.text"))}},

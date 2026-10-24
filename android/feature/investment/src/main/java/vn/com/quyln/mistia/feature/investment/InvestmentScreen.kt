@@ -1,6 +1,7 @@
 package vn.com.quyln.mistia.feature.investment
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -86,6 +87,7 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
     var actionError by remember{mutableStateOf<Int?>(null)}
     var archiveToken by rememberSaveable{mutableStateOf<String?>(null)}
     var actionRunning by remember{mutableStateOf(false)}
+    var tradeDetailId by rememberSaveable{mutableStateOf<String?>(null)}
     var saleId by rememberSaveable{mutableStateOf<String?>(null)}
     var saleAssetId by rememberSaveable{mutableStateOf<String?>(null)}
     fun openSale(asset:String?){saleAssetId=asset;saleId=UUID.randomUUID().toString()}
@@ -142,12 +144,16 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
         }
     }
     fun editCash(item:InvestmentCashHistoryItem) {
+        if(!item.isEditable)item.tradeId?.let{tradeDetailId=it;return}
         if(cashDirection!=null || cashSnapshot==null)return
         val event=item.ledgerTransactionId?.let{id ->runCatching{readInvestmentCashTransferLifecycle(cashSnapshot,id).event}.getOrNull()}
         if(event==null)cashActionError=R.string.common_error
         else {cashEditing=true;cashDirection=event.draft.direction.name;cashEvent=event.draft.id}
     }
-    androidx.activity.compose.BackHandler(enabled=historyOpen && cashDirection==null){historyOpen=false}
+    val trades=remember(snapshot){snapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty().filter{it.financeRawDeleted()==false}
+        .sortedWith(compareByDescending<CloudRecord>{runCatching{Instant.parse(it.payload.financeRawString("occurred_at"))}.getOrDefault(Instant.MIN)}
+            .thenByDescending{runCatching{Instant.parse(it.payload.financeRawString("created_at"))}.getOrDefault(Instant.MIN)}.thenByDescending{it.id})}
+    androidx.activity.compose.BackHandler(enabled=historyOpen && cashDirection==null && tradeDetailId==null){historyOpen=false}
     if(historyOpen)InvestmentCashHistoryScreen(cashLoad,historyParsed,walletNames,assets.orEmpty().associate{it.id to it.name},
         onBack={historyOpen=false},onOpen=::editCash,onRetry={cashRetry++},modifier=modifier)
     else LazyColumn(modifier.fillMaxSize().testTag("investment.list"),state=listState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -224,16 +230,16 @@ private fun OwnedInvestmentScreen(owner:UserId,repository:InvestmentRepository,o
                 }
             }}
         }
-        val trades=snapshot?.records(CloudEntity.INVESTMENT_TRADE).orEmpty().filter{it.financeRawDeleted()==false}
         if(trades.isNotEmpty())item{Text(stringResource(R.string.investment_hub_activity),style=MaterialTheme.typography.titleLarge)}
-        items(trades.take(20),key={"trade-${it.id}"}){trade ->
+        items(trades,key={"trade-${it.id}"}){trade ->
             val currency=trade.payload.financeRawString("currency_code")?.financeReportingCode()
             val amount=trade.payload.financeRawLong("gross_amount_minor")
             MistiaGlassCard{padding ->MistiaRecordRow(stringResource(if(trade.string("kind_raw_value")=="buy")R.string.investment_hub_buy else R.string.investment_hub_sell),
-                subtitle=trade.string("occurred_at"),trailing=if(currency==null || amount==null) "—" else formatMinorUnits(amount,currency),modifier=Modifier.padding(padding).testTag("investment.trade."+trade.id))}
+                subtitle=trade.string("occurred_at"),trailing=if(currency==null || amount==null) "—" else formatMinorUnits(amount,currency),modifier=Modifier.padding(padding).clickable{tradeDetailId=trade.id}.testTag("investment.trade."+trade.id))}
         }
         item{Spacer(Modifier.height(32.dp))}
     }
+    tradeDetailId?.let{id->InvestmentTradeDetailSheet(owner,repository,id,deviceIdProvider,onDismiss={tradeDetailId=null})}
     saleId?.let{id->key(owner.value,id){InvestmentSaleSheet(owner,repository,id,saleAssetId,exchangeRates,deviceIdProvider,{saleId=null;saleAssetId=null},onSetupLinked={scope.launch{
         // This fixed section precedes every variable channel/asset/activity row.
         listState.scrollToItem(3);pickRequest++

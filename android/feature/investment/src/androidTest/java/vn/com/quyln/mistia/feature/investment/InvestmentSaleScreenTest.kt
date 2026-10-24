@@ -85,7 +85,20 @@ class InvestmentSaleScreenTest {
         }}
         compose.waitUntil(5000){android.view.inspector.WindowInspector.getGlobalWindowViews().none{it.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())==true}}
     }
-    private fun await(tag:String){compose.waitUntil(5000){compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+    private fun await(tag:String){
+        try{compose.waitUntil(5000){compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+        catch(error:Throwable){
+            val context=ApplicationProvider.getApplicationContext<Context>()
+            val bitmap=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            bitmap?.let{frame->java.io.File(context.getExternalFilesDir(null),"sale-timeout-"+tag+".png").outputStream().use{frame.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};frame.recycle()}
+            val windows=android.view.inspector.WindowInspector.getGlobalWindowViews().joinToString {view->
+                "window="+view.width+"x"+view.height+" scrollY="+view.scrollY+" ime="+view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())
+            }
+            val roots=compose.onAllNodes(isRoot(),useUnmergedTree=true)
+            val tree=(0 until roots.fetchSemanticsNodes().size).joinToString("\n"){roots[it].printToString()}
+            throw AssertionError("Waiting for "+tag+"\n"+windows+"\n"+tree,error)
+        }
+    }
     private fun fill(quantity:String="1",gross:String="50"){
         compose.onNodeWithTag("investment.sale.quantity").performScrollTo().performTextInput(quantity)
         compose.onNodeWithTag("investment.sale.amount").performScrollTo().performTextInput(gross)
@@ -154,16 +167,25 @@ class InvestmentSaleScreenTest {
     }
 
     private fun futureExpense(amount:Long)=runBlocking {
+        // This must remain later than the form's real current-time default across calendar changes.
+        val futureAt=java.time.Instant.now().plusSeconds(86_400).toString()
         val source=store.recordsIncludingDeleted(owner,CloudEntity.LEDGER_TRANSACTION.table).single()
         val id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         val raw=source.copy(id=id,payload=JsonObject(source.payload+buildJsonObject {
             put("id",id);put("settlement_role_raw_value",JsonNull);put("amount_minor",amount);put("reporting_amount_minor",amount);put("reporting_expense_minor",amount)
-            put("occurred_at","2026-10-24T00:00:00Z");put("created_at","2026-10-24T00:00:00Z")
+            put("occurred_at",futureAt)
         }))
         store.commitMutation(raw,PendingMutation(CloudEntity.LEDGER_TRANSACTION,id,owner.value,MutationKind.UPSERT,raw.payload,raw.updatedAt!!,raw.syncVersion,device))
     }
     @Test fun aBackdatedSaleReviewsTheExactReservedCashUsedByALaterExpenseAndCancelWritesNothing(){
-        futureExpense(80);val before=rows();val pending=queues();compose.setContent{Screen()};open();fill();save();await("investment.sale.funds.review")
+        futureExpense(80);val before=rows();val pending=queues();var submitted:InvestmentSaleRequest?=null
+        val source=object:InvestmentRepository by repo {
+            override suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,deviceId:String,now:String):Result<CloudRecord>{submitted=request;return repo.saveSale(owner,request,deviceId,now)}
+        }
+        compose.setContent{Screen(source)};open();fill();save();compose.waitUntil(5000){submitted!=null}
+        val later=before.rows.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id=="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}
+        Assert.assertTrue("The expense must follow the actual submitted sale",java.time.Instant.parse(submitted!!.draft.occurredAt)<java.time.Instant.parse(later.payload.financeRawString("occurred_at")))
+        await("investment.sale.funds.review")
         compose.onNodeWithTag("investment.sale.funds.message."+walletId).assertTextContains("22",substring=true)
         val resources=ApplicationProvider.getApplicationContext<Context>().resources
         compose.onNodeWithTag("investment.sale.funds.message."+walletId).assertTextEquals(resources.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_trade_cash_review_message,

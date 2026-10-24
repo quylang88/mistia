@@ -9063,6 +9063,144 @@
         }
       }
     },
+    "investment.trade.accountingAmount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accounting Amount"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会計金額"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Số tiền hạch toán"
+          }
+        }
+      }
+    },
+    "investment.trade.deleteCashReviewAction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete and Update Usage"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "削除して使用額を更新"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa và cập nhật tiền đã dùng"
+          }
+        }
+      }
+    },
+    "investment.trade.deleteCashReviewMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleting this trade updates the investment cash used in this wallet from %@ to %@. After deletion, %@ will remain available. The deletion and these cash changes will be saved together."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この取引を削除すると、このウォレットで使用する投資資金が%@から%@に変わります。削除後に利用可能な投資資金は%@です。取引の削除と資金使用額の変更は一緒に保存されます。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa giao dịch này sẽ cập nhật tiền đầu tư đã dùng trong ví này từ %@ thành %@. Sau khi xóa, ví còn %@ tiền đầu tư khả dụng. Việc xóa và thay đổi tiền đã dùng sẽ được lưu cùng nhau."
+          }
+        }
+      }
+    },
+    "investment.trade.detailTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Investment Transaction"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投資取引"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch đầu tư"
+          }
+        }
+      }
+    },
+    "investment.trade.exchangeRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stored Exchange Rate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存された為替レート"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tỷ giá đã lưu"
+          }
+        }
+      }
+    },
+    "investment.trade.positionAfter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inventory After Transaction"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取引後の在庫"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tồn kho sau giao dịch"
+          }
+        }
+      }
+    },
     "investment.trade.deleteAction" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9473,6 +9611,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Số lượng"
+          }
+        }
+      }
+    },
+    "investment.trade.releasedCostBasis" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Released Cost Basis"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "払出原価"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giá vốn đã xuất"
           }
         }
       }

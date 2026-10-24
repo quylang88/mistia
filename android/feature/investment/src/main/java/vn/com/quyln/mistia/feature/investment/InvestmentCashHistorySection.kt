@@ -131,6 +131,6 @@ import vn.com.quyln.mistia.core.model.*
         }
     }
     val modifier=Modifier.fillMaxWidth().testTag("investment.cash.history.item."+item.id)
-    if(item.isEditable)Surface(onClick={onOpen(item)},modifier=modifier,shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surface,content=content)
+    if(item.isEditable || item.tradeId!=null)Surface(onClick={onOpen(item)},modifier=modifier,shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surface,content=content)
     else Surface(modifier=modifier,shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surface,content=content)
 }

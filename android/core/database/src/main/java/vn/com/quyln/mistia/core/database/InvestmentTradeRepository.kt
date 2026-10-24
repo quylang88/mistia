@@ -6,17 +6,19 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import vn.com.quyln.mistia.core.model.*
 
-internal class OfflineInvestmentTradeCreationRepository(private val store:LocalStore) {
+internal class OfflineInvestmentTradeRepository(private val store:LocalStore) {
     fun observe(owner:UserId)=store.observeInvestmentPurchaseSnapshot(owner).map{snapshot->
         require(snapshot.owner==owner)
         require(snapshot.rows.all{row->CloudEntity.fromTable(row.entity)?.let{entity->entity in InvestmentPurchaseSnapshot.entities && row.financeRawIdentity(owner,entity,true)}==true})
         snapshot
     }
-    suspend fun save(owner:UserId,request:InvestmentPurchaseRequest,device:String,now:String)=
-        save(owner,{planInvestmentPurchase(it,request,device,now)},{store.commitInvestmentPurchase(it,request,device,now)})
+    suspend fun savePurchase(owner:UserId,request:InvestmentPurchaseRequest,device:String,now:String)=
+        save(owner,{planInvestmentPurchase(it,request,device,now).trade},{store.commitInvestmentPurchase(it,request,device,now)})
     suspend fun saveSale(owner:UserId,request:InvestmentSaleRequest,device:String,now:String)=
-        save(owner,{planInvestmentSale(it,request,device,now)},{store.commitInvestmentSale(it,request,device,now)})
-    private suspend fun save(owner:UserId,prepare:(InvestmentTradeCreationSnapshot)->InvestmentTradeCreationPlan,
+        save(owner,{planInvestmentSale(it,request,device,now).trade},{store.commitInvestmentSale(it,request,device,now)})
+    suspend fun deleteTrade(owner:UserId,request:InvestmentTradeDeletionRequest,device:String,now:String)=
+        save(owner,{planInvestmentTradeDeletion(it,request,device,now).trade},{store.commitInvestmentTradeDeletion(it,request,device,now)})
+    private suspend fun save(owner:UserId,prepare:(InvestmentTradeCreationSnapshot)->CloudRecord,
         commit:suspend (InvestmentTradeCreationSnapshot)->Boolean):Result<CloudRecord> = try {
         var result:CloudRecord?=null
         repeat(3) {
@@ -24,8 +26,8 @@ internal class OfflineInvestmentTradeCreationRepository(private val store:LocalS
                 currentCoroutineContext().ensureActive()
                 val snapshot=store.investmentPurchaseSnapshot(owner)
                 require(snapshot.owner==owner)
-                val plan=prepare(snapshot)
-                if(commit(snapshot))result=plan.trade
+                val trade=prepare(snapshot)
+                if(commit(snapshot))result=trade
             }
         }
         currentCoroutineContext().ensureActive()

@@ -175,4 +175,13 @@ class InvestmentFundUsagePlanTest {
         assertTrue(plan(after,income,review.consent).mutations.isEmpty())
     }
 
+    @Test fun changingDeviceLanguageDoesNotRewriteAnExistingAutomaticAdjustmentTitle() {
+        val raw=source(40,60,"unreconciled");val transaction=expense(60)
+        val current=applied(raw,transaction,plan(raw,transaction))
+        val adjustment=current.rows.single{it.payload.financeRawString("settlement_role_raw_value")=="investmentReserveUse"}
+        val result=planInvestmentFundUsage(current,"JPY",transaction,review(current,transaction).consent,"別の端末の言語",device,now)
+        assertTrue("A translated label is not a new financial mutation",result.mutations.isEmpty())
+        assertEquals("Automatic cash reconciliation",adjustment.payload.financeRawString("title"))
+    }
+
 }

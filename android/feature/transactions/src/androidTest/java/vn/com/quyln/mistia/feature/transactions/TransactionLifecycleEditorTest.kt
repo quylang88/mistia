@@ -79,7 +79,20 @@ class TransactionLifecycleEditorTest {
         val review=(repo.prepareTransactionLifecycle(owner,r,device,r.operationAt).exceptionOrNull() as InvestmentFundUsageConfirmationRequired).review
         repo.saveTransactionLifecycle(owner,r.copy(consent=review.consent),device,r.operationAt).getOrThrow();Unit
     }
-    private fun awaitTag(tag:String){compose.waitUntil(5000){compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+    private fun awaitTag(tag:String){
+        try{compose.waitUntil(5000){compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+        catch(error:Throwable){
+            val context=ApplicationProvider.getApplicationContext<Context>()
+            val bitmap=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            bitmap?.let{frame->java.io.File(context.getExternalFilesDir(null),"lifecycle-timeout-"+tag+".png").outputStream().use{frame.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};frame.recycle()}
+            val windows=android.view.inspector.WindowInspector.getGlobalWindowViews().joinToString {view->
+                "window="+view.width+"x"+view.height+" scrollY="+view.scrollY+" ime="+view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())
+            }
+            val roots=compose.onAllNodes(isRoot(),useUnmergedTree=true)
+            val tree=(0 until roots.fetchSemanticsNodes().size).joinToString("\n"){roots[it].printToString()}
+            throw AssertionError("Waiting for "+tag+"\n"+windows+"\n"+tree,error)
+        }
+    }
     @Test fun storedEditorArchiveCancelKeepsItsUnsavedDraftAndConfirmationRestoresReservedFunds() {
         var dismissed=false
         compose.setContent{MistiaTheme(darkTheme=false){StoredTransactionEditorRoute(owner,id(20),repo,exchange,receipts,{device},onDismiss={dismissed=true})}}
