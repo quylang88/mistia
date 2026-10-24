@@ -25,7 +25,7 @@ import vn.com.quyln.mistia.core.model.UserId
 
 class PullOnlySyncEnginePushOrderTest {
     @Test
-    fun `sync pushes category wallet card profile then transaction budget savings bill installment and due before pull`() = runTest {
+    fun `sync orders existing domains then investment channels assets and trades before pull`() = runTest {
         val events = mutableListOf<String>()
         val category = RecordingPushCoordinator(CloudEntity.TRANSACTION_CATEGORY, events)
         val wallet = RecordingPushCoordinator(CloudEntity.LEDGER_WALLET, events)
@@ -36,6 +36,9 @@ class PullOnlySyncEnginePushOrderTest {
         val due = RecordingPushCoordinator(CloudEntity.DUE_OCCURRENCE_RECORD, events)
         val bill = RecordingPushCoordinator(CloudEntity.RECURRING_BILL_PLAN, events)
         val installment = RecordingPushCoordinator(CloudEntity.INSTALLMENT_PLAN, events)
+        val channel = RecordingPushCoordinator(CloudEntity.INVESTMENT_CHANNEL, events)
+        val asset = RecordingPushCoordinator(CloudEntity.INVESTMENT_ASSET, events)
+        val trade = RecordingPushCoordinator(CloudEntity.INVESTMENT_TRADE, events)
         val remote = object : RemoteStore {
             override suspend fun pullPage(
                 table: String,
@@ -53,7 +56,7 @@ class PullOnlySyncEnginePushOrderTest {
             authRepository = SignedInAuthRepository(),
             localStore = EmptyLocalStore(),
             remoteStore = remote,
-            pushCoordinators = listOf(due, installment, bill, savings, budget, transaction, card, wallet, category),
+            pushCoordinators = listOf(trade, asset, channel, due, installment, bill, savings, budget, transaction, card, wallet, category),
         )
 
         val result = engine.syncNow()
@@ -68,7 +71,30 @@ class PullOnlySyncEnginePushOrderTest {
         assertEquals("push:recurring_bill_plans", events[6])
         assertEquals("push:installment_plans", events[7])
         assertEquals("push:due_occurrence_records", events[8])
-        assertEquals("pull:transaction_categories", events[9])
+        assertEquals("push:investment_channels", events[9])
+        assertEquals("push:investment_assets", events[10])
+        assertEquals("push:investment_trades", events[11])
+        assertEquals("pull:transaction_categories", events[12])
+    }
+
+    @Test fun `disabled real channel coordinator permits pull without querying an outbox or invoking a writer`()=runTest {
+        val local=object:LocalStore by EmptyLocalStore() {
+            override suspend fun pendingMutations(ownerUserId:UserId,entity:CloudEntity,dueAtEpochMillis:Long,limit:Int):List<QueuedMutation> = error("Disabled channel must not inspect an outbox")
+        }
+        val channelRemote=object:RemoteMutationStore {
+            override suspend fun fetchRecord(entity:CloudEntity,recordId:String,accessToken:String,ownerUserId:UserId):CloudRecord?=error("Disabled channel cannot fetch")
+            override suspend fun createRecord(entity:CloudEntity,accessToken:String,ownerUserId:UserId,payload:JsonObject):CloudRecord=error("Disabled channel cannot create")
+            override suspend fun conditionalUpdate(entity:CloudEntity,recordId:String,accessToken:String,ownerUserId:UserId,expectedVersion:Long,payload:JsonObject):CloudRecord?=error("Disabled channel cannot update")
+        }
+        val pulled=mutableListOf<String>()
+        val remote=object:RemoteStore {
+            override suspend fun pullPage(table:String,accessToken:String,ownerUserId:UserId,offset:Int,limit:Int):RemotePage {
+                pulled.add(table);return RemotePage(emptyList(),null)
+            }
+        }
+        val channel=InvestmentChannelPushCoordinator(local,channelRemote,false,{error("Disabled channel cannot request a session")})
+        assertTrue(PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,listOf(channel)).syncNow().isSuccess)
+        assertEquals(CloudEntity.pullOrder.map{it.table},pulled.take(CloudEntity.entries.size))
     }
 
     private val maintenanceCatalog=SystemCategoryCatalog.parse("""[

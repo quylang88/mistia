@@ -294,6 +294,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun investmentChannelPublicationSnapshot(owner:UserId,id:String):InvestmentChannelPublicationSnapshot = throw UnsupportedOperationException("Atomic channel publication read unavailable")
+
+    suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean = throw UnsupportedOperationException("Scoped channel acknowledgement unavailable")
+    suspend fun recordInvestmentChannelMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean = throw UnsupportedOperationException("Scoped channel failure recording unavailable")
+
     suspend fun commitInvestmentAssetImageMutation(expected:InvestmentAssetSnapshot,request:InvestmentAssetImageSaveRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional asset image save unavailable")
 
     suspend fun commitInvestmentTradeEdit(expected:InvestmentTradeCreationSnapshot,request:InvestmentTradeEditRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional trade editing unavailable")

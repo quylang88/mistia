@@ -1607,6 +1607,56 @@ class RoomLocalStore(
         ).map { it.toQueuedMutation() }
     }
 
+    override suspend fun investmentChannelPublicationSnapshot(owner:UserId,id:String):vn.com.quyln.mistia.core.model.InvestmentChannelPublicationSnapshot {
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value && vn.com.quyln.mistia.core.model.financeRawUuid(id)==id){"Invalid channel publication identity"}
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val row=database.cloudRecordDao().record(owner.value,CloudEntity.INVESTMENT_CHANNEL.table,id)
+            val queued=database.syncOutboxDao().record(owner.value,CloudEntity.INVESTMENT_CHANNEL.table,id)
+            val snapshot=vn.com.quyln.mistia.core.model.InvestmentChannelPublicationSnapshot(owner,row?.toCloudRecord(),queued?.toQueuedMutation(),row?.hasPendingMutation==true)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            snapshot
+        }
+    }
+
+    override suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean {
+        val owner=investmentChannelPublicationOwner(mutation)
+        require(remoteRecord.ownerUserId==owner.value && remoteRecord.entity==CloudEntity.INVESTMENT_CHANNEL.table && remoteRecord.id==mutation.mutation.recordId){"Channel acknowledgement identity differs"}
+        vn.com.quyln.mistia.core.model.InvestmentChannelRecord.fromCloudRecord(remoteRecord)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=investmentChannelPublicationSnapshot(owner,mutation.mutation.recordId)
+            if(!source.matches(mutation))return@withTransaction false
+            vn.com.quyln.mistia.core.model.InvestmentChannelRecord.fromCloudRecord(requireNotNull(source.record))
+            val acknowledged=acknowledgeMutation(mutation,remoteRecord)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            acknowledged
+        }
+    }
+
+    override suspend fun recordInvestmentChannelMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean {
+        val owner=investmentChannelPublicationOwner(mutation)
+        require(nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode)){"Invalid channel publication failure"}
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=investmentChannelPublicationSnapshot(owner,mutation.mutation.recordId)
+            if(!source.matches(mutation))return@withTransaction false
+            val recorded=recordMutationFailure(mutation,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            recorded
+        }
+    }
+
+    private fun investmentChannelPublicationOwner(queued:QueuedMutation):UserId {
+        val q=queued.mutation
+        require(q.entity==CloudEntity.INVESTMENT_CHANNEL && vn.com.quyln.mistia.core.model.financeRawUuid(q.subjectUserId)==q.subjectUserId &&
+            vn.com.quyln.mistia.core.model.financeRawUuid(q.recordId)==q.recordId && vn.com.quyln.mistia.core.model.financeRawUuid(q.deviceId)==q.deviceId){"Invalid channel publication queue identity"}
+        return UserId(q.subjectUserId)
+    }
+
     override suspend fun acknowledgeMutation(
         mutation: QueuedMutation,
         remoteRecord: CloudRecord,

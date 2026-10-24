@@ -84,8 +84,8 @@ data class InvestmentChannelSnapshot(val owner:UserId,val rows:List<CloudRecord>
 
 /** Visible consent ignores only synchronization acknowledgement metadata. */
 fun InvestmentChannelRecord.matchesVisibleInvestmentChannel(other:InvestmentChannelRecord):Boolean =
-    copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString())==
-        other.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString())
+    copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString(),archivedAt=archivedAt?.let{Instant.parse(it).toString()})==
+        other.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString(),archivedAt=other.archivedAt?.let{Instant.parse(it).toString()})
 
 /** The ordinary wallet pipeline cannot publish investment-domain state independently. */
 fun requiresInvestmentWalletDomain(owner:UserId,id:String,payload:JsonObject?):Boolean {

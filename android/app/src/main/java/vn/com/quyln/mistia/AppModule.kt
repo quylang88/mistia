@@ -453,6 +453,21 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideInvestmentChannelClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentChannelClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentChannelPushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentChannelClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
+
+    @Provides
+    @Singleton
     fun provideSyncEngine(
         @ApplicationContext context: Context,
         authRepository: AuthRepository,
@@ -467,6 +482,7 @@ object AppModule {
         recurringBillPushCoordinator: RecurringBillPushCoordinator,
         installmentPushCoordinator: InstallmentPushCoordinator,
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
+        investmentChannelPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
         categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
         financeRepository: FinanceRepository,
@@ -488,6 +504,7 @@ object AppModule {
             recurringBillPushCoordinator,
             installmentPushCoordinator,
             dueOccurrencePushCoordinator,
+            investmentChannelPushCoordinator,
         ),
         categoryTranslationCoordinator,
         categoryMaintenanceCoordinator,
