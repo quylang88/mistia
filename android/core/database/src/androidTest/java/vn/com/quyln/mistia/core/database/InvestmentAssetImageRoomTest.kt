@@ -473,4 +473,63 @@ class InvestmentAssetImageRoomTest {
         assertEquals(rows,domains.associateWith{store.recordsIncludingDeleted(owner,it.table)})
     }
 
+    private data class ReceiptFixture(val old:InvestmentAssetPublicationSnapshot,val sent:JsonObject,val remote:CloudRecord)
+    private suspend fun receiptFixture():ReceiptFixture {
+        val old=plainPublication();val oldRecord=requireNotNull(old.record)
+        val asset=InvestmentAssetRecord.fromCloudRecord(oldRecord)
+        imageRepo().saveAsset(owner,draft(asset).copy(name="Newer"),device,"2026-10-24T00:15:00Z").getOrThrow()
+        val current=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertTrue(store.recordInvestmentAssetMutationFailure(current.pending!!,12345,"network_io"))
+        val sent=JsonObject(assetPayloadForCloud(oldRecord.payload)+("sync_version" to JsonPrimitive(8)))
+        val remote=serverResult(oldRecord,8)
+        return ReceiptFixture(old,sent,remote)
+    }
+    @Test fun confirmedReceiptAtomicallyAddsOnlyEvidenceAndPreservesEveryNewQueueStamp()=runBlocking {
+        val f=receiptFixture();val before=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        val storedBefore=db.cloudRecordDao().record(owner.value,CloudEntity.INVESTMENT_ASSET.table,assetId)!!
+        assertTrue(store.recordInvestmentAssetPublicationReceipt(f.old.pending!!,f.sent,7,f.remote))
+        val after=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        val afterRecord=requireNotNull(after.record);val beforeQueue=requireNotNull(before.pending)
+        assertEquals(assetPayloadForCloud(before.record!!.payload),assetPayloadForCloud(afterRecord.payload))
+        assertEquals(beforeQueue.copy(mutation=beforeQueue.mutation.copy(payload=afterRecord.payload)),after.pending)
+        assertTrue(after.matches(after.pending!!));assertTrue(after.hasPendingMutation)
+        assertTrue(isKnownPriorAssetPublication(afterRecord,f.remote,device,false))
+        assertEquals(storedBefore.copy(payloadJson=afterRecord.payload.toString()),db.cloudRecordDao().record(owner.value,CloudEntity.INVESTMENT_ASSET.table,assetId))
+    }
+    @Test fun receiptCannotBeLaunderedFromAnUnrelatedPayloadOrServerVersion()=runBlocking {
+        val f=receiptFixture();val before=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertTrue(runCatching{store.recordInvestmentAssetPublicationReceipt(f.old.pending!!,JsonObject(f.sent+("name" to JsonPrimitive("Forged"))),7,f.remote)}.isFailure)
+        assertTrue(runCatching{store.recordInvestmentAssetPublicationReceipt(f.old.pending!!,f.sent,6,f.remote)}.isFailure)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun receiptRevokesTheOldOwnerBeforeWritingAnything()=runBlocking {
+        val f=receiptFixture();val before=store.reconcileInvestmentAssetImagePublication(owner,assetId);active=other
+        assertTrue(runCatching{store.recordInvestmentAssetPublicationReceipt(f.old.pending!!,f.sent,7,f.remote)}.exceptionOrNull() is CancellationException)
+        active=owner;assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun receiptQueueInsertFailureRollsBackTheAlreadyUpdatedRow()=runBlocking {
+        val f=receiptFixture();val before=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_receipt_queue BEFORE INSERT ON sync_outbox WHEN NEW.entity = 'investment_assets' BEGIN SELECT RAISE(ABORT, 'receipt queue failure'); END")
+        assertTrue(runCatching{store.recordInvestmentAssetPublicationReceipt(f.old.pending!!,f.sent,7,f.remote)}.isFailure)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun finalReceiptCallerCancellationRollsBackBothEvidenceWrites()=runBlocking {
+        val f=receiptFixture();val before=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        val oldPayload=before.record!!.payload.toString();var task:Deferred<Boolean>?=null
+        val guarded=RoomLocalStore(db,productImages=cache,currentBillOwner={
+            val payload=db.openHelper.writableDatabase.query("SELECT payload_json FROM cloud_records WHERE entity = 'investment_assets'").use{it.moveToFirst();it.getString(0)}
+            if(payload!=oldPayload)task!!.cancel(CancellationException("Final receipt fence"))
+            active
+        })
+        task=async(start=CoroutineStart.LAZY){guarded.recordInvestmentAssetPublicationReceipt(f.old.pending!!,f.sent,7,f.remote)}
+        task.start();assertTrue(runCatching{task.await()}.exceptionOrNull() is CancellationException)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun cloudAcknowledgementCannotImportForgedLocalCausalEvidence()=runBlocking {
+        val f=plainPublication();val remote=serverResult(f.record!!,1)
+        val forged=remote.copy(payload=JsonObject(remote.payload+(LOCAL_ASSET_PUBLICATION_PARENTS_KEY to JsonNull)))
+        assertTrue(runCatching{store.acknowledgeInvestmentAssetMutation(f.pending!!,forged)}.isFailure)
+        assertEquals(f,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+
 }

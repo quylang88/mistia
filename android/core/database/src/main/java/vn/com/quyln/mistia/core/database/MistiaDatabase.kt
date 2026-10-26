@@ -981,11 +981,47 @@ class RoomLocalStore(
             changed
         }
     }
+    override suspend fun recordInvestmentAssetPublicationReceipt(mutation:QueuedMutation,sentPayload:JsonObject,expectedVersion:Long,remoteRecord:CloudRecord):Boolean {
+        val owner=assetPublicationOwner(mutation);val q=mutation.mutation
+        val oldPayload=requireNotNull(q.payload)
+        require(expectedVersion>=0 && expectedVersion<Long.MAX_VALUE && remoteRecord.syncVersion==expectedVersion+1)
+        require(remoteRecord.ownerUserId==owner.value && remoteRecord.entity==q.entity.table && remoteRecord.id==q.recordId)
+        require(vn.com.quyln.mistia.core.model.LOCAL_ASSET_PUBLICATION_KEYS.none{it in remoteRecord.payload || it in sentPayload})
+        vn.com.quyln.mistia.core.model.InvestmentAssetRecord.fromCloudRecord(remoteRecord)
+        require(remoteRecord.payload.financeRawString("last_modified_by_device_id")==q.deviceId && sentPayload.financeRawString("last_modified_by_device_id")==q.deviceId)
+        require(sentPayload.financeRawString("id")==q.recordId && sentPayload.financeRawString("user_id")==owner.value)
+        require(vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(oldPayload,true)==vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(sentPayload,true))
+        require(vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(sentPayload)==vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(remoteRecord.payload))
+        require((sentPayload.financeRawString("deleted_at")!=null)==(remoteRecord.deletedAt!=null))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=currentAssetPublication(owner,q.recordId)
+            val pending=source.pending ?: return@withTransaction false
+            val row=source.record ?: return@withTransaction false
+            if(source.matches(mutation) || !source.matches(pending) || pending.mutation.deviceId!=q.deviceId || pending.mutation.baseVersion!=q.baseVersion)return@withTransaction false
+            require(java.time.Instant.parse(row.payload.financeRawString("created_at"))==java.time.Instant.parse(oldPayload.financeRawString("created_at")))
+            val parentFingerprint=vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(oldPayload)
+            val parents=vn.com.quyln.mistia.core.model.localAssetPublicationParents(row)
+            if(parents.none{it.deviceId==q.deviceId && it.baseVersion==q.baseVersion && it.fingerprint==parentFingerprint && it.deleted==(q.kind==vn.com.quyln.mistia.core.model.MutationKind.DELETE)})return@withTransaction false
+            val receipt=vn.com.quyln.mistia.core.model.InvestmentAssetPublicationParent(expectedVersion,remoteRecord.syncVersion,q.deviceId,remoteRecord.deletedAt!=null,
+                vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(remoteRecord.payload),vn.com.quyln.mistia.core.model.investmentAssetPublicationFingerprint(remoteRecord.payload,true))
+            // Keep all business, dirty, base, received-at and retry stamps unchanged.
+            val payload=vn.com.quyln.mistia.core.model.appendAssetPublicationParent(row,receipt).payload.toString()
+            val stored=database.cloudRecordDao().record(owner.value,q.entity.table,q.recordId)!!
+            val queued=database.syncOutboxDao().record(owner.value,q.entity.table,q.recordId)!!
+            database.cloudRecordDao().upsert(stored.copy(payloadJson=payload))
+            database.syncOutboxDao().upsert(queued.copy(payloadJson=payload))
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+
     override suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,
         publication:vn.com.quyln.mistia.core.model.InvestmentProductImagePublication?):Boolean {
         val owner=assetPublicationOwner(mutation)
         require(remoteRecord.ownerUserId==owner.value && remoteRecord.entity==CloudEntity.INVESTMENT_ASSET.table && remoteRecord.id==mutation.mutation.recordId)
-        require(vn.com.quyln.mistia.core.model.LOCAL_ASSET_IMAGE_INTENT_KEY !in remoteRecord.payload){"Remote asset cannot supply local image provenance"}
+        require(vn.com.quyln.mistia.core.model.LOCAL_ASSET_PUBLICATION_KEYS.none{it in remoteRecord.payload}){"Remote asset cannot supply local image provenance"}
         val remote=vn.com.quyln.mistia.core.model.InvestmentAssetRecord.fromCloudRecord(remoteRecord)
         val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
         return database.withTransaction {

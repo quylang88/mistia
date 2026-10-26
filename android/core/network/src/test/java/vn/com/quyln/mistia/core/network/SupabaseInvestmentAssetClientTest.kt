@@ -87,6 +87,22 @@ class SupabaseInvestmentAssetClientTest {
         assertEquals(409,(runCatching{client.createRecord(entity,token,owner,payload(1))}.exceptionOrNull() as SupabaseHttpException).statusCode)
         assertEquals(2,server.requestCount)
     }
+    @Test fun causalEvidenceIsStrippedOnWriteAndRejectedOnEveryCloudIngress()=runTest {
+        val row=CloudRecord(entity.table,id,owner.value,payload(),now,null,version)
+        val parent=InvestmentAssetPublicationParent(version,null,device,false,investmentAssetPublicationFingerprint(row.payload),investmentAssetPublicationFingerprint(row.payload,true))
+        val local=JsonObject(row.withAssetPublicationParent(parent).payload+("sync_version" to JsonPrimitive(version+1)))
+        server.enqueue(response(payload(version+1)))
+        client.conditionalUpdate(entity,id,token,owner,version,local)
+        val sent=rpc("mutate_investment_asset").getValue("p_asset").jsonObject
+        assertTrue(LOCAL_ASSET_PUBLICATION_KEYS.none{it in sent})
+        val forged=JsonObject(payload()+(LOCAL_ASSET_PUBLICATION_PARENTS_KEY to JsonNull))
+        server.enqueue(response(forged))
+        assertTrue(runCatching{client.fetchRecord(entity,id,token,owner)}.isFailure)
+        server.takeRequest(1,TimeUnit.SECONDS)
+        val gateway=SupabasePostgrestRemoteStore(SupabaseConfig(server.url("/").toString(),"publishable-key"),http)
+        server.enqueue(response(forged))
+        assertTrue(runCatching{gateway.pullPage(entity.table,token,owner,0,100)}.isFailure)
+    }
     @Test fun localImageIntentNeverBecomesARpcColumnAndServerCannotInjectPrivateProvenance()=runTest {
         val marker=buildJsonObject {
             put("version",1);put("owner_user_id",owner.value);put("asset_id",id);put("revision","55555555-5555-5555-5555-555555555555")

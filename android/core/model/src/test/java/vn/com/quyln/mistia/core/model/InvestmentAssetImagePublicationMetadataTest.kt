@@ -28,6 +28,18 @@ class InvestmentAssetImagePublicationMetadataTest {
         assertEquals(mutation.first.payload,mutation.second.payload)
         return mutation.first
     }
+    @Test fun aRealRenamePersistsItsCausalParentInTheSameExactOutboxPayload() {
+        val before=saved();val typed=InvestmentAssetRecord.fromCloudRecord(before)
+        val result=planInvestmentAssetMutation(source(before),InvestmentAssetRequest.Save(
+            InvestmentAssetDraft(id,channelId,"Later","VND","box",typed)),device,now)
+        val (row,queue)=result.mutations.single()
+        assertTrue(row.payload["_mistia_android_asset_publication_parents"] is JsonObject)
+        assertEquals(row.payload,queue.payload)
+    }
+    @Test fun noPrivateCausalEvidenceCanBeSentToTheBackend() {
+        val payload=JsonObject(asset.toCloudRecord().payload+("_mistia_android_asset_publication_parents" to buildJsonObject{put("version",999)}))
+        assertFalse("_mistia_android_asset_publication_parents" in assetPayloadForCloud(payload))
+    }
     @Test fun realTypedReplacementAtomicallyCarriesExplicitPublicationToOutbox() {
         val row=saved()
         assertTrue(row.payload[key] is JsonObject)
@@ -51,7 +63,7 @@ class InvestmentAssetImagePublicationMetadataTest {
         val raw=saved(true)
         val payload=JsonObject(raw.payload+mapOf("future_null" to JsonNull,"future_object" to buildJsonObject{put("large",Long.MAX_VALUE)}))
         val result=assetPayloadForCloud(payload)
-        assertEquals(JsonObject(payload.filterKeys{it!=key}),result)
+        assertEquals(JsonObject(payload.filterKeys{it !in LOCAL_ASSET_PUBLICATION_KEYS}),result)
         assertFalse(key in result);assertSame(JsonNull,result["image_path"])
         assertTrue(key in payload)
     }

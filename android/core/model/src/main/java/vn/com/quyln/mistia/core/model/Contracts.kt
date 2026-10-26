@@ -296,6 +296,9 @@ interface InvestmentRepository {
 interface LocalStore {
     suspend fun cleanupInvestmentProductImages(owner:UserId,remote:InvestmentProductImageRemote):Int = throw UnsupportedOperationException("Reference guarded image cleanup unavailable")
 
+    /** Optional durable receipt for a definite superseded RPC. Unsupported stores retain the proposal. */
+    suspend fun recordInvestmentAssetPublicationReceipt(mutation:QueuedMutation,sentPayload:JsonObject,expectedVersion:Long,remoteRecord:CloudRecord):Boolean = false
+
     suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,publication:InvestmentProductImagePublication?=null):Boolean = throw UnsupportedOperationException("Scoped asset acknowledgement unavailable")
     suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean = throw UnsupportedOperationException("Scoped asset failure recording unavailable")
 

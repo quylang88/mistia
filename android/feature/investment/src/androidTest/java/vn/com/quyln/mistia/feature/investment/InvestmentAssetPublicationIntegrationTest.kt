@@ -117,12 +117,12 @@ class InvestmentAssetPublicationIntegrationTest {
         val bitmap=Bitmap.createBitmap(8,4,Bitmap.Config.ARGB_8888);bitmap.eraseColor(color)
         return try{ByteArrayOutputStream().use{bitmap.compress(Bitmap.CompressFormat.JPEG,90,it);it.toByteArray()}}finally{bitmap.recycle()}
     }
-    private suspend fun photo(expected:InvestmentAssetRecord?=null,color:Int=android.graphics.Color.BLUE):InvestmentAssetRecord {
+    private suspend fun photo(expected:InvestmentAssetRecord?=null,color:Int=android.graphics.Color.BLUE,writeDate:String?=null):InvestmentAssetRecord {
         val bytes=jpeg(color)
         val candidate=repo.stageProductImage(owner,id,PreparedInvestmentProductImage(bytes,bytes,"image/jpeg",8,4)).getOrThrow()
         return repo.saveAssetImage(owner,InvestmentAssetDraft(id,channel,"Cards","VND","box",expected,
             InvestmentAssetImageChange.Replace(InvestmentProductImagePath.parse(owner,id,candidate.path))),candidate,UUID.randomUUID().toString(),device,
-            if(expected==null)now else "2026-10-24T01:00:00Z").getOrThrow()
+            writeDate ?: if(expected==null)now else "2026-10-24T01:00:00Z").getOrThrow()
     }
     private suspend fun push()=coordinator.pushPending(owner,requireNotNull(session).accessToken)
     private fun order()=requests.map{it.method+" "+it.requestUrl!!.encodedPath.substringBefore(owner.value)}
@@ -204,4 +204,42 @@ class InvestmentAssetPublicationIntegrationTest {
         val after=store.reconcileInvestmentAssetImagePublication(owner,id)
         assertEquals(before.record,after.record);assertEquals(before.pending,after.pending);assertFalse(after.imageAcknowledged)
     }
+    @Test fun aConfirmedWriteAgainstAHigherRemoteBaseProtectsTheConcurrentRename()=runBlocking {
+        val asset=photo()
+        backend=asset.copy(name="Before",syncVersion=7,updatedAt="2026-10-23T00:00:00Z",lastModifiedByDeviceId="99999999-9999-9999-9999-999999999999").toCloudRecord()
+        onRpc={repo.saveAsset(owner,InvestmentAssetDraft(id,channel,"Renamed","VND","box",asset),device,"2026-10-24T00:15:00Z").getOrThrow();Unit}
+        assertEquals(1,push().staleResponses)
+        assertEquals(8L,backend!!.syncVersion)
+        assertEquals(1,push().pushed)
+        assertEquals("Renamed",store.reconcileInvestmentAssetImagePublication(owner,id).record!!.payload.financeRawString("name"))
+        assertEquals(9L,backend!!.syncVersion)
+    }
+    @Test fun aServerClockLaterThanTheConcurrentRenameCannotEraseItOnTheNextCycle()=runBlocking {
+        val asset=photo()
+        onRpc={repo.saveAsset(owner,InvestmentAssetDraft(id,channel,"Renamed","VND","box",asset),device,"2026-10-24T00:15:00Z").getOrThrow();Unit}
+        assertEquals(1,push().staleResponses)
+        assertEquals("Renamed",InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,id)!!).name)
+        assertEquals(1,push().pushed)
+        assertEquals("Renamed",InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,id)!!).name)
+        assertNull(store.reconcileInvestmentAssetImagePublication(owner,id).pending)
+    }
+    @Test fun aLostReplyAndLaterServerClockCannotEraseAConcurrentRenameOnRetry()=runBlocking {
+        val asset=photo();loseRpcReply=true
+        onRpc={repo.saveAsset(owner,InvestmentAssetDraft(id,channel,"Renamed","VND","box",asset),device,"2026-10-24T00:15:00Z").getOrThrow();Unit}
+        assertEquals(1,push().staleResponses)
+        clock=100_000
+        assertEquals(1,push().pushed)
+        assertEquals("Renamed",InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,id)!!).name)
+        assertEquals(2,rpcBodies().size)
+    }
+    @Test fun aServerClockLaterThanTheNewPhotoCannotRollItsPointerBack()=runBlocking {
+        val first=photo();var next:InvestmentAssetRecord?=null
+        onRpc={next=photo(first,android.graphics.Color.RED,"2026-10-24T00:15:00Z")}
+        assertEquals(1,push().staleResponses)
+        assertEquals(next!!.imagePath,store.reconcileInvestmentAssetImagePublication(owner,id).record!!.payload.financeRawString("image_path"))
+        assertEquals(1,push().pushed)
+        assertEquals(next!!.imagePath,store.reconcileInvestmentAssetImagePublication(owner,id).record!!.payload.financeRawString("image_path"))
+        assertNotNull(cache.cachedImageData(owner,id,next!!.imagePath!!).getOrThrow())
+    }
+
 }

@@ -388,7 +388,11 @@ class InvestmentPurchaseScreenTest {
         compose.waitUntil(5000){observed.isCompleted};compose.waitForIdle()
         val afterAck=rows();val pending=queue()
         Assert.assertTrue(planInvestmentPurchase(afterAck,runBlocking{frozen.await()},device,now).mutations.isEmpty())
-        compose.onNodeWithTag("investment.purchase.retry").performScrollTo().assertIsEnabled().performClick();closed()
+        // This case tests metadata ACK/retry authority. Activate its real accessibility
+        // action so an IME/reflow between scroll and pointer injection cannot miss it.
+        compose.onNodeWithTag("investment.purchase.retry").performScrollTo().assertIsEnabled()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){Assert.assertTrue(it())}
+        closed();Assert.assertEquals(2,successes)
         Assert.assertEquals(2,successes);Assert.assertEquals(afterAck,rows());Assert.assertEquals(pending,queue())
     }
 

@@ -21,6 +21,7 @@ class InvestmentAssetPushCoordinatorTest {
     private var session:AuthSession?=AuthSession(owner,null,token,"refresh",Long.MAX_VALUE)
     private fun record(version:Long=0,name:String="Cards",date:String=now)=InvestmentAssetRecord(id,owner.value,"44444444-4444-4444-4444-444444444444",name,"VND",null,"box",0,false,null,now,date,null,version,device)
         .toCloudRecord().let{it.copy(payload=JsonObject(it.payload+("future_null" to JsonNull)))}
+    private fun otherDevice(row:CloudRecord)=row.copy(payload=JsonObject(row.payload+("last_modified_by_device_id" to JsonPrimitive("99999999-9999-9999-9999-999999999999"))))
     private fun queue(row:CloudRecord)=QueuedMutation(PendingMutation(CloudEntity.INVESTMENT_ASSET,row.id,row.ownerUserId,
         if(row.deletedAt==null)MutationKind.UPSERT else MutationKind.DELETE,row.payload,requireNotNull(row.updatedAt),row.syncVersion,device),0,0,null)
     private fun coordinator(store:Store,remote:Remote,enabled:Boolean=true)=InvestmentAssetPushCoordinator(store,remote,enabled,{session},{4000})
@@ -101,8 +102,14 @@ class InvestmentAssetPushCoordinatorTest {
         assertEquals(row,store.record);assertEquals(Long.MAX_VALUE,store.queued!!.nextAttemptAtEpochMillis)
         assertEquals("conflict_same_clock_version_different_payload",store.queued!!.lastError);assertEquals(0,remote.writes)
     }
+    @Test fun anUnprovenOwnLaterClockCannotSilentlyConsumeTheCurrentProposal()=runTest {
+        val row=record(3);val store=Store(row,queue(row));val remote=Remote().apply{fetched=record(4,"Prior","2026-10-24T01:00:00Z")}
+        val result=coordinator(store,remote).pushPending(owner,token)
+        assertEquals(1,result.conflicts);assertEquals(row,store.record);assertEquals(0,remote.writes)
+        assertEquals("conflict_own_unproven_publication",store.queued!!.lastError)
+    }
     @Test fun newerRemoteMetadataWinsWithoutAWriteOrAStaleLocalQueue()=runTest {
-        val row=record(3);val winner=record(4,"Remote","2026-10-24T01:00:00Z")
+        val row=record(3);val winner=otherDevice(record(4,"Remote","2026-10-24T01:00:00Z"))
         val store=Store(row,queue(row));val remote=Remote().apply{fetched=winner}
         assertEquals(1,coordinator(store,remote).pushPending(owner,token).acknowledged)
         assertEquals(winner,store.record);assertNull(store.queued);assertEquals(0,remote.writes)
@@ -115,7 +122,7 @@ class InvestmentAssetPushCoordinatorTest {
         assertEquals(2,remote.fetches);assertEquals(1,remote.writes);assertEquals(record(1),store.record);assertNull(store.queued)
     }
     @Test fun conditionalMissRefetchesTheWinningVersionInsteadOfAcknowledgingANullReply()=runTest {
-        val row=record(3);val winner=record(4,"Remote","2026-10-24T01:00:00Z");val store=Store(row,queue(row))
+        val row=record(3);val winner=otherDevice(record(4,"Remote","2026-10-24T01:00:00Z"));val store=Store(row,queue(row))
         val remote=Remote().apply{fetchSequence.addAll(listOf(record(3,"Before"),winner))}
         assertEquals(1,coordinator(store,remote).pushPending(owner,token).acknowledged)
         assertEquals(winner,store.record);assertNull(store.queued);assertEquals(1,remote.writes)

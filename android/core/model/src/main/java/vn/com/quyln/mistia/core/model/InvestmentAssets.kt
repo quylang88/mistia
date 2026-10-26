@@ -191,7 +191,7 @@ internal fun investmentAssetVersion(raw:CloudRecord):Long {
 internal fun investmentAssetDecode(raw:CloudRecord):InvestmentAssetRecord=try{InvestmentAssetRecord.fromCloudRecord(raw)}catch(_:Exception){investmentAssetFail(InvestmentAssetError.UNREADABLE_SOURCE)}
 internal fun investmentAssetChanged(raw:CloudRecord,fields:JsonObject,device:String,now:String):CloudRecord {
     try{investmentAssetVersion(raw)}catch(_:Exception){investmentAssetFail(InvestmentAssetError.UNREADABLE_SOURCE)}
-    return raw.copy(payload=JsonObject(raw.payload+(if(raw.deletedAt!=null && "deleted_at" !in fields) mapOf("deleted_at" to JsonPrimitive(raw.deletedAt)) else emptyMap())+fields+mapOf("updated_at" to JsonPrimitive(now),"last_modified_by_device_id" to JsonPrimitive(device))),updatedAt=now)
+    return raw.copy(payload=JsonObject(raw.payload+(if(raw.deletedAt!=null && "deleted_at" !in fields) mapOf("deleted_at" to JsonPrimitive(raw.deletedAt)) else emptyMap())+fields+mapOf("updated_at" to JsonPrimitive(now),"last_modified_by_device_id" to JsonPrimitive(device))),updatedAt=now).withPriorAssetPublication(raw)
 }
 fun InvestmentAssetRecord.matchesVisibleInvestmentAsset(other:InvestmentAssetRecord):Boolean=
     copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString(),archivedAt=archivedAt?.let{Instant.parse(it).toString()})==

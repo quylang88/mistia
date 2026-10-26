@@ -100,13 +100,13 @@ class SupabaseInvestmentAssetClient(
         return record
     }
     private fun decode(context:Context,payload:JsonObject,allowLocal:Boolean=false):CloudRecord {
-        require(allowLocal || LOCAL_ASSET_IMAGE_INTENT_KEY !in payload){"Remote asset cannot supply local image provenance"}
+        require(allowLocal || LOCAL_ASSET_PUBLICATION_KEYS.none{it in payload}){"Remote asset cannot supply local image provenance"}
         require(payload.financeRawString("id")==context.id && payload.financeRawString("user_id")==context.owner.value){"Asset response identity differs"}
         val version=requireNotNull(payload.financeRawLong("sync_version"));require(version>=0){"Invalid asset response version"}
         val updated=requireNotNull(payload.financeRawString("updated_at"));Instant.parse(updated)
         val deleted=payload.financeRawString("deleted_at")?.also{Instant.parse(it)}
         return CloudRecord(CloudEntity.INVESTMENT_ASSET.table,context.id,context.owner.value,payload,updated,deleted,version)
-            .also{InvestmentAssetRecord.fromCloudRecord(it);if(allowLocal)localAssetImagePublication(it)}
+            .also{InvestmentAssetRecord.fromCloudRecord(it);if(allowLocal){localAssetImagePublication(it);localAssetPublicationParents(it)}}
     }
     private suspend fun Call.awaitText():String = suspendCancellableCoroutine{continuation->
         continuation.invokeOnCancellation{cancel()}

@@ -85,7 +85,7 @@ class InvestmentAssetPushCoordinator(
                 checkSession()
                 val result=remoteStore.fetchRecord(entity,recordId,accessToken,ownerUserId)
                 checkSession()
-                require(result==null || LOCAL_ASSET_IMAGE_INTENT_KEY !in result.payload){"Remote asset cannot supply local image provenance"}
+                require(result==null || LOCAL_ASSET_PUBLICATION_KEYS.none{it in result.payload}){"Remote asset cannot supply local image provenance"}
                 val state=context(recordId)
                 state.remote=result
                 refresh(state.queued,state.local)
@@ -93,21 +93,41 @@ class InvestmentAssetPushCoordinator(
             }
             override suspend fun createRecord(entity:CloudEntity,accessToken:String,ownerUserId:UserId,payload:JsonObject):CloudRecord {
                 checkSession()
-                return remoteStore.createRecord(entity,accessToken,ownerUserId,cloudPayload(payload)).also{checkSession()}
+                val sent=cloudPayload(payload)
+                val result=remoteStore.createRecord(entity,accessToken,ownerUserId,sent)
+                checkSession()
+                localStore.recordInvestmentAssetPublicationReceipt(context(result.id).queued,sent,0,result)
+                checkSession()
+                return result
             }
             override suspend fun conditionalUpdate(entity:CloudEntity,recordId:String,accessToken:String,ownerUserId:UserId,expectedVersion:Long,payload:JsonObject):CloudRecord? {
                 checkSession()
-                return remoteStore.conditionalUpdate(entity,recordId,accessToken,ownerUserId,expectedVersion,cloudPayload(payload)).also{checkSession()}
+                val sent=cloudPayload(payload)
+                val result=remoteStore.conditionalUpdate(entity,recordId,accessToken,ownerUserId,expectedVersion,sent)
+                checkSession()
+                if(result!=null && context(recordId).local.deletedAt==null)
+                    localStore.recordInvestmentAssetPublicationReceipt(context(recordId).queued,sent,expectedVersion,result)
+                checkSession()
+                return result
             }
         }
         val delegate=OutboxPushCoordinator(entity,localStore,adapter,writesEnabled,nowEpochMillis,
-            allowTombstoneDeletes=true,validateRecord={InvestmentAssetRecord.fromCloudRecord(it)},
+            allowTombstoneDeletes=true,validateRecord={InvestmentAssetRecord.fromCloudRecord(it);localAssetPublicationParents(it)},
             normalizeSemanticPayload={payload->
                 val stripped=assetPayloadForCloud(payload)
                 val semantic=if(active?.keepImage==true)stripped-"image_path" else stripped
                 JsonObject(semantic.mapValues{(key,value)->
                     if(key=="archived_at" && value is JsonPrimitive && value.isString)JsonPrimitive(Instant.parse(value.content).toString()) else value
                 })
+            },conflictDecisionOverride={local,remote->
+                val device=requireNotNull(active).queued.mutation.deviceId
+                if(isKnownPriorAssetPublication(local,remote,device,active?.keepImage==true))
+                    ConflictDecision(ConflictWinner.LOCAL,"own_prior_publication")
+                else if(remote.payload.financeRawString("last_modified_by_device_id")==device &&
+                    investmentAssetPublicationFingerprint(local.payload,active?.keepImage==true)!=investmentAssetPublicationFingerprint(remote.payload,active?.keepImage==true) &&
+                    ConflictResolver.resolve(local,remote).winner==ConflictWinner.REMOTE)
+                    ConflictDecision(ConflictWinner.UNRESOLVED,"own_unproven_publication")
+                else null
             },preflight={q,row,_,_->preflight(q,row)},beforeRemoteWrite={q,row,_,_->
                 ensurePhoto(q,row)
             },acknowledgeOverride={q,remote->

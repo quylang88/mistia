@@ -66,10 +66,11 @@ internal class OutboxPushCoordinator(
     private val acknowledgementContext: suspend (QueuedMutation, CloudRecord, UserId, String) -> CoroutineContext = { _, _, _, _ -> EmptyCoroutineContext },
     private val recordFailureOverride: suspend (QueuedMutation, Long, String) -> Boolean? = { _, _, _ -> null },
     private val acknowledgeOverride: suspend (QueuedMutation, CloudRecord) -> MutationAcknowledgement = { _, _ -> MutationAcknowledgement.Default },
+    private val conflictDecisionOverride: (CloudRecord, CloudRecord) -> ConflictDecision? = { _, _ -> null },
     private val beforeRemoteWrite: suspend (QueuedMutation, CloudRecord, UserId, String) -> MutationPreflight = { _, _, _, _ -> MutationPreflight.Continue },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
-        ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
+        conflictDecisionOverride(local, remote) ?: ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
             remote.copy(payload = normalizeSemanticPayload(remote.payload)))
 
     override suspend fun pushPending(ownerUserId: UserId, accessToken: String): DomainPushSummary {

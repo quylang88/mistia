@@ -30,7 +30,7 @@ fun localAssetImagePublication(row:CloudRecord):InvestmentProductImagePublicatio
     return InvestmentProductImagePublication(owner.value,row.id,revision,previous,candidate)
 }
 
-fun assetPayloadForCloud(payload:JsonObject):JsonObject = JsonObject(payload-LOCAL_ASSET_IMAGE_INTENT_KEY)
+fun assetPayloadForCloud(payload:JsonObject):JsonObject = JsonObject(payload-LOCAL_ASSET_PUBLICATION_KEYS)
 
 internal fun InvestmentAssetMutationPlan.withLocalImagePublication(publication:InvestmentProductImagePublication):InvestmentAssetMutationPlan {
     val marker=buildJsonObject {

@@ -222,7 +222,11 @@ class InvestmentProductImageScreenTest {
             for(code in listOf("en","vi","ja"))for(theme in listOf(false,true)) {
                 compose.runOnIdle{configure(code);language=code;dark=theme;dismissed=false;scenario++}
                 fill();pick();compose.runOnIdle{configure(code)}
-                compose.onNodeWithTag("investment.asset.image.remove").performScrollTo().assertIsDisplayed()
+                // Configuration dispatch can remeasure the sheet after an initial scroll.
+                // Keep proving that the real control is reachable after that layout settles.
+                compose.waitUntil(8000){runCatching {
+                    compose.onNodeWithTag("investment.asset.image.remove").performScrollTo().assertIsDisplayed();true
+                }.getOrDefault(false)}
                 compose.onNodeWithTag("investment.image.loaded.$assetId").assertIsDisplayed()
                 val localized=context.createConfigurationContext(android.content.res.Configuration(context.resources.configuration).apply{setLocale(java.util.Locale.forLanguageTag(code))})
                 complete(localized.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_asset_image_optional))
