@@ -39,8 +39,8 @@ import vn.com.quyln.mistia.core.model.*
     val expectedSystem=remember(systemToken){systemToken?.let{decodeLinkedWallet(owner,it)}}
     val expectedTarget=remember(targetToken){targetToken?.let{decodeLinkedWallet(owner,it)}}
     val linkedAcknowledged=view!=null && expectedSystem!=null && expectedTarget!=null && view.system.investmentLinkedWalletId==expectedTarget.id &&
-        expectedSystem.copy(investmentLinkedWalletId=expectedTarget.id).matchesVisibleInvestmentWallet(view.system)
-    val baseConsent=view!=null && expectedSystem!=null && (expectedSystem.matchesVisibleInvestmentWallet(view.system) || linkedAcknowledged)
+        expectedSystem.copy(investmentLinkedWalletId=expectedTarget.id).matchesVisibleInvestmentSystemWallet(view.system)
+    val baseConsent=view!=null && expectedSystem!=null && (expectedSystem.matchesVisibleInvestmentSystemWallet(view.system) || linkedAcknowledged)
     val eventCandidate=eventId?.let{id ->snapshot?.rows?.any{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==investmentLedgerIdentity(id,"linked-wallet-move")}==true}==true
     val targetConsent=expectedTarget!=null && view?.eligibleWallets?.singleOrNull{it.id==expectedTarget.id}?.let(expectedTarget::matchesVisibleInvestmentWallet)==true
     val canDefault=baseConsent && targetConsent && !busy

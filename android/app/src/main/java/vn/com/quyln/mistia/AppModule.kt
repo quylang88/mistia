@@ -257,6 +257,8 @@ object AppModule {
         localStore = localStore,
         remoteStore = remoteStore,
         writesEnabled = BuildConfig.ALLOW_WALLET_CLOUD_WRITES,
+        investmentWalletSource = if(BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES)
+            localStore::investmentWalletPublicationSnapshot else null,
     )
 
     @Provides
@@ -485,13 +487,34 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideInvestmentWalletClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentWalletClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentWalletPushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentWalletClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.InvestmentWalletPushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
+
+    @Provides
+    @Singleton
+    fun provideWalletPublicationPushCoordinator(ordinary:WalletPushCoordinator,
+        investment:vn.com.quyln.mistia.core.sync.InvestmentWalletPushCoordinator)=
+        vn.com.quyln.mistia.core.sync.WalletPublicationPushCoordinator(ordinary,investment)
+
+    @Provides
+    @Singleton
     fun provideSyncEngine(
         @ApplicationContext context: Context,
         authRepository: AuthRepository,
         localStore: LocalStore,
         remoteStore: RemoteStore,
         categoryPushCoordinator: CategoryPushCoordinator,
-        walletPushCoordinator: WalletPushCoordinator,
+        walletPushCoordinator: vn.com.quyln.mistia.core.sync.WalletPublicationPushCoordinator,
         creditCardPushCoordinator: CreditCardPushCoordinator,
         transactionPushCoordinator: TransactionPushCoordinator,
         budgetPushCoordinator: BudgetPushCoordinator,

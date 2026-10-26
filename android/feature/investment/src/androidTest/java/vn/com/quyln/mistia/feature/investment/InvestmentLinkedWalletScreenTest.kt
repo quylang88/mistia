@@ -84,12 +84,49 @@ class InvestmentLinkedWalletScreenTest {
         Assert.assertTrue(rows().rows.none{it.entity==CloudEntity.LEDGER_TRANSACTION.table});Assert.assertEquals(4,queues().values.sumOf{it.size})
         await("investment.wallet.linked.name");compose.onNodeWithTag("investment.wallet.linked.name").assertTextEquals("Target wallet")
     }
+    @Test fun actualPickerExcludesEveryReservedPurposeAndKeepsOrdinaryChoices() {
+        prepare(true)
+        val reserved="99999999-9999-9999-9999-999999999999"
+        val raw=wallet(reserved,"Reserved").let{it.copy(payload=JsonObject(it.payload+("system_purpose_raw_value" to JsonPrimitive("futureReserved"))))}
+        seed(raw);val before=rows();val pending=queues()
+        compose.setContent{Screen()};choose()
+        compose.onNodeWithTag("investment.wallet.link.option."+target).assertExists()
+        compose.onNodeWithTag("investment.wallet.link.option."+reserved).assertDoesNotExist()
+        Assert.assertEquals(before,rows());Assert.assertEquals(pending,queues())
+    }
     @Test fun changingOnlyTheDefaultLeavesBookedCashAndEveryFinancialRowUnchanged() {
         prepare();val cash=rows().rows.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}
         compose.setContent{Screen()};choose();select();await("investment.wallet.link.onlyDefault")
         compose.onNodeWithTag("investment.wallet.link.onlyDefault").performClick();linked()
         Assert.assertEquals(cash,rows().rows.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table})
         Assert.assertTrue(rows().rows.none{it.entity==CloudEntity.LEDGER_TRANSACTION.table});Assert.assertEquals(4,queues().values.sumOf{it.size})
+    }
+    @Test fun frozenLinkChoiceSurvivesServerReadonlyRootMetadataAcknowledgement() {
+        prepare();val observed=CompletableDeferred<Unit>()
+        val source=object:InvestmentRepository by repo {
+            override fun observeCashSnapshot(owner:UserId)=repo.observeCashSnapshot(owner).onEach{snapshot->
+                if(snapshot.rows.any{it.id==investmentSystemWalletId(owner) && it.syncVersion==5L})observed.complete(Unit)
+            }
+        }
+        compose.setContent{Screen(source=source)};choose();select();await("investment.wallet.link.onlyDefault")
+        runBlocking {
+            for(id in listOf(previous,target)) {
+                val raw=store.record(owner,CloudEntity.LEDGER_WALLET.table,id)!!
+                val q=store.pendingMutations(owner,CloudEntity.LEDGER_WALLET,Long.MAX_VALUE).single{it.mutation.recordId==id}
+                Assert.assertTrue(store.acknowledgeMutation(q,raw.copy(syncVersion=1,payload=JsonObject(raw.payload+("sync_version" to JsonPrimitive(1))))))
+            }
+            val state=store.investmentWalletPublicationSnapshot(owner);val raw=state.record!!
+            val remote=raw.copy(syncVersion=5,updatedAt="2026-10-26T00:30:00Z",payload=JsonObject(raw.payload+buildJsonObject {
+                put("name","Investment Wallet");put("icon_symbol_name","chart.line.uptrend.xyaxis");put("icon_color_hex","#9A67FF")
+                put("sort_order",2147483547);put("updated_at","2026-10-26T00:30:00Z");put("sync_version",5)
+            }))
+            Assert.assertTrue(store.acknowledgeInvestmentWalletMutation(state.pending!!,remote,state))
+        }
+        compose.waitUntil(5000){observed.isCompleted};compose.waitForIdle()
+        val financial=rows().rows.filter{it.entity!=CloudEntity.LEDGER_WALLET.table}
+        compose.onNodeWithTag("investment.wallet.link.onlyDefault").assertIsEnabled()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){Assert.assertTrue(it())}
+        linked();Assert.assertEquals(financial,rows().rows.filter{it.entity!=CloudEntity.LEDGER_WALLET.table})
     }
     @Test fun changeAndMoveAllExecutesTheActualRoomTransferWithTwoSignedPostings() {
         prepare();val wallets=rows().rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table}.associate{it.id to it.payload.financeRawLong("opening_balance_minor")}

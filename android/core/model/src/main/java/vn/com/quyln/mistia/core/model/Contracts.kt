@@ -294,6 +294,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun recordInvestmentWalletPublicationReceipt(mutation:QueuedMutation,sentPayload:JsonObject,expectedVersion:Long,remoteRecord:CloudRecord,isSessionCurrent:()->Boolean={true}):Boolean = false
+    suspend fun investmentWalletPublicationSnapshot(owner:UserId):InvestmentWalletPublicationSnapshot = throw UnsupportedOperationException("Atomic investment wallet publication read unavailable")
+    suspend fun acknowledgeInvestmentWalletMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,expected:InvestmentWalletPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped investment wallet acknowledgement unavailable")
+    suspend fun recordInvestmentWalletMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentWalletPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped investment wallet failure recording unavailable")
+
     suspend fun cleanupInvestmentProductImages(owner:UserId,remote:InvestmentProductImageRemote):Int = throw UnsupportedOperationException("Reference guarded image cleanup unavailable")
 
     /** Optional durable receipt for a definite superseded RPC. Unsupported stores retain the proposal. */

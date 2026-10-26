@@ -1,5 +1,6 @@
 package vn.com.quyln.mistia.core.database
 
+import vn.com.quyln.mistia.core.model.financeRawLong
 import vn.com.quyln.mistia.core.model.InstallmentPaymentAcknowledgementSnapshot
 import vn.com.quyln.mistia.core.model.InstallmentPaymentAcknowledgement
 import vn.com.quyln.mistia.core.model.planInstallmentPaymentAcknowledgement
@@ -955,6 +956,115 @@ class RoomLocalStore(
             if(deleted)removed++
         }
         return removed
+    }
+
+    private suspend fun currentInvestmentWalletPublication(owner:UserId):vn.com.quyln.mistia.core.model.InvestmentWalletPublicationSnapshot {
+        val entity=CloudEntity.LEDGER_WALLET.table
+        val id=vn.com.quyln.mistia.core.model.investmentSystemWalletId(owner)
+        val stored=database.cloudRecordDao().record(owner.value,entity,id)
+        val queued=database.syncOutboxDao().record(owner.value,entity,id)
+        val row=stored?.toCloudRecord()
+        val linkedId=row?.payload?.financeRawReference("investment_linked_wallet_id")?.id
+        val linked=linkedId?.let{database.cloudRecordDao().record(owner.value,entity,it)}
+        val linkedQueue=linkedId?.let{database.syncOutboxDao().record(owner.value,entity,it)}
+        return vn.com.quyln.mistia.core.model.InvestmentWalletPublicationSnapshot(owner,row,queued?.toQueuedMutation(),stored?.hasPendingMutation==true,
+            linked?.toCloudRecord(),linkedQueue?.toQueuedMutation(),linked?.hasPendingMutation==true)
+    }
+    override suspend fun investmentWalletPublicationSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.InvestmentWalletPublicationSnapshot {
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=currentInvestmentWalletPublication(owner)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            source
+        }
+    }
+    private fun investmentWalletPublicationOwner(queued:QueuedMutation):UserId {
+        val q=queued.mutation;val owner=UserId(q.subjectUserId)
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value &&
+            q.entity==CloudEntity.LEDGER_WALLET && q.recordId==vn.com.quyln.mistia.core.model.investmentSystemWalletId(owner) &&
+            q.kind==MutationKind.UPSERT && vn.com.quyln.mistia.core.model.financeRawUuid(q.deviceId)==q.deviceId)
+        return owner
+    }
+    private fun ensureInvestmentWalletPublicationSession(isSessionCurrent:()->Boolean) {
+        if(!isSessionCurrent())throw kotlinx.coroutines.CancellationException("Investment wallet session changed")
+    }
+
+    override suspend fun recordInvestmentWalletPublicationReceipt(mutation:QueuedMutation,sentPayload:JsonObject,expectedVersion:Long,remoteRecord:CloudRecord,isSessionCurrent:()->Boolean):Boolean {
+        val owner=investmentWalletPublicationOwner(mutation);val q=mutation.mutation
+        val oldPayload=requireNotNull(q.payload)
+        require(expectedVersion>=0 && q.baseVersion>=0 && maxOf(expectedVersion,q.baseVersion)<Long.MAX_VALUE)
+        val proposed=maxOf(expectedVersion,q.baseVersion)+1
+        require(sentPayload.financeRawLong("sync_version")==proposed && remoteRecord.syncVersion==proposed)
+        require(vn.com.quyln.mistia.core.model.LOCAL_INVESTMENT_WALLET_PARENTS_KEY !in sentPayload &&
+            vn.com.quyln.mistia.core.model.LOCAL_INVESTMENT_WALLET_PARENTS_KEY !in remoteRecord.payload)
+        val old=CloudRecord(q.entity.table,q.recordId,q.subjectUserId,oldPayload,q.modifiedAt,null,q.baseVersion)
+        vn.com.quyln.mistia.core.model.canonicalInvestmentWalletForPublication(owner,old,forWrite=true)
+        vn.com.quyln.mistia.core.model.localInvestmentWalletPublicationParents(old)
+        vn.com.quyln.mistia.core.model.canonicalInvestmentWalletForPublication(owner,remoteRecord,forWrite=true)
+        require(oldPayload.financeRawString("last_modified_by_device_id")==q.deviceId && sentPayload.financeRawString("last_modified_by_device_id")==q.deviceId &&
+            remoteRecord.payload.financeRawString("last_modified_by_device_id")==q.deviceId)
+        require(sentPayload.financeRawString("id")==q.recordId && sentPayload.financeRawString("user_id")==owner.value)
+        val fingerprint=vn.com.quyln.mistia.core.model.investmentWalletPublicationFingerprint(oldPayload)
+        require(fingerprint==vn.com.quyln.mistia.core.model.investmentWalletPublicationFingerprint(sentPayload) &&
+            fingerprint==vn.com.quyln.mistia.core.model.investmentWalletPublicationFingerprint(remoteRecord.payload))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent)
+            val source=currentInvestmentWalletPublication(owner)
+            val pending=source.pending ?: return@withTransaction false
+            val row=source.record ?: return@withTransaction false
+            if(source.matches(mutation) || !source.matches(pending) || pending.mutation.baseVersion!=q.baseVersion || pending.mutation.deviceId!=q.deviceId)return@withTransaction false
+            vn.com.quyln.mistia.core.model.canonicalInvestmentWalletForPublication(owner,row,forWrite=true)
+            require(java.time.Instant.parse(row.payload.financeRawString("created_at"))==java.time.Instant.parse(oldPayload.financeRawString("created_at")))
+            if(vn.com.quyln.mistia.core.model.localInvestmentWalletPublicationParents(row).none{it.baseVersion==q.baseVersion && it.deviceId==q.deviceId && it.fingerprint==fingerprint})return@withTransaction false
+            val parent=vn.com.quyln.mistia.core.model.InvestmentWalletPublicationParent(q.baseVersion,remoteRecord.syncVersion,q.deviceId,fingerprint)
+            val changed=vn.com.quyln.mistia.core.model.appendInvestmentWalletPublicationParent(row,parent)
+            if(changed.payload==row.payload)return@withTransaction false
+            val payload=changed.payload.toString()
+            val stored=database.cloudRecordDao().record(owner.value,q.entity.table,q.recordId)!!
+            val queued=database.syncOutboxDao().record(owner.value,q.entity.table,q.recordId)!!
+            database.cloudRecordDao().upsert(stored.copy(payloadJson=payload))
+            database.syncOutboxDao().upsert(queued.copy(payloadJson=payload))
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent);kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+
+    override suspend fun acknowledgeInvestmentWalletMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,
+        expected:vn.com.quyln.mistia.core.model.InvestmentWalletPublicationSnapshot,isSessionCurrent:()->Boolean):Boolean {
+        val owner=investmentWalletPublicationOwner(mutation)
+        require(expected.owner==owner && expected.matches(mutation))
+        require(vn.com.quyln.mistia.core.model.LOCAL_INVESTMENT_WALLET_PARENTS_KEY !in remoteRecord.payload){"Remote wallet cannot supply local publication evidence"}
+        val remote=vn.com.quyln.mistia.core.model.canonicalInvestmentWalletForPublication(owner,remoteRecord,forWrite=true)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent)
+            val source=currentInvestmentWalletPublication(owner)
+            if(source!=expected || !source.matches(mutation) || source.dependency()!=vn.com.quyln.mistia.core.model.InvestmentWalletPublicationDependency.READY)return@withTransaction false
+            val current=vn.com.quyln.mistia.core.model.canonicalInvestmentWalletForPublication(owner,requireNotNull(source.record),forWrite=true)
+            vn.com.quyln.mistia.core.model.localInvestmentWalletPublicationParents(requireNotNull(source.record))
+            require(remote.currencyCode==current.currencyCode){"Investment accounting currency cannot change through metadata acknowledgement"}
+            val accepted=acknowledgeMutation(mutation,remoteRecord)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent);kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            accepted
+        }
+    }
+    override suspend fun recordInvestmentWalletMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,
+        expected:vn.com.quyln.mistia.core.model.InvestmentWalletPublicationSnapshot,isSessionCurrent:()->Boolean):Boolean {
+        val owner=investmentWalletPublicationOwner(mutation)
+        require(expected.owner==owner && expected.matches(mutation))
+        require(nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent)
+            val source=currentInvestmentWalletPublication(owner)
+            if(source!=expected || !source.matches(mutation))return@withTransaction false
+            val accepted=recordMutationFailure(mutation,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentWalletPublicationSession(isSessionCurrent);kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            accepted
+        }
     }
 
     private suspend fun currentAssetPublication(owner:UserId,assetId:String):vn.com.quyln.mistia.core.model.InvestmentAssetPublicationSnapshot {

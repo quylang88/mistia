@@ -80,6 +80,43 @@ class InvestmentWalletLinkPlanTest {
             failure(InvestmentWalletLinkError.INVALID_WALLET){plan(snapshot(selected=selected),request(selected=selected))}
         }
     }
+    @Test fun anyReservedPurposeTargetIsRejectedBeforeLinkOrMoneyMutation() {
+        val selected=change(wallet(target),buildJsonObject{put("system_purpose_raw_value","futureReserved")})
+        failure(InvestmentWalletLinkError.INVALID_WALLET){plan(snapshot(selected=selected),request(selected=selected,move=false))}
+    }
+    @Test fun pickerReadDoesNotExposeAnyReservedPurposeAsAnOrdinaryTarget() {
+        val selected=change(wallet(target),buildJsonObject{put("system_purpose_raw_value","futureReserved")})
+        assertFalse(investmentLinkedWalletView(snapshot(selected=selected)).eligibleWallets.any{it.id==target})
+    }
+    @Test fun reservedLegacyHolderCannotBeUsedToMoveCashAsAnOrdinaryWallet() {
+        val source=snapshot().let{it.copy(rows=it.rows.map{row->if(row.id==previous)change(row,buildJsonObject{put("system_purpose_raw_value","futureReserved")}) else row})}
+        assertNull(investmentLinkedWalletView(source).bookedMinor)
+        failure(InvestmentWalletLinkError.INVALID_WALLET){plan(source)}
+    }
+    @Test fun serverReadonlyRootPresentationAckDoesNotInvalidateAConfirmedLinkChange() {
+        val oldSystem=system()
+        val acknowledged=oldSystem.copy(syncVersion=oldSystem.syncVersion+8,updatedAt=now,payload=JsonObject(oldSystem.payload+buildJsonObject {
+            put("name","Investment Wallet");put("icon_symbol_name","chart.line.uptrend.xyaxis");put("icon_color_hex","#9A67FF")
+            put("institution_display_name",JsonNull);put("institution_preset_key",JsonNull);put("sort_order",2147483547)
+            put("sync_version",oldSystem.syncVersion+8);put("updated_at",now);put("last_modified_by_device_id","99999999-9999-9999-9999-999999999999")
+        }))
+        val result=plan(snapshot(system=acknowledged),request(system=oldSystem,move=false))
+        assertEquals(target,result.linkedWalletId);assertEquals(1,result.mutations.size)
+        assertEquals(acknowledged.syncVersion,result.mutations.single().second.baseVersion)
+    }
+    @Test fun rootPresentationNormalizationStillRequiresTheSameMoneyLinkAndCanonicalIdentity() {
+        val expected=LedgerWalletRecord.fromCloudRecord(system())
+        assertTrue(expected.matchesVisibleInvestmentSystemWallet(expected))
+        val changed=listOf(expected.copy(currencyCode="JPY"),expected.copy(openingBalanceMinor=1),
+            expected.copy(investmentLinkedWalletId=null),expected.copy(id=target),
+            expected.copy(ownerUserId="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),expected.copy(systemPurposeRawValue="futureReserved"),
+            expected.copy(isArchived=true),expected.copy(deletedAt=now),expected.copy(createdAt=now))
+        changed.forEach{assertFalse(it.toString(),expected.matchesVisibleInvestmentSystemWallet(it))}
+        val ordinary=LedgerWalletRecord.fromCloudRecord(wallet(target))
+        assertFalse(ordinary.matchesVisibleInvestmentSystemWallet(ordinary))
+        val renamed=change(wallet(target),buildJsonObject{put("name","Renamed target")})
+        failure(InvestmentWalletLinkError.STALE_RECORD){plan(snapshot(selected=renamed),request(move=false))}
+    }
     @Test fun changedVisibleSourceOrBookedAmountCannotMoveUnconfirmedCash() {
         val changed=change(system(),buildJsonObject{put("investment_linked_wallet_id","dddddddd-dddd-dddd-dddd-dddddddddddd")})
         failure(InvestmentWalletLinkError.STALE_RECORD){plan(snapshot(system=changed))}

@@ -40,9 +40,10 @@ fun planInvestmentWalletLink(
     } || snapshot.rows.map{it.entity to it.id}.distinct().size!=snapshot.rows.size)unreadable()
     fun record(entity:CloudEntity,id:String)=snapshot.rows.singleOrNull{it.entity==entity.table && it.id==id}
     fun wallet(raw:CloudRecord)=investmentLinkedWalletRecord(raw)
-    fun visible(expected:LedgerWalletRecord,current:LedgerWalletRecord):Boolean =
-        try{expected.matchesVisibleInvestmentWallet(current)}catch(_:Exception){unreadable()}
     val systemId=investmentSystemWalletId(snapshot.owner)
+    fun visible(expected:LedgerWalletRecord,current:LedgerWalletRecord):Boolean =
+        try{if(expected.id==systemId)expected.matchesVisibleInvestmentSystemWallet(current)
+            else expected.matchesVisibleInvestmentWallet(current)}catch(_:Exception){unreadable()}
     if(request.expectedSystem.id!=systemId || request.expectedSystem.ownerUserId!=snapshot.owner.value ||
         request.expectedTarget.ownerUserId!=snapshot.owner.value)fail(InvestmentWalletLinkError.INVALID_WALLET)
     val rawSystem=record(CloudEntity.LEDGER_WALLET,systemId) ?: fail(InvestmentWalletLinkError.INVALID_WALLET)
@@ -53,7 +54,7 @@ fun planInvestmentWalletLink(
     val targetId=identity(request.expectedTarget.id)
     val target=record(CloudEntity.LEDGER_WALLET,targetId)?.let(::wallet) ?: fail(InvestmentWalletLinkError.INVALID_WALLET)
     if(target.kind==null || target.kind in setOf(WalletKind.CREDIT_CARD,WalletKind.INVESTMENT) ||
-        target.id==systemId || target.systemPurposeRawValue=="investmentProfit" || target.deletedAt!=null || target.isArchived ||
+        target.id==systemId || target.systemPurposeRawValue!=null || target.deletedAt!=null || target.isArchived ||
         investmentAssetCurrency(target.currencyCode)!=code)fail(InvestmentWalletLinkError.INVALID_WALLET)
     if(!visible(request.expectedTarget,target))fail(InvestmentWalletLinkError.STALE_RECORD)
     val previousId=request.expectedSystem.investmentLinkedWalletId
@@ -101,12 +102,12 @@ fun planInvestmentWalletLink(
     var amount=0L
     if(request.moveAllBookedCash && previousId!=null) {
         val previous=record(CloudEntity.LEDGER_WALLET,identity(previousId))?.let(::wallet) ?: fail(InvestmentWalletLinkError.INVALID_WALLET)
-        if(previous.deletedAt!=null || previous.kind==null || previous.kind in setOf(WalletKind.CREDIT_CARD,WalletKind.INVESTMENT) ||
+        if(previous.deletedAt!=null || previous.systemPurposeRawValue!=null || previous.kind==null || previous.kind in setOf(WalletKind.CREDIT_CARD,WalletKind.INVESTMENT) ||
             investmentAssetCurrency(previous.currencyCode)!=code)fail(InvestmentWalletLinkError.INVALID_WALLET)
         amount=investmentBookedCashMinor(snapshot,previousId,code)
         if(amount!=request.expectedBookedMinor)fail(InvestmentWalletLinkError.STALE_RECORD)
     }
-    val changed=investmentAssetChanged(rawSystem,buildJsonObject{put("investment_linked_wallet_id",targetId)},deviceId,now)
+    val changed=investmentAssetChanged(rawSystem,buildJsonObject{put("investment_linked_wallet_id",targetId)},deviceId,now).withPriorInvestmentWalletPublication(rawSystem)
     val rows=mutableListOf(changed)
     fun create(entity:CloudEntity,id:String,fields:JsonObject):CloudRecord=CloudRecord(entity.table,id,snapshot.owner.value,buildJsonObject {
         put("id",id);put("user_id",snapshot.owner.value);put("created_at",now);put("updated_at",now);put("deleted_at",JsonNull)
@@ -179,6 +180,17 @@ fun LedgerWalletRecord.matchesVisibleInvestmentWallet(other:LedgerWalletRecord):
         other.copy(currencyCode=otherCurrency,updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString())
 }
 
+/** A metadata ACK may canonicalize root presentation while a link choice is open. */
+fun LedgerWalletRecord.matchesVisibleInvestmentSystemWallet(other:LedgerWalletRecord):Boolean = runCatching {
+    val owner=UserId(ownerUserId)
+    fun normalized(wallet:LedgerWalletRecord):LedgerWalletRecord {
+        val raw=wallet.toCloudRecord()
+        canonicalInvestmentWalletForPublication(owner,raw,forWrite=true)
+        return LedgerWalletRecord.fromCloudRecord(raw.copy(payload=investmentWalletMetadataForComparison(raw.payload)))
+    }
+    normalized(this).matchesVisibleInvestmentWallet(normalized(other))
+}.getOrDefault(false)
+
 data class InvestmentLinkedWalletView(
     val system:LedgerWalletRecord,val linkedWallet:LedgerWalletRecord?,
     val eligibleWallets:List<LedgerWalletRecord>,val bookedMinor:Long?,
@@ -193,10 +205,10 @@ fun investmentLinkedWalletView(snapshot:InvestmentWalletSnapshot):InvestmentLink
     if(system.kind!=WalletKind.INVESTMENT || system.systemPurposeRawValue!="investmentProfit" || system.deletedAt!=null || system.isArchived)
         throw InvestmentWalletLinkException(InvestmentWalletLinkError.INVALID_WALLET)
     val eligible=wallets.filter{it.kind!=null && it.kind !in setOf(WalletKind.INVESTMENT,WalletKind.CREDIT_CARD) && it.id!=system.id &&
-        it.systemPurposeRawValue!="investmentProfit" && !it.isArchived && it.deletedAt==null && investmentAssetCurrency(it.currencyCode)==code}
+        it.systemPurposeRawValue==null && !it.isArchived && it.deletedAt==null && investmentAssetCurrency(it.currencyCode)==code}
         .sortedWith(compareBy(LedgerWalletRecord::sortOrder).thenBy{Instant.parse(it.createdAt)}.thenBy(LedgerWalletRecord::id))
     val linked=wallets.singleOrNull{it.id==system.investmentLinkedWalletId}
-    val movable=system.investmentLinkedWalletId==null || (linked!=null && linked.deletedAt==null && linked.kind!=null &&
+    val movable=system.investmentLinkedWalletId==null || (linked!=null && linked.deletedAt==null && linked.systemPurposeRawValue==null && linked.kind!=null &&
         linked.kind !in setOf(WalletKind.CREDIT_CARD,WalletKind.INVESTMENT) && investmentAssetCurrency(linked.currencyCode)==code)
     val booked=if(movable)runCatching{investmentBookedCashMinor(snapshot,system.investmentLinkedWalletId,code)}.getOrNull() else null
     return InvestmentLinkedWalletView(system,linked,eligible,booked)
