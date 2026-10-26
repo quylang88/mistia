@@ -61,7 +61,7 @@ private fun InvestmentProductThumbnailContent(owner:UserId,repository:Investment
 @Composable
 internal fun InvestmentProductImageField(owner:UserId,repository:InvestmentRepository,assetId:String,path:String?,
     candidate:InvestmentProductImageCandidate?,enabled:Boolean,onCandidate:(InvestmentProductImageCandidate)->Unit,
-    onRemove:()->Unit,onBusy:(Boolean)->Unit) {
+    onRemove:()->Unit,onBusy:(Boolean)->Unit,allowEmptyRemoval:Boolean=false) {
     val context=LocalContext.current
     val background=if(MaterialTheme.colorScheme.background.luminance()<0.5f)android.graphics.Color.BLACK else android.graphics.Color.WHITE
     val preparer=remember(context,background){AndroidInvestmentProductImagePreparer(context.contentResolver,backgroundColor=background)}
@@ -147,6 +147,10 @@ internal fun InvestmentProductImageField(owner:UserId,repository:InvestmentRepos
                 DropdownMenuItem(text={Text(stringResource(R.string.investment_asset_choose_photo))},modifier=Modifier.testTag("investment.asset.image.library"),onClick={
                     menu=false
                     if(active && latestEnabled && !processing){pendingLibrary=formNonce;picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))}
+                })
+                if(allowEmptyRemoval)DropdownMenuItem(text={Text(stringResource(R.string.investment_asset_remove_image))},modifier=Modifier.testTag("investment.asset.image.clear"),onClick={
+                    menu=false
+                    if(active && latestEnabled && !processing){failed=false;onRemove()}
                 })
             }
         }

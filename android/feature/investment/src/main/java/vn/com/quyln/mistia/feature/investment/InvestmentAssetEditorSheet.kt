@@ -160,7 +160,7 @@ internal fun InvestmentAssetEditorSheet(
                 },onRemove={
                     val previous=candidate;imageToken=null;removesImage=true;imageRevision=java.util.UUID.randomUUID().toString();error=null
                     if(previous!=null)scope.launch{repository.discardProductImage(owner,previous)}
-                },onBusy={imageBusy=it})
+                },onBusy={imageBusy=it},allowEmptyRemoval=expected!=null)
             if(candidateResult?.isFailure==true)Text(stringResource(R.string.common_error),Modifier.testTag("investment.asset.image.invalid"),color=MaterialTheme.colorScheme.error)
             if(historyLocked)Text(stringResource(R.string.investment_error_asset_history_locks_accounting),Modifier.testTag("investment.asset.historyLocked"),style=MaterialTheme.typography.bodySmall)
             if(!readable || !consent || (channelId.isNotEmpty() && selectedChannel==null))

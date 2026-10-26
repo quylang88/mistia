@@ -94,6 +94,7 @@ class SupabasePostgrestRemoteStore(
             val records = (json.parseToJsonElement(body) as? JsonArray)
                 ?.mapNotNull { it as? JsonObject }
                 .orEmpty()
+            require(table!=CloudEntity.INVESTMENT_ASSET.table || records.none{vn.com.quyln.mistia.core.model.LOCAL_ASSET_IMAGE_INTENT_KEY in it}) {"Remote asset cannot supply local image provenance"}
             RemotePage(records = records, nextOffset = if (records.size == limit) offset + limit else null)
         }
     }
@@ -349,6 +350,7 @@ class SupabasePostgrestRemoteStore(
     }
 
     private fun JsonObject.toCloudRecord(entity: CloudEntity, ownerUserId: UserId): CloudRecord {
+        require(entity!=CloudEntity.INVESTMENT_ASSET || vn.com.quyln.mistia.core.model.LOCAL_ASSET_IMAGE_INTENT_KEY !in this) {"Remote asset cannot supply local image provenance"}
         val recordId = string("id") ?: error("Supabase ${entity.table} row is missing id")
         require(string("user_id") == ownerUserId.value) { "Supabase row owner does not match request" }
         return CloudRecord(

@@ -43,7 +43,7 @@ class SupabaseInvestmentProductImageClient(
             val bytes = when {
                 response.isSuccessful -> checkNotNull(response.bytes)
                 response.code == 404 -> null
-                else -> throw StorageRequestException(response.code)
+                else -> throw SupabaseHttpException(response.code,"")
             }
             ensureCurrent(context)
             bytes
@@ -73,9 +73,9 @@ class SupabaseInvestmentProductImageClient(
                     ensureCurrent(context)
                     same
                 }
-                if (!matches) throw StorageRequestException(status)
+                if (!matches) throw SupabaseHttpException(status,"")
             }
-            else -> throw StorageRequestException(status)
+            else -> throw SupabaseHttpException(status,"")
         }
         ensureCurrent(context)
     }
@@ -89,7 +89,7 @@ class SupabaseInvestmentProductImageClient(
         val context = capture(owner, assetId, path, isWrite = true, isCurrent)
         execute(context, "DELETE").let { response ->
             ensureCurrent(context)
-            if (!response.isSuccessful && response.code != 404) throw StorageRequestException(response.code)
+            if (!response.isSuccessful && response.code != 404) throw SupabaseHttpException(response.code,"")
         }
         ensureCurrent(context)
     }
@@ -144,7 +144,11 @@ class SupabaseInvestmentProductImageClient(
         throw error
     } catch (error: Exception) {
         // HTTP response bodies, transport errors, and their URLs may contain private data.
-        Result.failure(if (error is StorageRequestException) error else StorageRequestException())
+        Result.failure(when(error) {
+            is SupabaseHttpException->SupabaseHttpException(error.statusCode,"")
+            is StorageRequestException->error
+            else->StorageRequestException()
+        })
     }
 
     private suspend fun Call.await(readBytes: Boolean): StorageResponse = suspendCancellableCoroutine { continuation ->

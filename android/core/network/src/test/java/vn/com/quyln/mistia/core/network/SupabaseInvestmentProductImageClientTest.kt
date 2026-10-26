@@ -338,4 +338,14 @@ class SupabaseInvestmentProductImageClientTest {
             assertFalse(message.contains(privateText))
         }
     }
+    @Test fun `upload failures preserve only safe HTTP status for permanent and retryable classification`()=runTest {
+        for(status in listOf(401,403,413,422,429,500)) {
+            server.enqueue(MockResponse().setResponseCode(status).setBody("private-error-detail"))
+            val result=client.upload(owner,assetId,path,jpeg)
+            assertEquals(status,(result.exceptionOrNull() as? SupabaseHttpException)?.statusCode)
+            assertEquals("",(result.exceptionOrNull() as SupabaseHttpException).responseBody)
+            assertSafeFailure(result)
+        }
+    }
+
 }

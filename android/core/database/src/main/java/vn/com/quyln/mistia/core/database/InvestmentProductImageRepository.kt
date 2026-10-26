@@ -71,7 +71,8 @@ internal class OfflineInvestmentProductImageRepository(
                 if(!store.commitInvestmentAssetImageMutation(durable,request,device,now))return@repeat
             }
             currentCoroutineContext().ensureActive()
-            require(images().markLocalPublished(owner,ticket).getOrThrow()){"Product image publication changed"}
+            val actual=store.reconcileInvestmentAssetImagePublication(owner,draft.id,request)
+            require(actual.record?.let{InvestmentAssetRecord.fromCloudRecord(it).imagePath}==ticket.path){"Product image source changed"}
             return@result plan.asset
         }
         throw InvestmentAssetException(InvestmentAssetError.STALE_RECORD)

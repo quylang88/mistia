@@ -25,7 +25,7 @@ fun planInvestmentAssetImageSave(snapshot:InvestmentAssetSnapshot,request:Invest
             InvestmentProductImagePath.parse(snapshot.owner,draft.id,image.path).value
         }
     }
-    try{return planInvestmentAssetMutation(snapshot,InvestmentAssetRequest.Save(draft),deviceId,now)}
+    try{return planInvestmentAssetMutation(snapshot,InvestmentAssetRequest.Save(draft),deviceId,now).withLocalImagePublication(publication)}
     catch(error:InvestmentAssetException){if(error.reason!=InvestmentAssetError.STALE_RECORD)throw error}
     // An old baseline is eligible only for an exact already committed proposal, never a rebase.
     val raw=snapshot.records(CloudEntity.INVESTMENT_ASSET).singleOrNull{it.id==draft.id} ?: stale()

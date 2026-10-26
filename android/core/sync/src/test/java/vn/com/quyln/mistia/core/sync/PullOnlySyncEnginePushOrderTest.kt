@@ -77,7 +77,7 @@ class PullOnlySyncEnginePushOrderTest {
         assertEquals("pull:transaction_categories", events[12])
     }
 
-    @Test fun `disabled real channel coordinator permits pull without querying an outbox or invoking a writer`()=runTest {
+    @Test fun `disabled real investment coordinators permit pull without querying an outbox or invoking a writer`()=runTest {
         val local=object:LocalStore by EmptyLocalStore() {
             override suspend fun pendingMutations(ownerUserId:UserId,entity:CloudEntity,dueAtEpochMillis:Long,limit:Int):List<QueuedMutation> = error("Disabled channel must not inspect an outbox")
         }
@@ -93,7 +93,8 @@ class PullOnlySyncEnginePushOrderTest {
             }
         }
         val channel=InvestmentChannelPushCoordinator(local,channelRemote,false,{error("Disabled channel cannot request a session")})
-        assertTrue(PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,listOf(channel)).syncNow().isSuccess)
+        val asset=InvestmentAssetPushCoordinator(local,channelRemote,false,{error("Disabled asset cannot request a session")})
+        assertTrue(PullOnlySyncEngine(null,SignedInAuthRepository(),local,remote,listOf(asset,channel)).syncNow().isSuccess)
         assertEquals(CloudEntity.pullOrder.map{it.table},pulled.take(CloudEntity.entries.size))
     }
 

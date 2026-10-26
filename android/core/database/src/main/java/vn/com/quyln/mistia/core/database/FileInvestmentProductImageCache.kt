@@ -150,6 +150,51 @@ class FileInvestmentProductImageCache(
         manifest.links[publication.assetId]=publication.revision
         save(owner,manifest,caller);true
     }
+    /** The caller holds the Room write transaction, serializing every typed asset metadata save. */
+    internal suspend fun reconcileCurrentReference(proof:CurrentAssetImageReferenceProof):Result<Pair<InvestmentProductImagePublication?,Boolean>> = guarded(proof.owner){caller->
+        val owner=proof.owner;require(financeRawUuid(proof.assetId)==proof.assetId)
+        proof.path?.let{InvestmentProductImagePath.parse(owner,proof.assetId,it)}
+        val manifest=load(owner)
+        val linked=manifest.links[proof.assetId]?.let(manifest.publications::get)
+        val declared=proof.declared?.also{validate(owner,it);require(it.assetId==proof.assetId && it.path==proof.path)}
+        val reserved=manifest.publications.values.filter{it.ticket.assetId==proof.assetId && it.state=="reserved"}
+        val legacy=if(declared==null && proof.dirty) {
+            proof.knownLegacyResult?.also{validate(owner,it);require(it.assetId==proof.assetId && it.path==proof.path)}
+                ?: if(proof.path!=null)reserved.singleOrNull{it.ticket.path==proof.path}?.ticket else null
+        } else null
+        val currentLinked=linked?.takeIf{it.ticket.path==proof.path}
+        if(declared==null && legacy==null && currentLinked==null && proof.dirty && proof.path==null && reserved.any{it.ticket.path==null})
+            error("Legacy removal publication is ambiguous")
+        // An equivalent retry is not a new edit: retain the already confirmed revision
+        // when metadata still points at it, including a subsequent ordinary dirty rename.
+        val ticket=declared ?: currentLinked?.ticket ?: legacy ?: return@guarded null to false
+        val saved=manifest.publications[ticket.revision] ?: error("Current product image publication is unavailable")
+        require(saved.ticket==ticket){"Current product image publication changed"}
+        verifyFiles(owner,manifest,ticket)
+        // A unique candidate referenced by a committed descendant proves that ancestor was used.
+        // Other reservations remain pinned: they may belong to a not-yet-committed form save.
+        val visited=mutableSetOf(ticket.revision)
+        var ancestor=ticket.previousPath
+        while(ancestor!=null) {
+            val prior=manifest.publications.values.singleOrNull{it.ticket.assetId==proof.assetId && it.ticket.path==ancestor} ?: break
+            require(visited.add(prior.ticket.revision)){"Cyclic product image publication history"}
+            // The committed descendant proves this immutable path was used. Its old
+            // bytes need not survive to retire that reservation; only the current
+            // candidate above can become upload authority and must still verify.
+            if(prior.state=="reserved") {
+                prior.ticket.candidate?.let{c->manifest.entries[c.path]=manifest.entries.getValue(c.path).copy(state="published")}
+                manifest.publications[prior.ticket.revision]=prior.copy(state="local")
+            }
+            ancestor=prior.ticket.previousPath
+        }
+        if(saved.state=="reserved") {
+            ticket.candidate?.let{c->manifest.entries[c.path]=manifest.entries.getValue(c.path).copy(state="published")}
+            manifest.publications[ticket.revision]=saved.copy(state="local")
+        }
+        manifest.links[proof.assetId]=ticket.revision
+        save(owner,manifest,caller)
+        ticket to (saved.state=="acknowledged")
+    }
     suspend fun pendingUploads(owner:UserId):Result<List<InvestmentProductImageCandidate>> = guarded(owner){
         val manifest=load(owner)
         manifest.links.toSortedMap().values.mapNotNull{revision->manifest.publications.getValue(revision).takeIf{it.state=="local"}?.ticket?.candidate}
@@ -175,6 +220,7 @@ class FileInvestmentProductImageCache(
             manifest.publications.values.filter{it.state=="reserved"}.mapNotNull{it.ticket.path}
         for((key,published) in manifest.publications.toMap())if(published.ticket.assetId==publication.assetId && published.state in setOf("local","acknowledged") && !published.cleanupQueued) {
             published.ticket.previousPath?.takeIf{it !in referenced}?.let{manifest.ready.add(it)}
+            published.ticket.path?.takeIf{it !in referenced}?.let{manifest.ready.add(it)}
             manifest.publications[key]=published.copy(cleanupQueued=true)
         }
         manifest.publications[publication.revision]=manifest.publications.getValue(publication.revision).copy(state="acknowledged")
@@ -182,6 +228,13 @@ class FileInvestmentProductImageCache(
         save(owner,manifest,caller);true
     }
     suspend fun readyDeletions(owner:UserId):Result<List<String>> = guarded(owner){load(owner).ready.sorted()}
+    internal suspend fun deletionIsUnpinned(owner:UserId,assetId:String,path:String):Result<Boolean> = guarded(owner){
+        InvestmentProductImagePath.parse(owner,assetId,path)
+        val manifest=load(owner)
+        path in manifest.ready && manifest.links.values.none{manifest.publications[it]?.ticket?.path==path} &&
+            manifest.publications.values.none{it.state=="reserved" && it.ticket.path==path} &&
+            manifest.entries[path]?.state !in setOf("staged","reserved")
+    }
     suspend fun markDeletionSucceeded(owner:UserId,assetId:String,path:String):Result<Boolean> = guarded(owner){caller->
         InvestmentProductImagePath.parse(owner,assetId,path)
         val manifest=load(owner)

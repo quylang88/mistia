@@ -194,8 +194,8 @@ internal fun investmentAssetChanged(raw:CloudRecord,fields:JsonObject,device:Str
     return raw.copy(payload=JsonObject(raw.payload+(if(raw.deletedAt!=null && "deleted_at" !in fields) mapOf("deleted_at" to JsonPrimitive(raw.deletedAt)) else emptyMap())+fields+mapOf("updated_at" to JsonPrimitive(now),"last_modified_by_device_id" to JsonPrimitive(device))),updatedAt=now)
 }
 fun InvestmentAssetRecord.matchesVisibleInvestmentAsset(other:InvestmentAssetRecord):Boolean=
-    copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString())==
-        other.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString())
+    copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(createdAt).toString(),archivedAt=archivedAt?.let{Instant.parse(it).toString()})==
+        other.copy(updatedAt="",syncVersion=0,lastModifiedByDeviceId=null,createdAt=Instant.parse(other.createdAt).toString(),archivedAt=other.archivedAt?.let{Instant.parse(it).toString()})
 
 internal fun investmentAssetHistory(snapshot:InvestmentAssetSnapshot,id:String):List<CloudRecord> =
     snapshot.records(CloudEntity.INVESTMENT_TRADE).filter{trade ->

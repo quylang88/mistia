@@ -207,4 +207,270 @@ class InvestmentAssetImageRoomTest {
         assertEquals(before,store.investmentAssetSnapshot(owner));assertTrue(cache.pendingUploads(owner).getOrThrow().isEmpty())
     }
 
+    @Test fun freshRoomAuthorityRepairsACommittedButUnpromotedCandidateAfterRestart()=runBlocking {
+        prepare();val request=proposal()
+        assertTrue(store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),request,device,now))
+        assertTrue(cache.pendingUploads(owner).getOrThrow().isEmpty())
+        val resumed=RoomLocalStore(db,currentBillOwner={active},productImages=FileInvestmentProductImageCache(directory,{active}))
+        val state=resumed.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(request.publication,state.imagePublication);assertFalse(state.imageAcknowledged)
+        assertEquals(listOf(request.publication.candidate),cache.pendingUploads(owner).getOrThrow())
+        assertTrue(state.matches(store.pendingMutations(owner,CloudEntity.INVESTMENT_ASSET,Long.MAX_VALUE).single()))
+    }
+    @Test fun currentMarkerRepairsAnInterruptedChainWithoutPromotingTheOldRetryTicket()=runBlocking {
+        prepare();val first=proposal()
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),first,device,now)
+        val b=InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,assetId)!!)
+        val newer=cache.stage(owner,assetId,jpeg(),jpeg()).getOrThrow()
+        val ticket=cache.reservePublication(owner,newer,b.imagePath,"77777777-7777-7777-7777-777777777777").getOrThrow()
+        val request=InvestmentAssetImageSaveRequest(imageDraft(newer,b),ticket)
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),request,device,now)
+        val state=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(ticket,state.imagePublication);assertEquals(listOf(newer),cache.pendingUploads(owner).getOrThrow())
+        assertFalse(cache.discardCandidate(owner,first.publication.candidate!!).getOrThrow())
+    }
+    @Test fun sameEffectRemovalRetryKeepsTheActualCurrentPublicationRevision()=runBlocking {
+        prepare();val initial=proposal()
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),initial,device,now)
+        val b=InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,assetId)!!)
+        val actual=cache.reserveRemoval(owner,assetId,b.imagePath,"77777777-7777-7777-7777-777777777777").getOrThrow()
+        val removal=InvestmentAssetImageSaveRequest(draft(b).copy(imageChange=InvestmentAssetImageChange.Remove),actual)
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),removal,device,now)
+        val old=cache.reserveRemoval(owner,assetId,b.imagePath,"88888888-8888-8888-8888-888888888888").getOrThrow()
+        val retry=removal.copy(publication=old)
+        assertTrue(store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),retry,device,now))
+        val state=store.reconcileInvestmentAssetImagePublication(owner,assetId,retry)
+        assertEquals(actual,state.imagePublication)
+        assertFalse(cache.markUploadSucceeded(owner,initial.publication.candidate!!).getOrThrow())
+    }
+    @Test fun malformedOrUnqueuedCurrentIntentCannotPromoteAnyReservedBytes()=runBlocking {
+        prepare();val request=proposal()
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),request,device,now)
+        db.openHelper.writableDatabase.execSQL("DELETE FROM sync_outbox WHERE entity = 'investment_assets'")
+        assertTrue(runCatching{store.reconcileInvestmentAssetImagePublication(owner,assetId)}.isFailure)
+        assertTrue(cache.pendingUploads(owner).getOrThrow().isEmpty())
+    }
+    @Test fun ownerChangeDuringReconciliationRetainsReservationAndDoesNotExposeAnotherOwner()=runBlocking {
+        prepare();val request=proposal()
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),request,device,now)
+        active=other
+        assertTrue(runCatching{store.reconcileInvestmentAssetImagePublication(owner,assetId)}.exceptionOrNull() is CancellationException)
+        active=owner;assertTrue(cache.pendingUploads(owner).getOrThrow().isEmpty())
+    }
+
+    private suspend fun removeLocalIntentForLegacyFixture() {
+        val raw=store.record(owner,CloudEntity.INVESTMENT_ASSET.table,assetId)!!
+        val payload=assetPayloadForCloud(raw.payload).toString()
+        for(table in listOf("cloud_records","sync_outbox"))db.openHelper.writableDatabase.execSQL(
+            "UPDATE $table SET payload_json = ? WHERE owner_user_id = ? AND entity = 'investment_assets' AND record_id = ?",arrayOf(payload,owner.value,assetId))
+    }
+    @Test fun legacyUniqueReservedReplacementCanBeRecoveredFromItsActuallyReferencedPath()=runBlocking {
+        prepare();val request=proposal()
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),request,device,now)
+        removeLocalIntentForLegacyFixture()
+        val state=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(request.publication,state.imagePublication)
+        assertEquals(listOf(request.publication.candidate),cache.pendingUploads(owner).getOrThrow())
+    }
+    @Test fun unmarkedLegacyNullReservationIsHeldUntilAnExplicitKnownResultRetry()=runBlocking {
+        prepare();val candidate=staged()
+        val initial=imageRepo().saveAssetImage(owner,imageDraft(candidate),candidate,revision,device,now).getOrThrow()
+        val ticket=cache.reserveRemoval(owner,assetId,initial.imagePath,"77777777-7777-7777-7777-777777777777").getOrThrow()
+        val request=InvestmentAssetImageSaveRequest(draft(initial).copy(imageChange=InvestmentAssetImageChange.Remove),ticket)
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),request,device,now)
+        removeLocalIntentForLegacyFixture()
+        val before=store.investmentAssetSnapshot(owner)
+        assertTrue(runCatching{store.reconcileInvestmentAssetImagePublication(owner,assetId)}.isFailure)
+        assertEquals(before,store.investmentAssetSnapshot(owner))
+        val repaired=store.reconcileInvestmentAssetImagePublication(owner,assetId,request)
+        assertEquals(ticket,repaired.imagePublication);assertFalse(repaired.imageAcknowledged)
+        assertEquals(before,store.investmentAssetSnapshot(owner))
+    }
+    @Test fun acknowledgedPhotoIntentAcrossALaterRenameIsRecognizedAsKeep()=runBlocking {
+        prepare();val candidate=staged()
+        val original=imageRepo().saveAssetImage(owner,imageDraft(candidate),candidate,revision,device,now).getOrThrow()
+        assertTrue(cache.markUploadSucceeded(owner,candidate).getOrThrow())
+        val ticket=store.reconcileInvestmentAssetImagePublication(owner,assetId).imagePublication!!
+        assertTrue(cache.acknowledgePublished(owner,ticket).getOrThrow())
+        imageRepo().saveAsset(owner,draft(original).copy(name="Renamed"),device,now).getOrThrow()
+        val state=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(ticket,state.imagePublication);assertTrue(state.imageAcknowledged)
+        assertEquals("Renamed",InvestmentAssetRecord.fromCloudRecord(state.record!!).name)
+    }
+
+    private fun serverResult(raw:CloudRecord,version:Long=9007199254740993L)=raw.copy(syncVersion=version,
+        payload=JsonObject(assetPayloadForCloud(raw.payload)+("sync_version" to JsonPrimitive(version))))
+    @Test fun assetAckStripsLocalIntentAndClearsOnlyTheExactPrimaryQueue()=runBlocking {
+        prepare();val candidate=staged()
+        imageRepo().saveAssetImage(owner,imageDraft(candidate),candidate,revision,device,now).getOrThrow()
+        val source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        val others=store.pendingMutations(owner,CloudEntity.LEDGER_WALLET,Long.MAX_VALUE)
+        assertTrue(cache.markUploadSucceeded(owner,candidate).getOrThrow())
+        val remote=serverResult(source.record!!)
+        assertTrue(store.acknowledgeInvestmentAssetMutation(source.pending!!,remote,source.imagePublication))
+        val after=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(remote,after.record);assertNull(after.pending);assertFalse(after.hasPendingMutation)
+        assertTrue(after.imageAcknowledged);assertEquals(others,store.pendingMutations(owner,CloudEntity.LEDGER_WALLET,Long.MAX_VALUE))
+    }
+    @Test fun lateAssetAckMayAcknowledgeTheSamePhotoButCannotEraseALaterRename()=runBlocking {
+        prepare();val candidate=staged()
+        val asset=imageRepo().saveAssetImage(owner,imageDraft(candidate),candidate,revision,device,now).getOrThrow()
+        val source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        cache.markUploadSucceeded(owner,candidate).getOrThrow()
+        imageRepo().saveAsset(owner,draft(asset).copy(name="Later name"),device,"2026-10-24T01:00:00Z").getOrThrow()
+        val newer=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertFalse(store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!),source.imagePublication))
+        val after=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(newer.record,after.record);assertEquals(newer.pending,after.pending);assertTrue(after.imageAcknowledged)
+    }
+    @Test fun oldAssetAckCannotAcknowledgeANewerPhotoRevisionOrAnUnuploadedCandidate()=runBlocking {
+        prepare();val candidate=staged()
+        val asset=imageRepo().saveAssetImage(owner,imageDraft(candidate),candidate,revision,device,now).getOrThrow()
+        val source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertFalse(store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!),source.imagePublication))
+        cache.markUploadSucceeded(owner,candidate).getOrThrow()
+        val c=staged()
+        imageRepo().saveAssetImage(owner,imageDraft(c,asset),c,"77777777-7777-7777-7777-777777777777",device,now).getOrThrow()
+        val current=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertFalse(store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!),source.imagePublication))
+        val after=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(current,after);assertFalse(after.imageAcknowledged);assertTrue(cache.readyDeletions(owner).getOrThrow().isEmpty())
+    }
+    @Test fun assetFailureUsesOnlyItsExactCurrentQueueAndRedactedCodes()=runBlocking {
+        prepare();imageRepo().saveAsset(owner,draft(),device,now).getOrThrow()
+        val source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertTrue(store.recordInvestmentAssetMutationFailure(source.pending!!,34000,"network_io"))
+        val current=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(source.record,current.record);assertEquals(1,current.pending!!.attemptCount)
+        assertFalse(store.recordInvestmentAssetMutationFailure(source.pending!!,Long.MAX_VALUE,"old_error"))
+        assertTrue(runCatching{store.recordInvestmentAssetMutationFailure(current.pending!!,Long.MAX_VALUE,"private body")} .isFailure)
+    }
+
+    @Test fun omittingThePublicationTicketCannotBypassTheActualUploadProof()=runBlocking {
+        prepare();val candidate=staged()
+        imageRepo().saveAssetImage(owner,imageDraft(candidate),candidate,revision,device,now).getOrThrow()
+        val source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertFalse(store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!)))
+        assertEquals(source,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+
+    private suspend fun readyOldImage():Pair<InvestmentProductImageCandidate,InvestmentProductImageCandidate> {
+        prepare();val b=staged()
+        val first=imageRepo().saveAssetImage(owner,imageDraft(b),b,revision,device,now).getOrThrow()
+        cache.markUploadSucceeded(owner,b).getOrThrow()
+        var source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!,1),source.imagePublication)
+        val current=InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,assetId)!!)
+        val c=staged()
+        imageRepo().saveAssetImage(owner,imageDraft(c,current),c,"77777777-7777-7777-7777-777777777777",device,now).getOrThrow()
+        cache.markUploadSucceeded(owner,c).getOrThrow()
+        source=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!,2),source.imagePublication)
+        assertEquals(listOf(b.path),cache.readyDeletions(owner).getOrThrow())
+        return b to c
+    }
+    private fun deleting(action:suspend (String,()->Boolean)->Unit)=object:InvestmentProductImageRemote {
+        override suspend fun delete(owner:UserId,assetId:String,path:String,isCurrent:()->Boolean):Result<Unit> {
+            return try{action(path,isCurrent);Result.success(Unit)}catch(error:Exception){Result.failure(error)}
+        }
+        override suspend fun upload(owner:UserId,assetId:String,path:String,bytes:ByteArray,isCurrent:()->Boolean):Result<Unit> = error("Cleanup must not upload")
+        override suspend fun download(owner:UserId,assetId:String,path:String,isCurrent:()->Boolean):Result<ByteArray?> = error("Cleanup must not download")
+    }
+    @Test fun imageDeletionRunsOnlyAfterAckAndFreshRoomReferenceChecks()=runBlocking {
+        val (b,c)=readyOldImage();val deleted=mutableListOf<String>()
+        assertEquals(1,store.cleanupInvestmentProductImages(owner,deleting{path,current->assertTrue(current());deleted.add(path)}))
+        assertEquals(listOf(b.path),deleted);assertTrue(cache.readyDeletions(owner).getOrThrow().isEmpty())
+        assertTrue(cache.imageData(owner,b).isFailure);assertArrayEquals(jpeg(),cache.imageData(owner,c).getOrThrow())
+    }
+    @Test fun aSoftDeletedAssetStillReferencingAnOldPhotoPinsThatObjectForRestore()=runBlocking {
+        val (b,_)=readyOldImage()
+        db.openHelper.writableDatabase.execSQL("UPDATE cloud_records SET payload_json = json_set(payload_json, '$.image_path', ?, '$.deleted_at', ?), deleted_at = ? WHERE entity = 'investment_assets'",arrayOf(b.path,now,now))
+        assertEquals(0,store.cleanupInvestmentProductImages(owner,deleting{_,_->error("Restorable photo must stay pinned")}))
+        assertEquals(listOf(b.path),cache.readyDeletions(owner).getOrThrow());assertArrayEquals(jpeg(),cache.imageData(owner,b).getOrThrow())
+    }
+    @Test fun failedOrLateCrossAccountDeletionRetainsReadyAuthorityAndLocalBytes()=runBlocking {
+        val (b,_)=readyOldImage()
+        assertTrue(runCatching{store.cleanupInvestmentProductImages(owner,deleting{_,_->throw java.io.IOException("synthetic deletion failure")})}.isFailure)
+        assertEquals(listOf(b.path),cache.readyDeletions(owner).getOrThrow())
+        assertTrue(runCatching{store.cleanupInvestmentProductImages(owner,deleting{_,_->active=other})}.exceptionOrNull() is CancellationException)
+        active=owner
+        assertEquals(listOf(b.path),cache.readyDeletions(owner).getOrThrow());assertArrayEquals(jpeg(),cache.imageData(owner,b).getOrThrow())
+        assertEquals(1,store.cleanupInvestmentProductImages(owner,deleting{_,current->assertTrue(current())}))
+    }
+
+    @Test fun oldEquivalentRemovalRetryCannotReactivateAConfirmedPhotoAfterAnOrdinaryResave()=runBlocking {
+        prepare();val b=staged()
+        val original=imageRepo().saveAssetImage(owner,imageDraft(b),b,revision,device,now).getOrThrow()
+        val removeDraft=draft(original).copy(imageChange=InvestmentAssetImageChange.Remove)
+        val removed=imageRepo().saveAssetImage(owner,removeDraft,null,"77777777-7777-7777-7777-777777777777",device,now).getOrThrow()
+        val published=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertTrue(store.acknowledgeInvestmentAssetMutation(published.pending!!,serverResult(published.record!!,1),published.imagePublication))
+        val acknowledged=InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,assetId)!!)
+        imageRepo().saveAsset(owner,draft(acknowledged),device,"2026-10-24T02:00:00Z").getOrThrow()
+        val before=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertTrue(before.imageAcknowledged)
+        imageRepo().saveAssetImage(owner,removeDraft,null,"88888888-8888-8888-8888-888888888888",device,now).getOrThrow()
+        val after=store.reconcileInvestmentAssetImagePublication(owner,assetId)
+        assertEquals(before,after);assertTrue(after.imageAcknowledged)
+        assertEquals(published.imagePublication,after.imagePublication)
+    }
+    @Test fun aNewReplacementCanRecoverWhenItsUnpromotedAncestorsLocalBytesAreLost()=runBlocking {
+        prepare();val first=proposal()
+        store.commitInvestmentAssetImageMutation(store.investmentAssetSnapshot(owner),first,device,now)
+        val original=InvestmentAssetRecord.fromCloudRecord(store.record(owner,CloudEntity.INVESTMENT_ASSET.table,assetId)!!)
+        val objectName=first.publication.path!!.substringAfterLast('/')
+        val oldFiles=directory.walkTopDown().filter{it.isFile && it.name==objectName}.toList()
+        assertEquals(2,oldFiles.size);oldFiles.forEach{assertTrue(it.delete())}
+        val c=staged()
+        val saved=imageRepo().saveAssetImage(owner,imageDraft(c,original),c,"77777777-7777-7777-7777-777777777777",device,now).getOrThrow()
+        assertEquals(c.path,saved.imagePath)
+        assertEquals(listOf(c),cache.pendingUploads(owner).getOrThrow())
+        assertArrayEquals(jpeg(),cache.imageData(owner,c).getOrThrow());assertTrue(cache.readyDeletions(owner).getOrThrow().isEmpty())
+    }
+
+    private suspend fun plainPublication():InvestmentAssetPublicationSnapshot {
+        prepare();imageRepo().saveAsset(owner,draft(),device,now).getOrThrow()
+        return store.reconcileInvestmentAssetImagePublication(owner,assetId)
+    }
+    @Test fun ownerReplacementRevokesAssetAckAndFailureBeforeAnyOldOwnerDatabaseWrite()=runBlocking {
+        val source=plainPublication();val result=serverResult(source.record!!,1)
+        active=other
+        assertTrue(runCatching{store.acknowledgeInvestmentAssetMutation(source.pending!!,result)}.exceptionOrNull() is CancellationException)
+        assertTrue(runCatching{store.recordInvestmentAssetMutationFailure(source.pending!!,34000,"network_io")}.exceptionOrNull() is CancellationException)
+        active=owner;assertEquals(source,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun finalCallerCancellationRollsBackAppliedAssetAckAndQueueDeletion()=runBlocking {
+        val source=plainPublication();val result=serverResult(source.record!!,1)
+        var task:Deferred<Boolean>?=null
+        val guarded=RoomLocalStore(db,productImages=cache,currentBillOwner={
+            val version=db.openHelper.writableDatabase.query("SELECT sync_version FROM cloud_records WHERE entity = 'investment_assets'").use{it.moveToFirst();it.getLong(0)}
+            if(version>0)task!!.cancel(CancellationException("Final asset ACK fence"))
+            active
+        })
+        task=async(start=CoroutineStart.LAZY){guarded.acknowledgeInvestmentAssetMutation(source.pending!!,result)}
+        task.start();assertTrue(runCatching{task.await()}.exceptionOrNull() is CancellationException)
+        assertEquals(source,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun aLateDatabaseFailureRestoresTheExactAssetQueueInTheAckTransaction()=runBlocking {
+        val source=plainPublication();val result=serverResult(source.record!!,1)
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_asset_ack BEFORE INSERT ON cloud_records WHEN NEW.entity = 'investment_assets' BEGIN SELECT RAISE(ABORT, 'synthetic asset ACK failure'); END")
+        assertTrue(runCatching{store.acknowledgeInvestmentAssetMutation(source.pending!!,result)}.isFailure)
+        assertEquals(source,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+    @Test fun primaryAssetAckCannotConsumeDirtyTradeCashOrPostingQueues()=runBlocking {
+        val source=plainPublication()
+        val domains=listOf(CloudEntity.INVESTMENT_TRADE,CloudEntity.LEDGER_TRANSACTION,CloudEntity.INVESTMENT_POSTING)
+        for((index,entity) in domains.withIndex()) {
+            val identity="%08d-8888-8888-8888-888888888888".format(index+1)
+            val payload=buildJsonObject{put("id",identity);put("user_id",owner.value);put("asset_id",assetId);put("updated_at",now);put("sync_version",0);put("deleted_at",JsonNull);put("future_marker","keep")}.toString()
+            db.cloudRecordDao().upsert(CloudRecordEntity(owner.value,entity.table,identity,payload,now,null,0,true,0))
+            db.syncOutboxDao().upsert(SyncOutboxEntity(owner.value,entity.table,identity,"upsert",payload,now,0,device))
+        }
+        val queues=domains.associateWith{store.pendingMutations(owner,it,Long.MAX_VALUE)}
+        val rows=domains.associateWith{store.recordsIncludingDeleted(owner,it.table)}
+        assertTrue(store.acknowledgeInvestmentAssetMutation(source.pending!!,serverResult(source.record!!,1)))
+        assertEquals(queues,domains.associateWith{store.pendingMutations(owner,it,Long.MAX_VALUE)})
+        assertEquals(rows,domains.associateWith{store.recordsIncludingDeleted(owner,it.table)})
+    }
+
 }

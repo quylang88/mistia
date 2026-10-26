@@ -294,6 +294,13 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun cleanupInvestmentProductImages(owner:UserId,remote:InvestmentProductImageRemote):Int = throw UnsupportedOperationException("Reference guarded image cleanup unavailable")
+
+    suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,publication:InvestmentProductImagePublication?=null):Boolean = throw UnsupportedOperationException("Scoped asset acknowledgement unavailable")
+    suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean = throw UnsupportedOperationException("Scoped asset failure recording unavailable")
+
+    suspend fun reconcileInvestmentAssetImagePublication(owner:UserId,assetId:String,knownResult:InvestmentAssetImageSaveRequest?=null):InvestmentAssetPublicationSnapshot = throw UnsupportedOperationException("Current asset image reconciliation unavailable")
+
     suspend fun investmentChannelPublicationSnapshot(owner:UserId,id:String):InvestmentChannelPublicationSnapshot = throw UnsupportedOperationException("Atomic channel publication read unavailable")
 
     suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean = throw UnsupportedOperationException("Scoped channel acknowledgement unavailable")

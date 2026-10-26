@@ -1,0 +1,11 @@
+# Slice151 implementation plan
+
+Spec: investment-asset-publication-design-2026-10-24.md. Baseline032d8593. Inline, autonomous TDD; preserve the requested branch and accepted APK149/148 artifacts. No subagent dispatch or routine permission question.
+
+- [x] Pure runtime RED→GREEN for local explicit image-intent metadata on the real typed image planner, preservation by ordinary Keep/rename, safe parser/version/owner/path/hash validation and stripping only the reserved transport field. Keep genuine no-write retry semantics and current publication authority.
+- [x] Trusted Room/cache reconciliation and legacy adoption/hold: current owned row+dirty+exact queue+device/date/base+private intent, proof-bound manifest reference repair, safe unknown result and ancestor handling, reference-safe reserved cleanup. Add actual Room/filesystem/native failures before implementation.
+- [x] Closed authenticated asset fetch/RPC HTTPS tests before implementation, including expected-version0 create race, fixed forcefalse, conditional miss, exact Long/nulls, opaque fields, reserved-key ingress/egress, session/gates/body cancellation and error redaction. Verify current migration/Swift contract directly.
+- [x] Owner-scoped asset coordinator and dependency registration: active channels first; image upload-before-RPC and exact-byte collisions; source change after upload; Keep remote photo merge; explicit photo intent; semantic ACK/conflicts/races/retry; primary/derived queues and same-photo versus newer-photo ACK distinction. Actual joint cache/Room/network order tests.
+- [x] Actual photo create/replace/remove/Cancel/uncertain-result retry/saved-state regressions and legacy attention repair as needed. No source-default/late callback can silently convert Keep into Remove or erase newer work.
+- [x] Full appropriate JVM/Room/Investment native/host/Swift/scripts, direct author Swift/SQL/diff review, RED→GREEN fixes, honest scoped evidence. All11flagsfalse/Room6/SwiftDataV11/noProd/noSamsung assumptions preserved.
+- [x] Archive nextmain150/source/test APK/hash/install-r proof; update progress/handoff/evidence, commit151 independently and immediately continue dedicated trade/cash RPC and remaining full APK1–4/RC.

@@ -57,6 +57,7 @@ import vn.com.quyln.mistia.core.model.TransactionSaveSnapshot
 import vn.com.quyln.mistia.core.model.BillMoneySnapshot
 import vn.com.quyln.mistia.core.model.requireValidMutations
 import vn.com.quyln.mistia.core.model.requireUnchanged
+import vn.com.quyln.mistia.core.model.financeRawString
 import vn.com.quyln.mistia.core.model.financeRawReference
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.CloudEntity
@@ -927,6 +928,118 @@ class RoomLocalStore(
         val rows=database.cloudRecordDao().investmentChannelRows(owner.value,vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot.entities.map{it.table})
         ensureCurrentFinanceOwner(owner)
         vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot(owner,rows.map{it.toCloudRecord()})
+    }
+
+    override suspend fun cleanupInvestmentProductImages(owner:UserId,remote:vn.com.quyln.mistia.core.model.InvestmentProductImageRemote):Int {
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureCurrentFinanceOwner(owner)
+        val cache=productImages ?: return 0
+        val ready=cache.readyDeletions(owner).getOrThrow()
+        var removed=0
+        for(path in ready) {
+            val assetId=path.split('/').getOrNull(1) ?: error("Invalid product image deletion identity")
+            vn.com.quyln.mistia.core.model.InvestmentProductImagePath.parse(owner,assetId,path)
+            val deleted=database.withTransaction {
+                ensureCurrentFinanceOwner(owner);caller.ensureActive()
+                // Hold the write transaction across the request: a later typed save cannot
+                // verify a reservation and commit a new reference between this proof and deletion.
+                val rows=database.cloudRecordDao().investmentChannelRows(owner.value,listOf(CloudEntity.INVESTMENT_ASSET.table))
+                if(rows.any{vn.com.quyln.mistia.core.model.InvestmentAssetRecord.fromCloudRecord(it.toCloudRecord()).imagePath==path})return@withTransaction false
+                if(!cache.deletionIsUnpinned(owner,assetId,path).getOrThrow())return@withTransaction false
+                remote.delete(owner,assetId,path,isCurrent={caller.ensureActive();ensureCurrentFinanceOwner(owner);true}).getOrThrow()
+                ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val accepted=cache.markDeletionSucceeded(owner,assetId,path).getOrThrow()
+                ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                accepted
+            }
+            if(deleted)removed++
+        }
+        return removed
+    }
+
+    private suspend fun currentAssetPublication(owner:UserId,assetId:String):vn.com.quyln.mistia.core.model.InvestmentAssetPublicationSnapshot {
+        val stored=database.cloudRecordDao().record(owner.value,CloudEntity.INVESTMENT_ASSET.table,assetId)
+        val queued=database.syncOutboxDao().record(owner.value,CloudEntity.INVESTMENT_ASSET.table,assetId)?.toQueuedMutation()
+        return vn.com.quyln.mistia.core.model.InvestmentAssetPublicationSnapshot(owner,stored?.toCloudRecord(),queued,stored?.hasPendingMutation==true)
+    }
+    private fun assetPublicationOwner(queued:QueuedMutation):UserId {
+        val q=queued.mutation
+        require(q.entity==CloudEntity.INVESTMENT_ASSET && vn.com.quyln.mistia.core.model.financeRawUuid(q.subjectUserId)==q.subjectUserId &&
+            vn.com.quyln.mistia.core.model.financeRawUuid(q.recordId)==q.recordId && vn.com.quyln.mistia.core.model.financeRawUuid(q.deviceId)==q.deviceId){"Invalid asset publication queue identity"}
+        return UserId(q.subjectUserId)
+    }
+    override suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean {
+        val owner=assetPublicationOwner(mutation)
+        require(nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode)){"Invalid asset publication failure"}
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=currentAssetPublication(owner,mutation.mutation.recordId)
+            if(!source.matches(mutation))return@withTransaction false
+            val changed=recordMutationFailure(mutation,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            changed
+        }
+    }
+    override suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,
+        publication:vn.com.quyln.mistia.core.model.InvestmentProductImagePublication?):Boolean {
+        val owner=assetPublicationOwner(mutation)
+        require(remoteRecord.ownerUserId==owner.value && remoteRecord.entity==CloudEntity.INVESTMENT_ASSET.table && remoteRecord.id==mutation.mutation.recordId)
+        require(vn.com.quyln.mistia.core.model.LOCAL_ASSET_IMAGE_INTENT_KEY !in remoteRecord.payload){"Remote asset cannot supply local image provenance"}
+        val remote=vn.com.quyln.mistia.core.model.InvestmentAssetRecord.fromCloudRecord(remoteRecord)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=currentAssetPublication(owner,mutation.mutation.recordId)
+            val currentQueue=source.pending;val currentRecord=source.record
+            val coherent=if(currentQueue==null)!source.hasPendingMutation else source.matches(currentQueue)
+            if(!coherent || currentRecord==null)return@withTransaction false
+            vn.com.quyln.mistia.core.model.InvestmentAssetRecord.fromCloudRecord(currentRecord)
+            val current=reconcileInvestmentAssetImagePublication(owner,remote.id,null)
+            val photo=publication ?: current.imagePublication
+            if(photo!=null && remote.deletedAt==null && remote.imagePath==photo.path) {
+                require(photo.ownerUserId==owner.value && photo.assetId==remote.id)
+                if(current.imagePublication==photo) {
+                    if(!requireNotNull(productImages).acknowledgePublished(owner,photo).getOrThrow())return@withTransaction false
+                } else if(source.matches(mutation))return@withTransaction false
+            }
+            val accepted=if(source.matches(mutation))acknowledgeMutation(mutation,remoteRecord) else false
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            accepted
+        }
+    }
+
+    override suspend fun reconcileInvestmentAssetImagePublication(owner:UserId,assetId:String,
+        knownResult:vn.com.quyln.mistia.core.model.InvestmentAssetImageSaveRequest?):vn.com.quyln.mistia.core.model.InvestmentAssetPublicationSnapshot {
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value && vn.com.quyln.mistia.core.model.financeRawUuid(assetId)==assetId)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val state=currentAssetPublication(owner,assetId)
+            val raw=state.record;val queued=state.pending
+            require((queued==null && !state.hasPendingMutation) || (queued!=null && state.matches(queued))){"Asset image current source outbox differs"}
+            if(raw==null) {
+                ensureCurrentFinanceOwner(owner);caller.ensureActive()
+                return@withTransaction state
+            }
+            val asset=vn.com.quyln.mistia.core.model.InvestmentAssetRecord.fromCloudRecord(raw)
+            val declared=vn.com.quyln.mistia.core.model.localAssetImagePublication(raw)
+            require(declared==null || state.hasPendingMutation){"Clean remote asset has local image provenance"}
+            val legacy=if(declared==null && knownResult!=null) {
+                require(knownResult.draft.id==assetId)
+                val device=requireNotNull(raw.payload.financeRawString("last_modified_by_device_id"))
+                val plan=vn.com.quyln.mistia.core.model.planInvestmentAssetImageSave(investmentAssetSnapshot(owner),knownResult,device,requireNotNull(raw.updatedAt))
+                require(plan.mutations.isEmpty()){"Image retry has no committed result"}
+                require(requireNotNull(productImages).verifyPublication(owner,knownResult.publication,allowPublished=true).getOrThrow())
+                knownResult.publication
+            } else null
+            val reconciled=if(productImages==null) {
+                require(declared==null && legacy==null){"Product image cache unavailable"}
+                null to false
+            } else productImages.reconcileCurrentReference(CurrentAssetImageReferenceProof(owner,assetId,asset.imagePath,state.hasPendingMutation,declared,legacy)).getOrThrow()
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            state.copy(imagePublication=reconciled.first,imageAcknowledged=reconciled.second)
+        }
     }
 
     override suspend fun commitInvestmentAssetImageMutation(expected:vn.com.quyln.mistia.core.model.InvestmentAssetSnapshot,

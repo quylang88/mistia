@@ -87,10 +87,10 @@ class InvestmentProductImageScreenTest {
         runBlocking{repository.saveChannel(owner,InvestmentChannelDraft(channelId,"Shop"),"VND",device,now).getOrThrow()}
     }
     @After fun close(){db.close();directory.deleteRecursively()}
-    @Composable private fun Editor(id:String=assetId,source:InvestmentRepository=repository,darkTheme:Boolean=false) {
+    @Composable private fun Editor(id:String=assetId,source:InvestmentRepository=repository,darkTheme:Boolean=false,expectedToken:String?=null) {
         MistiaTheme(darkTheme=darkTheme) {CompositionLocalProvider(LocalActivityResultRegistryOwner provides registryOwner) {
             Scaffold{padding->androidx.compose.foundation.layout.Box(Modifier.padding(padding)) {
-                if(!dismissed)InvestmentAssetEditorSheet(owner,source,id,null,"VND",listOf("VND"),{device},{dismissed=true})
+                if(!dismissed)InvestmentAssetEditorSheet(owner,source,id,expectedToken,"VND",listOf("VND"),{device},{dismissed=true})
             }}
         }}
     }
@@ -315,6 +315,26 @@ class InvestmentProductImageScreenTest {
         try{compose.waitUntil(8000){compose.onAllNodesWithTag("investment.image.loaded.$assetId",useUnmergedTree=true).fetchSemanticsNodes().isNotEmpty()}}
         catch(error:Throwable){File(context.getExternalFilesDir(null),"photo-history-debug.txt").writeText(compose.onRoot(useUnmergedTree=true).printToString());throw error}
         compose.onNodeWithTag("investment.image.loaded.$assetId",useUnmergedTree=true).assertIsDisplayed()
+    }
+
+    @Test fun existingEmptyPhotoCanExplicitlyRepairAnAmbiguousLegacyRemovalAfterRestoration() {
+        val baseline=runBlocking{repository.saveAsset(owner,InvestmentAssetDraft(assetId,channelId,"Cards","VND","box"),device,now).getOrThrow()}
+        val ambiguous="77777777-7777-7777-7777-777777777777"
+        runBlocking{cache.reserveRemoval(owner,assetId,null,ambiguous).getOrThrow()}
+        assertTrue(runBlocking{runCatching{store.reconcileInvestmentAssetImagePublication(owner,assetId)}}.isFailure)
+        val token=baseline.toCloudRecord().payload.toString()
+        val restoration=StateRestorationTester(compose)
+        restoration.setContent{Editor(expectedToken=token)}
+        await("investment.asset.image.add")
+        compose.onNodeWithTag("investment.asset.image.add").performScrollTo().performClick()
+        compose.onNodeWithTag("investment.asset.image.clear").assertIsDisplayed().performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        save()
+        val source=runBlocking{store.reconcileInvestmentAssetImagePublication(owner,assetId)}
+        val publication=requireNotNull(source.imagePublication)
+        assertNull(publication.path);assertNotEquals(ambiguous,publication.revision)
+        assertEquals(publication,localAssetImagePublication(source.record!!))
+        assertEquals(source.record!!.payload,source.pending!!.mutation.payload)
     }
 
 }

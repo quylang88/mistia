@@ -159,4 +159,23 @@ class FileInvestmentProductImageCacheTest {
         assertTrue(runCatching{source.cachedImageData(owner,asset,staged.path)}.exceptionOrNull() is CancellationException)
     }
 
+    @Test fun latestAcknowledgementCleansSupersededCandidatesAcrossARemoteReferenceDiscontinuity()=runBlocking {
+        var serial=10
+        val source=FileInvestmentProductImageCache(temporary.root,{active},{"%08d-3333-3333-3333-333333333333".format(serial++)})
+        val b=source.stage(owner,asset,bytes("full"),bytes("thumb")).getOrThrow()
+        val first=source.reservePublication(owner,b,null,revision).getOrThrow()
+        assertTrue(source.markLocalPublished(owner,first).getOrThrow());assertTrue(source.markUploadSucceeded(owner,b).getOrThrow())
+        val remote=InvestmentProductImagePath.create(owner,asset,"66666666-6666-6666-6666-666666666666").value
+        val d=source.stage(owner,asset,bytes("full"),bytes("thumb")).getOrThrow()
+        val latest=source.reservePublication(owner,d,remote,"77777777-7777-7777-7777-777777777777").getOrThrow()
+        assertEquals(latest,source.reconcileCurrentReference(CurrentAssetImageReferenceProof(owner,asset,d.path,true,latest)).getOrThrow().first)
+        val future=source.stage(owner,asset,bytes("full"),bytes("thumb")).getOrThrow()
+        source.reservePublication(owner,future,d.path,"88888888-8888-8888-8888-888888888888").getOrThrow()
+        assertTrue(source.markUploadSucceeded(owner,d).getOrThrow());assertTrue(source.acknowledgePublished(owner,latest).getOrThrow())
+        assertEquals(setOf(b.path,remote),source.readyDeletions(owner).getOrThrow().toSet())
+        assertFalse(source.markDeletionSucceeded(owner,asset,d.path).getOrThrow())
+        assertFalse(source.markDeletionSucceeded(owner,asset,future.path).getOrThrow())
+        assertArrayEquals(bytes("full"),source.imageData(owner,future).getOrThrow())
+    }
+
 }

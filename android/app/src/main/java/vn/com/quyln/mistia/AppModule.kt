@@ -468,6 +468,23 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideInvestmentAssetClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentAssetClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentAssetPushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentAssetClient,auth:AuthRepository,
+        images:vn.com.quyln.mistia.core.database.FileInvestmentProductImageCache,
+        imageRemote:vn.com.quyln.mistia.core.model.InvestmentProductImageRemote)=
+        vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},images=images,imageRemote=imageRemote)
+
+    @Provides
+    @Singleton
     fun provideSyncEngine(
         @ApplicationContext context: Context,
         authRepository: AuthRepository,
@@ -483,6 +500,7 @@ object AppModule {
         installmentPushCoordinator: InstallmentPushCoordinator,
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
         investmentChannelPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
+        investmentAssetPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
         categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
         financeRepository: FinanceRepository,
@@ -505,6 +523,7 @@ object AppModule {
             installmentPushCoordinator,
             dueOccurrencePushCoordinator,
             investmentChannelPushCoordinator,
+            investmentAssetPushCoordinator,
         ),
         categoryTranslationCoordinator,
         categoryMaintenanceCoordinator,
