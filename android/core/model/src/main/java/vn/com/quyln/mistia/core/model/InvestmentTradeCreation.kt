@@ -189,7 +189,7 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
 }
 
 
-private val purchaseAckFields=setOf("updated_at","sync_version","last_modified_by_device_id","last_modified_by_user_id")
+private val purchaseAckFields=setOf(LOCAL_TRADE_PUBLICATION_PARENTS_KEY,"updated_at","sync_version","last_modified_by_device_id","last_modified_by_user_id")
 
 private fun purchaseSemantic(value:JsonElement?,key:String):JsonElement?=if(key in setOf("created_at","occurred_at","deleted_at","archived_at") && value is JsonPrimitive && value.isString)
     runCatching{JsonPrimitive(Instant.parse(value.content).toString())}.getOrDefault(value) else value

@@ -140,4 +140,11 @@ class InvestmentTradeDeletionTest {
         assertEquals(now,planInvestmentTradeDeletion(source,r.copy(consent=review.consent),device,now).trade.deletedAt)
     }
 
+    @Test fun deletingSaleProducesItsLiveIntentParentWithoutAddingEvidenceToFinancialChildren() {
+        val source=sale();val request=deleting(source);val plan=planInvestmentTradeDeletion(source,request,device,now)
+        val parent=localInvestmentTradePublicationParents(plan.trade).single()
+        assertFalse(parent.deleted);assertEquals(investmentTradeIntentFingerprint(request.expectedTrade.payload),parent.fingerprint)
+        assertTrue(plan.mutations.filter{it.first.entity!=CloudEntity.INVESTMENT_TRADE.table}.all{LOCAL_TRADE_PUBLICATION_PARENTS_KEY !in it.first.payload})
+    }
+
 }

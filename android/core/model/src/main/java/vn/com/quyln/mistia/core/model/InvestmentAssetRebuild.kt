@@ -19,6 +19,7 @@ internal fun rebuildInvestmentAssetUnitHistory(
     snapshot:InvestmentAssetSnapshot,asset:InvestmentAssetRecord,unit:String,device:String,now:String,
     resolveZeroBuyFunding:Boolean=true,
     preserveAccountingErrors:Boolean=false,
+    preserveLegacyUnitLabels:Boolean=false,
 ):List<CloudRecord> {
     fun fail(reason:InvestmentAssetError=InvestmentAssetError.INVALID_ACCOUNTING):Nothing=investmentAssetFail(reason)
     fun JsonObject.text(key:String)=financeRawString(key) ?: fail()
@@ -77,7 +78,7 @@ internal fun rebuildInvestmentAssetUnitHistory(
         val label=raw.payload["unit_label"]
         if(label!=null && label!=JsonNull && raw.payload.financeRawString("unit_label")==null)
             fail(InvestmentAssetError.UNREADABLE_SOURCE)
-        if(raw.payload["unit_label"]==null || raw.payload["unit_label"]==JsonNull)
+        if(!preserveLegacyUnitLabels && (raw.payload["unit_label"]==null || raw.payload["unit_label"]==JsonNull))
             investmentAssetChanged(raw,buildJsonObject{put("unit_label",unit)},device,now).also(::write)
         else raw
     }

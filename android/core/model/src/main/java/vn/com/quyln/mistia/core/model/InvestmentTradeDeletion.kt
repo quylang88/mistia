@@ -96,7 +96,7 @@ fun planInvestmentTradeDeletion(snapshot:InvestmentTradeDeletionSnapshot,request
     return InvestmentTradeDeletionPlan(changes.getValue(current.entity to current.id),writes,review)
 }
 
-private val deletionAckKeys=setOf("updated_at","sync_version","last_modified_by_device_id","last_modified_by_user_id")
+private val deletionAckKeys=setOf(LOCAL_TRADE_PUBLICATION_PARENTS_KEY,"updated_at","sync_version","last_modified_by_device_id","last_modified_by_user_id")
 private val deletionSemanticKeys=setOf("id","user_id","channel_id","asset_id","kind_raw_value","quantity_decimal_string","unit_label","gross_amount_minor","currency_code","accounting_gross_amount_minor","accounting_currency_code","exchange_rate_decimal_string","exchange_rate_provider","exchange_rate_date","funding_wallet_id","funding_wallet_currency_code","funding_wallet_amount_minor","funding_to_accounting_rate_decimal_string","capital_return_wallet_id","capital_return_wallet_currency_code","capital_return_wallet_amount_minor","accounting_to_capital_return_rate_decimal_string","note","occurred_at","created_at","funding_ledger_transaction_id","capital_return_ledger_transaction_id","profit_loss_ledger_transaction_id","released_cost_basis_minor","realized_profit_loss_minor","position_quantity_after_decimal_string","position_cost_basis_after_minor")
 private fun deletionSemantic(value:JsonElement?,key:String):JsonElement?=if(key in setOf("created_at","occurred_at","deleted_at","archived_at") && value is JsonPrimitive && value.isString)
     runCatching{JsonPrimitive(Instant.parse(value.content).toString())}.getOrDefault(value) else value

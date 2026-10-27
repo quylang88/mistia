@@ -487,6 +487,21 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideInvestmentTradeClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentTradeClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentTradePushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentTradeClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
+
+    @Provides
+    @Singleton
     fun provideInvestmentWalletClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
         vn.com.quyln.mistia.core.network.SupabaseInvestmentWalletClient(config,client,
             {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
@@ -524,6 +539,7 @@ object AppModule {
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
         investmentChannelPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
         investmentAssetPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,
+        investmentTradePushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
         categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
         financeRepository: FinanceRepository,
@@ -547,6 +563,7 @@ object AppModule {
             dueOccurrencePushCoordinator,
             investmentChannelPushCoordinator,
             investmentAssetPushCoordinator,
+            investmentTradePushCoordinator,
         ),
         categoryTranslationCoordinator,
         categoryMaintenanceCoordinator,

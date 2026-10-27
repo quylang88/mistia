@@ -224,4 +224,15 @@ class InvestmentTradeEditingTest {
         assertEquals(InvestmentAssetError.INVALID_ACCOUNTING,(runCatching{planInvestmentTradeEdit(bad,r,device,now)}.exceptionOrNull() as? InvestmentAssetException)?.reason)
     }
 
+    @Test fun editingAcquisitionProducesAnOwnedCausalParentButDerivedSaleRebuildDoesNot() {
+        val source=sale();val request=editing(source)
+        val plan=planInvestmentTradeEdit(source,request.copy(draft=request.draft.copy(grossMinor=120,accountingMinor=120,walletMinor=120)),device,now)
+        val old=request.expectedTrade
+        val parents=localInvestmentTradePublicationParents(plan.trade)
+        assertEquals(1,parents.size);assertEquals(investmentTradeIntentFingerprint(old.payload),parents.single().fingerprint)
+        assertEquals(old.syncVersion,parents.single().baseVersion)
+        val later=plan.mutations.single{it.first.entity==CloudEntity.INVESTMENT_TRADE.table && it.first.id==saleId}.first
+        assertTrue(localInvestmentTradePublicationParents(later).isEmpty())
+    }
+
 }

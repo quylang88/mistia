@@ -96,6 +96,7 @@ class SupabasePostgrestRemoteStore(
                 .orEmpty()
             require(table!=CloudEntity.LEDGER_WALLET.table || records.none{vn.com.quyln.mistia.core.model.LOCAL_INVESTMENT_WALLET_PARENTS_KEY in it}) {"Remote wallet cannot supply local publication evidence"}
             require(table!=CloudEntity.INVESTMENT_ASSET.table || records.none{record->vn.com.quyln.mistia.core.model.LOCAL_ASSET_PUBLICATION_KEYS.any{it in record}}) {"Remote asset cannot supply local image provenance"}
+            require(table!=CloudEntity.INVESTMENT_TRADE.table || records.none{vn.com.quyln.mistia.core.model.LOCAL_TRADE_PUBLICATION_PARENTS_KEY in it}) {"Remote trade cannot supply local publication evidence"}
             RemotePage(records = records, nextOffset = if (records.size == limit) offset + limit else null)
         }
     }
@@ -355,6 +356,7 @@ class SupabasePostgrestRemoteStore(
     private fun JsonObject.toCloudRecord(entity: CloudEntity, ownerUserId: UserId): CloudRecord {
         require(entity!=CloudEntity.LEDGER_WALLET || vn.com.quyln.mistia.core.model.LOCAL_INVESTMENT_WALLET_PARENTS_KEY !in this) {"Remote wallet cannot supply local publication evidence"}
         require(entity!=CloudEntity.INVESTMENT_ASSET || vn.com.quyln.mistia.core.model.LOCAL_ASSET_PUBLICATION_KEYS.none{it in this}) {"Remote asset cannot supply local image provenance"}
+        require(entity!=CloudEntity.INVESTMENT_TRADE || vn.com.quyln.mistia.core.model.LOCAL_TRADE_PUBLICATION_PARENTS_KEY !in this) {"Remote trade cannot supply local publication evidence"}
         val recordId = string("id") ?: error("Supabase ${entity.table} row is missing id")
         require(string("user_id") == ownerUserId.value) { "Supabase row owner does not match request" }
         return CloudRecord(
