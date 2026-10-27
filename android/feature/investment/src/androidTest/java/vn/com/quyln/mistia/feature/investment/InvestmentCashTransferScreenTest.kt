@@ -315,7 +315,8 @@ class InvestmentCashTransferScreenTest {
     }
     @Test fun aChangedAccountingCurrencyCannotRelabelTheOldAmountEvenWhenNumericCapacityMatches() {
         prepare();compose.setContent{Screen()};open()
-        runBlocking{store.commitMutations(rows().map{row ->row.copy(payload=JsonObject(row.payload.mapValues{(key,value)->
+        // Restore an already changed legacy source; a new local protected currency edit is now forbidden.
+        runBlocking{restoreLegacyInvestmentFixture(db,rows().map{row ->row.copy(payload=JsonObject(row.payload.mapValues{(key,value)->
             if(key in setOf("currency_code","accounting_currency_code"))JsonPrimitive("USD") else value
         }))}.map(::mutation))};await("investment.cash.transfer.conflict")
         val before=snapshot();val pending=queues()

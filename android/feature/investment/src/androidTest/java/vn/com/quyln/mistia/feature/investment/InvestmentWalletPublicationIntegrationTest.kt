@@ -243,7 +243,9 @@ class InvestmentWalletPublicationIntegrationTest {
         val initial=store.investmentWalletPublicationSnapshot(owner)
         assertTrue(store.acknowledgeInvestmentWalletMutation(initial.pending!!,root(1),initial));backend=root(1)
         val old=LedgerWalletRecord.fromCloudRecord(store.record(owner,CloudEntity.LEDGER_WALLET.table,oldLink)!!)
-        val archived=old.toArchiveMutation(device,"2026-10-26T00:16:00Z");store.commitMutation(archived.record,archived.pending)
+        val archived=old.toArchiveMutation(device,"2026-10-26T00:16:00Z")
+        // Legacy dirty retirement remains recoverable even though current user edits now reject a linked archive.
+        restoreLegacyInvestmentFixture(db,listOf(archived.record to archived.pending))
         val before=store.pendingMutations(owner,CloudEntity.LEDGER_WALLET,Long.MAX_VALUE).single()
         onOrdinaryFetch={chooseNewLink()}
         val ordinary=WalletPushCoordinator(store,ordinaryRemote,true,investmentWalletSource=store::investmentWalletPublicationSnapshot,nowEpochMillis={clock})

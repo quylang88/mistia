@@ -262,6 +262,7 @@ enum class WalletValidationError {
     UNKNOWN_KIND,
     OWNER_MISMATCH,
     CURRENCY_IN_USE,
+    INVESTMENT_CASH_PROTECTED,
     STALE_EDIT,
 }
 

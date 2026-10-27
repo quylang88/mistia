@@ -309,8 +309,7 @@ private fun OwnedCreditCardEditorSheet(
                                 onFailure = {
                                     isSaving = false
                                     saveFailed = true
-                                    saveFailureMessage = if ((it as? vn.com.quyln.mistia.core.model.WalletValidationException)?.reason == vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
-                                        R.string.management_wallet_editor_currency_in_use else R.string.planning_planning_couldn_t_save_this_card_right_now
+                                    saveFailureMessage = walletMutationFailureResource(it,R.string.planning_planning_couldn_t_save_this_card_right_now)
                                 },
                             )
                         }

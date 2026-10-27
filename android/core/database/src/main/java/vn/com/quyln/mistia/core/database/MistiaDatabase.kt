@@ -2414,6 +2414,21 @@ class RoomLocalStore(
         require(record.id == mutation.recordId) { "Mutation record ID does not match record" }
         require(record.payload == mutation.payload) { "Mutation payload does not match local record" }
         val previousRecord=database.cloudRecordDao().record(record.ownerUserId,record.entity,record.id)
+        val guardedWallet=record.entity==CloudEntity.LEDGER_WALLET.table && previousRecord!=null &&
+            record.id!=vn.com.quyln.mistia.core.model.investmentSystemWalletId(UserId(record.ownerUserId)) &&
+            vn.com.quyln.mistia.core.model.walletMutationNeedsInvestmentProtection(previousRecord.toCloudRecord(),record)
+        val walletCaller=if(guardedWallet)kotlinx.coroutines.currentCoroutineContext() else null
+        if(guardedWallet) {
+            val owner=UserId(record.ownerUserId)
+            ensureCurrentFinanceOwner(owner);walletCaller!!.ensureActive()
+            val protected=try {
+                vn.com.quyln.mistia.core.model.walletHasProtectedInvestmentCash(owner,record.id,
+                    recordsIncludingDeleted(owner,CloudEntity.LEDGER_WALLET.table)+recordsIncludingDeleted(owner,CloudEntity.INVESTMENT_POSTING.table))
+            }catch(error:IllegalArgumentException) {
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+            }
+            if(protected)throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.INVESTMENT_CASH_PROTECTED)
+        }
         val previousQueue=database.syncOutboxDao().record(record.ownerUserId,record.entity,record.id)
         val observed=remoteIdentityObserved || mutation.baseVersion>0 || record.syncVersion>0 || previousQueue?.remoteIdentityObserved==true || previousRecord?.hasPendingMutation==false
         database.cloudRecordDao().upsert(
@@ -2439,6 +2454,10 @@ class RoomLocalStore(
             record.payload["id"]==JsonPrimitive(record.id) &&
             (record.deletedAt!=null || record.payload["is_paused"]==JsonPrimitive(true) || record.payload["is_archived"]==JsonPrimitive(true)))
             resolveBillNotificationsInTransaction(record,null)
+        if(guardedWallet) {
+            ensureCurrentFinanceOwner(UserId(record.ownerUserId));walletCaller!!.ensureActive()
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        }
     }
 
     private fun CloudRecordEntity.toCloudRecord(): CloudRecord = CloudRecord(

@@ -324,8 +324,7 @@ private fun OwnedWalletEditorSheet(
                                 onFailure = {
                                     isSaving = false
                                     saveFailed = true
-                                    saveFailureMessage = if ((it as? vn.com.quyln.mistia.core.model.WalletValidationException)?.reason == vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE)
-                                        R.string.management_wallet_editor_currency_in_use else R.string.management_management_couldn_t_save_this_wallet_right_now
+                                    saveFailureMessage = walletMutationFailureResource(it)
                                 },
                             )
                         }
@@ -568,7 +567,7 @@ private fun OwnedWalletEditorSheet(
                                 onFailure = {
                                     isSaving = false
                                     saveFailed = true
-                                    saveFailureMessage = R.string.management_management_couldn_t_save_this_wallet_right_now
+                                    saveFailureMessage = walletMutationFailureResource(it)
                                 },
                             )
                         }
@@ -704,3 +703,10 @@ internal val WALLET_ICON_SYMBOLS = listOf(
     "mistia.wallet.family",
     "mistia.wallet.emergency",
 )
+
+internal fun walletMutationFailureResource(error:Throwable,fallback:Int=R.string.management_management_couldn_t_save_this_wallet_right_now):Int =
+    when((error as? vn.com.quyln.mistia.core.model.WalletValidationException)?.reason) {
+        vn.com.quyln.mistia.core.model.WalletValidationError.INVESTMENT_CASH_PROTECTED->R.string.investment_error_wallet_holds_cash
+        vn.com.quyln.mistia.core.model.WalletValidationError.CURRENCY_IN_USE->R.string.management_wallet_editor_currency_in_use
+        else->fallback
+    }
