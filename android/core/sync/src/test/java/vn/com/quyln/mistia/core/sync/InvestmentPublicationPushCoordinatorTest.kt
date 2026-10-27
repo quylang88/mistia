@@ -37,5 +37,11 @@ class InvestmentPublicationPushCoordinatorTest {
         assertEquals(DomainPushSummary(1122,2244,3366,4488,5610,6732,7854),c.pushPending(owner,"captured-token"))
         assertEquals(listOf(CloudEntity.INVESTMENT_CHANNEL,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_TRADE,CloudEntity.LEDGER_TRANSACTION,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL),order)
     }
+    @Test fun reconciliationFollowsCashAndPreservesAllCountersBeforeRetirement()=runTest {
+        val c=InvestmentPublicationPushCoordinator(publisher(CloudEntity.INVESTMENT_CHANNEL,1),publisher(CloudEntity.INVESTMENT_ASSET,10),
+            publisher(CloudEntity.INVESTMENT_TRADE,100),publisher(CloudEntity.LEDGER_TRANSACTION,1000),publisher(CloudEntity.INVESTMENT_POSTING,10000))
+        assertEquals(DomainPushSummary(11122,22244,33366,44488,55610,66732,77854),c.pushPending(owner,"captured-token"))
+        assertEquals(listOf(CloudEntity.INVESTMENT_CHANNEL,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_TRADE,CloudEntity.LEDGER_TRANSACTION,CloudEntity.INVESTMENT_POSTING,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL),order)
+    }
 
 }

@@ -227,7 +227,11 @@ class InvestmentProductImageScreenTest {
                 compose.waitUntil(8000){runCatching {
                     compose.onNodeWithTag("investment.asset.image.remove").performScrollTo().assertIsDisplayed();true
                 }.getOrDefault(false)}
-                compose.onNodeWithTag("investment.image.loaded.$assetId").assertIsDisplayed()
+                // The remove button and preview are separate scroll targets. A font/locale
+                // remeasure may leave the image above the viewport after scrolling to the button.
+                compose.waitUntil(8000){runCatching {
+                    compose.onNodeWithTag("investment.image.loaded.$assetId").performScrollTo().assertIsDisplayed();true
+                }.getOrDefault(false)}
                 val localized=context.createConfigurationContext(android.content.res.Configuration(context.resources.configuration).apply{setLocale(java.util.Locale.forLanguageTag(code))})
                 complete(localized.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_asset_image_optional))
                 complete(localized.getString(vn.com.quyln.mistia.core.designsystem.R.string.investment_asset_remove_image))

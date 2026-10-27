@@ -294,6 +294,9 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun acknowledgeInvestmentCashReconciliationResult(expected:InvestmentCashEventPublicationSnapshot,candidate:InvestmentCashReconciliationCloudSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic reconciliation acknowledgement unavailable")
+    suspend fun recordInvestmentCashReconciliationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped reconciliation failure unavailable")
+
     suspend fun recordInvestmentCashEventPublicationReceipt(receipt:InvestmentCashEventPublicationReceipt,isSessionCurrent:()->Boolean={true}):Int = throw UnsupportedOperationException("Atomic cash event receipt unavailable")
     suspend fun investmentCashEventPublicationSnapshot(owner:UserId,eventId:String):InvestmentCashEventPublicationSnapshot = throw UnsupportedOperationException("Atomic cash event source unavailable")
     suspend fun acknowledgeInvestmentCashEventResult(expected:InvestmentCashEventPublicationSnapshot,candidate:InvestmentCashEventCloudSnapshot,deviceId:String,now:String,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic cash event acknowledgement unavailable")

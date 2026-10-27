@@ -520,8 +520,24 @@ object AppModule {
     @Singleton
     fun provideInvestmentPublicationPushCoordinator(channel:vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
         asset:vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,trade:vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator,
-        cash:vn.com.quyln.mistia.core.sync.InvestmentCashEventPushCoordinator)=
-        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade,cash)
+        cash:vn.com.quyln.mistia.core.sync.InvestmentCashEventPushCoordinator,
+        reconciliation:vn.com.quyln.mistia.core.sync.InvestmentCashReconciliationPushCoordinator)=
+        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade,cash,reconciliation)
+
+    @Provides
+    @Singleton
+    fun provideInvestmentCashReconciliationClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentCashReconciliationClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentCashReconciliationPushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentCashReconciliationClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.InvestmentCashReconciliationPushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
 
     @Provides
     @Singleton
