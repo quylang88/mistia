@@ -519,8 +519,24 @@ object AppModule {
     @Provides
     @Singleton
     fun provideInvestmentPublicationPushCoordinator(channel:vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
-        asset:vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,trade:vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator)=
-        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade)
+        asset:vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,trade:vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator,
+        cash:vn.com.quyln.mistia.core.sync.InvestmentCashEventPushCoordinator)=
+        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade,cash)
+
+    @Provides
+    @Singleton
+    fun provideInvestmentCashEventClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentCashEventClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentCashEventPushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentCashEventClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.InvestmentCashEventPushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
 
     @Provides
     @Singleton

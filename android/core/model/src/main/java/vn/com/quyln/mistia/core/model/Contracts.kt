@@ -294,6 +294,11 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun recordInvestmentCashEventPublicationReceipt(receipt:InvestmentCashEventPublicationReceipt,isSessionCurrent:()->Boolean={true}):Int = throw UnsupportedOperationException("Atomic cash event receipt unavailable")
+    suspend fun investmentCashEventPublicationSnapshot(owner:UserId,eventId:String):InvestmentCashEventPublicationSnapshot = throw UnsupportedOperationException("Atomic cash event source unavailable")
+    suspend fun acknowledgeInvestmentCashEventResult(expected:InvestmentCashEventPublicationSnapshot,candidate:InvestmentCashEventCloudSnapshot,deviceId:String,now:String,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic cash event acknowledgement unavailable")
+    suspend fun recordInvestmentCashEventMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped cash event failure unavailable")
+
     suspend fun prepareInvestmentMetadataStage(expected:InvestmentTradePublicationSnapshot,entity:CloudEntity,id:String,compared:CloudRecord?,isSessionCurrent:()->Boolean={true}):InvestmentMetadataStagePreparation? = throw UnsupportedOperationException("Atomic metadata stage preparation unavailable")
     suspend fun rebaseInvestmentMetadataStage(prepared:InvestmentTradePublicationSnapshot,entity:CloudEntity,id:String,stage:InvestmentMetadataStage,remote:CloudRecord,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic metadata stage rebase unavailable")
     suspend fun recordInvestmentTradePublicationReceipt(receipt:InvestmentTradePublicationReceipt,isSessionCurrent:()->Boolean={true}):Int = throw UnsupportedOperationException("Atomic investment trade receipt recording unavailable")

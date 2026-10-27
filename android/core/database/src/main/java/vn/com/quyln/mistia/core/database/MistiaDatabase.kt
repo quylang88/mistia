@@ -958,6 +958,89 @@ class RoomLocalStore(
         return removed
     }
 
+    private suspend fun currentInvestmentCashEventPublication(owner:UserId,eventId:String):vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot {
+        val entities=vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot.entities.map{it.table}
+        val stored=database.cloudRecordDao().investmentChannelRows(owner.value,entities)
+        val pending=database.syncOutboxDao().rows(owner.value).filter{it.entity in entities}.map{it.toQueuedMutation()}
+        return vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot(owner,eventId,stored.map{it.toCloudRecord()},pending,
+            stored.filter{it.hasPendingMutation}.map{it.entity to it.recordId}.toSet())
+    }
+    override suspend fun investmentCashEventPublicationSnapshot(owner:UserId,eventId:String):vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot {
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value && vn.com.quyln.mistia.core.model.financeRawUuid(eventId)==eventId)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=currentInvestmentCashEventPublication(owner,eventId)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            source
+        }
+    }
+
+    override suspend fun recordInvestmentCashEventPublicationReceipt(receipt:vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationReceipt,
+        isSessionCurrent:()->Boolean):Int {
+        val source=receipt.source;source.requireCoherent();val owner=source.owner
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentCashEventPublication(owner,source.eventId)
+            val changes=vn.com.quyln.mistia.core.model.planInvestmentCashEventPublicationReceipt(receipt,current)
+            val changedByKey=changes.associateBy{it.entity to it.id}
+            val expected=current.copy(rows=current.rows.map{changedByKey[it.entity to it.id] ?: it},pending=current.pending.map{queued->
+                changedByKey[queued.mutation.entity.table to queued.mutation.recordId]?.let{row->queued.copy(mutation=queued.mutation.copy(payload=row.payload))} ?: queued
+            })
+            for(row in changes) {
+                val stored=checkNotNull(database.cloudRecordDao().record(owner.value,row.entity,row.id))
+                val queued=checkNotNull(database.syncOutboxDao().record(owner.value,row.entity,row.id))
+                database.cloudRecordDao().upsert(stored.copy(payloadJson=row.payload.toString()))
+                database.syncOutboxDao().upsert(queued.copy(payloadJson=row.payload.toString()))
+            }
+            expected.requireUnchanged(currentInvestmentCashEventPublication(owner,source.eventId))
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            changes.size
+        }
+    }
+
+    override suspend fun acknowledgeInvestmentCashEventResult(expected:vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot,
+        candidate:vn.com.quyln.mistia.core.model.InvestmentCashEventCloudSnapshot,deviceId:String,now:String,isSessionCurrent:()->Boolean):Boolean {
+        expected.requireCoherent();require(expected.owner==candidate.owner && expected.eventId==candidate.eventId)
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(deviceId)==deviceId);java.time.Instant.parse(now)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentCashEventPublication(expected.owner,expected.eventId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val plan=vn.com.quyln.mistia.core.model.planInvestmentCashEventResultAcknowledgement(current,candidate)
+            val acknowledged=plan.acknowledgements.map{it.first}+plan.absentAcknowledgements
+            if(acknowledged.isEmpty())return@withTransaction false
+            for(queued in acknowledged)check(removeQueuedMutationExact(queued)){"Cash event result queue changed"}
+            for(queued in plan.absentAcknowledgements) {
+                val q=queued.mutation
+                val stored=checkNotNull(database.cloudRecordDao().record(expected.owner.value,q.entity.table,q.recordId))
+                database.cloudRecordDao().upsert(stored.copy(hasPendingMutation=false))
+            }
+            val received=System.currentTimeMillis()
+            for(remote in plan.imports)database.cloudRecordDao().upsert(remote.toEntity(hasPendingMutation=false,receivedAtEpochMillis=received))
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+    override suspend fun recordInvestmentCashEventMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,
+        expected:vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean):Boolean {
+        require(expected.matches(mutation) && nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentCashEventPublication(expected.owner,expected.eventId)
+            if(!current.matches(mutation) || runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val recorded=recordMutationFailure(mutation,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            recorded
+        }
+    }
+
     private suspend fun currentInvestmentTradePublication(owner:UserId,tradeId:String):vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot {
         val entities=vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot.entities.map{it.table}.toSet()
         val stored=database.cloudRecordDao().investmentChannelRows(owner.value,entities.toList())
@@ -2211,6 +2294,12 @@ class RoomLocalStore(
         database.withTransaction {
             val installmentPull = entity == CloudEntity.INSTALLMENT_PLAN.table
             val tradePull = entity == CloudEntity.INVESTMENT_TRADE.table
+            val ledgerPull = entity == CloudEntity.LEDGER_TRANSACTION.table
+            if(ledgerPull) {
+                ensureCurrentFinanceOwner(ownerUserId);pullCaller.ensureActive()
+                require(records.all{it.ownerUserId==ownerUserId.value && it.entity==entity && it.payload.financeRawString("id")==it.id &&
+                    it.payload.financeRawString("user_id")==ownerUserId.value && it.payload.keys.none{key->key.startsWith("_mistia_android_")}}){"Remote ledger identity or private evidence differs"}
+            }
             val metadataPull = entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table)
             if(metadataPull) {
                 ensureCurrentFinanceOwner(ownerUserId);pullCaller.ensureActive()
@@ -2259,7 +2348,7 @@ class RoomLocalStore(
                 )
             )
             if (installmentPull) ensureCurrentFinanceOwner(ownerUserId)
-            if(tradePull || metadataPull) {ensureCurrentFinanceOwner(ownerUserId);pullCaller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()}
+            if(tradePull || metadataPull || ledgerPull) {ensureCurrentFinanceOwner(ownerUserId);pullCaller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()}
         }
     }
 

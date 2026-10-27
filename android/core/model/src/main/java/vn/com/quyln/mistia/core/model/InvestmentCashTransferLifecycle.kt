@@ -39,7 +39,9 @@ fun planInvestmentCashTransferLifecycle(snapshot:InvestmentCashReadSnapshot,requ
             val mutations=fresh.mutations.map{(replacement,_) ->
                 val raw=snapshot.rows.single{it.entity==replacement.entity && it.id==replacement.id}
                 val fields=JsonObject(replacement.payload.filterKeys{it !in setOf("id","user_id","created_at","updated_at","sync_version","last_modified_by_device_id","created_by_user_id")})
-                val changed=investmentAssetChanged(raw,fields,deviceId,now)
+                val changed=investmentAssetChanged(raw,fields,deviceId,now).let{row->
+                    if(raw.entity==CloudEntity.LEDGER_TRANSACTION.table)row.withPriorCashEventPublication(raw) else row
+                }
                 changed to PendingMutation(requireNotNull(CloudEntity.fromTable(changed.entity)),changed.id,snapshot.owner.value,MutationKind.UPSERT,changed.payload,now,changed.syncVersion,deviceId)
             }
             return InvestmentCashTransferPlan(mutations)
@@ -60,7 +62,9 @@ fun planInvestmentCashTransferLifecycle(snapshot:InvestmentCashReadSnapshot,requ
             }
             val ids=current.postings.map{it.lifecycleText("id")}.toSet()
             return InvestmentCashTransferPlan(snapshot.rows.filter{(it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==original.id) || (it.entity==CloudEntity.INVESTMENT_POSTING.table && it.id in ids)}.map{raw ->
-                val changed=investmentAssetChanged(raw,buildJsonObject{put("deleted_at",now)},deviceId,now).copy(deletedAt=now)
+                val changed=investmentAssetChanged(raw,buildJsonObject{put("deleted_at",now)},deviceId,now).copy(deletedAt=now).let{row->
+                    if(raw.entity==CloudEntity.LEDGER_TRANSACTION.table)row.withPriorCashEventPublication(raw) else row
+                }
                 changed to PendingMutation(requireNotNull(CloudEntity.fromTable(changed.entity)),changed.id,snapshot.owner.value,MutationKind.DELETE,changed.payload,now,changed.syncVersion,deviceId)
             })
         }

@@ -148,4 +148,17 @@ class InvestmentCashTransferLifecycleTest {
         val altered=saved.copy(rows=saved.rows.map{if(it.entity==CloudEntity.INVESTMENT_POSTING.table && it.id==otherId)it.with("amount_minor",JsonPrimitive(101L)).with("accounting_amount_minor",JsonPrimitive(101L)) else it})
         assertTrue(runCatching{changed(altered,edit)}.isFailure)
     }
+    @Test fun actualLifecycleEditsAndDeletionRetainTheirPriorLedgerIntentForLateReplies() {
+        val before=deposited();val old=before.rows.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==event}
+        val edit=changed(before,InvestmentCashTransferLifecycleRequest.Save(read(before).event,review(before,400)))
+        val edited=edit.mutations.single{it.first.entity==CloudEntity.LEDGER_TRANSACTION.table}.first
+        assertEquals(1,localCashEventPublicationParents(edited).size)
+        assertEquals(cashEventIntentFingerprint(old),localCashEventPublicationParents(edited).single().fingerprint)
+        assertTrue(edit.mutations.filter{it.first.entity==CloudEntity.INVESTMENT_POSTING.table}.all{LOCAL_CASH_EVENT_PUBLICATION_PARENTS_KEY !in it.first.payload})
+        val after=after(before,edit)
+        val deleted=changed(after,InvestmentCashTransferLifecycleRequest.Delete(read(after).event,review(after))).mutations.single{it.first.entity==CloudEntity.LEDGER_TRANSACTION.table}.first
+        assertEquals(2,localCashEventPublicationParents(deleted).size)
+        assertEquals(cashEventIntentFingerprint(edited),localCashEventPublicationParents(deleted).last().fingerprint)
+    }
+
 }
