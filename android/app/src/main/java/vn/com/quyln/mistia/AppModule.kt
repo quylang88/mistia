@@ -463,10 +463,11 @@ object AppModule {
     @Provides
     @Singleton
     fun provideInvestmentChannelPushCoordinator(localStore:LocalStore,
-        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentChannelClient,auth:AuthRepository)=
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentChannelClient,auth:AuthRepository,
+        retirement:vn.com.quyln.mistia.core.network.SupabaseInvestmentTradeClient)=
         vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator(localStore,remote,
             BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
-            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},retirementRemote=retirement)
 
     @Provides
     @Singleton
@@ -480,10 +481,16 @@ object AppModule {
     fun provideInvestmentAssetPushCoordinator(localStore:LocalStore,
         remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentAssetClient,auth:AuthRepository,
         images:vn.com.quyln.mistia.core.database.FileInvestmentProductImageCache,
-        imageRemote:vn.com.quyln.mistia.core.model.InvestmentProductImageRemote)=
+        imageRemote:vn.com.quyln.mistia.core.model.InvestmentProductImageRemote,
+        retirement:vn.com.quyln.mistia.core.network.SupabaseInvestmentTradeClient,
+        channels:vn.com.quyln.mistia.core.network.SupabaseInvestmentChannelClient)=
         vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator(localStore,remote,
             BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
-            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},images=images,imageRemote=imageRemote)
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},images=images,imageRemote=imageRemote,
+            retirementRemote=retirement,metadataRemote=vn.com.quyln.mistia.core.model.InvestmentTradeMetadataRemote{owner,entity,id,token->
+                require(entity==vn.com.quyln.mistia.core.model.CloudEntity.INVESTMENT_CHANNEL)
+                channels.fetchRecord(entity,id,token,owner)
+            })
 
     @Provides
     @Singleton
@@ -495,10 +502,25 @@ object AppModule {
     @Provides
     @Singleton
     fun provideInvestmentTradePushCoordinator(localStore:LocalStore,
-        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentTradeClient,auth:AuthRepository)=
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentTradeClient,auth:AuthRepository,
+        assets:vn.com.quyln.mistia.core.network.SupabaseInvestmentAssetClient,
+        channels:vn.com.quyln.mistia.core.network.SupabaseInvestmentChannelClient)=
         vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator(localStore,remote,
             BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
-            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            metadataRemote=vn.com.quyln.mistia.core.model.InvestmentTradeMetadataRemote{owner,entity,id,token->
+                when(entity) {
+                    vn.com.quyln.mistia.core.model.CloudEntity.INVESTMENT_ASSET->assets.fetchRecord(entity,id,token,owner)
+                    vn.com.quyln.mistia.core.model.CloudEntity.INVESTMENT_CHANNEL->channels.fetchRecord(entity,id,token,owner)
+                    else->error("Invalid investment trade metadata entity")
+                }
+            })
+
+    @Provides
+    @Singleton
+    fun provideInvestmentPublicationPushCoordinator(channel:vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
+        asset:vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,trade:vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator)=
+        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade)
 
     @Provides
     @Singleton
@@ -537,9 +559,7 @@ object AppModule {
         recurringBillPushCoordinator: RecurringBillPushCoordinator,
         installmentPushCoordinator: InstallmentPushCoordinator,
         dueOccurrencePushCoordinator: DueOccurrencePushCoordinator,
-        investmentChannelPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
-        investmentAssetPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,
-        investmentTradePushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator,
+        investmentPublicationPushCoordinator: vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator,
         categoryTranslationCoordinator: CategoryTranslationCoordinator,
         categoryMaintenanceCoordinator: CategoryMaintenanceCoordinator,
         financeRepository: FinanceRepository,
@@ -561,9 +581,7 @@ object AppModule {
             recurringBillPushCoordinator,
             installmentPushCoordinator,
             dueOccurrencePushCoordinator,
-            investmentChannelPushCoordinator,
-            investmentAssetPushCoordinator,
-            investmentTradePushCoordinator,
+            investmentPublicationPushCoordinator,
         ),
         categoryTranslationCoordinator,
         categoryMaintenanceCoordinator,

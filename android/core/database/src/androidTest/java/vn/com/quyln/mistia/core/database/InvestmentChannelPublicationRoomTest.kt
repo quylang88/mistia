@@ -131,4 +131,30 @@ class InvestmentChannelPublicationRoomTest {
         assertFalse(store.recordInvestmentChannelMutationFailure(q,34000,"network_io"));assertEquals(before,store.investmentChannelPublicationSnapshot(owner,id))
     }
 
+    @Test fun finalSessionRotationRollsBackChannelAcknowledgement()=runBlocking {
+        val q=prepare();val before=store.investmentChannelPublicationSnapshot(owner,id);val server=remote()
+        var sawApplied=false
+        val error=runCatching{store.acknowledgeInvestmentChannelMutation(q,server,isSessionCurrent={
+            val value=db.openHelper.writableDatabase.query("SELECT sync_version FROM cloud_records WHERE entity = 'investment_channels'").use{it.moveToFirst();it.getLong(0)}
+            if(!(value==0L))sawApplied=true
+            value==0L
+        })}.exceptionOrNull()
+        assertTrue("Session fence must observe the applied write before rollback",sawApplied)
+        assertTrue(error is CancellationException)
+        assertEquals(before,store.investmentChannelPublicationSnapshot(owner,id))
+    }
+
+    @Test fun finalSessionRotationRollsBackChannelFailureBookkeeping()=runBlocking {
+        val q=prepare();val before=store.investmentChannelPublicationSnapshot(owner,id);val server=remote()
+        var sawApplied=false
+        val error=runCatching{store.recordInvestmentChannelMutationFailure(q,34000,"network_io",isSessionCurrent={
+            val value=db.openHelper.writableDatabase.query("SELECT attempt_count FROM sync_outbox WHERE entity = 'investment_channels'").use{it.moveToFirst();it.getLong(0)}
+            if(!(value==0L))sawApplied=true
+            value==0L
+        })}.exceptionOrNull()
+        assertTrue("Session fence must observe the applied write before rollback",sawApplied)
+        assertTrue(error is CancellationException)
+        assertEquals(before,store.investmentChannelPublicationSnapshot(owner,id))
+    }
+
 }

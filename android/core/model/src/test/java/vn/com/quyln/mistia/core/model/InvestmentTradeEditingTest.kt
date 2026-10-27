@@ -38,6 +38,18 @@ class InvestmentTradeEditingTest {
             if(buying)p.financeRawString("funding_wallet_id") else p.financeRawString("capital_return_wallet_id"),if(buying)p.financeRawLong("funding_wallet_amount_minor") else null,null,
             p.financeRawString("note"),p.financeRawString("occurred_at")!!,p.financeRawString("created_at")!!),asset,LedgerWalletRecord.fromCloudRecord(wallet),null,"Reserve")
     }
+    private fun renamed()=snapshot().let{s->s.copy(rows=s.rows.map{row->if(row.entity==CloudEntity.INVESTMENT_ASSET.table)row.copy(payload=JsonObject(row.payload+("name" to JsonPrimitive("New cards")))) else row})}
+    @Test fun aMetadataRenameDoesNotBlockAnEditOrChangeTheOldFundingAmount() {
+        val s=renamed();val r=editing(s).let{it.copy(expectedAsset=asset.copy(name="New cards"),draft=it.draft.copy(note="New note"))}
+        val plan=planInvestmentTradeEdit(s,r,device,now)
+        val funding=plan.mutations.single{it.first.entity==CloudEntity.LEDGER_TRANSACTION.table}.first
+        assertEquals("New cards",funding.payload.financeRawString("title"));assertEquals(100L,funding.payload.financeRawLong("amount_minor"))
+    }
+    @Test fun aMetadataRenameDoesNotBlockTheNextSaleFromExistingStock() {
+        val plan=planInvestmentSale(renamed(),request().copy(expectedAsset=asset.copy(name="New cards")),device,now)
+        assertEquals(50L,plan.trade.payload.financeRawLong("released_cost_basis_minor"))
+        assertEquals(30L,plan.trade.payload.financeRawLong("realized_profit_loss_minor"))
+    }
     @Test fun editingAcquisitionTotalRecomputesLaterCostAndProfitWithoutNewIdentity() {
         val s=sale();val r=editing(s);val p=planInvestmentTradeEdit(s,r.copy(draft=r.draft.copy(grossMinor=120,accountingMinor=120,walletMinor=120)),device,now)
         assertEquals(buyId,p.trade.id);assertEquals(before,p.trade.payload.financeRawString("created_at"))

@@ -106,7 +106,7 @@ class SupabaseInvestmentAssetClient(
         val updated=requireNotNull(payload.financeRawString("updated_at"));Instant.parse(updated)
         val deleted=payload.financeRawString("deleted_at")?.also{Instant.parse(it)}
         return CloudRecord(CloudEntity.INVESTMENT_ASSET.table,context.id,context.owner.value,payload,updated,deleted,version)
-            .also{InvestmentAssetRecord.fromCloudRecord(it);if(allowLocal){localAssetImagePublication(it);localAssetPublicationParents(it)}}
+            .also{InvestmentAssetRecord.fromCloudRecord(it);if(allowLocal){localAssetImagePublication(it);localAssetPublicationParents(it);localInvestmentMetadataStages(it)}}
     }
     private suspend fun Call.awaitText():String = suspendCancellableCoroutine{continuation->
         continuation.invokeOnCancellation{cancel()}

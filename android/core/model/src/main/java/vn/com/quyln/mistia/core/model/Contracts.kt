@@ -294,6 +294,8 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun prepareInvestmentMetadataStage(expected:InvestmentTradePublicationSnapshot,entity:CloudEntity,id:String,compared:CloudRecord?,isSessionCurrent:()->Boolean={true}):InvestmentMetadataStagePreparation? = throw UnsupportedOperationException("Atomic metadata stage preparation unavailable")
+    suspend fun rebaseInvestmentMetadataStage(prepared:InvestmentTradePublicationSnapshot,entity:CloudEntity,id:String,stage:InvestmentMetadataStage,remote:CloudRecord,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic metadata stage rebase unavailable")
     suspend fun recordInvestmentTradePublicationReceipt(receipt:InvestmentTradePublicationReceipt,isSessionCurrent:()->Boolean={true}):Int = throw UnsupportedOperationException("Atomic investment trade receipt recording unavailable")
     suspend fun acknowledgeInvestmentTradeResult(expected:InvestmentTradePublicationSnapshot,candidate:InvestmentTradeCloudSnapshot,deviceId:String,now:String,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic investment trade result acknowledgement unavailable")
     suspend fun investmentTradePublicationSnapshot(owner:UserId,tradeId:String):InvestmentTradePublicationSnapshot = throw UnsupportedOperationException("Atomic investment trade publication source unavailable")
@@ -307,17 +309,17 @@ interface LocalStore {
     suspend fun cleanupInvestmentProductImages(owner:UserId,remote:InvestmentProductImageRemote):Int = throw UnsupportedOperationException("Reference guarded image cleanup unavailable")
 
     /** Optional durable receipt for a definite superseded RPC. Unsupported stores retain the proposal. */
-    suspend fun recordInvestmentAssetPublicationReceipt(mutation:QueuedMutation,sentPayload:JsonObject,expectedVersion:Long,remoteRecord:CloudRecord):Boolean = false
+    suspend fun recordInvestmentAssetPublicationReceipt(mutation:QueuedMutation,sentPayload:JsonObject,expectedVersion:Long,remoteRecord:CloudRecord,isSessionCurrent:()->Boolean={true}):Boolean = false
 
-    suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,publication:InvestmentProductImagePublication?=null):Boolean = throw UnsupportedOperationException("Scoped asset acknowledgement unavailable")
-    suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean = throw UnsupportedOperationException("Scoped asset failure recording unavailable")
+    suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,publication:InvestmentProductImagePublication?=null,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped asset acknowledgement unavailable")
+    suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped asset failure recording unavailable")
 
     suspend fun reconcileInvestmentAssetImagePublication(owner:UserId,assetId:String,knownResult:InvestmentAssetImageSaveRequest?=null):InvestmentAssetPublicationSnapshot = throw UnsupportedOperationException("Current asset image reconciliation unavailable")
 
     suspend fun investmentChannelPublicationSnapshot(owner:UserId,id:String):InvestmentChannelPublicationSnapshot = throw UnsupportedOperationException("Atomic channel publication read unavailable")
 
-    suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean = throw UnsupportedOperationException("Scoped channel acknowledgement unavailable")
-    suspend fun recordInvestmentChannelMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean = throw UnsupportedOperationException("Scoped channel failure recording unavailable")
+    suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped channel acknowledgement unavailable")
+    suspend fun recordInvestmentChannelMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped channel failure recording unavailable")
 
     suspend fun commitInvestmentAssetImageMutation(expected:InvestmentAssetSnapshot,request:InvestmentAssetImageSaveRequest,deviceId:String,now:String):Boolean = throw UnsupportedOperationException("Conditional asset image save unavailable")
 

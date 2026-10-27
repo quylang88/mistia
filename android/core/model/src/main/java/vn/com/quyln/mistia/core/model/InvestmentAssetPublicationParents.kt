@@ -5,7 +5,7 @@ import kotlinx.serialization.json.*
 
 /** Bounded local causal evidence, stored with the row and its exact queued proposal. Never wire data. */
 const val LOCAL_ASSET_PUBLICATION_PARENTS_KEY="_mistia_android_asset_publication_parents"
-val LOCAL_ASSET_PUBLICATION_KEYS=setOf(LOCAL_ASSET_IMAGE_INTENT_KEY,LOCAL_ASSET_PUBLICATION_PARENTS_KEY)
+val LOCAL_ASSET_PUBLICATION_KEYS=setOf(LOCAL_ASSET_IMAGE_INTENT_KEY,LOCAL_ASSET_PUBLICATION_PARENTS_KEY,LOCAL_INVESTMENT_METADATA_STAGES_KEY)
 
 data class InvestmentAssetPublicationParent(
     val baseVersion:Long,val confirmedVersion:Long?,val deviceId:String,val deleted:Boolean,

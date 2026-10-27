@@ -532,4 +532,43 @@ class InvestmentAssetImageRoomTest {
         assertEquals(f,store.reconcileInvestmentAssetImagePublication(owner,assetId))
     }
 
+    @Test fun finalSessionRotationRollsBackAssetAcknowledgement()=runBlocking {
+        val source=plainPublication();val before=source;val result=serverResult(source.record!!,1)
+        var sawApplied=false
+        val error=runCatching{store.acknowledgeInvestmentAssetMutation(source.pending!!,result,isSessionCurrent={
+            val value=db.openHelper.writableDatabase.query("SELECT sync_version FROM cloud_records WHERE entity = 'investment_assets'").use{it.moveToFirst();it.getLong(0)}
+            if(!(value==0L))sawApplied=true
+            value==0L
+        })}.exceptionOrNull()
+        assertTrue("Session fence must observe the applied write before rollback",sawApplied)
+        assertTrue(error is CancellationException)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+
+    @Test fun finalSessionRotationRollsBackAssetFailureBookkeeping()=runBlocking {
+        val source=plainPublication();val before=source;val result=serverResult(source.record!!,1)
+        var sawApplied=false
+        val error=runCatching{store.recordInvestmentAssetMutationFailure(source.pending!!,34000,"network_io",isSessionCurrent={
+            val value=db.openHelper.writableDatabase.query("SELECT attempt_count FROM sync_outbox WHERE entity = 'investment_assets'").use{it.moveToFirst();it.getLong(0)}
+            if(!(value==0L))sawApplied=true
+            value==0L
+        })}.exceptionOrNull()
+        assertTrue("Session fence must observe the applied write before rollback",sawApplied)
+        assertTrue(error is CancellationException)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+
+    @Test fun finalSessionRotationRollsBackAssetReceipt()=runBlocking {
+        val f=receiptFixture();val before=store.reconcileInvestmentAssetImagePublication(owner,assetId);val oldPayload=before.record!!.payload.toString()
+        var sawApplied=false
+        val error=runCatching{store.recordInvestmentAssetPublicationReceipt(f.old.pending!!,f.sent,7,f.remote,isSessionCurrent={
+            val value=db.openHelper.writableDatabase.query("SELECT payload_json FROM cloud_records WHERE entity = 'investment_assets'").use{it.moveToFirst();it.getString(0)}
+            if(!(value==oldPayload))sawApplied=true
+            value==oldPayload
+        })}.exceptionOrNull()
+        assertTrue("Session fence must observe the applied write before rollback",sawApplied)
+        assertTrue(error is CancellationException)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,assetId))
+    }
+
 }

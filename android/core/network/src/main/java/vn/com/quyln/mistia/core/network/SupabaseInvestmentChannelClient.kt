@@ -27,7 +27,7 @@ class SupabaseInvestmentChannelClient(
         val id=requireNotNull(payload.financeRawString("id")){"Missing channel identity"}
         val context=capture(entity,id,accessToken,ownerUserId,true)
         validatePayload(context,payload,creating=true)
-        val body=JsonArray(listOf(payload)).toString().toRequestBody(JSON_TYPE)
+        val body=JsonArray(listOf(investmentMetadataPayloadForCloud(payload))).toString().toRequestBody(JSON_TYPE)
         requireNotNull(execute(context,request(context,context.url).post(body).build())){"Missing created channel representation"}
     }
     override suspend fun conditionalUpdate(entity:CloudEntity,recordId:String,accessToken:String,ownerUserId:UserId,expectedVersion:Long,payload:JsonObject):CloudRecord? = safely {
@@ -36,7 +36,7 @@ class SupabaseInvestmentChannelClient(
         validatePayload(context,payload,creating=false)
         require(requireNotNull(payload.financeRawLong("sync_version"))>expectedVersion){"Channel version must advance beyond the compared base"}
         val url=context.url.newBuilder().addQueryParameter("id","eq.$recordId").addQueryParameter("sync_version","eq.$expectedVersion").build()
-        execute(context,request(context,url).patch(payload.toString().toRequestBody(JSON_TYPE)).build())
+        execute(context,request(context,url).patch(investmentMetadataPayloadForCloud(payload).toString().toRequestBody(JSON_TYPE)).build())
     }
     private data class Context(val owner:UserId,val id:String,val session:AuthSession,val write:Boolean,val url:HttpUrl,val caller:CoroutineContext)
     private suspend fun capture(entity:CloudEntity,id:String,token:String,owner:UserId,write:Boolean):Context {
@@ -66,7 +66,7 @@ class SupabaseInvestmentChannelClient(
         if(deleted!=null) {
             require(!creating && payload.keys==DELETE_KEYS){"Invalid channel tombstone patch"};Instant.parse(deleted)
         } else {
-            val record=decode(context,payload)
+            val record=decode(context,payload,allowLocal=true)
             val channel=InvestmentChannelRecord.fromCloudRecord(record)
             require(channel.name.isNotEmpty() && normalizedInvestmentChannelName(channel.name)==channel.name){"Invalid channel name"}
         }
@@ -86,13 +86,15 @@ class SupabaseInvestmentChannelClient(
         ensureCurrent(context)
         return record
     }
-    private fun decode(context:Context,payload:JsonObject):CloudRecord {
+    private fun decode(context:Context,payload:JsonObject,allowLocal:Boolean=false):CloudRecord {
+        require(allowLocal || payload.keys.none{it.startsWith("_mistia_android_")}){"Remote channel cannot supply local publication evidence"}
+        require((LOCAL_ASSET_PUBLICATION_KEYS-LOCAL_INVESTMENT_METADATA_STAGES_KEY).none{it in payload})
         require(payload.financeRawString("id")==context.id && payload.financeRawString("user_id")==context.owner.value){"Channel response identity differs"}
         val version=requireNotNull(payload.financeRawLong("sync_version"));require(version>=0){"Invalid channel response version"}
         val updated=requireNotNull(payload.financeRawString("updated_at"));Instant.parse(updated)
         val deleted=payload.financeRawString("deleted_at")?.also{Instant.parse(it)}
         return CloudRecord(CloudEntity.INVESTMENT_CHANNEL.table,context.id,context.owner.value,payload,updated,deleted,version)
-            .also{InvestmentChannelRecord.fromCloudRecord(it)}
+            .also{InvestmentChannelRecord.fromCloudRecord(it);if(allowLocal)localInvestmentMetadataStages(it)}
     }
     private suspend fun Call.awaitText():String = suspendCancellableCoroutine{continuation->
         continuation.invokeOnCancellation{cancel()}

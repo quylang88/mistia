@@ -31,6 +31,14 @@ class InvestmentTradeDeletionTest {
         val s=snapshot();return apply(s,planInvestmentSale(s,request(gross,quantity),device,now).mutations)
     }
     private fun deleting(s:InvestmentTradeDeletionSnapshot,id:String=saleId)=InvestmentTradeDeletionRequest(s.rows.single{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id},null,"Reserve")
+    @Test fun renamingMetadataDoesNotInvalidateAnExistingFundingTitleBeforeTradeDeletion() {
+        val s=snapshot().let{it.copy(rows=it.rows.map{row->if(row.entity==CloudEntity.INVESTMENT_ASSET.table)row.copy(payload=JsonObject(row.payload+("name" to JsonPrimitive("New cards")))) else row})}
+        val plan=planInvestmentTradeDeletion(s,deleting(s,buyId),device,now)
+        assertEquals(now,plan.trade.deletedAt)
+        assertEquals(100L,plan.mutations.single{it.first.entity==CloudEntity.LEDGER_TRANSACTION.table}.first.payload.financeRawLong("amount_minor"))
+        val corrupt=s.copy(rows=s.rows.map{row->if(row.entity==CloudEntity.LEDGER_TRANSACTION.table)row.copy(payload=JsonObject(row.payload+("amount_minor" to JsonPrimitive(101)))) else row})
+        assertTrue(runCatching{planInvestmentTradeDeletion(corrupt,deleting(corrupt,buyId),device,now)}.isFailure)
+    }
     @Test fun deletingASaleRestoresFifoStockAndTombstonesItsCapitalProfitAndCashAccrual() {
         val s=sale();val plan=planInvestmentTradeDeletion(s,deleting(s),device,now)
         assertEquals(now,plan.trade.deletedAt);assertEquals(6,plan.mutations.size);assertTrue(plan.mutations.all{it.second.kind==MutationKind.DELETE && it.first.deletedAt==now})

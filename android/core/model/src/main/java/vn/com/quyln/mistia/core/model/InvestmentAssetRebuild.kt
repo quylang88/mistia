@@ -6,6 +6,15 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.json.*
 
+/** Existing canonical legs retain the asset's historical display name until the next financial rebuild. */
+internal fun investmentTradeBaselineExpected(generated:CloudRecord,stored:CloudRecord):CloudRecord {
+    val role=generated.payload.financeRawString("settlement_role_raw_value")
+    val title=stored.payload.financeRawString("title")?.takeUnless{it.isBlank()}
+    return if(generated.entity==CloudEntity.LEDGER_TRANSACTION.table && stored.entity==generated.entity && stored.id==generated.id &&
+        role in setOf("investmentFunding","investmentCapitalReturn","investmentRealizedProfit") && stored.payload.financeRawString("settlement_role_raw_value")==role && title!=null)
+        generated.copy(payload=JsonObject(generated.payload+("title" to JsonPrimitive(title)))) else generated
+}
+
 fun investmentLedgerIdentity(eventId:String,component:String):String {
     investmentAssetIdentity(eventId)
     val bytes=MessageDigest.getInstance("SHA-256").digest("com.mistia.investment.ledger:$eventId:$component".toByteArray(Charsets.UTF_8)).copyOf(16)

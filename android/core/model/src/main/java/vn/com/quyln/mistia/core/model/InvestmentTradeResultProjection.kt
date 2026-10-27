@@ -9,6 +9,7 @@ class InvestmentTradeResultException(val reason:InvestmentTradeResultError):Ille
 /** A mathematical result proof, not permission to acknowledge any queue. */
 fun projectInvestmentTradePublicationResult(
     source:InvestmentTradePublicationSnapshot,remoteTrades:List<CloudRecord>,affectedAssetIds:Set<String>,deviceId:String,now:String,
+    metadata:List<CloudRecord> = emptyList(),
 ):List<CloudRecord> {
     fun fail(reason:InvestmentTradeResultError=InvestmentTradeResultError.INVALID_RESULT):Nothing=throw InvestmentTradeResultException(reason)
     fun context():Nothing=fail(InvestmentTradeResultError.UNREADABLE_SOURCE)
@@ -49,7 +50,10 @@ fun projectInvestmentTradePublicationResult(
         val id=reference(trade.payload,if(trade.payload.financeRawString("kind_raw_value")=="buy")"funding_wallet_id" else "capital_return_wallet_id")
         id?.let{row(CloudEntity.LEDGER_WALLET,it);dependencies+=CloudEntity.LEDGER_WALLET.table to it}
     }
-    if(dependencies.any{it in source.dirtyKeys})fail(InvestmentTradeResultError.DEPENDENCY_PENDING)
+    val proven=if(metadata.isEmpty())emptySet() else try {
+        investmentTradeActiveMetadataPrerequisites(source,affectedAssetIds,metadata)
+    }catch(_:Exception){fail()}
+    if(dependencies.any{it in source.dirtyKeys && it !in proven})fail(InvestmentTradeResultError.DEPENDENCY_PENDING)
     val rows=source.rows.filterNot{it.entity==CloudEntity.INVESTMENT_TRADE.table && reference(it.payload,"asset_id") in affectedAssetIds}+remoteTrades
     val snapshot=InvestmentAssetSnapshot(source.owner,rows.filter{CloudEntity.fromTable(it.entity) in InvestmentAssetSnapshot.entities})
     val result=linkedMapOf<Pair<String,String>,CloudRecord>()

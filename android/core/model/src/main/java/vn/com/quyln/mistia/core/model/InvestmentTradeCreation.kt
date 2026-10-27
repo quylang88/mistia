@@ -118,7 +118,7 @@ internal fun planInvestmentTradeCreation(snapshot:InvestmentTradeCreationSnapsho
     for(baselineAsset in listOfNotNull(asset,originalAsset).distinctBy{it.id}) {
         val baselineUnit=baselineAsset.defaultUnitLabel ?: expected?.payload?.financeRawString("unit_label")?.let(InvestmentUnitLabel::normalizedDisplay) ?: fail(InvestmentAssetError.UNIT_REQUIRED)
         val baseline=rebuildInvestmentAssetUnitHistory(assetSource,baselineAsset,baselineUnit,deviceId,now,resolveZeroBuyFunding=false)
-        if(baseline.any{row->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(row,it)}!=true})fail(InvestmentAssetError.INVALID_ACCOUNTING)
+        if(baseline.any{row->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(investmentTradeBaselineExpected(row,it),it)}!=true})fail(InvestmentAssetError.INVALID_ACCOUNTING)
     }
     if(old==null) {
         val ledgerIds=setOf("funding","capital-return","profit-loss").map{investmentLedgerIdentity(d.id,it)}.toSet()

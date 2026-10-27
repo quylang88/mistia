@@ -154,6 +154,7 @@ class InvestmentAssetMutationPlanTest {
         assertEquals(old,deleted.first.payload.financeRawString("deleted_at"))
         assertEquals(old,deleted.second.payload!!.financeRawString("deleted_at"))
         assertEquals("box",deleted.first.payload.financeRawString("unit_label"))
+        assertEquals(MutationKind.DELETE,deleted.second.kind)
         assertEquals(2,result.mutations.size)
     }
 
@@ -169,6 +170,7 @@ class InvestmentAssetMutationPlanTest {
         assertNotNull("Canonical obsolete leg must not remain financially active",deleted)
         assertEquals(now,deleted!!.deletedAt);assertEquals(now,deleted.payload.financeRawString("deleted_at"))
         assertEquals(JsonPrimitive("preserve"),deleted.payload["future_field"])
+        assertEquals(MutationKind.DELETE,result.mutations.single{it.first.entity==deleted.entity && it.first.id==deleted.id}.second.kind)
     }
     @Test fun freeLegacyBuyStillRequiresTheFundingDependencyUsedBySwiftRebuild() {
         val raw=trade(buyId,"buy",0,old)

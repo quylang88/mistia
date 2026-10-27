@@ -26,7 +26,7 @@ fun planInvestmentTradeDeletion(snapshot:InvestmentTradeDeletionSnapshot,request
     val assetSource=InvestmentAssetSnapshot(snapshot.owner,snapshot.rows.filter{CloudEntity.fromTable(it.entity) in InvestmentAssetSnapshot.entities})
     fun same(a:CloudRecord,b:CloudRecord)=deletionPayload(a)==deletionPayload(b)
     val baseline=rebuildInvestmentAssetUnitHistory(assetSource,asset,unit,deviceId,now,resolveZeroBuyFunding=false)
-    if(baseline.any{row->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(row,it)}!=true})fail()
+    if(baseline.any{row->snapshot.rows.singleOrNull{it.entity==row.entity && it.id==row.id}?.let{same(investmentTradeBaselineExpected(row,it),it)}!=true})fail()
     fun cash(rows:List<CloudRecord>)=InvestmentCashReadSnapshot(snapshot.owner,rows.filter{CloudEntity.fromTable(it.entity) in InvestmentCashReadSnapshot.entities})
     val beforeCash=cash(snapshot.rows);val before=investmentFundUsageTimeline(beforeCash,code)
     if(planInvestmentFundEffects(beforeCash,code,before,request.adjustmentTitle,deviceId,now).mutations.isNotEmpty())fail()

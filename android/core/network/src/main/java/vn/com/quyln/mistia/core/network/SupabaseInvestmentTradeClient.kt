@@ -16,9 +16,44 @@ import vn.com.quyln.mistia.core.model.*
 class SupabaseInvestmentTradeClient(
     private val config:SupabaseConfig,client:OkHttpClient,
     private val currentSession:()->AuthSession?,private val writesEnabled:()->Boolean,
-):InvestmentTradeRemote {
+):InvestmentTradeRemote,InvestmentRetirementRemote {
     private val http=client.newBuilder().followRedirects(false).followSslRedirects(false).build()
     private data class Context(val owner:UserId,val id:String,val session:AuthSession,val write:Boolean,val base:HttpUrl,val caller:CoroutineContext)
+    override suspend fun fetchRetirementHistory(owner:UserId,entity:CloudEntity,id:String,accessToken:String):InvestmentRetirementHistory = safely {
+        require(entity in setOf(CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL))
+        val context=capture(owner,id,accessToken,false)
+        var characters=0L
+        suspend fun pages(table:CloudEntity):List<CloudRecord> {
+            val result=mutableListOf<CloudRecord>();var cursor:String?=null
+            while(true) {
+                val url=context.base.newBuilder().addPathSegments("rest/v1/${table.table}")
+                    .addQueryParameter("user_id","eq.${owner.value}").addQueryParameter("order","id.asc").addQueryParameter("limit","100")
+                    .addQueryParameter(if(entity==CloudEntity.INVESTMENT_CHANNEL)"channel_id" else if(table==CloudEntity.INVESTMENT_ASSET)"id" else "asset_id","eq.$id")
+                    .apply{cursor?.let{addQueryParameter("id","gt.$it")}}.build()
+                val rows=execute(context,authorized(context,url).get().build());require(rows.size<=100)
+                if(rows.isEmpty())break
+                for(payload in rows) {
+                    val row=if(table==CloudEntity.INVESTMENT_TRADE)decode(context,payload) else {
+                        val key=requireNotNull(payload.financeRawString("id"));val version=requireNotNull(payload.financeRawLong("sync_version"))
+                        CloudRecord(table.table,key,owner.value,payload,payload.financeRawString("updated_at"),payload.financeRawString("deleted_at"),version).also{
+                            InvestmentAssetRecord.fromCloudRecord(it)
+                            require(payload.financeRawString("id")==key && payload.financeRawString("user_id")==owner.value && payload.keys.none{it.startsWith("_mistia_android_")})
+                        }
+                    }
+                    require(cursor?.let{row.id>it}!=false)
+                    require(if(entity==CloudEntity.INVESTMENT_CHANNEL)row.payload.financeRawString("channel_id")==id
+                        else if(table==CloudEntity.INVESTMENT_ASSET)row.id==id else row.payload.financeRawString("asset_id")==id)
+                    cursor=row.id;characters+=payload.toString().length
+                    require(result.size<10000 && characters<=67_108_864)
+                    result+=row
+                }
+            }
+            return result
+        }
+        val assets=pages(CloudEntity.INVESTMENT_ASSET);val trades=pages(CloudEntity.INVESTMENT_TRADE)
+        ensureCurrent(context)
+        InvestmentRetirementHistory(owner,entity,id,assets,trades).also{it.requireValid()}
+    }
     override suspend fun fetchTradeResult(owner:UserId,affectedAssetIds:Set<String>,knownTradeIds:Set<String>,accessToken:String):InvestmentTradeCloudSnapshot = safely {
         require(affectedAssetIds.size in 1..2 && affectedAssetIds.all{financeRawUuid(it)==it})
         require(knownTradeIds.size<=10000 && knownTradeIds.all{financeRawUuid(it)==it})
@@ -210,6 +245,7 @@ class SupabaseInvestmentTradeClient(
     }
     private suspend inline fun <T> safely(block:()->T):T=try{block()}
         catch(cancelled:CancellationException){throw cancelled}
+        catch(changed:InvestmentRetirementHistoryChanged){throw changed}
         catch(http:SupabaseHttpException){throw SupabaseHttpException(http.statusCode,"")}
         catch(network:IOException){throw IOException("Investment trade network request failed")}
         catch(invalid:Exception){throw IllegalArgumentException("Invalid investment trade request or response")}

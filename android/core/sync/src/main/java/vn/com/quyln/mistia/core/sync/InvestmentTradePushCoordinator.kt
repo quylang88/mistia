@@ -11,6 +11,7 @@ import vn.com.quyln.mistia.core.network.SupabaseHttpException
 class InvestmentTradePushCoordinator(
     private val localStore:LocalStore,private val remote:InvestmentTradeRemote,private val writesEnabled:Boolean,
     private val currentSession:()->AuthSession?,private val nowEpochMillis:()->Long=System::currentTimeMillis,
+    private val metadataRemote:InvestmentTradeMetadataRemote?=null,
 ):DomainPushCoordinator {
     override val entity=CloudEntity.INVESTMENT_TRADE
     override suspend fun pushPending(ownerUserId:UserId,accessToken:String):DomainPushSummary {
@@ -58,10 +59,27 @@ class InvestmentTradePushCoordinator(
             require(candidate.owner==ownerUserId && candidate.affectedAssetIds==affected && candidate.remoteIntentWinners.isEmpty())
             return candidate.rows.filter{it.entity==entity.table}
         }
-        fun validateDependencies(s:InvestmentTradePublicationSnapshot,affected:Set<String>,device:String) {
+        suspend fun validateDependencies(s:InvestmentTradePublicationSnapshot,affected:Set<String>,device:String):List<CloudRecord> {
+            val metadata=mutableListOf<CloudRecord>()
+            if(metadataRemote!=null) {
+                val dependencies=linkedSetOf<Pair<CloudEntity,String>>()
+                for(id in affected) {
+                    dependencies+=CloudEntity.INVESTMENT_ASSET to id
+                    val asset=s.rows.singleOrNull{it.entity==CloudEntity.INVESTMENT_ASSET.table && it.id==id}
+                    asset?.payload?.financeRawString("channel_id")?.let{dependencies+=CloudEntity.INVESTMENT_CHANNEL to it}
+                }
+                for((entity,id) in dependencies) {
+                    val local=s.rows.singleOrNull{it.entity==entity.table && it.id==id} ?: continue
+                    if(entity.table to id in s.dirtyKeys && local.deletedAt==null && local.payload.financeRawArchived()==true) {
+                        checkSession();val active=metadataRemote.fetchMetadata(ownerUserId,entity,id,accessToken);checkSession()
+                        active?.let(metadata::add)
+                    }
+                }
+            }
             val trades=s.rows.filter{it.entity==entity.table && it.payload.financeRawString("asset_id") in affected}
                 .map{it.copy(payload=JsonObject(it.payload-LOCAL_TRADE_PUBLICATION_PARENTS_KEY))}
-            projectInvestmentTradePublicationResult(s,trades,affected,device,Instant.ofEpochMilli(now).toString())
+            projectInvestmentTradePublicationResult(s,trades,affected,device,Instant.ofEpochMilli(now).toString(),metadata)
+            return metadata
         }
         val initial=source("00000000-0000-0000-0000-000000000000")
         val initialRows=initial.rows.filter{it.entity==entity.table}.associateBy{it.id}
@@ -166,7 +184,7 @@ class InvestmentTradePushCoordinator(
                         expected.rows.singleOrNull{it.entity==entity.table && it.id==queued.mutation.recordId}?.let{investmentTradeIntentFingerprint(it.payload)}!=written[queued.mutation.recordId]}) {
                     summary=summary.copy(staleResponses=summary.staleResponses+1);continue
                 }
-                validateDependencies(expected,affected,q.mutation.deviceId)
+                val metadata=validateDependencies(expected,affected,q.mutation.deviceId)
                 val known=expected.rows.filter{it.entity==entity.table && it.payload.financeRawString("asset_id") in affected}.map{it.id}.toSet()+requested
                 checkSession();var candidate=remote.fetchTradeResult(ownerUserId,affected,known,accessToken);checkSession()
                 require(candidate.owner==ownerUserId && candidate.affectedAssetIds==affected && candidate.remoteIntentWinners.isEmpty())
@@ -176,7 +194,7 @@ class InvestmentTradePushCoordinator(
                     local!=null && queue!=null && !investmentTradePublicationIntentsMatch(local,row) &&
                         resolveInvestmentTradePublication(local,row,queue.mutation.deviceId).winner==RecordConflictWinner.REMOTE
                 }.map{it.id}.toSet()
-                candidate=candidate.copy(remoteIntentWinners=winners)
+                candidate=candidate.copy(remoteIntentWinners=winners,metadata=metadata)
                 val plan=planInvestmentTradeResultAcknowledgement(expected,candidate,q.mutation.deviceId,Instant.ofEpochMilli(now).toString())
                 val tradeIds=(plan.acknowledgements.map{it.first}+plan.absentAcknowledgements).filter{it.mutation.entity==entity}.map{it.mutation.recordId}.toSet()
                 checkSession()

@@ -173,7 +173,8 @@ fun planInvestmentAssetMutation(
         }
     }
     val mutations=(listOf(changed)+extras).map{row ->
-        row to PendingMutation(requireNotNull(CloudEntity.fromTable(row.entity)),row.id,snapshot.owner.value,MutationKind.UPSERT,row.payload,now,row.syncVersion,deviceId)
+        row to PendingMutation(requireNotNull(CloudEntity.fromTable(row.entity)),row.id,snapshot.owner.value,
+            if(row.deletedAt==null)MutationKind.UPSERT else MutationKind.DELETE,row.payload,now,row.syncVersion,deviceId)
     }
     require(mutations.map{it.first.entity to it.first.id}.distinct().size==mutations.size)
     return InvestmentAssetMutationPlan(investmentAssetDecode(changed),mutations)

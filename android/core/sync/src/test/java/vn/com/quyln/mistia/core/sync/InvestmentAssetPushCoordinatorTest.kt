@@ -265,11 +265,11 @@ class InvestmentAssetPushCoordinatorTest {
         override suspend fun reconcileInvestmentAssetImagePublication(owner:UserId,id:String,knownResult:InvestmentAssetImageSaveRequest?)=InvestmentAssetPublicationSnapshot(owner,record,queued,queued!=null,publication,photoAcknowledged)
         override suspend fun acknowledgeMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean=error("Channel ACK must use its scoped boundary")
         override suspend fun recordMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean=error("Channel failure must use its scoped boundary")
-        override suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,publication:InvestmentProductImagePublication?):Boolean {
+        override suspend fun acknowledgeInvestmentAssetMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,publication:InvestmentProductImagePublication?,isSessionCurrent:()->Boolean):Boolean {
             if(queued!=mutation || record?.payload!=mutation.mutation.payload)return false
             queued=null;record=remoteRecord;return true
         }
-        override suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean {
+        override suspend fun recordInvestmentAssetMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean):Boolean {
             if(queued!=mutation || record?.payload!=mutation.mutation.payload)return false
             queued=mutation.copy(attemptCount=mutation.attemptCount+1,nextAttemptAtEpochMillis=nextAttemptAtEpochMillis,lastError=errorCode);return true
         }

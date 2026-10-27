@@ -68,6 +68,7 @@ internal class OutboxPushCoordinator(
     private val acknowledgeOverride: suspend (QueuedMutation, CloudRecord) -> MutationAcknowledgement = { _, _ -> MutationAcknowledgement.Default },
     private val conflictDecisionOverride: (CloudRecord, CloudRecord) -> ConflictDecision? = { _, _ -> null },
     private val beforeRemoteWrite: suspend (QueuedMutation, CloudRecord, UserId, String) -> MutationPreflight = { _, _, _, _ -> MutationPreflight.Continue },
+    private val retryableFailureOverride: (QueuedMutation, Exception) -> Boolean? = { _, _ -> null },
 ) : DomainPushCoordinator {
     private fun semanticDecision(local: CloudRecord, remote: CloudRecord): ConflictDecision =
         conflictDecisionOverride(local, remote) ?: ConflictResolver.resolve(local.copy(payload = normalizeSemanticPayload(local.payload)),
@@ -94,7 +95,7 @@ internal class OutboxPushCoordinator(
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 if (error is MutationFailurePersistenceException) throw requireNotNull(error.cause)
-                val retryable = error.isRetryable()
+                val retryable = retryableFailureOverride(queued,error) ?: error.isRetryable()
                 val retryAt = if (retryable) now + retryDelayMillis(queued.attemptCount) else Long.MAX_VALUE
                 val recorded = recordFailure(queued, retryAt, error.safeCode())
                 if (!recorded) summary.copy(staleResponses = summary.staleResponses + 1)
@@ -131,7 +132,7 @@ internal class OutboxPushCoordinator(
             } catch (error: Exception) {
                 currentCoroutineContext().ensureActive()
                 if (error is CancellationException || error is MutationFailurePersistenceException) throw error
-                val retryable = error.isRetryable()
+                val retryable = retryableFailureOverride(queued,error) ?: error.isRetryable()
                 val retryAt = if (retryable) now + retryDelayMillis(queued.attemptCount) else Long.MAX_VALUE
                 if (!recordFailure(queued, retryAt, error.safeCode())) PushOutcome.STALE
                 else if (retryable) PushOutcome.RETRYABLE_FAILURE else PushOutcome.PERMANENT_FAILURE

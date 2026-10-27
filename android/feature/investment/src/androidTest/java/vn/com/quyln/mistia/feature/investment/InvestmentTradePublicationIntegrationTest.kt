@@ -1,10 +1,14 @@
 package vn.com.quyln.mistia.feature.investment
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.util.Collections
+import java.util.UUID
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
@@ -12,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.*
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
+import okio.Buffer
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -37,17 +42,32 @@ class InvestmentTradePublicationIntegrationTest {
     private lateinit var db:MistiaDatabase
     private lateinit var store:RoomLocalStore
     private lateinit var repo:OfflineFirstInvestmentRepository
+    private lateinit var cache:FileInvestmentProductImageCache
+    private lateinit var imageDirectory:File
     private lateinit var server:MockWebServer
     private lateinit var coordinator:InvestmentTradePushCoordinator
+    private lateinit var assetCoordinator:InvestmentAssetPushCoordinator
+    private lateinit var channelCoordinator:InvestmentChannelPushCoordinator
     private val requests=Collections.synchronizedList(mutableListOf<RecordedRequest>())
     private val backend=Collections.synchronizedMap(linkedMapOf<Pair<String,String>,CloudRecord>())
+    private val objects=Collections.synchronizedMap(mutableMapOf<String,ByteArray>())
+    private val objectPrefix="/storage/v1/object/investment-product-images/"
     private var onRpc:(suspend ()->Unit)?=null
     private var loseReply=false
     private var corruptFinancial=false
     private var validateEditsAgainstBackendHistory=false
+    private lateinit var rootCoordinator:InvestmentWalletPushCoordinator
+    private var beforeRead:(suspend (RecordedRequest)->Unit)?=null
+    private var beforeMetadataWrite:(suspend (CloudEntity,JsonObject)->Unit)?=null
+    private var onMetadataCommit:(suspend (CloudEntity,JsonObject)->Unit)?=null
+    private var metadataFailure:Int?=null
+    private var loseMetadataReply=false
     @Before fun setup()=runBlocking {
-        db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(),MistiaDatabase::class.java).allowMainThreadQueries().build()
-        store=RoomLocalStore(db,currentBillOwner={session?.userId});repo=OfflineFirstInvestmentRepository(store)
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        imageDirectory=File(context.cacheDir,"trade-retirement-images-${UUID.randomUUID()}")
+        cache=FileInvestmentProductImageCache(imageDirectory,{session?.userId})
+        db=Room.inMemoryDatabaseBuilder(context,MistiaDatabase::class.java).allowMainThreadQueries().build()
+        store=RoomLocalStore(db,currentBillOwner={session?.userId},productImages=cache);repo=OfflineFirstInvestmentRepository(store,productImages=cache)
         val rows=listOf(
             InvestmentAssetRecord(asset,owner.value,channel,"Cards","VND",null,"box",0,false,null,now,now,null,0,device).toCloudRecord(),
             InvestmentChannelRecord(channel,owner.value,"Shop","shippingbox.fill","#9A67FF",0,false,null,now,now,null,0,device).toCloudRecord(),
@@ -66,25 +86,96 @@ class InvestmentTradePublicationIntegrationTest {
         server=MockWebServer().apply{useHttps(serverTls.sslSocketFactory(),false);dispatcher=fixture();start()}
         val http=OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager).retryOnConnectionFailure(false).callTimeout(5,TimeUnit.SECONDS).build()
         val remote=SupabaseInvestmentTradeClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
-        coordinator=InvestmentTradePushCoordinator(store,remote,true,{session},{clock})
+        val assets=SupabaseInvestmentAssetClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        val channels=SupabaseInvestmentChannelClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        val rootRemote=SupabaseInvestmentWalletClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        rootCoordinator=InvestmentWalletPushCoordinator(store,rootRemote,true,{session},{clock})
+        for(row in store.recordsIncludingDeleted(owner,CloudEntity.LEDGER_WALLET.table))backend[row.entity to row.id]=row
+        val images=SupabaseInvestmentProductImageClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        assetCoordinator=InvestmentAssetPushCoordinator(store,assets,true,{session},{clock},cache,images,retirementRemote=remote,
+            metadataRemote=InvestmentTradeMetadataRemote{user,entity,key,token->channels.fetchRecord(entity,key,token,user)})
+        channelCoordinator=InvestmentChannelPushCoordinator(store,channels,true,{session},{clock},retirementRemote=remote)
+        coordinator=InvestmentTradePushCoordinator(store,remote,true,{session},{clock},InvestmentTradeMetadataRemote{user,entity,key,token->
+            when(entity) {
+                CloudEntity.INVESTMENT_ASSET->assets.fetchRecord(entity,key,token,user)
+                CloudEntity.INVESTMENT_CHANNEL->channels.fetchRecord(entity,key,token,user)
+                else->error("Invalid test metadata entity")
+            }
+        })
     }
-    @After fun close(){server.shutdown();db.close()}
+    @After fun close(){server.shutdown();db.close();imageDirectory.deleteRecursively()}
     private fun response(rows:List<CloudRecord>)=MockResponse().setBody(JsonArray(rows.map{it.payload}).toString())
     private fun fixture()=object:Dispatcher() {
         override fun dispatch(request:RecordedRequest):MockResponse {
             requests.add(request)
-            assertEquals("Bearer local-contract-token",request.getHeader("Authorization"));assertEquals("local-publishable-key",request.getHeader("apikey"))
+            assertEquals("Bearer "+session?.accessToken,request.getHeader("Authorization"));assertEquals("local-publishable-key",request.getHeader("apikey"))
             val url=request.requestUrl!!;val path=url.encodedPath
+            if(path.startsWith(objectPrefix)) {
+                val objectPath=path.removePrefix(objectPrefix)
+                InvestmentProductImagePath.parse(owner,objectPath.split('/')[1],objectPath)
+                return when(request.method) {
+                    "POST"->if(objects.containsKey(objectPath))MockResponse().setResponseCode(409) else {
+                        objects[objectPath]=request.body.clone().readByteArray();MockResponse().setResponseCode(201)
+                    }
+                    "GET"->objects[objectPath]?.let{MockResponse().setBody(Buffer().write(it))} ?: MockResponse().setResponseCode(404)
+                    "DELETE"->{objects.remove(objectPath);MockResponse().setResponseCode(204)}
+                    else->MockResponse().setResponseCode(405)
+                }
+            }
             if(request.method=="GET") {
+                beforeRead?.let{runBlocking{it(request)}}
                 assertEquals("eq."+owner.value,url.queryParameter("user_id"))
                 val table=url.pathSegments.last();val filters=url.queryParameterValues("id").filterNotNull()
                 val exact=filters.firstOrNull{it.startsWith("eq.")}?.removePrefix("eq.")
                 val ids=filters.firstOrNull{it.startsWith("in.(")}?.removePrefix("in.(")?.removeSuffix(")")?.split(',')?.toSet()
                 val cursor=filters.firstOrNull{it.startsWith("gt.")}?.removePrefix("gt.")
-                val assets=url.queryParameter("asset_id")?.removePrefix("in.(")?.removeSuffix(")")?.split(',')?.toSet()
+                val assets=url.queryParameter("asset_id")?.removePrefix("eq.")?.removePrefix("in.(")?.removeSuffix(")")?.split(',')?.toSet()
+                val parent=url.queryParameter("channel_id")?.removePrefix("eq.")
                 val rows=synchronized(backend){backend.values.toList()}.filter{it.entity==table && (exact==null || it.id==exact) &&
-                    (ids==null || it.id in ids) && (cursor==null || it.id>cursor) && (assets==null || it.payload.financeRawString("asset_id") in assets)}.sortedBy{it.id}.take(1)
+                    (ids==null || it.id in ids) && (cursor==null || it.id>cursor) && (assets==null || it.payload.financeRawString("asset_id") in assets) &&
+                    (parent==null || it.payload.financeRawString("channel_id")==parent)}.sortedBy{it.id}.take(1)
                 return response(rows.map{if(corruptFinancial && it.entity==CloudEntity.LEDGER_TRANSACTION.table)it.copy(payload=JsonObject(it.payload+("amount_minor" to JsonPrimitive(71)))) else it})
+            }
+            if(path in setOf("/rest/v1/investment_channels","/rest/v1/ledger_wallets") && request.method in setOf("PATCH","POST") || path=="/rest/v1/rpc/mutate_investment_asset") {
+                val wire=Json.parseToJsonElement(request.body.clone().readUtf8())
+                val body=if(wire is JsonArray)wire.single().jsonObject else wire.jsonObject
+                val assetRpc=path.endsWith("mutate_investment_asset")
+                val entity=if(assetRpc)CloudEntity.INVESTMENT_ASSET else if(path=="/rest/v1/ledger_wallets")CloudEntity.LEDGER_WALLET else CloudEntity.INVESTMENT_CHANNEL
+                val input=if(assetRpc)body.getValue("p_asset").jsonObject else body
+                val identity=input.financeRawString("id") ?: url.queryParameter("id")!!.removePrefix("eq.")
+                val key=entity.table to identity
+                val old=backend[key]
+                val payload=if(entity==CloudEntity.LEDGER_WALLET && old!=null)JsonObject(old.payload+input) else input
+                val expected=if(assetRpc)body.financeRawLong("p_expected_version")!! else if(request.method=="POST")0 else url.queryParameter("sync_version")!!.removePrefix("eq.").toLong()
+                if(old==null && expected!=0L || old!=null && old.syncVersion!=expected)return response(emptyList())
+                if(!assetRpc && old!=null && request.method=="POST")return MockResponse().setResponseCode(409)
+                val before=beforeMetadataWrite;beforeMetadataWrite=null;if(before!=null)runBlocking{before(entity,payload)}
+                metadataFailure?.let{metadataFailure=null;return MockResponse().setResponseCode(it)}
+                assertEquals(owner.value,payload.financeRawString("user_id"))
+                assertTrue(payload.keys.none{it.startsWith("_mistia_android_")})
+                if(assetRpc) {
+                    assertEquals(JsonPrimitive(false),body["p_force"])
+                    val parent=backend[CloudEntity.INVESTMENT_CHANNEL.table to payload.financeRawString("channel_id")]
+                    if(parent==null || parent.deletedAt!=null || parent.payload.financeRawArchived()!=false)return MockResponse().setResponseCode(400)
+                }
+                if(payload.financeRawArchived()==true) {
+                    val assets=if(assetRpc)setOf(key.second) else synchronized(backend){backend.values.filter{it.entity==CloudEntity.INVESTMENT_ASSET.table &&
+                        it.deletedAt==null && it.payload.financeRawString("channel_id")==key.second}.map{it.id}.toSet()}
+                    val active=synchronized(backend){backend.values.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.deletedAt==null && it.payload.financeRawString("asset_id") in assets}}
+                    val open=active.groupBy{it.payload.financeRawString("asset_id")}.values.any{rows->
+                        rows.maxWith(compareBy<CloudRecord>{it.payload.financeRawString("occurred_at")}.thenBy{it.payload.financeRawString("created_at")}.thenBy{it.id})
+                            .payload.financeRawString("position_quantity_after_decimal_string")!!.toBigDecimal().signum()>0
+                    }
+                    if(open)return MockResponse().setResponseCode(400).setBody("Close cloud positions before archive")
+                }
+                val version=if(assetRpc)expected+1 else payload.financeRawLong("sync_version")!!
+                val saved=CloudRecord(entity.table,key.second,owner.value,JsonObject(payload+buildJsonObject{put("sync_version",version);put("updated_at",serverTime)}),serverTime,payload.financeRawString("deleted_at"),version)
+                backend[key]=saved
+                if(assetRpc && old!=null && old.payload.financeRawString("default_unit_label")==null && payload.financeRawString("default_unit_label")!=null)
+                    repairServerLegacyUnits(old,payload)
+                val callback=onMetadataCommit;onMetadataCommit=null;if(callback!=null)runBlocking{callback(entity,payload)}
+                if(loseMetadataReply){loseMetadataReply=false;return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)}
+                return response(listOf(saved))
             }
             val delete=path=="/rest/v1/rpc/delete_investment_trade"
             if(request.method!="POST" || !delete && path!="/rest/v1/rpc/mutate_investment_trade")return MockResponse().setResponseCode(404)
@@ -104,7 +195,8 @@ class InvestmentTradePublicationIntegrationTest {
             }catch(rejected:InvestmentAccountingException) {
                 return MockResponse().setResponseCode(400).setBody("local SQL FIFO dependency fixture")
             } else source.rows
-            val tradeIds=synchronized(backend){backend.values.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table}.map{it.id}.toSet()}+requested
+            val affected=setOfNotNull(existing?.payload?.financeRawString("asset_id"),incoming?.financeRawString("asset_id"),source.requestedRecord?.payload?.financeRawString("asset_id"))
+            val tradeIds=synchronized(backend){backend.values.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.payload.financeRawString("asset_id") in affected}.map{it.id}.toSet()}+requested
             val canonical=tradeIds.flatMap{trade->listOf("funding","capital-return","profit-loss","funding-posting","capital-return-posting","profit-loss-posting","cash-accrual-posting").map{investmentLedgerIdentity(trade,it)}}.toSet()
             for(raw in projected.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id in tradeIds || it.entity in setOf(CloudEntity.LEDGER_TRANSACTION.table,CloudEntity.INVESTMENT_POSTING.table) && it.id in canonical}) {
                 val previous=backend[raw.entity to raw.id]
@@ -131,12 +223,35 @@ class InvestmentTradePublicationIntegrationTest {
             }
             val callback=onRpc;onRpc=null;if(callback!=null)runBlocking{callback()}
             if(loseReply){loseReply=false;return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)}
-            return response(synchronized(backend){backend.values.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && if(delete)it.id==requested else it.deletedAt==null}})
+            return response(synchronized(backend){backend.values.filter{it.entity==CloudEntity.INVESTMENT_TRADE.table && if(delete)it.id==requested else it.deletedAt==null && it.payload.financeRawString("asset_id") in affected}})
+        }
+    }
+    /** Mirrors effective SQL's NULL-label update (+1 including tombstones), then active FIFO rebuild (+1).
+     * Uses the model only to supply financial fields, never as an independent SQL arithmetic oracle. */
+    private fun repairServerLegacyUnits(old:CloudRecord,payload:JsonObject) {
+        val cloud=synchronized(backend){backend.values.toList()}
+        val metadata=runBlocking{source()}.rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table}
+        val rows=(metadata+cloud).associateBy{it.entity to it.id}.toMutableMap()
+        rows[old.entity to old.id]=old
+        val current=InvestmentAssetRecord.fromCloudRecord(old)
+        val draft=InvestmentAssetDraft(old.id,current.channelId,payload.financeRawString("name")!!,current.currencyCode,
+            payload.financeRawString("default_unit_label")!!,current)
+        val plan=planInvestmentAssetMutation(InvestmentAssetSnapshot(owner,rows.values.toList()),InvestmentAssetRequest.Save(draft),device,serverTime)
+        for((raw,_) in plan.mutations.filter{it.first.entity!=CloudEntity.INVESTMENT_ASSET.table}) {
+            val previous=rows[raw.entity to raw.id]
+            val isTrade=raw.entity==CloudEntity.INVESTMENT_TRADE.table
+            val labelled=isTrade && previous?.payload?.financeRawString("unit_label")==null
+            val increments=(if(labelled)1 else 0)+(if(isTrade && raw.deletedAt!=null)0 else 1)
+            val version=(previous?.syncVersion ?: 0)+increments
+            val fields=JsonObject(raw.payload.filterKeys{!it.startsWith("_mistia_android_")}+buildJsonObject{
+                put("sync_version",version);put("updated_at",serverTime);put("last_modified_by_device_id",device)
+            })
+            backend[raw.entity to raw.id]=raw.copy(payload=fields,syncVersion=version,updatedAt=serverTime)
         }
     }
     private fun serverEditRows(local:InvestmentTradePublicationSnapshot,incoming:JsonObject,existing:CloudRecord):List<CloudRecord> {
         val metadata=local.rows.filter{it.entity !in setOf(CloudEntity.INVESTMENT_TRADE.table,CloudEntity.LEDGER_TRANSACTION.table,CloudEntity.INVESTMENT_POSTING.table)}
-        val rows=metadata+synchronized(backend){backend.values.toList()}
+        val rows=(metadata+synchronized(backend){backend.values.toList()}).associateBy{it.entity to it.id}.values.toList()
         val buying=incoming.financeRawString("kind_raw_value")=="buy"
         val walletId=incoming.financeRawString(if(buying)"funding_wallet_id" else "capital_return_wallet_id")
         val selected=walletId?.let{key->LedgerWalletRecord.fromCloudRecord(rows.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==key})}
@@ -161,6 +276,394 @@ class InvestmentTradePublicationIntegrationTest {
         val s=store.investmentPurchaseSnapshot(owner)
         return repo.savePurchase(owner,InvestmentPurchaseRequest(InvestmentPurchaseDraft(id,asset,"2.5","box",cost,cost,"VND",null,null,null,if(cost>0)wallet else null,if(cost>0)cost else null,null,null,now,now),
             InvestmentAssetRecord.fromCloudRecord(s.rows.single{it.id==asset}),if(cost>0)LedgerWalletRecord.fromCloudRecord(s.rows.single{it.id==wallet}) else null,null,"Reserve"),device,now).getOrThrow()
+    }
+    private suspend fun closeThenArchive(archiveChannel:Boolean,cost:Long=0) {
+        buy(cost);assertEquals(1,push().pushed)
+        val before=source()
+        for(row in before.rows.filter{it.entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table)})
+            backend[row.entity to row.id]=row
+        repo.deleteTrade(owner,InvestmentTradeDeletionRequest(before.requestedRecord!!,null,"Reserve"),device,"2026-10-27T01:00:00Z").getOrThrow()
+        if(archiveChannel)repo.archiveChannel(owner,InvestmentChannelRecord.fromCloudRecord(source().rows.single{it.entity==CloudEntity.INVESTMENT_CHANNEL.table && it.id==channel}),device,"2026-10-27T01:01:00Z").getOrThrow()
+        else repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.entity==CloudEntity.INVESTMENT_ASSET.table && it.id==asset}),device,"2026-10-27T01:01:00Z").getOrThrow()
+    }
+    @Test fun actualOfflineCloseCanPublishBeforeTheQueuedAssetArchive()=runBlocking {
+        closeThenArchive(false)
+        assertEquals(1,push().pushed)
+        val after=source()
+        assertFalse(after.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_TRADE})
+        assertTrue(after.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_ASSET})
+        assertTrue(InvestmentAssetRecord.fromCloudRecord(after.rows.single{it.entity==CloudEntity.INVESTMENT_ASSET.table && it.id==asset}).isArchived)
+        assertNotNull(backend[CloudEntity.INVESTMENT_TRADE.table to id]!!.deletedAt)
+    }
+    @Test fun actualOfflineCloseCanPublishBeforeTheQueuedChannelArchive()=runBlocking {
+        closeThenArchive(true)
+        assertEquals(1,push().pushed)
+        val after=source()
+        assertFalse(after.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_TRADE})
+        assertTrue(after.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_CHANNEL})
+        assertTrue(InvestmentChannelRecord.fromCloudRecord(after.rows.single{it.entity==CloudEntity.INVESTMENT_CHANNEL.table && it.id==channel}).isArchived)
+        assertNotNull(backend[CloudEntity.INVESTMENT_TRADE.table to id]!!.deletedAt)
+    }
+    @Test fun actualOfflineCloseThenAssetAndChannelArchiveFinishesAcrossTheOrderedPublishers()=runBlocking {
+        closeThenArchive(false,70)
+        repo.archiveChannel(owner,InvestmentChannelRecord.fromCloudRecord(source().rows.single{it.entity==CloudEntity.INVESTMENT_CHANNEL.table && it.id==channel}),device,"2026-10-27T01:02:00Z").getOrThrow()
+        InvestmentPublicationPushCoordinator(channelCoordinator,assetCoordinator,coordinator).pushPending(owner,requireNotNull(session).accessToken)
+        assertTrue("Every actual trade/financial/archive proposal must finish",source().pending.isEmpty())
+        assertEquals(true,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+        assertEquals(true,backend[CloudEntity.INVESTMENT_CHANNEL.table to channel]!!.payload.financeRawArchived())
+    }
+    @Test fun actualRenamedAssetAndChannelStageTheirActiveMetadataBeforeClosingAndArchiving()=runBlocking {
+        buy(70);assertEquals(1,push().pushed)
+        val before=source()
+        for(row in before.rows.filter{it.entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table)})backend[row.entity to row.id]=row
+        repo.saveAsset(owner,InvestmentAssetDraft(asset,channel,"New cards","VND","box",InvestmentAssetRecord.fromCloudRecord(before.rows.single{it.id==asset})),device,"2026-10-27T01:00:00Z").getOrThrow()
+        repo.saveChannel(owner,InvestmentChannelDraft(channel,"New shop",InvestmentChannelRecord.fromCloudRecord(before.rows.single{it.id==channel})),"VND",device,"2026-10-27T01:01:00Z").getOrThrow()
+        repo.deleteTrade(owner,InvestmentTradeDeletionRequest(source().requestedRecord!!,null,"Reserve"),device,"2026-10-27T01:02:00Z").getOrThrow()
+        repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-27T01:03:00Z").getOrThrow()
+        repo.archiveChannel(owner,InvestmentChannelRecord.fromCloudRecord(source().rows.single{it.id==channel}),device,"2026-10-27T01:04:00Z").getOrThrow()
+        val result=InvestmentPublicationPushCoordinator(channelCoordinator,assetCoordinator,coordinator).pushPending(owner,requireNotNull(session).accessToken)
+        assertTrue("Renamed metadata and final archive queues must finish: $result",source().pending.isEmpty())
+        assertEquals("New cards",backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawString("name"))
+        assertEquals("New shop",backend[CloudEntity.INVESTMENT_CHANNEL.table to channel]!!.payload.financeRawString("name"))
+        assertEquals(true,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+        assertEquals(true,backend[CloudEntity.INVESTMENT_CHANNEL.table to channel]!!.payload.financeRawArchived())
+        val writes=requests.filter{it.method!="GET"}.drop(1)
+        assertEquals("/rest/v1/investment_channels",writes[0].requestUrl!!.encodedPath)
+        assertEquals(false,Json.parseToJsonElement(writes[0].body.clone().readUtf8()).jsonObject.financeRawArchived())
+        assertEquals("/rest/v1/rpc/mutate_investment_asset",writes[1].requestUrl!!.encodedPath)
+        assertEquals(false,Json.parseToJsonElement(writes[1].body.clone().readUtf8()).jsonObject.getValue("p_asset").jsonObject.financeRawArchived())
+        assertEquals("/rest/v1/rpc/delete_investment_trade",writes[2].requestUrl!!.encodedPath)
+    }
+    @Test fun legacyNullUnitsAreRepairedBeforeClosingAndArchivingWithoutRecreatingTheTrade()=runBlocking {
+        buy(70);assertEquals(1,push().pushed);seedCloudMetadata()
+        for((entity,key,field) in listOf(Triple(CloudEntity.INVESTMENT_ASSET,asset,"default_unit_label"),Triple(CloudEntity.INVESTMENT_TRADE,id,"unit_label"))) {
+            val old=backend[entity.table to key]!!
+            val legacy=old.copy(payload=JsonObject(old.payload+(field to JsonNull)))
+            backend[entity.table to key]=legacy
+            store.replacePullSnapshot(owner,entity.table,listOf(legacy))
+        }
+        val current=InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset})
+        repo.saveAsset(owner,InvestmentAssetDraft(asset,channel,"Cards","VND","box",current),device,"2026-10-27T00:01:00Z").getOrThrow()
+        repo.deleteTrade(owner,InvestmentTradeDeletionRequest(source().requestedRecord!!,null,"Reserve"),device,"2026-10-27T00:02:00Z").getOrThrow()
+        repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-27T00:03:00Z").getOrThrow()
+        val result=publishAll()
+        assertTrue("Unit repair and final close/archive must finish: $result",source().pending.isEmpty())
+        val trade=backend[CloudEntity.INVESTMENT_TRADE.table to id]!!
+        assertEquals("box",trade.payload.financeRawString("unit_label"));assertNotNull(trade.deletedAt)
+        assertEquals(5L,trade.syncVersion) // original2 + label1 + rebuild1 + delete1
+        val deletes=requests.filter{it.requestUrl!!.encodedPath=="/rest/v1/rpc/delete_investment_trade"}
+        assertEquals(1,deletes.size)
+        assertEquals(4L,Json.parseToJsonElement(deletes.single().body.clone().readUtf8()).jsonObject.financeRawLong("p_expected_version"))
+        assertEquals(1,requests.count{it.requestUrl!!.encodedPath=="/rest/v1/rpc/mutate_investment_trade"})
+        assertEquals(true,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+    }
+    @Test fun legacyDeletedUnitsAreLabelledOnceWithoutSendingAnotherDelete()=runBlocking {
+        buy(70);assertEquals(1,push().pushed)
+        repo.deleteTrade(owner,InvestmentTradeDeletionRequest(source().requestedRecord!!,null,"Reserve"),device,"2026-10-27T00:00:00Z").getOrThrow()
+        assertEquals(1,push().pushed);seedCloudMetadata()
+        for((entity,key,field) in listOf(Triple(CloudEntity.INVESTMENT_ASSET,asset,"default_unit_label"),Triple(CloudEntity.INVESTMENT_TRADE,id,"unit_label"))) {
+            val old=backend[entity.table to key]!!;val legacy=old.copy(payload=JsonObject(old.payload+(field to JsonNull)))
+            backend[entity.table to key]=legacy;store.replacePullSnapshot(owner,entity.table,listOf(legacy))
+        }
+        val current=InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset})
+        repo.saveAsset(owner,InvestmentAssetDraft(asset,channel,"Cards","VND","box",current),device,"2026-10-27T00:01:00Z").getOrThrow()
+        assertEquals(MutationKind.DELETE,source().requestedQueue!!.mutation.kind)
+        repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-27T00:02:00Z").getOrThrow()
+        val result=publishAll()
+        assertTrue("Deleted history unit repair must finish: $result",source().pending.isEmpty())
+        val trade=backend[CloudEntity.INVESTMENT_TRADE.table to id]!!
+        assertNotNull(trade.deletedAt);assertEquals("box",trade.payload.financeRawString("unit_label"));assertEquals(4L,trade.syncVersion)
+        assertEquals(1,requests.count{it.requestUrl!!.encodedPath=="/rest/v1/rpc/delete_investment_trade"})
+        assertEquals(1,requests.count{it.requestUrl!!.encodedPath=="/rest/v1/rpc/mutate_investment_trade"})
+    }
+    @Test fun sweepingDueMetadataCannotBypassAnotherAssetsFutureRetryTime()=runBlocking {
+        val target="88888888-8888-8888-8888-888888888888"
+        cleanMetadata(InvestmentAssetRecord(target,owner.value,channel,"Later cards","VND",null,"box",0,false,null,now,now,null,0,device).toCloudRecord())
+        seedCloudMetadata()
+        for(key in listOf(asset,target)) {
+            val current=InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==key})
+            repo.saveAsset(owner,InvestmentAssetDraft(key,channel,"Changed $key","VND","box",current),device,"2026-10-27T00:01:00Z").getOrThrow()
+        }
+        val queued=source().pending.single{it.mutation.recordId==target}
+        assertTrue(store.recordInvestmentAssetMutationFailure(queued,clock+9000,"network_io"))
+        val before=store.reconcileInvestmentAssetImagePublication(owner,target)
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).pushed)
+        assertEquals(before,store.reconcileInvestmentAssetImagePublication(owner,target))
+        assertFalse(requests.any{request->request.requestUrl!!.queryParameterValues("id").any{it=="eq.$target"} ||
+            request.requestUrl!!.encodedPath=="/rest/v1/rpc/mutate_investment_asset" && request.body.clone().readUtf8().contains(target)})
+    }
+    @Test fun aNewCloudAssetBetweenHistoryReadsDoesNotPermanentlyFailTheArchive()=runBlocking {
+        closeThenArchive(true,70)
+        val before=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_CHANNEL}
+        beforeRead={request->
+            if(request.requestUrl!!.encodedPath=="/rest/v1/investment_trades" && request.requestUrl!!.queryParameter("channel_id")=="eq.$channel") {
+                beforeRead=null
+                val extra="88888888-8888-8888-8888-888888888888"
+                val cloudAsset=InvestmentAssetRecord(extra,owner.value,channel,"Concurrent asset","VND",null,"box",1,false,null,now,now,null,1,device).toCloudRecord()
+                backend[cloudAsset.entity to cloudAsset.id]=cloudAsset
+                val rows=(source().rows.filter{it.entity!=CloudEntity.INVESTMENT_TRADE.table}.map{row->if(row.entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table))backend[row.entity to row.id] ?: row else row}+listOf(cloudAsset)).associateBy{it.entity to it.id}.values.toList()
+                val plan=planInvestmentPurchase(InvestmentPurchaseSnapshot(owner,rows),InvestmentPurchaseRequest(
+                    InvestmentPurchaseDraft("99999999-9999-9999-9999-999999999999",extra,"1","box",0,0,"VND",null,null,null,null,null,null,null,now,now),
+                    InvestmentAssetRecord.fromCloudRecord(cloudAsset),null,null,"Reserve"),device,now)
+                val cloud=plan.trade.copy(syncVersion=2,payload=JsonObject(plan.trade.payload+("sync_version" to JsonPrimitive(2))))
+                backend[cloud.entity to cloud.id]=cloud
+            }
+        }
+        val first=channelCoordinator.pushPending(owner,session!!.accessToken)
+        assertEquals(0,first.permanentFailures)
+        assertEquals(before,source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_CHANNEL})
+        assertEquals(DomainPushSummary(),channelCoordinator.pushPending(owner,session!!.accessToken))
+        assertEquals(before,source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_CHANNEL})
+        assertFalse(backend[CloudEntity.INVESTMENT_CHANNEL.table to channel]!!.payload.financeRawArchived()!!)
+        val concurrent=backend[CloudEntity.INVESTMENT_TRADE.table to "99999999-9999-9999-9999-999999999999"]!!
+        backend[concurrent.entity to concurrent.id]=concurrent.copy(deletedAt=serverTime,updatedAt=serverTime,syncVersion=3,
+            payload=JsonObject(concurrent.payload+buildJsonObject{put("deleted_at",serverTime);put("updated_at",serverTime);put("sync_version",3)}))
+        publishAll()
+        assertTrue(source().pending.isEmpty())
+        assertEquals(true,backend[CloudEntity.INVESTMENT_CHANNEL.table to channel]!!.payload.financeRawArchived())
+    }
+    private suspend fun seedBlockedArchives(entity:CloudEntity) {
+        val existingTrade=backend[CloudEntity.INVESTMENT_TRADE.table to id]!!
+        val separateChannel="d0000000-0000-4000-8000-000000000000"
+        if(entity==CloudEntity.INVESTMENT_ASSET) {
+            cleanMetadata(InvestmentChannelRecord(separateChannel,owner.value,"Blocked branch","shippingbox.fill","#9A67FF",2,false,null,now,now,null,0,device).toCloudRecord())
+            backend[CloudEntity.INVESTMENT_CHANNEL.table to separateChannel]=source().rows.single{it.id==separateChannel}
+        }
+        for(index in 0 until 100) {
+            val blocked="a000%04x-0000-4000-8000-000000000000".format(index)
+            val blockedAsset=if(entity==CloudEntity.INVESTMENT_ASSET)blocked else "b000%04x-0000-4000-8000-000000000000".format(index)
+            val parent=if(entity==CloudEntity.INVESTMENT_CHANNEL)blocked else separateChannel
+            val assetRow=InvestmentAssetRecord(blockedAsset,owner.value,parent,"Blocked $index","VND",null,"box",0,false,null,now,now,null,1,device).toCloudRecord()
+            backend[assetRow.entity to assetRow.id]=assetRow
+            val raw=if(entity==CloudEntity.INVESTMENT_ASSET)assetRow else InvestmentChannelRecord(blocked,owner.value,"Blocked $index","shippingbox.fill","#9A67FF",index,false,null,now,now,null,1,device).toCloudRecord()
+            backend[raw.entity to raw.id]=raw
+            val archived=raw.copy(payload=JsonObject(raw.payload+buildJsonObject{put("is_archived",true);put("archived_at",now)}))
+            store.commitMutation(archived,PendingMutation(entity,blocked,owner.value,MutationKind.UPSERT,archived.payload,now,1,device))
+            val tradeId="c000%04x-0000-4000-8000-000000000000".format(index)
+            val trade=existingTrade.copy(id=tradeId,payload=JsonObject(existingTrade.payload+buildJsonObject{
+                put("id",tradeId);put("asset_id",blockedAsset);put("channel_id",parent)
+                for(field in listOf("gross_amount_minor","accounting_gross_amount_minor","released_cost_basis_minor","realized_profit_loss_minor","position_cost_basis_after_minor"))put(field,0)
+                for(field in listOf("funding_wallet_id","funding_wallet_currency_code","funding_wallet_amount_minor","funding_ledger_transaction_id","funding_to_accounting_rate_decimal_string"))put(field,JsonNull)
+            }))
+            backend[trade.entity to trade.id]=trade
+        }
+    }
+    @Test fun movedTradeFinishesBeforeRetiringItsOriginalAssetAndChannel()=runBlocking {
+        moveThenRetireOriginal(false)
+    }
+    @Test fun renamedMoveTargetIsPublishedBeforeMovingAndRetiringTheOriginalBranch()=runBlocking {
+        moveThenRetireOriginal(true)
+    }
+    @Test fun aBlockedAssetBacklogCannotStarveTheDueMoveTarget()=runBlocking {
+        moveThenRetireOriginal(true,CloudEntity.INVESTMENT_ASSET)
+    }
+    @Test fun aBlockedChannelBacklogCannotStarveTheDueMoveTarget()=runBlocking {
+        moveThenRetireOriginal(true,CloudEntity.INVESTMENT_CHANNEL)
+    }
+    @Test fun aNewChannelAndAssetAreCreatedBeforeMovingAndRetiringTheOldBranch()=runBlocking {
+        moveThenRetireOriginal(false,newTarget=true)
+    }
+    private suspend fun moveThenRetireOriginal(renameTarget:Boolean,blockedDomain:CloudEntity?=null,newTarget:Boolean=false) {
+        buy(70);assertEquals(1,push().pushed)
+        val target="88888888-8888-8888-8888-888888888888"
+        val targetChannel="99999999-9999-9999-9999-999999999999"
+        if(newTarget) {
+            seedCloudMetadata()
+            repo.saveChannel(owner,InvestmentChannelDraft(targetChannel,"Other shop"),"VND",device,"2026-10-27T00:00:01Z").getOrThrow()
+            repo.saveAsset(owner,InvestmentAssetDraft(target,targetChannel,"Other cards","VND","box"),device,"2026-10-27T00:00:02Z").getOrThrow()
+        } else {
+            cleanMetadata(InvestmentChannelRecord(targetChannel,owner.value,"Other shop","shippingbox.fill","#9A67FF",1,false,null,now,now,null,0,device).toCloudRecord())
+            cleanMetadata(InvestmentAssetRecord(target,owner.value,targetChannel,"Other cards","VND",null,"box",0,false,null,now,now,null,0,device).toCloudRecord())
+            seedCloudMetadata()
+        }
+        validateEditsAgainstBackendHistory=true
+        if(blockedDomain!=null)seedBlockedArchives(blockedDomain)
+        if(renameTarget) {
+            repo.saveChannel(owner,InvestmentChannelDraft(targetChannel,"Target shop",InvestmentChannelRecord.fromCloudRecord(source().rows.single{it.id==targetChannel})),"VND",device,"2026-10-27T00:01:00Z").getOrThrow()
+            repo.saveAsset(owner,InvestmentAssetDraft(target,targetChannel,"Target cards","VND","box",InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==target})),device,"2026-10-27T00:02:00Z").getOrThrow()
+        }
+        val context=source();val raw=context.requestedRecord!!
+        repo.editTrade(owner,InvestmentTradeEditRequest(raw,InvestmentTradeEditDraft(id,target,InvestmentTradeKind.BUY,"2.5","box",70,70,"VND",null,null,null,wallet,70,null,null,now,now),
+            InvestmentAssetRecord.fromCloudRecord(context.rows.single{it.id==target}),LedgerWalletRecord.fromCloudRecord(context.rows.single{it.id==wallet}),null,"Reserve"),device,"2026-10-27T00:03:00Z").getOrThrow()
+        repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-27T00:04:00Z").getOrThrow()
+        repo.archiveChannel(owner,InvestmentChannelRecord.fromCloudRecord(source().rows.single{it.id==channel}),device,"2026-10-27T00:05:00Z").getOrThrow()
+        val result=publishAll()
+        val left=source().pending
+        assertEquals("Only deliberately blocked unrelated archives may remain: $result, ${left.map{it.mutation.entity.table+":"+it.mutation.recordId+":"+it.lastError}}",if(blockedDomain==null)0 else 100,left.size)
+        assertTrue(left.all{it.mutation.entity==blockedDomain && it.mutation.recordId.startsWith("a000")})
+        assertEquals(target,backend[CloudEntity.INVESTMENT_TRADE.table to id]!!.payload.financeRawString("asset_id"))
+        assertEquals(targetChannel,backend[CloudEntity.INVESTMENT_TRADE.table to id]!!.payload.financeRawString("channel_id"))
+        assertEquals(true,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+        assertEquals(true,backend[CloudEntity.INVESTMENT_CHANNEL.table to channel]!!.payload.financeRawArchived())
+        assertEquals(false,backend[CloudEntity.INVESTMENT_ASSET.table to target]!!.payload.financeRawArchived())
+        assertEquals(false,backend[CloudEntity.INVESTMENT_CHANNEL.table to targetChannel]!!.payload.financeRawArchived())
+        assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to investmentLedgerIdentity(id,"funding")]!!.payload.financeRawLong("amount_minor"))
+        val writes=requests.filter{it.method!="GET"}.drop(1)
+        val move=writes.indexOfFirst{it.requestUrl!!.encodedPath=="/rest/v1/rpc/mutate_investment_trade"}
+        val oldArchive=writes.indexOfFirst{it.requestUrl!!.encodedPath=="/rest/v1/rpc/mutate_investment_asset" &&
+            Json.parseToJsonElement(it.body.clone().readUtf8()).jsonObject.getValue("p_asset").jsonObject.let{p->p.financeRawString("id")==asset && p.financeRawArchived()==true}}
+        assertTrue("Old asset archive follows the actual move",move>=0 && oldArchive>move)
+        if(renameTarget)assertEquals("Target cards",backend[CloudEntity.INVESTMENT_ASSET.table to target]!!.payload.financeRawString("name"))
+    }
+    private suspend fun assetStage() {
+        buy(70);assertEquals(1,push().pushed);val before=source()
+        for(row in before.rows.filter{it.entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table)})backend[row.entity to row.id]=row
+        repo.saveAsset(owner,InvestmentAssetDraft(asset,channel,"New cards","VND","box",InvestmentAssetRecord.fromCloudRecord(before.rows.single{it.id==asset})),device,"2026-10-26T00:05:00Z").getOrThrow()
+        repo.deleteTrade(owner,InvestmentTradeDeletionRequest(source().requestedRecord!!,null,"Reserve"),device,"2026-10-26T00:06:00Z").getOrThrow()
+        repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-26T00:07:00Z").getOrThrow()
+    }
+    private suspend fun seedCloudMetadata() {
+        for(row in source().rows.filter{it.entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table)})backend[row.entity to row.id]=row
+    }
+    private fun jpeg(color:Int):ByteArray {
+        val bitmap=Bitmap.createBitmap(8,4,Bitmap.Config.ARGB_8888);bitmap.eraseColor(color)
+        return try{ByteArrayOutputStream().use{bitmap.compress(Bitmap.CompressFormat.JPEG,90,it);it.toByteArray()}}finally{bitmap.recycle()}
+    }
+    private suspend fun photo(color:Int,name:String="Cards",date:String="2026-10-26T00:05:00Z"):InvestmentAssetRecord {
+        val bytes=jpeg(color);val candidate=repo.stageProductImage(owner,asset,PreparedInvestmentProductImage(bytes,bytes,"image/jpeg",8,4)).getOrThrow()
+        val current=InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset})
+        return repo.saveAssetImage(owner,InvestmentAssetDraft(asset,channel,name,"VND","box",current,
+            InvestmentAssetImageChange.Replace(InvestmentProductImagePath.parse(owner,asset,candidate.path))),candidate,UUID.randomUUID().toString(),device,date).getOrThrow()
+    }
+    private suspend fun closeAndArchivePhoto() {
+        repo.deleteTrade(owner,InvestmentTradeDeletionRequest(source().requestedRecord!!,null,"Reserve"),device,"2026-10-27T00:00:00Z").getOrThrow()
+        repo.archiveAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-27T00:01:00Z").getOrThrow()
+    }
+    private suspend fun addCloudPosition() {
+        val original=source();val current=backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!
+        val rows=original.rows.map{row->if(row.entity in setOf(CloudEntity.INVESTMENT_ASSET.table,CloudEntity.INVESTMENT_CHANNEL.table))backend[row.entity to row.id] ?: row else row}
+        val extra="77777777-7777-7777-7777-777777777777"
+        val plan=planInvestmentPurchase(InvestmentPurchaseSnapshot(owner,rows),InvestmentPurchaseRequest(InvestmentPurchaseDraft(extra,asset,"1","box",0,0,"VND",null,null,null,null,null,null,null,"2026-10-27T02:00:00Z",now),
+            InvestmentAssetRecord.fromCloudRecord(current),null,null,"Reserve"),device,now)
+        val cloud=plan.trade.copy(syncVersion=2,payload=JsonObject(plan.trade.payload+("sync_version" to JsonPrimitive(2))))
+        backend[cloud.entity to cloud.id]=cloud
+    }
+    private suspend fun restoreAndRenameAfterStage() {
+        repo.restoreAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-26T00:14:00Z").getOrThrow()
+        repo.saveAsset(owner,InvestmentAssetDraft(asset,channel,"Later local name","VND","box",InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset})),device,"2026-10-26T00:15:00Z").getOrThrow()
+    }
+    private fun metadataWrites()=requests.filter{it.method!="GET" && it.requestUrl!!.encodedPath in setOf("/rest/v1/investment_channels","/rest/v1/rpc/mutate_investment_asset")}
+    private suspend fun publishAll():DomainPushSummary {
+        val root=rootCoordinator.pushPending(owner,requireNotNull(session).accessToken)
+        assertEquals("Root metadata prerequisite must succeed",0,root.conflicts+root.retryableFailures+root.permanentFailures)
+        return InvestmentPublicationPushCoordinator(channelCoordinator,assetCoordinator,coordinator).pushPending(owner,requireNotNull(session).accessToken)
+    }
+    @Test fun lostStageReplyBacksOffThePreparedQueueThenRecoversWithoutReplayingItsWrite()=runBlocking {
+        assetStage();loseMetadataReply=true
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).retryableFailures)
+        val queued=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}
+        assertEquals(1,queued.attemptCount);assertEquals(34000L,queued.nextAttemptAtEpochMillis);assertEquals(1L,queued.mutation.baseVersion)
+        assertEquals(2L,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.syncVersion)
+        val count=metadataWrites().size;clock=40000
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).reconciled)
+        assertEquals(count,metadataWrites().size);assertEquals(2L,source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}.mutation.baseVersion)
+        publishAll();assertTrue(source().pending.isEmpty());assertEquals(true,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+    }
+    @Test fun aDefiniteStageDoesNotEraseANewerActualRestoreAndNameWithAnEarlierClientClock()=runBlocking {
+        assetStage();onMetadataCommit={_,_->restoreAndRenameAfterStage()}
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).reconciled)
+        val row=source().rows.single{it.id==asset};assertEquals("Later local name",row.payload.financeRawString("name"));assertEquals(false,row.payload.financeRawArchived())
+        assertEquals("2026-10-26T00:15:00Z",row.updatedAt);assertEquals(2L,row.syncVersion)
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).pushed)
+        assertEquals(1,push().pushed);assertTrue(source().pending.isEmpty())
+        assertEquals("Later local name",backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawString("name"));assertEquals(false,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+    }
+    @Test fun aStage503RecordsRetryAgainstTheExactPreparedGeneration()=runBlocking {
+        assetStage();metadataFailure=503
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).retryableFailures)
+        val q=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}
+        assertEquals("http_503",q.lastError);assertEquals(1,q.attemptCount);assertEquals(34000L,q.nextAttemptAtEpochMillis)
+        assertEquals(1L,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.syncVersion)
+        clock=40000;publishAll();assertTrue(source().pending.isEmpty())
+    }
+    @Test fun anOlderStage403CannotFailOrBackoffANewerActualRestoreAndName()=runBlocking {
+        assetStage();beforeMetadataWrite={_,_->restoreAndRenameAfterStage()};metadataFailure=403
+        val result=assetCoordinator.pushPending(owner,session!!.accessToken)
+        assertEquals(1,result.staleResponses);assertEquals(0,result.permanentFailures)
+        val q=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}
+        assertEquals(0,q.attemptCount);assertEquals(0L,q.nextAttemptAtEpochMillis);assertNull(q.lastError)
+        assertEquals("Later local name",q.mutation.payload!!.financeRawString("name"))
+        publishAll();assertTrue(source().pending.isEmpty());assertEquals(false,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawArchived())
+    }
+    @Test fun aSessionRotatedDuringStageCommitCannotRebaseAndTheNextSessionRecoversIt()=runBlocking {
+        assetStage();onMetadataCommit={_,_->session=session!!.copy(accessToken="rotated-local-token")}
+        assertTrue(runCatching{assetCoordinator.pushPending(owner,"local-contract-token")}.exceptionOrNull() is CancellationException)
+        val q=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET};assertEquals(1L,q.mutation.baseVersion);assertEquals(0,q.attemptCount)
+        val count=metadataWrites().size
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).reconciled);assertEquals(count,metadataWrites().size)
+        publishAll();assertTrue(source().pending.isEmpty())
+    }
+    @Test fun aNewCloudPositionAfterClosureProofKeepsTheFinalArchiveRetryable()=runBlocking {
+        closeThenArchive(false,70);assertEquals(1,push().pushed)
+        beforeMetadataWrite={_,_->addCloudPosition()}
+        val result=assetCoordinator.pushPending(owner,session!!.accessToken)
+        assertEquals(1,result.retryableFailures);assertEquals(0,result.permanentFailures)
+        val q=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}
+        assertEquals("http_400",q.lastError);assertEquals(34000L,q.nextAttemptAtEpochMillis)
+        clock=40000;val count=metadataWrites().size
+        assertEquals(DomainPushSummary(),assetCoordinator.pushPending(owner,session!!.accessToken));assertEquals(count,metadataWrites().size)
+    }
+    @Test fun aNewCloudPositionAlsoKeepsTheFinalChannelArchiveRetryable()=runBlocking {
+        closeThenArchive(true,70);assertEquals(1,push().pushed);beforeMetadataWrite={_,_->addCloudPosition()}
+        val result=channelCoordinator.pushPending(owner,session!!.accessToken)
+        assertEquals(1,result.retryableFailures);assertEquals(0,result.permanentFailures)
+        assertEquals(34000L,source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_CHANNEL}.nextAttemptAtEpochMillis)
+        clock=40000;val count=metadataWrites().size
+        assertEquals(DomainPushSummary(),channelCoordinator.pushPending(owner,session!!.accessToken));assertEquals(count,metadataWrites().size)
+    }
+    @Test fun aStage403RemainsPermanentForItsExactPreparedIntent()=runBlocking {
+        assetStage();metadataFailure=403;val result=assetCoordinator.pushPending(owner,session!!.accessToken)
+        assertEquals(1,result.permanentFailures);assertEquals(0,result.retryableFailures)
+        val q=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}
+        assertEquals("http_403",q.lastError);assertEquals(Long.MAX_VALUE,q.nextAttemptAtEpochMillis)
+    }
+    @Test fun aFinalArchive403IsNotChangedToAnArchiveRaceRetry()=runBlocking {
+        closeThenArchive(false,70);assertEquals(1,push().pushed);metadataFailure=403
+        val result=assetCoordinator.pushPending(owner,session!!.accessToken)
+        assertEquals(1,result.permanentFailures);assertEquals(0,result.retryableFailures)
+        val q=source().pending.single{it.mutation.entity==CloudEntity.INVESTMENT_ASSET}
+        assertEquals("http_403",q.lastError);assertEquals(Long.MAX_VALUE,q.nextAttemptAtEpochMillis)
+    }
+    @Test fun aReplacementPhotoUploadsBeforeItsActiveStageAndRetiresOldBytesOnlyAfterFinalArchiveAck()=runBlocking {
+        seedCloudMetadata();val first=photo(android.graphics.Color.BLUE);assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).pushed)
+        buy(70);assertEquals(1,push().pushed);val replacement=photo(android.graphics.Color.RED,"New cards","2026-10-26T00:15:00Z");closeAndArchivePhoto()
+        val start=requests.size
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).reconciled)
+        val stageRequests=requests.drop(start)
+        val upload=stageRequests.indexOfFirst{it.method=="POST" && it.requestUrl!!.encodedPath==objectPrefix+replacement.imagePath}
+        val rpc=stageRequests.indexOfFirst{it.requestUrl!!.encodedPath=="/rest/v1/rpc/mutate_investment_asset"}
+        assertTrue(upload>=0 && rpc>upload);assertArrayEquals(jpeg(android.graphics.Color.RED),objects[replacement.imagePath])
+        assertTrue(objects.containsKey(first.imagePath));assertTrue(source().pending.any{it.mutation.entity==CloudEntity.INVESTMENT_ASSET})
+        publishAll();assertTrue(source().pending.isEmpty());assertEquals(replacement.imagePath,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawString("image_path"))
+        assertFalse(objects.containsKey(first.imagePath));assertTrue(objects.containsKey(replacement.imagePath))
+    }
+    @Test fun aNewerActualPhotoAfterTheActiveStageCannotBeReplacedByTheOlderStageReply()=runBlocking {
+        seedCloudMetadata();photo(android.graphics.Color.BLUE);assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).pushed)
+        buy(70);assertEquals(1,push().pushed);val staged=photo(android.graphics.Color.RED,"New cards","2026-10-26T00:15:00Z");closeAndArchivePhoto()
+        var newer:InvestmentAssetRecord?=null
+        onMetadataCommit={_,_->
+            repo.restoreAsset(owner,InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset}),device,"2026-10-27T00:14:00Z").getOrThrow()
+            newer=photo(android.graphics.Color.GREEN,"Later photo","2026-10-27T00:15:00Z")
+        }
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).reconciled)
+        assertEquals(newer!!.imagePath,source().rows.single{it.id==asset}.payload.financeRawString("image_path"));assertEquals(staged.imagePath,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawString("image_path"))
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).pushed);assertEquals(1,push().pushed)
+        assertTrue(source().pending.isEmpty());assertEquals(newer!!.imagePath,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawString("image_path"))
+        assertArrayEquals(jpeg(android.graphics.Color.GREEN),objects[newer!!.imagePath])
+    }
+    @Test fun keepingAnAlreadyAcknowledgedPhotoCanAdoptANewerServerPhotoWithoutRetainingItsOldPrivateIntent()=runBlocking {
+        seedCloudMetadata();buy(70);assertEquals(1,push().pushed);photo(android.graphics.Color.BLUE)
+        onMetadataCommit={_,_->
+            repo.saveAsset(owner,InvestmentAssetDraft(asset,channel,"New cards","VND","box",InvestmentAssetRecord.fromCloudRecord(source().rows.single{it.id==asset})),device,"2026-10-26T00:15:00Z").getOrThrow()
+        }
+        assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).staleResponses)
+        assertTrue(store.reconcileInvestmentAssetImagePublication(owner,asset).imageAcknowledged)
+        val next=InvestmentProductImagePath.create(owner,asset,"88888888-8888-8888-8888-888888888888").value;objects[next]=jpeg(android.graphics.Color.GREEN)
+        val old=backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!
+        backend[old.entity to old.id]=old.copy(syncVersion=3,payload=JsonObject(old.payload+buildJsonObject{put("sync_version",3);put("image_path",next);put("last_modified_by_device_id","99999999-9999-9999-9999-999999999999")}))
+        closeAndArchivePhoto();assertEquals(1,assetCoordinator.pushPending(owner,session!!.accessToken).reconciled)
+        val current=source().rows.single{it.id==asset};assertEquals(next,current.payload.financeRawString("image_path"));assertNull(localAssetImagePublication(current))
+        publishAll();assertTrue(source().pending.isEmpty());assertEquals(next,backend[CloudEntity.INVESTMENT_ASSET.table to asset]!!.payload.financeRawString("image_path"))
     }
     private suspend fun editNote() {
         val s=store.investmentPurchaseSnapshot(owner);val old=s.rows.single{it.entity==CloudEntity.INVESTMENT_TRADE.table && it.id==id}

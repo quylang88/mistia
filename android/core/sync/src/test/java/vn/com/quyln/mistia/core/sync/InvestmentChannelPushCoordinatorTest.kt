@@ -148,11 +148,11 @@ class InvestmentChannelPushCoordinatorTest {
         override suspend fun investmentChannelPublicationSnapshot(owner:UserId,id:String)=InvestmentChannelPublicationSnapshot(owner,record,queued,queued!=null)
         override suspend fun acknowledgeMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean=error("Channel ACK must use its scoped boundary")
         override suspend fun recordMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean=error("Channel failure must use its scoped boundary")
-        override suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord):Boolean {
+        override suspend fun acknowledgeInvestmentChannelMutation(mutation:QueuedMutation,remoteRecord:CloudRecord,isSessionCurrent:()->Boolean):Boolean {
             if(queued!=mutation || record?.payload!=mutation.mutation.payload)return false
             queued=null;record=remoteRecord;return true
         }
-        override suspend fun recordInvestmentChannelMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String):Boolean {
+        override suspend fun recordInvestmentChannelMutationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean):Boolean {
             if(queued!=mutation || record?.payload!=mutation.mutation.payload)return false
             queued=mutation.copy(attemptCount=mutation.attemptCount+1,nextAttemptAtEpochMillis=nextAttemptAtEpochMillis,lastError=errorCode);return true
         }

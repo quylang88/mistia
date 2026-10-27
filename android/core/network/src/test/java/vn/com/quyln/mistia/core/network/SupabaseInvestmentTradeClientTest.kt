@@ -53,6 +53,73 @@ class SupabaseInvestmentTradeClientTest {
     },now,null,v)
     private fun response(vararg rows:CloudRecord)=MockResponse().setBody(JsonArray(rows.map{it.payload}).toString())
     private suspend fun mutate(proposal:CloudRecord=row(),base:Long=0,assets:Set<String> = setOf(asset))=client.mutateTrade(owner,proposal,base,assets,token)
+    private fun assetRow(identity:String=asset)=InvestmentAssetRecord(identity,owner.value,channel,"Cards","VND",null,"box",0,false,null,now,now,null,1,device).toCloudRecord()
+    private fun stagedChannel()=InvestmentChannelRecord(channel,owner.value,"Shop","shippingbox.fill","#9A67FF",0,false,null,now,now,null,1,device).toCloudRecord().let{
+        it.copy(payload=JsonObject(it.payload+(LOCAL_INVESTMENT_METADATA_STAGES_KEY to JsonNull)))
+    }
+    @Test fun remoteAssetCannotInjectPreparedMetadataStageAuthority()=runTest {
+        server.enqueue(response(assetRow().let{it.copy(payload=JsonObject(it.payload+(LOCAL_INVESTMENT_METADATA_STAGES_KEY to JsonNull)))}))
+        val metadata=SupabaseInvestmentAssetClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session.get()},{enabled.get()})
+        assertTrue(runCatching{metadata.fetchRecord(CloudEntity.INVESTMENT_ASSET,asset,token,owner)}.isFailure)
+    }
+    @Test fun remoteChannelCannotInjectPreparedMetadataStageAuthority()=runTest {
+        server.enqueue(response(stagedChannel()))
+        val metadata=SupabaseInvestmentChannelClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session.get()},{enabled.get()})
+        assertTrue(runCatching{metadata.fetchRecord(CloudEntity.INVESTMENT_CHANNEL,channel,token,owner)}.isFailure)
+    }
+    @Test fun genericChannelPullCannotInjectPreparedMetadataStageAuthority()=runTest {
+        server.enqueue(response(stagedChannel()))
+        val generic=SupabasePostgrestRemoteStore(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http)
+        assertTrue(runCatching{generic.pullPage(CloudEntity.INVESTMENT_CHANNEL.table,token,owner,0,100)}.isFailure)
+    }
+    @Test fun finalChannelArchiveStripsPreparedMetadataEvidenceFromItsWirePayload()=runTest {
+        val remote=stagedChannel().let{it.copy(payload=JsonObject(it.payload-LOCAL_INVESTMENT_METADATA_STAGES_KEY))}
+        val row=remote.copy(payload=JsonObject(remote.payload+buildJsonObject{put("is_archived",true);put("archived_at",now)}))
+        val q=QueuedMutation(PendingMutation(CloudEntity.INVESTMENT_CHANNEL,channel,owner.value,MutationKind.UPSERT,row.payload,now,1,device),0,0,null)
+        val s=InvestmentTradePublicationSnapshot(owner,channel,listOf(row),listOf(q),setOf(row.entity to channel))
+        val prepared=prepareInvestmentMetadataStage(s,CloudEntity.INVESTMENT_CHANNEL,channel,remote)
+        val payload=JsonObject(prepared.preparedRecord.payload+("sync_version" to JsonPrimitive(2)))
+        server.enqueue(response(row.copy(syncVersion=2,payload=investmentMetadataPayloadForCloud(payload))))
+        val metadata=SupabaseInvestmentChannelClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session.get()},{enabled.get()})
+        assertNotNull(metadata.conditionalUpdate(CloudEntity.INVESTMENT_CHANNEL,channel,token,owner,1,payload))
+        val sent=Json.parseToJsonElement(server.takeRequest(1,TimeUnit.SECONDS)!!.body.readUtf8()).jsonObject
+        assertFalse(LOCAL_INVESTMENT_METADATA_STAGES_KEY in sent);assertEquals(true,sent.financeRawArchived())
+    }
+    @Test fun retirementReadsEveryOwnedChannelAssetAndTradeUntilEmptyEvenWithShortPages()=runTest {
+        enabled.set(false)
+        server.enqueue(response(assetRow()));server.enqueue(response(assetRow(otherAsset)));server.enqueue(response())
+        server.enqueue(response(row()));server.enqueue(response(row(identity=second,assetId=otherAsset)));server.enqueue(response())
+        val result=client.fetchRetirementHistory(owner,CloudEntity.INVESTMENT_CHANNEL,channel,token)
+        assertEquals(2,result.assets.size);assertEquals(2,result.trades.size);assertEquals(6,server.requestCount)
+        repeat(6){index->val r=server.takeRequest(1,TimeUnit.SECONDS)!!
+            assertEquals("GET",r.method);assertEquals("Bearer "+token,r.getHeader("Authorization"))
+            assertEquals("eq."+owner.value,r.requestUrl!!.queryParameter("user_id"));assertEquals("eq."+channel,r.requestUrl!!.queryParameter("channel_id"))
+            assertEquals("id.asc",r.requestUrl!!.queryParameter("order"))
+            if(index==1)assertEquals("gt."+asset,r.requestUrl!!.queryParameter("id"))
+        }
+    }
+    @Test fun retirementAssetReadScopesItsMetadataAndAllTradesToTheExactAsset()=runTest {
+        server.enqueue(response(assetRow()));server.enqueue(response());server.enqueue(response(row()));server.enqueue(response())
+        val result=client.fetchRetirementHistory(owner,CloudEntity.INVESTMENT_ASSET,asset,token)
+        assertEquals(listOf(assetRow()),result.assets);assertEquals(listOf(row()),result.trades)
+        val metadata=server.takeRequest(1,TimeUnit.SECONDS)!!;server.takeRequest(1,TimeUnit.SECONDS)
+        val trades=server.takeRequest(1,TimeUnit.SECONDS)!!
+        assertEquals("eq."+asset,metadata.requestUrl!!.queryParameter("id"));assertEquals("eq."+asset,trades.requestUrl!!.queryParameter("asset_id"))
+    }
+    @Test fun retirementRejectsForeignMetadataAndPrivateOrWrongAssetHistory()=runTest {
+        val bad=assetRow().let{it.copy(payload=JsonObject(it.payload+("user_id" to JsonPrimitive(device))))}
+        server.enqueue(response(bad))
+        assertTrue(runCatching{client.fetchRetirementHistory(owner,CloudEntity.INVESTMENT_ASSET,asset,token)}.isFailure)
+    }
+    @Test fun retirementRejectsARepeatedKeysetPageRatherThanCertifyingPartialHistory()=runTest {
+        server.enqueue(response(assetRow()));server.enqueue(response(assetRow()))
+        assertTrue(runCatching{client.fetchRetirementHistory(owner,CloudEntity.INVESTMENT_CHANNEL,channel,token)}.isFailure)
+    }
+    @Test fun retirementRequiresTheCapturedOwnerSessionBeforeAnyHttp()=runTest {
+        session.set(session.get()!!.copy(accessToken="rotated"))
+        assertTrue(runCatching{client.fetchRetirementHistory(owner,CloudEntity.INVESTMENT_CHANNEL,channel,token)}.exceptionOrNull() is CancellationException)
+        assertEquals(0,server.requestCount)
+    }
     private fun rpc(name:String):JsonObject {
         val r=server.takeRequest(1,TimeUnit.SECONDS)!!
         assertEquals("POST",r.method);assertEquals("/rest/v1/rpc/"+name,r.requestUrl!!.encodedPath);assertNull(r.requestUrl!!.query)

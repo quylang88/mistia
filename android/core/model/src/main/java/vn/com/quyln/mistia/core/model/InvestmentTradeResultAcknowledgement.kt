@@ -4,7 +4,8 @@ import java.time.Instant
 import kotlinx.serialization.json.*
 
 /** Complete owner-scoped read candidate; rows remain untrusted until the result proof succeeds. */
-data class InvestmentTradeCloudSnapshot(val owner:UserId,val affectedAssetIds:Set<String>,val rows:List<CloudRecord>,val remoteIntentWinners:Set<String> = emptySet())
+data class InvestmentTradeCloudSnapshot(val owner:UserId,val affectedAssetIds:Set<String>,val rows:List<CloudRecord>,val remoteIntentWinners:Set<String> = emptySet(),
+    val metadata:List<CloudRecord> = emptyList())
 data class InvestmentTradeAcknowledgementPlan(
     val acknowledgements:List<Pair<QueuedMutation,CloudRecord>>,val absentAcknowledgements:List<QueuedMutation>,val imports:List<CloudRecord>,
 )
@@ -81,7 +82,7 @@ fun planInvestmentTradeResultAcknowledgement(
             if(current.deletedAt==null || q.mutation.baseVersion!=0L || q.remoteIdentityObserved)incomplete()
         } else if(!investmentTradePublicationIntentsMatch(current,remote) && current.id !in candidate.remoteIntentWinners)incomplete()
     }
-    val projected=projectInvestmentTradePublicationResult(source,remoteTrades,candidate.affectedAssetIds,deviceId,now)
+    val projected=projectInvestmentTradePublicationResult(source,remoteTrades,candidate.affectedAssetIds,deviceId,now,candidate.metadata)
     val expectedByKey=projected.associateBy{it.entity to it.id}
     data class Identity(val tradeId:String,val component:String,val role:String)
     val identities=linkedMapOf<Pair<String,String>,Identity>()
