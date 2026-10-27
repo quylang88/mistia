@@ -18,6 +18,7 @@
     "delete_family",
     "mutate_investment_trade",
     "mutate_investment_cash_posting",
+    "mutate_investment_cash_postings",
     "mutate_investment_cash_event",
     "mutate_investment_asset",
     "delete_investment_trade",
