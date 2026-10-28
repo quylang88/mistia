@@ -150,12 +150,15 @@ class InvestmentOrdinaryPushCoordinator(
         val active=t.deletedAt==null && !t.isArchived && t.entryStatus==TransactionEntryStatus.POSTED
         val categoryId=t.categoryId
         if(active && t.primaryKind in setOf(TransactionPrimaryKind.EXPENSE,TransactionPrimaryKind.INCOME) && categoryId==null)return false
+        // The confirmed event may retain archived category history (including
+        // inactive system billing categories). Creation eligibility belongs to
+        // the editor/planner; publication still requires owned, live, clean refs.
         if(categoryId!=null) {
             val rows=s.rows.filter{it.entity==CloudEntity.TRANSACTION_CATEGORY.table}.associateBy{it.id}
             val category=rows[categoryId]?.let(TransactionCategoryRecord::fromCloudRecord) ?: return false
-            if(category.deletedAt!=null || active && category.isArchived || category.hierarchyRole!=CategoryHierarchyRole.CHILD)return false
+            if(category.deletedAt!=null || category.hierarchyRole!=CategoryHierarchyRole.CHILD)return false
             val parent=category.parentCategoryId?.let(rows::get)?.let(TransactionCategoryRecord::fromCloudRecord) ?: return false
-            if(parent.deletedAt!=null || active && parent.isArchived || parent.hierarchyRole!=CategoryHierarchyRole.PARENT || parent.kind!=category.kind)return false
+            if(parent.deletedAt!=null || parent.hierarchyRole!=CategoryHierarchyRole.PARENT || parent.kind!=category.kind)return false
             if(t.primaryKind==TransactionPrimaryKind.EXPENSE && category.kind!=TransactionCategoryKind.EXPENSE || t.primaryKind==TransactionPrimaryKind.INCOME && category.kind!=TransactionCategoryKind.INCOME)return false
             if(listOf(category.id,parent.id).any{CloudEntity.TRANSACTION_CATEGORY.table to it in s.dirtyKeys})return false
         }

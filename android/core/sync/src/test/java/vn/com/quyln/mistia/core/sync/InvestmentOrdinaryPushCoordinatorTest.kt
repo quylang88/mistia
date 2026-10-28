@@ -321,4 +321,27 @@ class InvestmentOrdinaryPushCoordinatorTest {
         assertTrue(store.state.pending.any{it.lastError=="ordinary_paid_source_locked"})
     }
 
+    @Test fun confirmedInvestmentAllocationCanPublishWithCleanArchivedCategoryHistory()=runTest {
+        for(ids in listOf(setOf(id(31)),setOf(id(30)),setOf(id(30),id(31)))) {
+            val original=source()
+            val changed=original.copy(rows=original.rows.map{row->
+                if(row.entity==CloudEntity.TRANSACTION_CATEGORY.table && row.id in ids)row.copy(payload=JsonObject(row.payload+("is_archived" to JsonPrimitive(true)))) else row
+            })
+            val store=Store(changed);val remote=Remote()
+            assertEquals("Archived category history must not strand a confirmed allocation: $ids",1,coordinator(store,remote).pushPending(owner,"token").pushed)
+            assertEquals(1,remote.sends);assertTrue(store.state.pending.isEmpty())
+            assertEquals(70L,remote.observed.getValue(event).transaction!!.payload.financeRawLong("amount_minor"))
+        }
+    }
+    @Test fun deletedCategoryOrParentStillHoldsAConfirmedFinancialGroup()=runTest {
+        for(target in listOf(id(30),id(31))) {
+            val original=source()
+            val changed=original.copy(rows=original.rows.map{row->
+                if(row.entity==CloudEntity.TRANSACTION_CATEGORY.table && row.id==target)row.copy(deletedAt=now,payload=JsonObject(row.payload+("deleted_at" to JsonPrimitive(now)))) else row
+            })
+            val store=Store(changed);val remote=Remote();coordinator(store,remote).pushPending(owner,"token")
+            assertEquals(0,remote.reads);assertEquals(0,remote.sends);assertEquals(changed,store.state)
+        }
+    }
+
 }

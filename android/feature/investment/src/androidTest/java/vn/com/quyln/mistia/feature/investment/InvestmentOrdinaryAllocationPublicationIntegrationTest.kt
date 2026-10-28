@@ -41,6 +41,7 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
     private lateinit var transactions:TransactionPushCoordinator
     private lateinit var wallets:WalletPushCoordinator
     private lateinit var investments:InvestmentPublicationPushCoordinator
+    private lateinit var dueRemote:RemoteMutationStore
     private val backend=Collections.synchronizedMap(linkedMapOf<Pair<String,String>,CloudRecord>())
     private val requests=Collections.synchronizedList(mutableListOf<RecordedRequest>())
     @Before fun setup()=runBlocking {
@@ -74,6 +75,7 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
         val http=OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager).retryOnConnectionFailure(false).callTimeout(5,TimeUnit.SECONDS).build()
         val config=SupabaseConfig(server.url("/").toString(),"local-publishable-key")
         transactions=TransactionPushCoordinator(store,SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_TRANSACTION)),true,{clock})
+        dueRemote=SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.DUE_OCCURRENCE_RECORD,CloudEntity.TRANSACTION_CATEGORY))
         wallets=WalletPushCoordinator(store,SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_WALLET)),true,
             nowEpochMillis={clock},investmentWalletSource=store::investmentWalletPublicationSnapshot,investmentRetirementSource=store::investmentTradePublicationSnapshot,
             investmentPrerequisites=WalletInvestmentPrerequisiteCoordinator(store,SupabaseWalletInvestmentPrerequisiteClient(config,http,{session},{true}),true,{session}))
@@ -100,7 +102,14 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
                 val cursor=url.queryParameter("id")?.takeIf{it.startsWith("gt.")}?.removePrefix("gt.")
                 val ids=url.queryParameter("id")?.takeIf{it.startsWith("in.(")}?.removePrefix("in.(")?.removeSuffix(")")?.split(",")?.toSet()
                 val event=url.queryParameter("event_id")?.removePrefix("eq.")
-                return reply(synchronized(backend){backend.values.filter{it.entity==table && (exact==null || it.id==exact) && (ids==null || it.id in ids) && (cursor==null || it.id>cursor) && (event==null || it.payload.financeRawString("event_id")==event)}.sortedBy{it.id}.take(if(ids==null)1 else 3)})
+                val systemKey=url.queryParameter("system_key")?.removePrefix("eq.")
+                val rows=synchronized(backend){backend.values.filter{it.entity==table && (exact==null || it.id==exact) && (ids==null || it.id in ids) && (cursor==null || it.id>cursor) && (event==null || it.payload.financeRawString("event_id")==event) && (systemKey==null || it.payload.financeRawString("system_key")==systemKey)}.sortedBy{it.id}}
+                if(systemKey!=null) {
+                    val offset=request.getHeader("Range")!!.substringBefore('-').toInt()
+                    val page=rows.drop(offset).take(200)
+                    return reply(page).setHeader("Content-Range",(if(page.isEmpty())"*"else "$offset-${offset+page.size-1}")+"/"+rows.size)
+                }
+                return reply(rows.take(if(ids==null)1 else 3))
             }
             if(request.method=="PATCH" && table==CloudEntity.LEDGER_WALLET.table) {
                 assertEquals("eq.${owner.value}",url.queryParameter("user_id"))
@@ -155,6 +164,20 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
                         put("adjustment",if(adjustment==null)JsonNull else saved[1].payload)
                         put("postings",JsonArray(saved.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}.map{it.payload}))
                     }.toString())
+                }
+            }
+            if(table in setOf(CloudEntity.DUE_OCCURRENCE_RECORD.table,CloudEntity.TRANSACTION_CATEGORY.table) && request.method in setOf("POST","PATCH")) {
+                val raw=Json.parseToJsonElement(request.body.clone().readUtf8())
+                val body=if(raw is JsonArray)raw.single().jsonObject else raw.jsonObject
+                val rowId=body.financeRawString("id") ?: url.queryParameter("id")!!.removePrefix("eq.")
+                synchronized(backend) {
+                    val old=backend[table to rowId]
+                    if(request.method=="POST" && old!=null)return MockResponse().setResponseCode(409)
+                    if(request.method=="PATCH" && (old==null || old.syncVersion!=url.queryParameter("sync_version")!!.removePrefix("eq.").toLong()))return reply(emptyList())
+                    val wire=JsonObject(old?.payload.orEmpty()+body)
+                    assertEquals(owner.value,wire.financeRawString("user_id"))
+                    val saved=CloudRecord(table,rowId,owner.value,wire,wire.financeRawString("updated_at"),wire.financeRawString("deleted_at"),wire.financeRawLong("sync_version")!!)
+                    backend[table to rowId]=saved;return reply(listOf(saved))
                 }
             }
             if(request.method=="PATCH" && table==CloudEntity.LEDGER_TRANSACTION.table) {
@@ -510,6 +533,49 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
         assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
         assertEquals(2,snapshot().pending.size)
         assertTrue(snapshot().pending.any{it.lastError=="ordinary_paid_source_locked"})
+    }
+
+    @Test fun realFundedBillPayUndoAndRepayPublishExpenseAllocationAndCycleWithoutStrandedQueues()=runBlocking {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val catalog=vn.com.quyln.mistia.core.designsystem.systemCategoryCatalog(context)
+        val zone=java.time.ZoneId.of("UTC");val month=java.time.YearMonth.of(2026,10)
+        finance=OfflineFirstFinanceRepository(store,zone,catalog)
+        val initial=finance.saveRecurringBill(owner,RecurringBillDraft("Funded bill",id(31),70,id(1),"JPY",paymentStartDay=1,zoneId=zone),device,now).getOrThrow()
+        cleanIntoBackend(listOf(CloudEntity.TRANSACTION_CATEGORY,CloudEntity.RECURRING_BILL_PLAN))
+        val bill=RecurringBillPlanRecord.fromCloudRecord(store.record(owner,CloudEntity.RECURRING_BILL_PLAN.table,initial.id)!!)
+        val due=DueOccurrencePushCoordinator(store,dueRemote,true,nowEpochMillis={clock})
+        val categories=CategoryPushCoordinator(store,dueRemote,true,catalog,{clock})
+        suspend fun cycle() {repeat(3){categories.pushPending(owner,session.accessToken);transactions.pushPending(owner,session.accessToken);investments.pushPending(owner,session.accessToken);due.pushPending(owner,session.accessToken);clock+=30001}}
+        suspend fun pay(at:String,creation:Int) {
+            var request=BillPaymentRequest(RecordId(bill.id),month,RecordId(id(1)),70,expectedBill=bill,
+                investment=BillInvestmentOperationContext(TransactionCreationIdentity(id(creation),at),"JPY","Adjustment"))
+            val error=finance.payRecurringBill(owner,request,device,at).exceptionOrNull()
+            if(error is InvestmentFundUsageConfirmationRequired)request=request.copy(investment=request.investment!!.copy(consent=error.review.consent)) else if(error!=null)throw error
+            finance.payRecurringBill(owner,request,device,at).getOrThrow()
+        }
+        pay("2026-10-28T00:00:02Z",20);cycle()
+        val pendingPay=snapshot()
+        val payment=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!
+        val paymentCategory=payment.payload.financeRawString("category_id")?.let{store.record(owner,CloudEntity.TRANSACTION_CATEGORY.table,it)}
+        assertTrue("PAY pending="+pendingPay.pending.map{listOf(it.mutation.entity.table,it.mutation.recordId,it.lastError)}+
+            "; category="+paymentCategory?.payload?.let{listOf(it.financeRawString("system_key"),it.financeRawArchived(),it.financeRawString("parent_category_id"))}+
+            "; requests="+requests.map{it.method+" "+it.requestUrl!!.pathSegments.last()},pendingPay.pending.isEmpty())
+        assertPublished(70,-30)
+        var occurrence=store.recordsIncludingDeleted(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table).single{it.payload.financeRawString("source_id")==bill.id}
+        assertEquals("paid",backend[occurrence.entity to occurrence.id]!!.payload.financeRawString("status_raw_value"))
+        assertEquals(id(20),backend[occurrence.entity to occurrence.id]!!.payload.financeRawString("linked_transaction_id"))
+        var undo=BillInvestmentUndoRequest(bill,month,70,id(20),BillInvestmentOperationContext(TransactionCreationIdentity(id(50),"2026-10-28T00:00:03Z"),"JPY","Adjustment"))
+        val error=finance.undoRecurringBillPaymentWithInvestmentFunds(owner,undo,device,"2026-10-28T00:00:03Z").exceptionOrNull()
+        if(error is InvestmentFundUsageConfirmationRequired)undo=undo.copy(investment=undo.investment.copy(consent=error.review.consent)) else if(error!=null)throw error
+        finance.undoRecurringBillPaymentWithInvestmentFunds(owner,undo,device,"2026-10-28T00:00:03Z").getOrThrow()
+        cycle();assertTrue("UNDO pending="+snapshot().pending.map{listOf(it.mutation.entity.table,it.mutation.recordId,it.lastError)},snapshot().pending.isEmpty());assertPublished(70,0)
+        assertNotNull(backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.deletedAt)
+        assertNotNull(backend[occurrence.entity to occurrence.id]!!.deletedAt)
+        pay("2026-10-28T00:00:04Z",21);cycle();assertTrue("REPAY pending="+snapshot().pending.map{listOf(it.mutation.entity.table,it.mutation.recordId,it.lastError)},snapshot().pending.isEmpty());assertPublished(70,-30)
+        assertNull(backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.deletedAt)
+        occurrence=store.recordsIncludingDeleted(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table).single{it.deletedAt==null && it.payload.financeRawString("source_id")==bill.id}
+        assertNull(backend[occurrence.entity to occurrence.id]!!.deletedAt)
+        assertEquals(id(20),backend[occurrence.entity to occurrence.id]!!.payload.financeRawString("linked_transaction_id"))
     }
 
 }
