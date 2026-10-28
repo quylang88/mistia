@@ -38,6 +38,9 @@ class InvestmentCashReconciliationPublicationIntegrationTest {
     private lateinit var server:MockWebServer
     private lateinit var coordinator:InvestmentCashReconciliationPushCoordinator
     private lateinit var remote:InvestmentCashReconciliationRemote
+    private lateinit var ordinaryRemote:SupabasePostgrestRemoteStore
+    private lateinit var walletPrerequisiteRemote:WalletInvestmentPrerequisiteRemote
+    private lateinit var rootPublisher:InvestmentWalletPushCoordinator
     private val backend=Collections.synchronizedMap(linkedMapOf<Pair<String,String>,CloudRecord>())
     private val requests=Collections.synchronizedList(mutableListOf<RecordedRequest>())
     private var onCommit:(suspend ()->Unit)?=null
@@ -77,6 +80,10 @@ class InvestmentCashReconciliationPublicationIntegrationTest {
         server=MockWebServer().apply{useHttps(serverTls.sslSocketFactory(),false);dispatcher=fixture();start()}
         val http=OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager).retryOnConnectionFailure(false).callTimeout(5,TimeUnit.SECONDS).build()
         remote=SupabaseInvestmentCashReconciliationClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        val config=SupabaseConfig(server.url("/").toString(),"local-publishable-key")
+        ordinaryRemote=SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_WALLET))
+        walletPrerequisiteRemote=SupabaseWalletInvestmentPrerequisiteClient(config,http,{session},{enabled})
+        rootPublisher=InvestmentWalletPushCoordinator(store,SupabaseInvestmentWalletClient(config,http,{session},{enabled}),true,{session},{clock})
         coordinator=InvestmentCashReconciliationPushCoordinator(store,remote,true,{session},{clock})
     }
     @After fun close(){server.shutdown();db.close()}
@@ -95,6 +102,23 @@ class InvestmentCashReconciliationPublicationIntegrationTest {
                 return reply(synchronized(backend){backend.values.filter{it.entity==table && (exact==null || it.id==exact) && (cursor==null || it.id>cursor) && (eventFilter==null || it.payload.financeRawString("event_id")==eventFilter)}.sortedBy{it.id}.take(1).map{row->
                     if(corruptPosting && row.entity==CloudEntity.INVESTMENT_POSTING.table)row.copy(payload=JsonObject(row.payload+("accounting_amount_minor" to JsonPrimitive(999)))) else row
                 }})
+            }
+            if(request.method=="PATCH" && path=="/rest/v1/ledger_wallets") {
+                val id=requireNotNull(url.queryParameter("id")).removePrefix("eq.")
+                assertTrue(id in setOf(investmentSystemWalletId(owner),linked,selected));assertEquals("eq.${owner.value}",url.queryParameter("user_id"))
+                val previous=backend[CloudEntity.LEDGER_WALLET.table to id]!!
+                assertEquals("eq.${previous.syncVersion}",url.queryParameter("sync_version"))
+                val element=Json.parseToJsonElement(request.body.clone().readUtf8());val body=if(element is JsonArray)element.single().jsonObject else element.jsonObject
+                // Mirror only the already independently verified SQL archive rule;
+                // this fixture is not a replacement for the real PostgreSQL race oracle.
+                if(id!=investmentSystemWalletId(owner) && body.financeRawArchived()==true) {
+                    val retained=backend.values.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.deletedAt==null &&
+                        it.payload.financeRawString("wallet_id")==id && it.payload.financeRawString("cash_bucket_raw_value")!=null}
+                        .fold(java.math.BigInteger.ZERO){sum,row->sum+requireNotNull(row.payload.financeRawLong("accounting_amount_minor")).toBigInteger()}
+                    if(retained!=java.math.BigInteger.ZERO)return MockResponse().setResponseCode(400).setBody("""{"code":"P0001","message":"Move or adjust the investment cash held by this wallet first"}""")
+                }
+                val saved=previous.copy(syncVersion=previous.syncVersion+1,updatedAt="2026-10-28T00:30:00Z",payload=JsonObject(previous.payload+body+buildJsonObject{put("sync_version",previous.syncVersion+1);put("updated_at","2026-10-28T00:30:00Z")}))
+                backend[saved.entity to saved.id]=saved;return reply(listOf(saved))
             }
             assertEquals("POST",request.method)
             failure?.let{failure=null;return MockResponse().setResponseCode(it).setBody(failureBody)}
@@ -243,6 +267,29 @@ class InvestmentCashReconciliationPublicationIntegrationTest {
         }
         assertEquals(1,snapshot().pending.size);assertEquals(1,push().acknowledged)
         assertTrue(snapshot().pending.isEmpty());assertEquals(0,ledgerCalls);assertEquals(0,postCalls)
+    }
+
+    @Test fun offlineReconciliationThenArchivePublishesProfitBeforeFinalWalletRetirement()=runBlocking {
+        create()
+        OfflineFirstFinanceRepository(store).archiveWallet(owner,RecordId(selected),device,"2026-10-27T00:06:00Z").getOrThrow()
+        assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,selected)!!.payload.financeRawArchived())
+        val wallets=WalletPublicationPushCoordinator(WalletPushCoordinator(store,ordinaryRemote,true,
+            investmentWalletSource=store::investmentWalletPublicationSnapshot,investmentRetirementSource=store::investmentTradePublicationSnapshot,
+            investmentPrerequisites=WalletInvestmentPrerequisiteCoordinator(store,walletPrerequisiteRemote,true,{session}),nowEpochMillis={clock}),rootPublisher)
+        fun empty(entity:CloudEntity)=object:DomainPushCoordinator {
+            override val entity=entity
+            override suspend fun pushPending(ownerUserId:UserId,accessToken:String)=DomainPushSummary()
+        }
+        val investments=InvestmentPublicationPushCoordinator(empty(CloudEntity.INVESTMENT_CHANNEL),empty(CloudEntity.INVESTMENT_ASSET),empty(CloudEntity.INVESTMENT_TRADE),reconciliation=coordinator)
+        repeat(3){wallets.pushPending(owner,session!!.accessToken);investments.pushPending(owner,session!!.accessToken);clock+=30001}
+        assertEquals("confirmed reconciliation and final archive must finish",0,snapshot().pending.size)
+        assertEquals(true,backend[CloudEntity.LEDGER_WALLET.table to selected]!!.payload.financeRawArchived())
+        assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,selected)!!.payload.financeRawArchived())
+        assertEquals(80L,backend[CloudEntity.LEDGER_TRANSACTION.table to ledgerId]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(setOf(-50L,50L),posts().map{it.payload.financeRawLong("accounting_amount_minor")}.toSet());assertEquals(1,ledgerCalls);assertEquals(1,postCalls)
+        val pair=requests.indexOfFirst{it.requestUrl!!.encodedPath.endsWith("mutate_investment_cash_postings")}
+        val archive=requests.indexOfLast{it.method=="PATCH" && it.requestUrl!!.queryParameter("id")=="eq.$selected"}
+        assertTrue(pair>=0 && archive>pair)
     }
 
 }

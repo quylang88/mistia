@@ -118,10 +118,11 @@ class InvestmentCashEventPushCoordinator(private val localStore:LocalStore,priva
         val p=ledger.payload
         if(p.financeRawString(if(p.financeRawString("settlement_role_raw_value")=="investmentCashDeposit")"destination_wallet_id" else "source_wallet_id")!=linked)return false
         val dependencies=setOfNotNull(rootId,linked,p.financeRawString("source_wallet_id"),p.financeRawString("destination_wallet_id"))
-        if(dependencies.any{CloudEntity.LEDGER_WALLET.table to it in s.dirtyKeys})return false
+        val proven=walletInvestmentActivePrerequisites(s,dependencies-rootId)
+        if(dependencies.any{CloudEntity.LEDGER_WALLET.table to it in s.dirtyKeys && it !in proven})return false
         if(s.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_TRADE})return false
         for(id in dependencies-rootId) {
-            val row=wallets[id] ?: return false;val wallet=investmentLinkedWalletRecord(row)
+            val row=proven[id] ?: wallets[id] ?: return false;val wallet=investmentLinkedWalletRecord(row)
             if(wallet.deletedAt!=null || wallet.isArchived || wallet.kind in setOf(null,WalletKind.INVESTMENT,WalletKind.CREDIT_CARD) || wallet.systemPurposeRawValue!=null || wallet.currencyCode!=system.currencyCode)return false
         }
         return true

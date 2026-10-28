@@ -1112,6 +1112,64 @@ class RoomLocalStore(
         return vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot(owner,tradeId,stored.map{it.toCloudRecord()},pending,
             stored.filter{it.hasPendingMutation}.map{it.entity to it.recordId}.toSet())
     }
+    override suspend fun prepareWalletInvestmentPrerequisite(expected:vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot,
+        id:String,compared:CloudRecord?,isSessionCurrent:()->Boolean):vn.com.quyln.mistia.core.model.WalletInvestmentPrerequisitePreparation? {
+        expected.requireCoherent()
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentTradePublication(expected.owner,expected.tradeId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction null
+            val plan=vn.com.quyln.mistia.core.model.prepareWalletInvestmentPrerequisite(current,id,compared)
+            val stored=checkNotNull(database.cloudRecordDao().record(expected.owner.value,CloudEntity.LEDGER_WALLET.table,id))
+            val queued=checkNotNull(database.syncOutboxDao().record(expected.owner.value,CloudEntity.LEDGER_WALLET.table,id))
+            val payload=plan.preparedRecord.payload.toString()
+            database.cloudRecordDao().upsert(stored.copy(payloadJson=payload))
+            database.syncOutboxDao().upsert(queued.copy(payloadJson=payload))
+            plan.preparedSource.requireUnchanged(currentInvestmentTradePublication(expected.owner,expected.tradeId))
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            plan
+        }
+    }
+    override suspend fun rebaseWalletInvestmentPrerequisite(prepared:vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot,
+        id:String,remote:CloudRecord,isSessionCurrent:()->Boolean):Boolean {
+        prepared.requireCoherent()
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(prepared.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentTradePublication(prepared.owner,prepared.tradeId)
+            val change=vn.com.quyln.mistia.core.model.planWalletInvestmentPrerequisiteRebase(prepared,id,remote,current) ?: return@withTransaction false
+            val stored=checkNotNull(database.cloudRecordDao().record(prepared.owner.value,CloudEntity.LEDGER_WALLET.table,id))
+            val queued=checkNotNull(database.syncOutboxDao().record(prepared.owner.value,CloudEntity.LEDGER_WALLET.table,id))
+            database.cloudRecordDao().upsert(stored.copy(payloadJson=change.first.payload.toString(),syncVersion=change.first.syncVersion))
+            database.syncOutboxDao().upsert(queued.copy(payloadJson=change.second.mutation.payload.toString(),baseVersion=change.second.mutation.baseVersion,
+                remoteIdentityObserved=change.second.remoteIdentityObserved))
+            val expected=current.copy(rows=current.rows.map{if(it.entity==CloudEntity.LEDGER_WALLET.table && it.id==id)change.first else it},
+                pending=current.pending.map{if(it.mutation.entity==CloudEntity.LEDGER_WALLET && it.mutation.recordId==id)change.second else it})
+            expected.requireUnchanged(currentInvestmentTradePublication(prepared.owner,prepared.tradeId))
+            ensureCurrentFinanceOwner(prepared.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+    override suspend fun recordWalletInvestmentPrerequisiteFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,
+        expected:vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot,isSessionCurrent:()->Boolean):Boolean {
+        expected.requireCoherent();require(mutation in expected.pending && mutation.mutation.entity==CloudEntity.LEDGER_WALLET &&
+            vn.com.quyln.mistia.core.model.walletHasPendingInvestmentFinancialDependency(expected,mutation.mutation.recordId) &&
+            nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentTradePublication(expected.owner,expected.tradeId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val recorded=recordMutationFailure(mutation,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            recorded
+        }
+    }
+
     override suspend fun prepareInvestmentMetadataStage(expected:vn.com.quyln.mistia.core.model.InvestmentTradePublicationSnapshot,
         entity:CloudEntity,id:String,compared:CloudRecord?,isSessionCurrent:()->Boolean):vn.com.quyln.mistia.core.model.InvestmentMetadataStagePreparation? {
         expected.requireCoherent();require(expected.tradeId==id && entity in setOf(CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL))
@@ -2449,10 +2507,12 @@ class RoomLocalStore(
         val guardedWallet=record.entity==CloudEntity.LEDGER_WALLET.table && previousRecord!=null &&
             record.id!=vn.com.quyln.mistia.core.model.investmentSystemWalletId(UserId(record.ownerUserId)) &&
             vn.com.quyln.mistia.core.model.walletMutationNeedsInvestmentProtection(previousRecord.toCloudRecord(),record)
-        val walletCaller=if(guardedWallet)kotlinx.coroutines.currentCoroutineContext() else null
+        val journalWallet=record.entity==CloudEntity.LEDGER_WALLET.table && previousRecord?.toCloudRecord()?.payload?.containsKey(vn.com.quyln.mistia.core.model.LOCAL_WALLET_INVESTMENT_PREREQUISITE_KEY)==true
+        val scopedWallet=guardedWallet || journalWallet
+        val walletCaller=if(scopedWallet)kotlinx.coroutines.currentCoroutineContext() else null
+        if(scopedWallet){ensureCurrentFinanceOwner(UserId(record.ownerUserId));walletCaller!!.ensureActive()}
         if(guardedWallet) {
             val owner=UserId(record.ownerUserId)
-            ensureCurrentFinanceOwner(owner);walletCaller!!.ensureActive()
             val protected=try {
                 vn.com.quyln.mistia.core.model.walletHasProtectedInvestmentCash(owner,record.id,
                     recordsIncludingDeleted(owner,CloudEntity.LEDGER_WALLET.table)+recordsIncludingDeleted(owner,CloudEntity.INVESTMENT_POSTING.table))
@@ -2461,10 +2521,13 @@ class RoomLocalStore(
             }
             if(protected)throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.INVESTMENT_CASH_PROTECTED)
         }
+        val retained=if(journalWallet)vn.com.quyln.mistia.core.model.retainWalletInvestmentPrerequisite(checkNotNull(previousRecord).toCloudRecord(),record) else record
+        if(journalWallet)require(mutation.baseVersion==retained.syncVersion && mutation.modifiedAt==retained.updatedAt &&
+            mutation.deviceId==retained.payload.financeRawString("last_modified_by_device_id"))
         val previousQueue=database.syncOutboxDao().record(record.ownerUserId,record.entity,record.id)
         val observed=remoteIdentityObserved || mutation.baseVersion>0 || record.syncVersion>0 || previousQueue?.remoteIdentityObserved==true || previousRecord?.hasPendingMutation==false
         database.cloudRecordDao().upsert(
-            record.toEntity(
+            retained.toEntity(
                 hasPendingMutation = true,
                 receivedAtEpochMillis = System.currentTimeMillis(),
             )
@@ -2475,7 +2538,7 @@ class RoomLocalStore(
                 entity = mutation.entity.table,
                 recordId = mutation.recordId,
                 kind = mutation.kind.name.lowercase(),
-                payloadJson = mutation.payload?.toString(),
+                payloadJson = retained.payload.toString(),
                 modifiedAt = mutation.modifiedAt,
                 baseVersion = mutation.baseVersion,
                 deviceId = mutation.deviceId,
@@ -2486,7 +2549,7 @@ class RoomLocalStore(
             record.payload["id"]==JsonPrimitive(record.id) &&
             (record.deletedAt!=null || record.payload["is_paused"]==JsonPrimitive(true) || record.payload["is_archived"]==JsonPrimitive(true)))
             resolveBillNotificationsInTransaction(record,null)
-        if(guardedWallet) {
+        if(scopedWallet) {
             ensureCurrentFinanceOwner(UserId(record.ownerUserId));walletCaller!!.ensureActive()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
         }

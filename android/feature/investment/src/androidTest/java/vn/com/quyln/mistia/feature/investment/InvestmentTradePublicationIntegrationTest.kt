@@ -56,6 +56,8 @@ class InvestmentTradePublicationIntegrationTest {
     private var loseReply=false
     private var corruptFinancial=false
     private var validateEditsAgainstBackendHistory=false
+    private lateinit var ordinaryRemote:SupabasePostgrestRemoteStore
+    private lateinit var walletPrerequisiteRemote:WalletInvestmentPrerequisiteRemote
     private lateinit var rootCoordinator:InvestmentWalletPushCoordinator
     private var beforeRead:(suspend (RecordedRequest)->Unit)?=null
     private var beforeMetadataWrite:(suspend (CloudEntity,JsonObject)->Unit)?=null
@@ -89,6 +91,8 @@ class InvestmentTradePublicationIntegrationTest {
         val assets=SupabaseInvestmentAssetClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
         val channels=SupabaseInvestmentChannelClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
         val rootRemote=SupabaseInvestmentWalletClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        ordinaryRemote=SupabasePostgrestRemoteStore(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,writableEntities=setOf(CloudEntity.LEDGER_WALLET))
+        walletPrerequisiteRemote=SupabaseWalletInvestmentPrerequisiteClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
         rootCoordinator=InvestmentWalletPushCoordinator(store,rootRemote,true,{session},{clock})
         for(row in store.recordsIncludingDeleted(owner,CloudEntity.LEDGER_WALLET.table))backend[row.entity to row.id]=row
         val images=SupabaseInvestmentProductImageClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
@@ -187,6 +191,12 @@ class InvestmentTradePublicationIntegrationTest {
                 assertEquals(JsonPrimitive(false),body["p_force"])
                 for(key in listOf(LOCAL_TRADE_PUBLICATION_PARENTS_KEY,"released_cost_basis_minor","funding_ledger_transaction_id","position_cost_basis_after_minor"))assertFalse(key,key in incoming!!)
             } else {assertEquals(owner.value,body.financeRawString("p_owner_user_id"));assertEquals(device,body.financeRawString("p_device_id"))}
+            if(incoming!=null)for(key in listOf("funding_wallet_id","capital_return_wallet_id")) {
+                val walletId=incoming.financeRawString(key) ?: continue
+                val remoteWallet=backend[CloudEntity.LEDGER_WALLET.table to walletId]
+                if(remoteWallet==null || remoteWallet.deletedAt!=null || remoteWallet.payload.financeRawArchived()!=false)
+                    return MockResponse().setResponseCode(400).setBody("Inactive trade cash wallet")
+            }
             val existing=backend[CloudEntity.INVESTMENT_TRADE.table to requested]
             if((existing?.syncVersion ?: 0L)!=base)return response(emptyList())
             val source=runBlocking{store.investmentTradePublicationSnapshot(owner,requested)}
@@ -857,6 +867,26 @@ class InvestmentTradePublicationIntegrationTest {
         assertEquals(1,push().pushed);val after=source();assertTrue(after.pending.isEmpty());assertNotNull(after.requestedRecord!!.deletedAt)
         assertEquals(asset,after.requestedRecord!!.payload.financeRawString("asset_id"));assertEquals(asset,after.rows.single{it.entity==CloudEntity.INVESTMENT_POSTING.table}.payload.financeRawString("asset_id"))
         assertEquals(2,rpcRequests().size);assertTrue(rpcRequests().last().requestUrl!!.encodedPath.endsWith("delete_investment_trade"))
+    }
+
+
+    @Test fun actualOfflineBuyPublishesFundingBeforeTheOrdinaryWalletsFinalArchive()=runBlocking {
+        seedCloudMetadata();buy()
+        OfflineFirstFinanceRepository(store).archiveWallet(owner,RecordId(wallet),device,"2026-10-26T00:06:00Z").getOrThrow()
+        val walletPublisher=WalletPublicationPushCoordinator(WalletPushCoordinator(store,ordinaryRemote,true,
+            investmentWalletSource=store::investmentWalletPublicationSnapshot,investmentRetirementSource=store::investmentTradePublicationSnapshot,
+            investmentPrerequisites=WalletInvestmentPrerequisiteCoordinator(store,walletPrerequisiteRemote,true,{session}),nowEpochMillis={clock}),rootCoordinator)
+        val investments=InvestmentPublicationPushCoordinator(channelCoordinator,assetCoordinator,coordinator)
+        repeat(3){walletPublisher.pushPending(owner,session!!.accessToken);investments.pushPending(owner,session!!.accessToken);clock+=30001}
+        assertTrue("Trade, financial result and final ordinary archive must finish",source().pending.isEmpty())
+        assertEquals(true,backend[CloudEntity.LEDGER_WALLET.table to wallet]!!.payload.financeRawArchived())
+        assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,wallet)!!.payload.financeRawArchived())
+        assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to investmentLedgerIdentity(id,"funding")]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(-70L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id,"funding-posting")]!!.payload.financeRawLong("amount_minor"))
+        val trade=requests.indexOfFirst{it.requestUrl!!.encodedPath.endsWith("mutate_investment_trade")}
+        val archive=requests.indexOfLast{it.method=="PATCH" && it.requestUrl!!.queryParameter("id")=="eq.$wallet"}
+        assertTrue(trade>=0 && archive>trade)
+        assertEquals(1,requests.count{it.requestUrl!!.encodedPath.endsWith("mutate_investment_trade")})
     }
 
 }

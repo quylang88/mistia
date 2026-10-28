@@ -107,9 +107,10 @@ class InvestmentCashReconciliationPushCoordinator(private val localStore:LocalSt
         val rootId=investmentSystemWalletId(s.owner);val root=wallets[rootId] ?: return false
         val system=canonicalInvestmentWalletForPublication(s.owner,root)
         val dependencies=setOfNotNull(rootId,g.ledger.payload.financeRawString("source_wallet_id"),g.ledger.payload.financeRawString("destination_wallet_id"))
-        if(dependencies.any{CloudEntity.LEDGER_WALLET.table to it in s.dirtyKeys} || s.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_TRADE})return false
+        val proven=walletInvestmentActivePrerequisites(s,dependencies-rootId)
+        if(dependencies.any{CloudEntity.LEDGER_WALLET.table to it in s.dirtyKeys && it !in proven} || s.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_TRADE})return false
         for(id in dependencies-rootId) {
-            val wallet=wallets[id]?.let(::investmentLinkedWalletRecord) ?: return false
+            val wallet=(proven[id] ?: wallets[id])?.let(::investmentLinkedWalletRecord) ?: return false
             if(wallet.deletedAt!=null || wallet.isArchived || wallet.kind in setOf(null,WalletKind.INVESTMENT,WalletKind.CREDIT_CARD) || wallet.systemPurposeRawValue!=null ||
                 wallet.currencyCode!=system.currencyCode || wallet.currencyCode!=g.ledger.payload.financeRawString("reporting_currency_code"))return false
         }

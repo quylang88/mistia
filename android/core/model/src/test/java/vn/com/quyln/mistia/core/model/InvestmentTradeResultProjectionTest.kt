@@ -143,4 +143,21 @@ class InvestmentTradeResultProjectionTest {
         assertEquals(0L,capital!!.payload.financeRawLong("amount_minor"))
         val profit=projected.single{it.id==investmentLedgerIdentity(saleId,"profit-loss")};assertEquals(50L,profit.payload.financeRawLong("amount_minor"))
     }
+    @Test fun provenActiveWalletCanFundThePendingTradeWhileItsFinalArchiveStaysQueued() {
+        val(metadata,plan)=buy();val initial=source(metadata,plan.mutations)
+        val before=initial.rows.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==walletId}
+            .let{it.copy(syncVersion=1,payload=JsonObject(it.payload+("sync_version" to JsonPrimitive(1))))}
+        val archive=LedgerWalletRecord.fromCloudRecord(before).toArchiveMutation(device,"2026-10-26T00:10:00Z")
+        val pending=initial.pending+QueuedMutation(archive.pending,0,0,null)
+        val waiting=initial.copy(rows=initial.rows.map{if(it.entity==before.entity && it.id==walletId)archive.record else it},
+            pending=pending,dirtyKeys=pending.map{it.mutation.entity.table to it.mutation.recordId}.toSet())
+        assertEquals(InvestmentTradeResultError.DEPENDENCY_PENDING,(runCatching{project(waiting,listOf(remote(plan.trade)))}.exceptionOrNull() as InvestmentTradeResultException).reason)
+        val prepared=prepareWalletInvestmentPrerequisite(waiting,walletId,before)
+        assertFalse(prepared.needsWrite)
+        val result=project(prepared.preparedSource,listOf(remote(plan.trade)))
+        assertEquals(-70L,result.single{it.entity==CloudEntity.INVESTMENT_POSTING.table}.payload.financeRawLong("accounting_amount_minor"))
+        assertEquals(70L,result.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table}.payload.financeRawLong("amount_minor"))
+        assertEquals(true,prepared.preparedRecord.payload.financeRawArchived())
+    }
+
 }

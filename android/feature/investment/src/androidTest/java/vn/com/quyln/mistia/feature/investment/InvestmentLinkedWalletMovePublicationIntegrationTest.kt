@@ -38,6 +38,8 @@ class InvestmentLinkedWalletMovePublicationIntegrationTest {
     private lateinit var server:MockWebServer
     private lateinit var coordinator:InvestmentLinkedWalletMovePushCoordinator
     private lateinit var remote:InvestmentLinkedWalletMoveRemote
+    private lateinit var ordinaryRemote:SupabasePostgrestRemoteStore
+    private lateinit var walletPrerequisiteRemote:WalletInvestmentPrerequisiteRemote
     private lateinit var rootPublisher:InvestmentWalletPushCoordinator
     private val allRequests=Collections.synchronizedList(mutableListOf<RecordedRequest>())
     private val metadataRequests=Collections.synchronizedList(mutableListOf<RecordedRequest>())
@@ -79,7 +81,9 @@ class InvestmentLinkedWalletMovePublicationIntegrationTest {
         val serverTls=HandshakeCertificates.Builder().heldCertificate(cert).build();val clientTls=HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
         server=MockWebServer().apply{useHttps(serverTls.sslSocketFactory(),false);dispatcher=fixture();start()}
         val http=OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager).retryOnConnectionFailure(false).callTimeout(5,TimeUnit.SECONDS).build()
+        ordinaryRemote=SupabasePostgrestRemoteStore(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,writableEntities=setOf(CloudEntity.LEDGER_WALLET))
         remote=SupabaseInvestmentLinkedWalletMoveClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
+        walletPrerequisiteRemote=SupabaseWalletInvestmentPrerequisiteClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{enabled})
         coordinator=InvestmentLinkedWalletMovePushCoordinator(store,remote,true,{session},{clock})
         rootPublisher=InvestmentWalletPushCoordinator(store,SupabaseInvestmentWalletClient(SupabaseConfig(server.url("/").toString(),"local-publishable-key"),http,{session},{true}),true,{session},{clock})
     }
@@ -102,10 +106,19 @@ class InvestmentLinkedWalletMovePublicationIntegrationTest {
                 }})
             }
             if(request.method=="PATCH" && path=="/rest/v1/ledger_wallets") {
-                val rootId=investmentSystemWalletId(owner);assertEquals("eq.$rootId",url.queryParameter("id"));assertEquals("eq.${owner.value}",url.queryParameter("user_id"))
-                val previous=backend[CloudEntity.LEDGER_WALLET.table to rootId]!!
+                val id=requireNotNull(url.queryParameter("id")).removePrefix("eq.")
+                assertTrue(id in setOf(investmentSystemWalletId(owner),linked,selected));assertEquals("eq.${owner.value}",url.queryParameter("user_id"))
+                val previous=backend[CloudEntity.LEDGER_WALLET.table to id]!!
                 assertEquals("eq.${previous.syncVersion}",url.queryParameter("sync_version"))
                 val element=Json.parseToJsonElement(request.body.clone().readUtf8());val body=if(element is JsonArray)element.single().jsonObject else element.jsonObject
+                // Mirror only the already independently verified SQL archive rule;
+                // this fixture is not a replacement for the real PostgreSQL race oracle.
+                if(id!=investmentSystemWalletId(owner) && body.financeRawArchived()==true) {
+                    val retained=backend.values.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.deletedAt==null &&
+                        it.payload.financeRawString("wallet_id")==id && it.payload.financeRawString("cash_bucket_raw_value")!=null}
+                        .fold(java.math.BigInteger.ZERO){sum,row->sum+requireNotNull(row.payload.financeRawLong("accounting_amount_minor")).toBigInteger()}
+                    if(retained!=java.math.BigInteger.ZERO)return MockResponse().setResponseCode(400).setBody("""{"code":"P0001","message":"Move or adjust the investment cash held by this wallet first"}""")
+                }
                 val saved=previous.copy(syncVersion=previous.syncVersion+1,updatedAt="2026-10-28T00:30:00Z",payload=JsonObject(previous.payload+body+buildJsonObject{put("sync_version",previous.syncVersion+1);put("updated_at","2026-10-28T00:30:00Z")}))
                 backend[saved.entity to saved.id]=saved;return reply(listOf(saved))
             }
@@ -297,6 +310,94 @@ class InvestmentLinkedWalletMovePublicationIntegrationTest {
         val realTransfers=allRequests.filter{it.method=="POST" && it.requestUrl!!.encodedPath=="/rest/v1/ledger_transactions"}
             .map{Json.parseToJsonElement(it.body.clone().readUtf8()).jsonObject.financeRawString("id")}
         assertEquals(listOf(ledgerId,investmentLedgerIdentity(second,"linked-wallet-move")),realTransfers)
+    }
+
+    @Test fun offlineMoveThenArchivePublishesFinancialPairBeforeFinalWalletArchiveAcrossAutomaticCycles()=runBlocking {
+        create(publishRoot=false)
+        OfflineFirstFinanceRepository(store).archiveWallet(owner,RecordId(selected),device,"2026-10-28T00:06:00Z").getOrThrow()
+        assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,selected)!!.payload.financeRawArchived())
+        val walletPublisher=WalletPublicationPushCoordinator(
+            WalletPushCoordinator(store,ordinaryRemote,true,investmentWalletSource=store::investmentWalletPublicationSnapshot,nowEpochMillis={clock},
+                investmentRetirementSource=store::investmentTradePublicationSnapshot,investmentPrerequisites=WalletInvestmentPrerequisiteCoordinator(store,walletPrerequisiteRemote,true,{session})),rootPublisher)
+        fun empty(entity:CloudEntity)=object:DomainPushCoordinator {
+            override val entity=entity
+            override suspend fun pushPending(ownerUserId:UserId,accessToken:String)=DomainPushSummary()
+        }
+        val investmentPublisher=InvestmentPublicationPushCoordinator(empty(CloudEntity.INVESTMENT_CHANNEL),empty(CloudEntity.INVESTMENT_ASSET),empty(CloudEntity.INVESTMENT_TRADE),linkedMove=coordinator)
+        repeat(3) {
+            walletPublisher.pushPending(owner,session!!.accessToken)
+            investmentPublisher.pushPending(owner,session!!.accessToken)
+            clock+=30001
+        }
+        assertEquals("all exact financial and final wallet queues must complete",0,snapshot().pending.size)
+        assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,selected)!!.payload.financeRawArchived())
+        assertEquals(true,backend[CloudEntity.LEDGER_WALLET.table to selected]!!.payload.financeRawArchived())
+        assertEquals(1,ledgerCalls);assertEquals(1,postCalls)
+        assertEquals(setOf(-50L,50L),posts().map{it.payload.financeRawLong("accounting_amount_minor")}.toSet())
+        val pairIndex=allRequests.indexOfFirst{it.requestUrl!!.encodedPath.endsWith("mutate_investment_cash_postings")}
+        val archiveIndex=allRequests.indexOfLast{it.method=="PATCH" && it.requestUrl!!.encodedPath=="/rest/v1/ledger_wallets" && it.requestUrl!!.queryParameter("id")=="eq.$selected"}
+        assertTrue(pairIndex>=0 && archiveIndex>pairIndex)
+    }
+
+    private fun retiringWalletPublisher(local:LocalStore=store,stageEnabled:Boolean=true,
+        sourceProvider:(suspend (UserId,String)->InvestmentTradePublicationSnapshot)?=null)=WalletPublicationPushCoordinator(
+        WalletPushCoordinator(local,ordinaryRemote,true,investmentWalletSource=local::investmentWalletPublicationSnapshot,
+            investmentRetirementSource=sourceProvider ?: local::investmentTradePublicationSnapshot,
+            investmentPrerequisites=WalletInvestmentPrerequisiteCoordinator(local,walletPrerequisiteRemote,stageEnabled,{session}),nowEpochMillis={clock}),rootPublisher)
+    private suspend fun archiveFormerHolder() {
+        OfflineFirstFinanceRepository(store).archiveWallet(owner,RecordId(selected),device,"2026-10-28T00:06:00Z").getOrThrow()
+    }
+    @Test fun disabledInvestmentPublicationDefersRetirementWithoutAnyWalletOrFinancialHttp()=runBlocking {
+        create();archiveFormerHolder();allRequests.clear();requests.clear();metadataRequests.clear();val before=snapshot()
+        assertEquals(DomainPushSummary(),retiringWalletPublisher(stageEnabled=false).pushPending(owner,session!!.accessToken))
+        assertEquals(DomainPushSummary(),InvestmentLinkedWalletMovePushCoordinator(store,remote,false,{session},{clock}).pushPending(owner,session!!.accessToken))
+        assertEquals(before,snapshot());assertTrue(allRequests.isEmpty())
+    }
+    @Test fun localRetirementSourceIoPropagatesWithoutRecordingANetworkFailure()=runBlocking {
+        create();archiveFormerHolder();allRequests.clear();val before=snapshot()
+        val p=retiringWalletPublisher(sourceProvider={o,id->if(id==selected)throw java.io.IOException("synthetic retirement source failure") else store.investmentTradePublicationSnapshot(o,id)})
+        val error=runCatching{p.pushPending(owner,session!!.accessToken)}.exceptionOrNull()
+        assertTrue(error is java.io.IOException);assertEquals("synthetic retirement source failure",error!!.message)
+        assertEquals(before,snapshot());assertTrue(allRequests.isEmpty())
+    }
+    @Test fun localPrerequisitePreparationIoPropagatesAfterTheReadWithoutConsumingAnyQueue()=runBlocking {
+        create();archiveFormerHolder();allRequests.clear();val before=snapshot()
+        val broken=object:LocalStore by store {
+            override suspend fun prepareWalletInvestmentPrerequisite(expected:InvestmentTradePublicationSnapshot,id:String,compared:CloudRecord?,isSessionCurrent:()->Boolean):WalletInvestmentPrerequisitePreparation?=throw java.io.IOException("synthetic prerequisite storage failure")
+        }
+        val error=runCatching{retiringWalletPublisher(broken).pushPending(owner,session!!.accessToken)}.exceptionOrNull()
+        assertTrue(error is java.io.IOException);assertEquals("synthetic prerequisite storage failure",error!!.message)
+        assertEquals(before,snapshot());assertEquals(1,allRequests.size);assertEquals("GET",allRequests.single().method)
+    }
+
+    @Test fun aDifferentDevicesNewerActiveWalletIsAConflictWithoutOverwritingOrAcknowledgingIt()=runBlocking {
+        create();archiveFormerHolder();val before=snapshot()
+        val original=backend[CloudEntity.LEDGER_WALLET.table to selected]!!
+        val other=original.copy(syncVersion=2,updatedAt="2026-10-28T00:30:00Z",payload=JsonObject(original.payload+buildJsonObject {
+            put("sync_version",2);put("updated_at","2026-10-28T00:30:00Z");put("name","Other device name");put("last_modified_by_device_id",event)
+        }))
+        backend[other.entity to other.id]=other;allRequests.clear()
+        val result=retiringWalletPublisher().pushPending(owner,session!!.accessToken)
+        assertEquals(1,result.conflicts)
+        val after=snapshot();assertEquals(before.rows,after.rows);assertEquals(4,after.pending.size)
+        val q=after.pending.single{it.mutation.entity==CloudEntity.LEDGER_WALLET}
+        assertEquals("conflict_wallet_prerequisite_remote_changed",q.lastError);assertEquals(Long.MAX_VALUE,q.nextAttemptAtEpochMillis)
+        assertEquals(before.pending.filter{it.mutation.entity!=CloudEntity.LEDGER_WALLET},after.pending.filter{it.mutation.entity!=CloudEntity.LEDGER_WALLET})
+        assertEquals(other,backend[other.entity to other.id]);assertTrue(allRequests.all{it.method=="GET"});assertEquals(0,ledgerCalls);assertEquals(0,postCalls)
+    }
+
+    @Test fun cachedActiveProofCannotPublishAfterTheWalletPhaseFindsANewerRemoteConflict()=runBlocking {
+        create();archiveFormerHolder();retiringWalletPublisher().pushPending(owner,session!!.accessToken)
+        assertNotNull(walletInvestmentActivePrerequisite(snapshot().rows.single{it.id==selected}))
+        val original=backend[CloudEntity.LEDGER_WALLET.table to selected]!!
+        val newer=original.copy(syncVersion=2,updatedAt="2026-10-28T00:30:00Z",payload=JsonObject(original.payload+buildJsonObject {
+            put("sync_version",2);put("updated_at","2026-10-28T00:30:00Z");put("name","Different device metadata");put("last_modified_by_device_id",event)
+        }))
+        backend[newer.entity to newer.id]=newer
+        assertEquals(1,retiringWalletPublisher().pushPending(owner,session!!.accessToken).conflicts)
+        val before=snapshot();allRequests.clear()
+        assertEquals(DomainPushSummary(),push());assertEquals(before,snapshot())
+        assertTrue(allRequests.isEmpty());assertEquals(0,ledgerCalls);assertEquals(0,postCalls)
     }
 
 }

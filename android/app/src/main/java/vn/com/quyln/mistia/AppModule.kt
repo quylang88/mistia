@@ -250,15 +250,33 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideWalletInvestmentPrerequisiteClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseWalletInvestmentPrerequisiteClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideWalletInvestmentPrerequisiteCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseWalletInvestmentPrerequisiteClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.WalletInvestmentPrerequisiteCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
+
+    @Provides
+    @Singleton
     fun provideWalletPushCoordinator(
         localStore: LocalStore,
         remoteStore: RemoteMutationStore,
+        prerequisites:vn.com.quyln.mistia.core.sync.WalletInvestmentPrerequisiteCoordinator,
     ): WalletPushCoordinator = WalletPushCoordinator(
         localStore = localStore,
         remoteStore = remoteStore,
         writesEnabled = BuildConfig.ALLOW_WALLET_CLOUD_WRITES,
         investmentWalletSource = if(BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES)
             localStore::investmentWalletPublicationSnapshot else null,
+        investmentRetirementSource=localStore::investmentTradePublicationSnapshot,
+        investmentPrerequisites=prerequisites,
     )
 
     @Provides

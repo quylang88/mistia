@@ -50,11 +50,15 @@ fun projectInvestmentTradePublicationResult(
         val id=reference(trade.payload,if(trade.payload.financeRawString("kind_raw_value")=="buy")"funding_wallet_id" else "capital_return_wallet_id")
         id?.let{row(CloudEntity.LEDGER_WALLET,it);dependencies+=CloudEntity.LEDGER_WALLET.table to it}
     }
-    val proven=if(metadata.isEmpty())emptySet() else try {
+    val walletProofs=try{walletInvestmentActivePrerequisites(source,dependencies.filter{it.first==CloudEntity.LEDGER_WALLET.table}.map{it.second}.toSet())}catch(_:Exception){fail()}
+    val proven=(if(metadata.isEmpty())emptySet() else try {
         investmentTradeActiveMetadataPrerequisites(source,affectedAssetIds,metadata)
-    }catch(_:Exception){fail()}
+    }catch(_:Exception){fail()})+walletProofs.keys.map{CloudEntity.LEDGER_WALLET.table to it}
     if(dependencies.any{it in source.dirtyKeys && it !in proven})fail(InvestmentTradeResultError.DEPENDENCY_PENDING)
-    val rows=source.rows.filterNot{it.entity==CloudEntity.INVESTMENT_TRADE.table && reference(it.payload,"asset_id") in affectedAssetIds}+remoteTrades
+    // Project against the proven active prerequisite view; the final archived
+    // local row and its queue remain in source for the exact-generation ACK.
+    val rows=source.rows.filterNot{it.entity==CloudEntity.INVESTMENT_TRADE.table && reference(it.payload,"asset_id") in affectedAssetIds}
+        .map{if(it.entity==CloudEntity.LEDGER_WALLET.table)walletProofs[it.id] ?: it else it}+remoteTrades
     val snapshot=InvestmentAssetSnapshot(source.owner,rows.filter{CloudEntity.fromTable(it.entity) in InvestmentAssetSnapshot.entities})
     val result=linkedMapOf<Pair<String,String>,CloudRecord>()
     for(asset in assets.values) {

@@ -379,4 +379,4 @@ internal class OutboxPushCoordinator(
     private enum class PushOutcome { PUSHED, ACKNOWLEDGED, CONFLICT, STALE, RECONCILED, DEFERRED, RETRYABLE_FAILURE, PERMANENT_FAILURE }
 }
 
-private class MutationFailurePersistenceException(cause: Exception) : Exception(cause)
+internal class MutationFailurePersistenceException(cause: Exception) : Exception(cause)
