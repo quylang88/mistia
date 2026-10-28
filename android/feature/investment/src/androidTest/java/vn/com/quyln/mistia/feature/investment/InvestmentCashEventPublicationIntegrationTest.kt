@@ -169,10 +169,10 @@ class InvestmentCashEventPublicationIntegrationTest {
         }
     }
     private suspend fun snapshot()=store.investmentCashEventPublicationSnapshot(owner,event)
-    private suspend fun create(direction:InvestmentCashTransferDirection=InvestmentCashTransferDirection.DEPOSIT,sameWallet:Boolean=false,selectedId:String=selected) {
-        val view=readInvestmentCashTransfer(store.investmentCashSnapshot(owner),direction,if(sameWallet)linked else selectedId,if(direction==InvestmentCashTransferDirection.DEPOSIT)50 else 20)
+    private suspend fun create(direction:InvestmentCashTransferDirection=InvestmentCashTransferDirection.DEPOSIT,sameWallet:Boolean=false,selectedId:String=selected,amount:Long=if(direction==InvestmentCashTransferDirection.DEPOSIT)50 else 20) {
+        val view=readInvestmentCashTransfer(store.investmentCashSnapshot(owner),direction,if(sameWallet)linked else selectedId,amount)
         repo.saveCashTransfer(owner,InvestmentCashTransferRequest(view.system,view.linked,view.selected,
-            InvestmentCashTransferDraft(event,direction,view.selected.id,if(direction==InvestmentCashTransferDirection.DEPOSIT)50 else 20,null,now,now),view.preview,"Cash event"),device,"2026-10-27T00:05:00Z").getOrThrow()
+            InvestmentCashTransferDraft(event,direction,view.selected.id,amount,null,now,now),view.preview,"Cash event"),device,"2026-10-27T00:05:00Z").getOrThrow()
     }
     private suspend fun push()=coordinator.pushPending(owner,session!!.accessToken)
     @Test fun actualDepositPublishesOneAtomicEventAndClearsItsCanonicalPair()=runBlocking {
@@ -440,6 +440,90 @@ class InvestmentCashEventPublicationIntegrationTest {
         assertEquals(0,q.attemptCount);assertEquals(0L,q.mutation.baseVersion)
         assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,newborn)!!.payload.financeRawArchived())
         finishNewWalletDeposit()
+    }
+
+    @Test fun aLaterDefaultLinkChoiceCannotStrandOrRedirectAnAlreadyConfirmedDeposit()=runBlocking {
+        create()
+        val before=snapshot()
+        val view=investmentLinkedWalletView(store.investmentCashSnapshot(owner).walletSnapshot())
+        repo.changeLinkedWallet(owner,InvestmentWalletLinkRequest(view.system,view.eligibleWallets.single{it.id==selected},"99999999-9999-4999-8999-999999999999",false,0,"Choose default only"),device,"2026-10-27T00:06:00Z").getOrThrow()
+        assertEquals(1,rootPublisher.pushPending(owner,session!!.accessToken).pushed)
+        assertEquals(before.pending,snapshot().pending)
+        assertEquals(selected,snapshot().rows.single{it.id==investmentSystemWalletId(owner)}.payload.financeRawString("investment_linked_wallet_id"))
+        assertEquals(1,push().pushed)
+        assertTrue(snapshot().pending.isEmpty())
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("destination_wallet_id"))
+        assertEquals(linked,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(event,"cash-transfer-posting")]!!.payload.financeRawString("wallet_id"))
+    }
+
+
+    private suspend fun chooseDefault(id:String=selected) {
+        val view=investmentLinkedWalletView(store.investmentCashSnapshot(owner).walletSnapshot())
+        repo.changeLinkedWallet(owner,InvestmentWalletLinkRequest(view.system,view.eligibleWallets.single{it.id==id},"99999999-9999-4999-8999-999999999999",false,0,"Choose default only"),device,"2026-10-27T00:06:00Z").getOrThrow()
+        assertEquals(1,rootPublisher.pushPending(owner,session!!.accessToken).pushed)
+    }
+    @Test fun aLaterDefaultChoicePreservesTheCapturedWithdrawalHolderAndNegativeAllocation()=runBlocking {
+        create(InvestmentCashTransferDirection.WITHDRAWAL);chooseDefault()
+        assertEquals(1,push().pushed);assertTrue(snapshot().pending.isEmpty())
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("source_wallet_id"))
+        assertEquals(linked,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(event,"cash-transfer-posting")]!!.payload.financeRawString("wallet_id"))
+        assertEquals(-20L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(event,"cash-transfer-posting")]!!.payload.financeRawLong("accounting_amount_minor"))
+    }
+    @Test fun anEditConfirmedBeforeTheLaterDefaultChoiceKeepsItsOwnUpdatedRouteAndAmount()=runBlocking {
+        create();assertEquals(1,push().pushed);edit(40);chooseDefault()
+        assertEquals(1,push().pushed);assertTrue(snapshot().pending.isEmpty())
+        val row=backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!
+        assertEquals(linked,row.payload.financeRawString("destination_wallet_id"));assertEquals(40L,row.payload.financeRawLong("amount_minor"))
+        assertEquals(40L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(event,"cash-transfer-posting")]!!.payload.financeRawLong("accounting_amount_minor"))
+    }
+    @Test fun aConfirmedDeletionRetiresTheOriginalEventAfterTheDefaultChoiceChanges()=runBlocking {
+        create();assertEquals(1,push().pushed);delete();chooseDefault()
+        assertEquals(1,push().pushed);assertTrue(snapshot().pending.isEmpty())
+        assertNotNull(backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.deletedAt)
+        assertNotNull(backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(event,"cash-transfer-posting")]!!.deletedAt)
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("destination_wallet_id"))
+    }
+    @Test fun aLaterClearedRemoteDefaultCannotStrandTheCapturedDeposit()=runBlocking {
+        create()
+        // Explicit later metadata fixture: the persisted nullable preference is
+        // cleared; neither confirmed financial endpoint is deleted or changed.
+        val root=snapshot().rows.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==investmentSystemWalletId(owner)}
+        val date="2026-10-27T00:06:00Z"
+        val cleared=root.copy(updatedAt=date,payload=JsonObject(root.payload+buildJsonObject{put("investment_linked_wallet_id",JsonNull);put("updated_at",date);put("last_modified_by_device_id",device)}))
+        store.commitMutation(cleared,PendingMutation(CloudEntity.LEDGER_WALLET,root.id,owner.value,MutationKind.UPSERT,cleared.payload,date,root.syncVersion,device))
+        assertEquals(1,rootPublisher.pushPending(owner,session!!.accessToken).pushed)
+        assertEquals(1,push().pushed);assertTrue(snapshot().pending.isEmpty())
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("destination_wallet_id"))
+    }
+    @Test fun aDirtyUnrelatedNewDefaultDoesNotBlockOrGetAcknowledgedWithHistoricalCash()=runBlocking {
+        create()
+        OfflineFirstFinanceRepository(store).saveWallet(owner,WalletDraft(id=newborn,name="Later default",kind=WalletKind.CASH,currencyCode="VND",openingBalanceMinor=1000),device,now).getOrThrow()
+        assertEquals(1,retiringWalletPublisher().pushPending(owner,session!!.accessToken).pushed)
+        chooseDefault(newborn)
+        OfflineFirstFinanceRepository(store).saveWallet(owner,WalletDraft(id=newborn,name="Latest default name",kind=WalletKind.CASH,currencyCode="VND",openingBalanceMinor=1000),device,"2026-10-27T00:07:00Z").getOrThrow()
+        val queued=snapshot().pending.single{it.mutation.entity==CloudEntity.LEDGER_WALLET}
+        assertEquals(1,push().pushed);assertEquals(listOf(queued),snapshot().pending)
+        assertEquals("Latest default name",store.record(owner,CloudEntity.LEDGER_WALLET.table,newborn)!!.payload.financeRawString("name"))
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("destination_wallet_id"))
+    }
+    @Test fun aLostCashReplyRecoversTheHistoricalPairAfterTheDefaultChoiceChanges()=runBlocking {
+        create();loseReply=true;assertEquals(1,push().retryableFailures)
+        chooseDefault();clock=40000
+        assertEquals(1,push().acknowledged);assertTrue(snapshot().pending.isEmpty())
+        assertEquals(1,requests.count{it.requestUrl!!.encodedPath.endsWith("mutate_investment_cash_event")})
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("destination_wallet_id"))
+    }
+    @Test fun fullHistoricalWithdrawalPublishesBeforeItsFormerHoldersFinalArchive()=runBlocking {
+        create(InvestmentCashTransferDirection.WITHDRAWAL,amount=300);chooseDefault()
+        OfflineFirstFinanceRepository(store).archiveWallet(owner,RecordId(linked),device,"2026-10-27T00:07:00Z").getOrThrow()
+        repeat(3){retiringWalletPublisher().pushPending(owner,session!!.accessToken);push();clock+=30001}
+        assertTrue(snapshot().pending.isEmpty());assertEquals(true,backend[CloudEntity.LEDGER_WALLET.table to linked]!!.payload.financeRawArchived())
+        assertEquals(true,store.record(owner,CloudEntity.LEDGER_WALLET.table,linked)!!.payload.financeRawArchived())
+        assertEquals(linked,backend[CloudEntity.LEDGER_TRANSACTION.table to event]!!.payload.financeRawString("source_wallet_id"))
+        assertEquals(-300L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(event,"cash-transfer-posting")]!!.payload.financeRawLong("accounting_amount_minor"))
+        val cash=requests.indexOfFirst{it.requestUrl!!.encodedPath.endsWith("mutate_investment_cash_event")}
+        val archived=requests.indexOfLast{it.method=="PATCH" && it.requestUrl!!.queryParameter("id")=="eq.$linked"}
+        assertTrue(cash>=0 && archived>cash)
     }
 
 }

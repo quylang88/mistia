@@ -114,10 +114,10 @@ class InvestmentCashEventPushCoordinator(private val localStore:LocalStore,priva
         val wallets=s.rows.filter{it.entity==CloudEntity.LEDGER_WALLET.table}.associateBy{it.id}
         val rootId=investmentSystemWalletId(s.owner);val root=wallets[rootId] ?: return false
         val system=canonicalInvestmentWalletForPublication(s.owner,root)
-        val linked=system.investmentLinkedWalletId ?: return false
         val p=ledger.payload
-        if(p.financeRawString(if(p.financeRawString("settlement_role_raw_value")=="investmentCashDeposit")"destination_wallet_id" else "source_wallet_id")!=linked)return false
-        val dependencies=setOfNotNull(rootId,linked,p.financeRawString("source_wallet_id"),p.financeRawString("destination_wallet_id"))
+        // The real ledger and canonical allocation already capture this event's
+        // route. A later default preference cannot redirect or strand it.
+        val dependencies=setOfNotNull(rootId,p.financeRawString("source_wallet_id"),p.financeRawString("destination_wallet_id"))
         val proven=walletInvestmentActivePrerequisites(s,dependencies-rootId)
         if(dependencies.any{CloudEntity.LEDGER_WALLET.table to it in s.dirtyKeys && it !in proven})return false
         if(s.pending.any{it.mutation.entity==CloudEntity.INVESTMENT_TRADE})return false

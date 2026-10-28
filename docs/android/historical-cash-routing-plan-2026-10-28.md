@@ -1,0 +1,12 @@
+# Historical cash routing implementation plan
+
+Baseline `0bebb76e8c8087af93f052a5b9e0b6d642ba76a1`, branch `codex/android-apk2-4-parity`. Accepted162 artifacts remain immutable; new test builds are WIP163 until separately accepted. Original user TXT requires runtime TDD, direct Swift/diff review, full appropriate checks and immediate independent local commit; no repeated routine approval.
+
+- [x] Characterize actual deposit→default-only-link-change→root publication→cash publication with repository, Room and closed HTTPS. Confirm runtime RED for captured ledger/posting endpoints; fixture/compile failures do not count.
+- [x] Reproduce effective local PostgreSQL rejection of a confirmed historical deposit and withdrawal after default changes. Inspect edit/deletion and existing event/canonical-post version rules before migration; retain owner/currency/capacity/CAS/grants and local-loopback safety. No production deployment.
+- [x] Add focused failing endpoint/currency/owner/conflict/deletion/capacity cases, implement the smallest coherent closed readiness/RPC change, run actual lifecycle tests until GREEN. Preserve162 retirement proof and canonical financial ACK behavior.
+- [x] Run full appropriate host/SQL/native checks, direct Swift/diff review; make review limitations explicit. Bump main version only for accepted product change, freeze candidate/source/APKs and verify installed SHA/cert/11flags/cold launch. Update evidence/progress/handoff, commit independently and continue whole APK1–4/RC.
+
+Scope ruling: direct review found same-RPC global identity collisions; actual37/9RED and2authenticated-caller raceRED required owner/immutable-reference write fences and atomic rollback before accepting this slice. Final41focused/full445SQL and7races pass. Signature and valid same-owner legacy force semantics retained. Initial gateway reload and race-fixture cleanup failures are recorded separately from final successful reset/tests. Native acceptance uses148fresh focused publication cases and unchanged-binary inherited504Room/35Management evidence, not a new full Investment UI run.
+
+Accepted local proof: fresh82 resetCLI0/stored4exact,445pgTAP/7races,2701JVM/627Swift/13hostgroups,148freshfocusednative56.379s, exactbefore/after4APKSHAs andmain160COLD962ms. Unchanged-binary504Room/35Management results inherited162; no new fullInvestmentUI claim. Directreviewcomplete; no independentreviewer undercurrentdelegationpolicy. Independentlocalcommit follows evidence update, wholeAPK1–4 remainsactive.
