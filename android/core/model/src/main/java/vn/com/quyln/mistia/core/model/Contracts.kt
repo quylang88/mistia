@@ -294,6 +294,9 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun acknowledgeInvestmentLinkedWalletMoveResult(expected:InvestmentCashEventPublicationSnapshot,candidate:InvestmentLinkedWalletMoveCloudSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic linked-wallet move acknowledgement unavailable")
+    suspend fun recordInvestmentLinkedWalletMoveFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped linked-wallet move failure unavailable")
+
     suspend fun acknowledgeInvestmentCashReconciliationResult(expected:InvestmentCashEventPublicationSnapshot,candidate:InvestmentCashReconciliationCloudSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic reconciliation acknowledgement unavailable")
     suspend fun recordInvestmentCashReconciliationFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped reconciliation failure unavailable")
 

@@ -521,8 +521,24 @@ object AppModule {
     fun provideInvestmentPublicationPushCoordinator(channel:vn.com.quyln.mistia.core.sync.InvestmentChannelPushCoordinator,
         asset:vn.com.quyln.mistia.core.sync.InvestmentAssetPushCoordinator,trade:vn.com.quyln.mistia.core.sync.InvestmentTradePushCoordinator,
         cash:vn.com.quyln.mistia.core.sync.InvestmentCashEventPushCoordinator,
-        reconciliation:vn.com.quyln.mistia.core.sync.InvestmentCashReconciliationPushCoordinator)=
-        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade,cash,reconciliation)
+        reconciliation:vn.com.quyln.mistia.core.sync.InvestmentCashReconciliationPushCoordinator,
+        linkedMove:vn.com.quyln.mistia.core.sync.InvestmentLinkedWalletMovePushCoordinator)=
+        vn.com.quyln.mistia.core.sync.InvestmentPublicationPushCoordinator(channel,asset,trade,cash,reconciliation,linkedMove)
+
+    @Provides
+    @Singleton
+    fun provideInvestmentLinkedWalletMoveClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.network.SupabaseInvestmentLinkedWalletMoveClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},
+            {BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES})
+
+    @Provides
+    @Singleton
+    fun provideInvestmentLinkedWalletMovePushCoordinator(localStore:LocalStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInvestmentLinkedWalletMoveClient,auth:AuthRepository)=
+        vn.com.quyln.mistia.core.sync.InvestmentLinkedWalletMovePushCoordinator(localStore,remote,
+            BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_INVESTMENT_CLOUD_WRITES,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
 
     @Provides
     @Singleton

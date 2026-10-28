@@ -1001,6 +1001,38 @@ class RoomLocalStore(
         }
     }
 
+    override suspend fun acknowledgeInvestmentLinkedWalletMoveResult(expected:vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot,
+        candidate:vn.com.quyln.mistia.core.model.InvestmentLinkedWalletMoveCloudSnapshot,isSessionCurrent:()->Boolean):Boolean {
+        expected.requireCoherent();require(expected.owner==candidate.owner && expected.eventId==candidate.eventId)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentCashEventPublication(expected.owner,expected.eventId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val plan=vn.com.quyln.mistia.core.model.planInvestmentLinkedWalletMoveAcknowledgement(current,candidate)
+            for((queued,_) in plan.acknowledgements)check(removeQueuedMutationExact(queued)){"Linked-wallet move queue changed"}
+            val received=System.currentTimeMillis()
+            for(remote in plan.imports)database.cloudRecordDao().upsert(remote.toEntity(hasPendingMutation=false,receivedAtEpochMillis=received))
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+    override suspend fun recordInvestmentLinkedWalletMoveFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,
+        expected:vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean):Boolean {
+        require(mutation in vn.com.quyln.mistia.core.model.investmentLinkedWalletMoveQueues(expected) && nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=currentInvestmentCashEventPublication(expected.owner,expected.eventId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val recorded=recordMutationFailure(mutation,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            recorded
+        }
+    }
+
     override suspend fun acknowledgeInvestmentCashReconciliationResult(expected:vn.com.quyln.mistia.core.model.InvestmentCashEventPublicationSnapshot,
         candidate:vn.com.quyln.mistia.core.model.InvestmentCashReconciliationCloudSnapshot,isSessionCurrent:()->Boolean):Boolean {
         expected.requireCoherent();require(expected.owner==candidate.owner && expected.eventId==candidate.eventId)

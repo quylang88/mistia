@@ -43,5 +43,12 @@ class InvestmentPublicationPushCoordinatorTest {
         assertEquals(DomainPushSummary(11122,22244,33366,44488,55610,66732,77854),c.pushPending(owner,"captured-token"))
         assertEquals(listOf(CloudEntity.INVESTMENT_CHANNEL,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_TRADE,CloudEntity.LEDGER_TRANSACTION,CloudEntity.INVESTMENT_POSTING,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL),order)
     }
+    @Test fun linkedWalletMovesFollowOtherCashBeforeRetirementWithoutDroppingTheirCounters()=runTest {
+        val c=InvestmentPublicationPushCoordinator(publisher(CloudEntity.INVESTMENT_CHANNEL,1),publisher(CloudEntity.INVESTMENT_ASSET,10),
+            publisher(CloudEntity.INVESTMENT_TRADE,100),publisher(CloudEntity.LEDGER_TRANSACTION,1000),publisher(CloudEntity.INVESTMENT_POSTING,10000),publisher(CloudEntity.INVESTMENT_POSTING,100000))
+        assertEquals(DomainPushSummary(111122,222244,333366,444488,555610,666732,777854),c.pushPending(owner,"captured-token"))
+        assertEquals(listOf(CloudEntity.INVESTMENT_CHANNEL,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_TRADE,CloudEntity.LEDGER_TRANSACTION,
+            CloudEntity.INVESTMENT_POSTING,CloudEntity.INVESTMENT_POSTING,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL),order)
+    }
 
 }
