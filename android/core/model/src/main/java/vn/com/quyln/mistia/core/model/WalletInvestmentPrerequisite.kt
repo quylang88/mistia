@@ -99,7 +99,17 @@ fun walletHasPendingInvestmentFinancialDependency(source:InvestmentTradePublicat
                 val ledger=row.payload.financeRawReference("ledger_transaction_id");if(!ledger.readable)return true
                 rows[CloudEntity.LEDGER_TRANSACTION.table to ledger.id]?.let{if(references(it))return true}
             }
-            CloudEntity.LEDGER_TRANSACTION->if(row.payload.financeRawString("settlement_role_raw_value")?.startsWith("investment")==true && references(row))return true
+            CloudEntity.LEDGER_TRANSACTION->if(references(row)) {
+                if(row.payload.financeRawString("settlement_role_raw_value")?.startsWith("investment")==true)return true
+                // Clean allocation history still reserves an edited ordinary
+                // parent, even when none of its posting payloads changed.
+                val canonical=listOf("cash-consumption-booked","cash-consumption-unreconciled","cash-destination-booked","cash-destination-unreconciled")
+                    .map{investmentLedgerIdentity(row.id,it)}.toSet()
+                if(localOrdinaryPublicationHistory(row).any{it.rows.size>1} ||
+                    rows.containsKey(CloudEntity.LEDGER_TRANSACTION.table to investmentLedgerIdentity(row.id,"cash-unreconciled-adjustment")) ||
+                    source.rows.any{it.entity==CloudEntity.INVESTMENT_POSTING.table && (it.id in canonical ||
+                        it.payload.financeRawString("event_id")==row.id && it.payload.financeRawString("role_raw_value") in setOf("cashConsumption","cashTransfer"))})return true
+            }
             else->Unit
         }
     }
@@ -137,6 +147,16 @@ private fun knownWalletReservation(source:InvestmentTradePublicationSnapshot,id:
         val row=rowsByKey.getValue(q.mutation.entity.table to q.mutation.recordId)
         if(listOf("funding_wallet_id","capital_return_wallet_id").any{row.payload.financeRawString(it)==id} &&
             runCatching{requireInvestmentTradeForPublication(source.owner,row,forWrite=false)}.isSuccess)return true
+    }
+    // This grants an active metadata prerequisite only. The ordinary
+    // publisher independently proves the full timeline and all prerequisites
+    // from its expanded snapshot before any financial write.
+    val ordinaryRows=source.rows.filter{CloudEntity.fromTable(it.entity) in InvestmentOrdinaryPublicationSnapshot.entities}
+    val ordinaryPending=source.pending.filter{it.mutation.entity in InvestmentOrdinaryPublicationSnapshot.entities}
+    val ordinary=InvestmentOrdinaryPublicationSnapshot(source.owner,source.tradeId,ordinaryRows,ordinaryPending,
+        ordinaryPending.map{it.mutation.entity.table to it.mutation.recordId}.toSet())
+    for(event in investmentOrdinaryPublicationCandidates(ordinary)) {
+        if(runCatching{investmentOrdinaryPublicationGroup(ordinary.copy(eventId=event)).rows}.getOrNull()?.let(::touches)==true)return true
     }
     return false
 }
@@ -212,5 +232,8 @@ fun walletInvestmentActivePrerequisites(source:InvestmentTradePublicationSnapsho
     source.requireCoherent();return activeWalletPrerequisites(source.owner,source.rows,source.pending,source.dirtyKeys,ids)
 }
 fun walletInvestmentActivePrerequisites(source:InvestmentCashEventPublicationSnapshot,ids:Set<String>):Map<String,CloudRecord> {
+    source.requireCoherent();return activeWalletPrerequisites(source.owner,source.rows,source.pending,source.dirtyKeys,ids)
+}
+fun walletInvestmentActivePrerequisites(source:InvestmentOrdinaryPublicationSnapshot,ids:Set<String>):Map<String,CloudRecord> {
     source.requireCoherent();return activeWalletPrerequisites(source.owner,source.rows,source.pending,source.dirtyKeys,ids)
 }

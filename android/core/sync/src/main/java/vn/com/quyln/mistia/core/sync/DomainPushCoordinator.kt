@@ -132,6 +132,7 @@ internal class OutboxPushCoordinator(
             } catch (error: Exception) {
                 currentCoroutineContext().ensureActive()
                 if (error is CancellationException || error is MutationFailurePersistenceException) throw error
+                if (error is MutationWriteStaleException) return@withContext PushOutcome.STALE
                 val retryable = retryableFailureOverride(queued,error) ?: error.isRetryable()
                 val retryAt = if (retryable) now + retryDelayMillis(queued.attemptCount) else Long.MAX_VALUE
                 if (!recordFailure(queued, retryAt, error.safeCode())) PushOutcome.STALE
@@ -380,3 +381,5 @@ internal class OutboxPushCoordinator(
 }
 
 internal class MutationFailurePersistenceException(cause: Exception) : Exception(cause)
+
+internal class MutationWriteStaleException : Exception()

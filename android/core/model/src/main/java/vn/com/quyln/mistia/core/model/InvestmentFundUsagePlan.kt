@@ -15,7 +15,7 @@ private fun fundUsageFail(reason:InvestmentFundUsageError=InvestmentFundUsageErr
 private fun fundUsageVisible(row:CloudRecord):JsonObject=buildJsonObject {
     put("entity",row.entity);put("identity",row.id);put("owner",row.ownerUserId)
     put("deleted",row.deletedAt?.let{runCatching{Instant.parse(it).toString()}.getOrDefault(it)}?.let(::JsonPrimitive) ?: JsonNull)
-    put("financial",buildJsonObject{row.payload.filterKeys{it !in setOf("sync_version","updated_at","last_modified_by_device_id","last_modified_by_user_id")}.forEach{(key,value)->
+    put("financial",buildJsonObject{ordinaryPublicationPayloadForCloud(row).filterKeys{it !in setOf("sync_version","updated_at","last_modified_by_device_id","last_modified_by_user_id")}.forEach{(key,value)->
         put(key,if(key in setOf("created_at","occurred_at","deleted_at","archived_at") && value is JsonPrimitive && value.isString)
             runCatching{JsonPrimitive(Instant.parse(value.content).toString())}.getOrDefault(value) else value)
     }})
@@ -155,3 +155,47 @@ internal fun planInvestmentFundEffects(snapshot:InvestmentCashReadSnapshot,accou
     }
     return InvestmentFundUsagePlan(changes)
 }
+
+/** Reuse the actual timeline/effect planner; canonical IDs alone do not prove allocation. */
+fun requireStableInvestmentOrdinaryAllocation(source:InvestmentOrdinaryPublicationSnapshot,activeWallets:Map<String,CloudRecord> = emptyMap()) {
+    val group=investmentOrdinaryPublicationGroup(source)
+    val root=source.rows.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==investmentSystemWalletId(source.owner)}
+    val code=canonicalInvestmentWalletForPublication(source.owner,root,forWrite=true).currencyCode
+    val rows=source.rows.filter{CloudEntity.fromTable(it.entity) in InvestmentCashReadSnapshot.entities}.map{row->
+        if(row.entity==CloudEntity.LEDGER_WALLET.table)activeWallets[row.id] ?: row else row
+    }
+    val cash=InvestmentCashReadSnapshot(source.owner,rows)
+    val timeline=investmentFundUsageTimeline(cash,code)
+    val driver=group.queues.first()
+    val effects=planInvestmentFundEffects(cash,code,timeline,group.adjustment?.payload?.financeRawString("title") ?: "Investment adjustment",driver.mutation.deviceId,driver.mutation.modifiedAt)
+    require(effects.mutations.isEmpty()){"Ordinary investment allocation differs from the current timeline"}
+}
+
+
+/** Conflict projections must leave every event's actual derived effects coherent. */
+internal fun requireStableInvestmentOrdinaryProjection(source:InvestmentOrdinaryPublicationSnapshot,projection:List<CloudRecord>) {
+    val group=investmentOrdinaryPublicationGroup(source)
+    val root=projection.single{it.entity==CloudEntity.LEDGER_WALLET.table && it.id==investmentSystemWalletId(source.owner)}
+    val code=canonicalInvestmentWalletForPublication(source.owner,root,forWrite=true).currencyCode
+    val ids=projection.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.payload.financeRawString("event_id")==source.eventId}
+        .mapNotNull{it.payload.financeRawString("wallet_id")}.toSet()+listOfNotNull(
+            projection.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==source.eventId}.payload.financeRawString("source_wallet_id"))
+    val active=walletInvestmentActivePrerequisites(source,ids)
+    val rows=projection.filter{CloudEntity.fromTable(it.entity) in InvestmentCashReadSnapshot.entities}.map{row->
+        if(row.entity==CloudEntity.LEDGER_WALLET.table)active[row.id] ?: row else row
+    }
+    val cash=InvestmentCashReadSnapshot(source.owner,rows)
+    val timeline=investmentFundUsageTimeline(cash,code)
+    val driver=group.queues.first()
+    val effects=planInvestmentFundEffects(cash,code,timeline,group.adjustment?.payload?.financeRawString("title") ?: "Investment adjustment",driver.mutation.deviceId,driver.mutation.modifiedAt)
+    val currentAdjustment=investmentLedgerIdentity(source.eventId,"cash-unreconciled-adjustment")
+    val changesCurrent=effects.mutations.any{(row,_)->
+        row.entity==CloudEntity.INVESTMENT_POSTING.table && row.payload.financeRawString("event_id")==source.eventId ||
+            row.entity==CloudEntity.LEDGER_TRANSACTION.table && row.id==currentAdjustment
+    }
+    require(!changesCurrent){"Ordinary conflict projection changes its own confirmed allocation"}
+    if(effects.mutations.isNotEmpty())throw InvestmentOrdinaryRelatedAllocationChanged()
+
+}
+
+internal class InvestmentOrdinaryRelatedAllocationChanged:IllegalArgumentException("Ordinary conflict changes another confirmed allocation")

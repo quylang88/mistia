@@ -12,6 +12,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vn.com.quyln.mistia.core.model.localOrdinaryPublicationHistory
+import vn.com.quyln.mistia.core.model.ordinaryPublicationPayloadForCloud
+import vn.com.quyln.mistia.core.model.planTransactionPublicationPreparation
 import vn.com.quyln.mistia.core.model.CloudEntity
 import vn.com.quyln.mistia.core.model.CloudRecord
 import vn.com.quyln.mistia.core.model.EntityCount
@@ -411,7 +414,76 @@ class TransactionPushCoordinatorTest {
         syncVersion = version,
     )
 
+    @Test fun `known investment allocation delegates the ledger before any generic HTTP`()=runTest {
+        val local=FakeLocalStore(localRecord(0),queued(0));local.investmentDependency=true
+        val remote=FakeRemoteStore().apply{createdResult=remoteRecord(1)}
+        assertEquals(DomainPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(0,remote.fetchCalls);assertNull(remote.createdPayload);assertEquals(queued(0),local.queued)
+    }
+    @Test fun `investment dependency appearing during read is rechecked before conditional write`()=runTest {
+        val local=FakeLocalStore(localRecord(7),queued(7))
+        val remote=FakeRemoteStore().apply{fetched=remoteRecord(7,title="Before");updatedResult=remoteRecord(8);onFetch={local.investmentDependency=true}}
+        assertEquals(DomainPushSummary(),coordinator(local,remote).pushPending(UserId(OWNER),TOKEN))
+        assertEquals(0,remote.updateCalls);assertEquals(queued(7),local.queued)
+    }
+
+    @Test fun `local investment dependency read failure never becomes a generic network retry`()=runTest {
+        val local=FakeLocalStore(localRecord(0),queued(0));val failure=IOException("Local dependency read unavailable");local.investmentDependencyFailure=failure
+        val remote=FakeRemoteStore().apply{createdResult=remoteRecord(1)}
+        assertSame(failure,runCatching{coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)}.exceptionOrNull())
+        assertEquals(0,remote.fetchCalls);assertEquals(queued(0),local.queued)
+    }
+
+
+    @Test fun `actual conditional target is journaled before wire and stripped from HTTP`()=runTest {
+        val local=FakeLocalStore(localRecord(6),queued(6));val remote=FakeRemoteStore().apply {
+            fetched=record(9007199254740993L,"Old server","2026-09-23T11:00:00Z")
+            updatedResult=remoteRecord(9007199254740994L)
+            beforeUpdate={
+                val history=localOrdinaryPublicationHistory(local.record!!)
+                assertEquals(9007199254740993L,history.single().rows.single().baseVersion)
+                assertEquals(6L,local.record!!.syncVersion)
+            }
+        }
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).pushed)
+        assertTrue(remote.updatedPayload!!.keys.none{it.startsWith("_mistia_android_")});assertNull(local.queued)
+    }
+    @Test fun `journal persistence IO aborts before generic HTTP without retry bookkeeping`()=runTest {
+        val local=FakeLocalStore(localRecord(0),queued(0));val error=IOException("Synthetic journal storage failure");local.journalFailure=error
+        val remote=FakeRemoteStore().apply{createdResult=remoteRecord(1)}
+        assertSame(error,runCatching{coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)}.exceptionOrNull())
+        assertNull(remote.createdPayload);assertEquals(queued(0),local.queued)
+    }
+    @Test fun `ambiguous generic response retains journal and next semantic read safely acknowledges`()=runTest {
+        val local=FakeLocalStore(localRecord(7),queued(7));val remote=FakeRemoteStore().apply{
+            fetched=record(7,"Old","2026-09-23T11:00:00Z");beforeUpdate={throw IOException("Lost reply")}
+        }
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).retryableFailures)
+        assertEquals(1,localOrdinaryPublicationHistory(local.record!!).size);assertEquals(1,local.queued!!.attemptCount)
+        local.queued=local.queued!!.copy(nextAttemptAtEpochMillis=0)
+        remote.beforeUpdate=null;remote.fetched=remoteRecord(8)
+        assertEquals(1,coordinator(local,remote).pushPending(UserId(OWNER),TOKEN).acknowledged)
+        assertNull(local.queued);assertTrue(local.record!!.payload.keys.none{it.startsWith("_mistia_android_")})
+    }
+
+
+    @Test fun `typed generic journal ACK storage IO is propagated without network retry bookkeeping`()=runTest {
+        val local=FakeLocalStore(localRecord(0),queued(0));val error=IOException("Synthetic acknowledgement storage failure");local.ackFailure=error
+        val remote=FakeRemoteStore().apply{createdResult=remoteRecord(1)}
+        assertSame(error,runCatching{coordinator(local,remote).pushPending(UserId(OWNER),TOKEN)}.exceptionOrNull())
+        assertEquals(0,local.queued!!.attemptCount);assertEquals(1,localOrdinaryPublicationHistory(local.record!!).size)
+    }
+
     private class FakeLocalStore(var record: CloudRecord?, var queued: QueuedMutation?) : LocalStore {
+        var journalFailure:Exception?=null
+        var ackFailure:Exception?=null
+        override suspend fun prepareTransactionPublication(queued:QueuedMutation,local:CloudRecord,proposal:JsonObject):QueuedMutation? {
+            journalFailure?.let{throw it};if(this.queued!=queued || record!=local)return null
+            val result=planTransactionPublicationPreparation(queued,local,proposal);record=result.first;this.queued=result.second;return result.second
+        }
+        var investmentDependency=false
+        var investmentDependencyFailure:Exception?=null
+        override suspend fun investmentOrdinaryPublicationDependency(owner:UserId,eventId:String):Boolean {investmentDependencyFailure?.let{throw it};return investmentDependency}
         val dependencies = mutableMapOf<Pair<UserId, String>, Set<String>>()
         var dependencyReads = 0
         override fun observe(entity: String, ownerUserId: UserId): Flow<List<CloudRecord>> =
@@ -431,6 +503,7 @@ class TransactionPushCoordinatorTest {
                 it.nextAttemptAtEpochMillis <= dueAtEpochMillis
         }
         override suspend fun acknowledgeMutation(mutation: QueuedMutation, remoteRecord: CloudRecord): Boolean {
+            ackFailure?.let{throw it}
             if (queued != mutation) return false
             queued = null
             record = remoteRecord

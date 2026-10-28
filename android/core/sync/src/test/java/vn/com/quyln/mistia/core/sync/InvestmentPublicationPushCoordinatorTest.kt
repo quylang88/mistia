@@ -51,4 +51,13 @@ class InvestmentPublicationPushCoordinatorTest {
             CloudEntity.INVESTMENT_POSTING,CloudEntity.INVESTMENT_POSTING,CloudEntity.INVESTMENT_ASSET,CloudEntity.INVESTMENT_CHANNEL),order)
     }
 
+    @Test fun ordinaryAllocationsFollowOtherCashAndPreserveEveryCounterBeforeRetirement()=runTest {
+        val names=mutableListOf<String>()
+        val c=InvestmentPublicationPushCoordinator(publisher(CloudEntity.INVESTMENT_CHANNEL,1),publisher(CloudEntity.INVESTMENT_ASSET,10),
+            publisher(CloudEntity.INVESTMENT_TRADE,100),publisher(CloudEntity.LEDGER_TRANSACTION,1000),publisher(CloudEntity.INVESTMENT_POSTING,10000),
+            publisher(CloudEntity.INVESTMENT_POSTING,100000){names+="linked"},publisher(CloudEntity.INVESTMENT_POSTING,1000000){names+="ordinary"})
+        assertEquals(DomainPushSummary(1111122,2222244,3333366,4444488,5555610,6666732,7777854),c.pushPending(owner,"captured-token"))
+        assertEquals(listOf("linked","ordinary"),names)
+    }
+
 }

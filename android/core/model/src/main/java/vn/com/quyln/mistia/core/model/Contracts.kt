@@ -294,6 +294,19 @@ interface InvestmentRepository {
 }
 
 interface LocalStore {
+    suspend fun resolveInvestmentOrdinaryConflict(expected:InvestmentOrdinaryPublicationSnapshot,observed:InvestmentOrdinaryCloudSnapshot,isSessionCurrent:()->Boolean={true}):InvestmentOrdinaryConflictPlan? =
+        throw UnsupportedOperationException("Whole ordinary conflict resolution unavailable")
+    suspend fun prepareTransactionPublication(queued:QueuedMutation,local:CloudRecord,proposal:kotlinx.serialization.json.JsonObject):QueuedMutation? =
+        throw UnsupportedOperationException("Generic transaction publication preparation unavailable")
+    suspend fun investmentOrdinaryPublicationDependency(owner:UserId,eventId:String):Boolean = throw UnsupportedOperationException("Complete ordinary investment dependency unavailable")
+
+    suspend fun prepareInvestmentOrdinaryPublication(expected:InvestmentOrdinaryPublicationSnapshot,deviceId:String,now:String,isSessionCurrent:()->Boolean={true}):InvestmentOrdinaryPublicationSnapshot? = throw UnsupportedOperationException("Atomic ordinary preparation unavailable")
+    suspend fun rebaseInvestmentOrdinaryPublication(expected:InvestmentOrdinaryPublicationSnapshot,observed:InvestmentOrdinaryCloudSnapshot,isSessionCurrent:()->Boolean={true}):InvestmentOrdinaryPublicationSnapshot? = throw UnsupportedOperationException("Atomic ordinary rebase unavailable")
+
+    suspend fun investmentOrdinaryPublicationSnapshot(owner:UserId,eventId:String):InvestmentOrdinaryPublicationSnapshot = throw UnsupportedOperationException("Atomic ordinary source unavailable")
+    suspend fun acknowledgeInvestmentOrdinaryResult(expected:InvestmentOrdinaryPublicationSnapshot,candidate:InvestmentOrdinaryPublicationResult,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic ordinary acknowledgement unavailable")
+    suspend fun recordInvestmentOrdinaryFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentOrdinaryPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped ordinary failure unavailable")
+
     suspend fun acknowledgeInvestmentLinkedWalletMoveResult(expected:InvestmentCashEventPublicationSnapshot,candidate:InvestmentLinkedWalletMoveCloudSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Atomic linked-wallet move acknowledgement unavailable")
     suspend fun recordInvestmentLinkedWalletMoveFailure(mutation:QueuedMutation,nextAttemptAtEpochMillis:Long,errorCode:String,expected:InvestmentCashEventPublicationSnapshot,isSessionCurrent:()->Boolean={true}):Boolean = throw UnsupportedOperationException("Scoped linked-wallet move failure unavailable")
 

@@ -78,7 +78,9 @@ class WalletInvestmentProtectionRoomTest {
             val changed=repo.saveWallet(owner,draft().copy(currencyCode="VND"),device,later).getOrThrow();assertEquals("VND",changed.currencyCode)
             repo.saveWallet(owner,draft(),device,later).getOrThrow()
         }
-        store.replacePullSnapshot(owner,CloudEntity.INVESTMENT_POSTING.table,emptyList());store.replacePullSnapshot(other,CloudEntity.INVESTMENT_POSTING.table,listOf(cash(subject=other)))
+        store.replacePullSnapshot(owner,CloudEntity.INVESTMENT_POSTING.table,emptyList())
+        // Populate the other partition through its own account-scoped store.
+        RoomLocalStore(db,currentBillOwner={other}).replacePullSnapshot(other,CloudEntity.INVESTMENT_POSTING.table,listOf(cash(subject=other)))
         repo.archiveWallet(owner,RecordId(id(1)),device,later).getOrThrow();assertTrue(LedgerWalletRecord.fromCloudRecord(row()).isArchived)
     }
     @Test fun aRejectedWalletInABatchRollsBackAnEarlierUnrelatedMutation()=runBlocking {

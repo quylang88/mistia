@@ -1,0 +1,515 @@
+package vn.com.quyln.mistia.feature.investment
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.util.Collections
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.*
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.*
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
+import org.junit.*
+import org.junit.Assert.*
+import org.junit.runner.RunWith
+import vn.com.quyln.mistia.core.database.*
+import vn.com.quyln.mistia.core.model.*
+import vn.com.quyln.mistia.core.network.*
+import vn.com.quyln.mistia.core.sync.*
+
+/** Actual consent/repository/Room and current closed publishers, not an SQL arithmetic oracle. */
+@RunWith(AndroidJUnit4::class)
+class InvestmentOrdinaryAllocationPublicationIntegrationTest {
+    private val owner=UserId("11111111-1111-1111-1111-111111111111")
+    private val device="44444444-4444-4444-8444-444444444444"
+    private val now="2026-10-28T00:00:00Z"
+    private fun id(n:Int)=java.util.UUID(0,n.toLong()).toString()
+    private var session=AuthSession(owner,null,"ordinary-allocation-test-token","refresh",Long.MAX_VALUE)
+    private var clock=10000L
+    private var afterOrdinaryCommit:(()->Unit)?=null
+    private var afterGenericCommit:(()->Unit)?=null
+    private var loseGenericReply=false
+    private var capacityFailureEvent:String?=null
+    private var loseOrdinaryReply=false
+    private lateinit var db:MistiaDatabase
+    private lateinit var store:RoomLocalStore
+    private lateinit var finance:OfflineFirstFinanceRepository
+    private lateinit var server:MockWebServer
+    private lateinit var transactions:TransactionPushCoordinator
+    private lateinit var wallets:WalletPushCoordinator
+    private lateinit var investments:InvestmentPublicationPushCoordinator
+    private val backend=Collections.synchronizedMap(linkedMapOf<Pair<String,String>,CloudRecord>())
+    private val requests=Collections.synchronizedList(mutableListOf<RecordedRequest>())
+    @Before fun setup()=runBlocking {
+        db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(),MistiaDatabase::class.java).allowMainThreadQueries().build()
+        store=RoomLocalStore(db,currentBillOwner={owner});finance=OfflineFirstFinanceRepository(store)
+        finance.saveWallet(owner,WalletDraft(id=id(1),name="Cash",kind=WalletKind.CASH,currencyCode="JPY",openingBalanceMinor=100),device,now).getOrThrow()
+        val parent=finance.saveCategory(owner,CategoryDraft(id=id(30),name="Parent",kind=TransactionCategoryKind.EXPENSE,hierarchyRole=CategoryHierarchyRole.PARENT),device,now).getOrThrow()
+        finance.saveCategory(owner,CategoryDraft(id=id(31),name="Child",kind=TransactionCategoryKind.EXPENSE,hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=parent.id),device,now).getOrThrow()
+        val root=WalletDraft(id=investmentSystemWalletId(owner),name="Investment wallet",kind=WalletKind.CASH,currencyCode="JPY").toMutation(owner,null,device,now).record.let{it.copy(payload=JsonObject(it.payload+buildJsonObject {
+            put("kind_raw_value","investment");put("system_purpose_raw_value","investmentProfit");put("investment_linked_wallet_id",id(1));put("opening_balance_minor",0)
+            put("icon_symbol_name","chart.line.uptrend.xyaxis");put("icon_color_hex","#9A67FF");put("sort_order",2147483547)
+            put("institution_display_name",JsonNull);put("institution_preset_key",JsonNull)
+        }))}
+        val cash=CloudRecord(CloudEntity.INVESTMENT_POSTING.table,id(10),owner.value,buildJsonObject {
+            put("id",id(10));put("user_id",owner.value);put("sync_version",0);put("deleted_at",JsonNull);put("created_at",now);put("updated_at",now);put("last_modified_by_device_id",device)
+            put("event_id",id(11));put("ledger_transaction_id",id(11));put("wallet_id",id(1));put("role_raw_value","cashAccrual");put("cash_bucket_raw_value","booked");put("cash_origin_raw_value","derived")
+            put("amount_minor",60);put("accounting_amount_minor",60);put("currency_code","JPY");put("accounting_currency_code","JPY");put("occurred_at","2026-10-28T00:00:01Z")
+        },now,null,0)
+        // Imported historical booked cash is explicit; its FIFO origin is outside this lifecycle fixture.
+        for(row in listOf(root,cash))store.commitMutation(row,PendingMutation(CloudEntity.fromTable(row.entity)!!,row.id,owner.value,MutationKind.UPSERT,row.payload,now,0,device))
+        for(entity in listOf(CloudEntity.LEDGER_WALLET,CloudEntity.TRANSACTION_CATEGORY,CloudEntity.INVESTMENT_POSTING)) {
+            for(q in store.pendingMutations(owner,entity,Long.MAX_VALUE)) {
+                val row=store.record(owner,entity.table,q.mutation.recordId)!!
+                val clean=row.copy(syncVersion=1,payload=JsonObject(row.payload+("sync_version" to JsonPrimitive(1))))
+                assertTrue(store.acknowledgeMutation(q,clean));backend[clean.entity to clean.id]=clean
+            }
+        }
+        val cert=HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val serverTls=HandshakeCertificates.Builder().heldCertificate(cert).build();val clientTls=HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
+        server=MockWebServer().apply{useHttps(serverTls.sslSocketFactory(),false);dispatcher=fixture();start()}
+        val http=OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager).retryOnConnectionFailure(false).callTimeout(5,TimeUnit.SECONDS).build()
+        val config=SupabaseConfig(server.url("/").toString(),"local-publishable-key")
+        transactions=TransactionPushCoordinator(store,SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_TRANSACTION)),true,{clock})
+        wallets=WalletPushCoordinator(store,SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_WALLET)),true,
+            nowEpochMillis={clock},investmentWalletSource=store::investmentWalletPublicationSnapshot,investmentRetirementSource=store::investmentTradePublicationSnapshot,
+            investmentPrerequisites=WalletInvestmentPrerequisiteCoordinator(store,SupabaseWalletInvestmentPrerequisiteClient(config,http,{session},{true}),true,{session}))
+        // These exact current financial coordinators have no channel/asset/trade queues in this fixture.
+        fun empty(entity:CloudEntity)=object:DomainPushCoordinator {
+            override val entity=entity
+            override suspend fun pushPending(ownerUserId:UserId,accessToken:String)=DomainPushSummary()
+        }
+        investments=InvestmentPublicationPushCoordinator(empty(CloudEntity.INVESTMENT_CHANNEL),empty(CloudEntity.INVESTMENT_ASSET),empty(CloudEntity.INVESTMENT_TRADE),
+            InvestmentCashEventPushCoordinator(store,SupabaseInvestmentCashEventClient(config,http,{session},{true}),true,{session},{clock}),
+            InvestmentCashReconciliationPushCoordinator(store,SupabaseInvestmentCashReconciliationClient(config,http,{session},{true}),true,{session},{clock}),
+            InvestmentLinkedWalletMovePushCoordinator(store,SupabaseInvestmentLinkedWalletMoveClient(config,http,{session},{true}),true,{session},{clock}),
+            InvestmentOrdinaryPushCoordinator(store,SupabaseInvestmentOrdinaryClient(config,http,{session},{true}),true,{session},{clock}))
+    }
+    @After fun close(){server.shutdown();db.close()}
+    private fun reply(rows:List<CloudRecord>)=MockResponse().setBody(JsonArray(rows.map{it.payload}).toString())
+    private fun fixture()=object:Dispatcher() {
+        override fun dispatch(request:RecordedRequest):MockResponse {
+            requests+=request;assertEquals("Bearer "+session.accessToken,request.getHeader("Authorization"));assertEquals("local-publishable-key",request.getHeader("apikey"))
+            val url=request.requestUrl!!;val table=url.pathSegments.last()
+            if(request.method=="GET") {
+                assertEquals("eq.${owner.value}",url.queryParameter("user_id"))
+                val exact=url.queryParameter("id")?.takeIf{it.startsWith("eq.")}?.removePrefix("eq.")
+                val cursor=url.queryParameter("id")?.takeIf{it.startsWith("gt.")}?.removePrefix("gt.")
+                val ids=url.queryParameter("id")?.takeIf{it.startsWith("in.(")}?.removePrefix("in.(")?.removeSuffix(")")?.split(",")?.toSet()
+                val event=url.queryParameter("event_id")?.removePrefix("eq.")
+                return reply(synchronized(backend){backend.values.filter{it.entity==table && (exact==null || it.id==exact) && (ids==null || it.id in ids) && (cursor==null || it.id>cursor) && (event==null || it.payload.financeRawString("event_id")==event)}.sortedBy{it.id}.take(if(ids==null)1 else 3)})
+            }
+            if(request.method=="PATCH" && table==CloudEntity.LEDGER_WALLET.table) {
+                assertEquals("eq.${owner.value}",url.queryParameter("user_id"))
+                val rowId=url.queryParameter("id")!!.removePrefix("eq.")
+                val expected=url.queryParameter("sync_version")!!.removePrefix("eq.").toLong()
+                val body=Json.parseToJsonElement(request.body.clone().readUtf8()).jsonObject
+                synchronized(backend) {
+                    val old=backend[table to rowId] ?: return reply(emptyList())
+                    if(old.syncVersion!=expected)return reply(emptyList())
+                    val wire=JsonObject(old.payload+body)
+                    val saved=old.copy(payload=wire,syncVersion=wire.financeRawLong("sync_version")!!,updatedAt=wire.financeRawString("updated_at"),deletedAt=wire.financeRawString("deleted_at"))
+                    backend[table to rowId]=saved;return reply(listOf(saved))
+                }
+            }
+            if(request.method=="POST" && table=="mutate_ordinary_investment_event") {
+                // A stateful CAS/protocol fixture. Real SQL validates money and permissions separately.
+                val body=Json.parseToJsonElement(request.body.clone().readUtf8()).jsonObject
+                assertEquals(setOf("p_transaction","p_adjustment","p_postings","p_expected_version","p_expected_adjustment_version","p_expected_posting_versions","p_expected_presence"),body.keys)
+                val primary=body.getValue("p_transaction").jsonObject
+                if(primary.financeRawString("id")==capacityFailureEvent) {
+                    capacityFailureEvent=null
+                    return MockResponse().setResponseCode(400).setBody("""{"code":"P0001","message":"ordinary_investment_capacity_conflict"}""")
+                }
+                val adjustment=body["p_adjustment"]?.takeUnless{it==JsonNull}?.jsonObject
+                val postings=body.getValue("p_postings").jsonArray.map{it.jsonObject}
+                val proposed=listOf(CloudEntity.LEDGER_TRANSACTION.table to primary)+listOfNotNull(adjustment?.let{CloudEntity.LEDGER_TRANSACTION.table to it})+postings.map{CloudEntity.INVESTMENT_POSTING.table to it}
+                val presence=body.getValue("p_expected_presence").jsonObject
+                val versions=body.getValue("p_expected_posting_versions").jsonObject
+                assertEquals(proposed.map{it.second.financeRawString("id")!!}.toSet(),presence.keys)
+                synchronized(backend) {
+                    for((entity,payload) in proposed) {
+                        val rowId=payload.financeRawString("id")!!
+                        assertEquals(owner.value,payload.financeRawString("user_id"));assertTrue(payload.keys.none{it.startsWith("_mistia_android_")})
+                        val expected=when { payload===primary->body.financeRawLong("p_expected_version")!!
+                            payload===adjustment->body.financeRawLong("p_expected_adjustment_version")!!
+                            else->versions.getValue(rowId).jsonPrimitive.long }
+                        assertEquals(expected,payload.financeRawLong("sync_version"))
+                        val old=backend[entity to rowId]
+                        if((old!=null)!=presence.getValue(rowId).jsonPrimitive.boolean || old!=null && old.syncVersion!=expected)
+                            return MockResponse().setResponseCode(400).setBody("""{"code":"P0001","message":"ordinary_investment_version_conflict"}""")
+                    }
+                    val saved=proposed.map{(entity,payload)->
+                        val version=payload.financeRawLong("sync_version")!!+1
+                        val wire=JsonObject(payload+("sync_version" to JsonPrimitive(version)))
+                        CloudRecord(entity,wire.financeRawString("id")!!,owner.value,wire,wire.financeRawString("updated_at"),wire.financeRawString("deleted_at"),version)
+                    }
+                    saved.forEach{backend[it.entity to it.id]=it}
+                    afterOrdinaryCommit?.also{afterOrdinaryCommit=null;it()}
+                    if(loseOrdinaryReply){loseOrdinaryReply=false;return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)}
+                    return MockResponse().setBody(buildJsonObject {
+                        put("transaction",saved.first().payload)
+                        put("adjustment",if(adjustment==null)JsonNull else saved[1].payload)
+                        put("postings",JsonArray(saved.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}.map{it.payload}))
+                    }.toString())
+                }
+            }
+            if(request.method=="PATCH" && table==CloudEntity.LEDGER_TRANSACTION.table) {
+                val rowId=url.queryParameter("id")!!.removePrefix("eq.")
+                val expected=url.queryParameter("sync_version")!!.removePrefix("eq.").toLong()
+                val body=Json.parseToJsonElement(request.body.clone().readUtf8()).jsonObject
+                assertTrue(body.keys.none{it.startsWith("_mistia_android_")})
+                synchronized(backend) {
+                    val old=backend[table to rowId] ?: return reply(emptyList())
+                    if(old.syncVersion!=expected)return reply(emptyList())
+                    val wire=JsonObject(old.payload+body)
+                    val saved=old.copy(payload=wire,syncVersion=wire.financeRawLong("sync_version")!!,updatedAt=wire.financeRawString("updated_at"),deletedAt=wire.financeRawString("deleted_at"))
+                    backend[table to rowId]=saved;afterGenericCommit?.also{afterGenericCommit=null;it()}
+                    if(loseGenericReply){loseGenericReply=false;return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)}
+                    return reply(listOf(saved))
+                }
+            }
+            if(request.method=="POST" && table==CloudEntity.LEDGER_TRANSACTION.table) {
+                val wire=Json.parseToJsonElement(request.body.clone().readUtf8())
+                val body=if(wire is JsonArray)wire.single().jsonObject else wire.jsonObject
+                assertEquals(owner.value,body.financeRawString("user_id"));assertTrue(body.keys.none{it.startsWith("_mistia_android_")})
+                val key=table to body.financeRawString("id")!!
+                if(backend.containsKey(key))return MockResponse().setResponseCode(409)
+                val saved=CloudRecord(table,key.second,owner.value,body,body.financeRawString("updated_at"),null,body.financeRawLong("sync_version")!!)
+                backend[key]=saved;afterGenericCommit?.also{afterGenericCommit=null;it()};if(loseGenericReply){loseGenericReply=false;return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)};return reply(listOf(saved))
+            }
+            return MockResponse().setResponseCode(404)
+        }
+    }
+    @Test fun confirmedOrdinaryExpensePublishesItsRealLedgerAndExactBookedConsumptionAcrossAutomaticCycles()=runBlocking {
+        val draft=TransactionDraft(primaryKind=TransactionPrimaryKind.EXPENSE,title="Expense",amountMinor=70,occurredAt="2026-10-28T00:00:02Z",sourceWalletId=id(1),categoryId=id(31))
+        val request=TransactionInvestmentSaveRequest(draft,TransactionCreationIdentity(id(20),now),null,"Adjustment","JPY")
+        val review=(finance.prepareTransactionWithInvestmentFunds(owner,request,device,now).exceptionOrNull() as InvestmentFundUsageConfirmationRequired).review
+        finance.saveTransactionWithInvestmentFunds(owner,request.copy(consent=review.consent),device,now).getOrThrow()
+        val local=store.investmentTradePublicationSnapshot(owner,id(20));assertEquals(2,local.pending.size)
+        val consumption=local.rows.single{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.payload.financeRawString("event_id")==id(20)}
+        assertEquals("cashConsumption",consumption.payload.financeRawString("role_raw_value"));assertEquals(-30L,consumption.payload.financeRawLong("accounting_amount_minor"))
+        repeat(3){transactions.pushPending(owner,session.accessToken);investments.pushPending(owner,session.accessToken);clock+=30001}
+        assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertEquals("real expense and its confirmed cash consumption must both finish",0,store.investmentTradePublicationSnapshot(owner,id(20)).pending.size)
+        assertEquals(-30L,backend[consumption.entity to consumption.id]!!.payload.financeRawLong("accounting_amount_minor"))
+        assertEquals(1,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"})
+        assertFalse(requests.any{it.method=="POST" && it.requestUrl!!.pathSegments.last()==CloudEntity.LEDGER_TRANSACTION.table})
+    }
+    private suspend fun publishCycles(count:Int=3) {
+        repeat(count){transactions.pushPending(owner,session.accessToken);investments.pushPending(owner,session.accessToken);clock+=30001}
+    }
+    private suspend fun snapshot()=store.investmentOrdinaryPublicationSnapshot(owner,id(20))
+    private suspend fun cleanIntoBackend(entities:List<CloudEntity>) {
+        for(entity in entities)for(q in store.pendingMutations(owner,entity,Long.MAX_VALUE)) {
+            val row=store.record(owner,entity.table,q.mutation.recordId)!!
+            val clean=row.copy(syncVersion=row.syncVersion+1,payload=JsonObject(row.payload+("sync_version" to JsonPrimitive(row.syncVersion+1))))
+            assertTrue(store.acknowledgeMutation(q,clean));backend[clean.entity to clean.id]=clean
+        }
+    }
+    private suspend fun saveExpense(amount:Long=70,event:Int=20,editing:Boolean=false):LedgerTransactionRecord {
+        val draft=TransactionDraft(id=if(editing)id(event) else null,primaryKind=TransactionPrimaryKind.EXPENSE,title="Expense",amountMinor=amount,
+            occurredAt="2026-10-28T00:00:02Z",sourceWalletId=id(1),categoryId=id(31))
+        var request=TransactionInvestmentSaveRequest(draft,if(editing)null else TransactionCreationIdentity(id(event),now),null,"Adjustment","JPY")
+        val error=finance.prepareTransactionWithInvestmentFunds(owner,request,device,now).exceptionOrNull()
+        if(error is InvestmentFundUsageConfirmationRequired)request=request.copy(consent=error.review.consent)
+        else if(error!=null)throw error
+        return finance.saveTransactionWithInvestmentFunds(owner,request,device,now).getOrThrow()
+    }
+    private suspend fun lifecycle(action:TransactionLifecycleAction) {
+        val current=LedgerTransactionRecord.fromCloudRecord(store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!)
+        var request=TransactionInvestmentLifecycleRequest(current,action,now,"JPY","Adjustment",null)
+        val error=finance.prepareTransactionLifecycle(owner,request,device,now).exceptionOrNull()
+        if(error is InvestmentFundUsageConfirmationRequired)request=request.copy(consent=error.review.consent)
+        else if(error!=null)throw error
+        finance.saveTransactionLifecycle(owner,request,device,now).getOrThrow()
+    }
+    private suspend fun assertPublished(amount:Long,activeConsumption:Long) {
+        assertTrue("All financial queues must finish",snapshot().pending.isEmpty())
+        val t=backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!
+        assertEquals(amount,t.payload.financeRawLong("amount_minor"))
+        val posts=backend.values.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.payload.financeRawString("event_id")==id(20)}
+        assertEquals(activeConsumption,posts.filter{it.deletedAt==null}.sumOf{it.payload.financeRawLong("accounting_amount_minor")!!})
+        assertFalse(requests.any{it.method=="POST" && it.requestUrl!!.pathSegments.last()==CloudEntity.LEDGER_TRANSACTION.table})
+    }
+    @Test fun realEditArchiveRestoreAndDeletePublishCompleteComparedHistory()=runBlocking {
+        saveExpense();publishCycles();assertPublished(70,-30)
+        saveExpense(80,editing=true);publishCycles();assertPublished(80,-40)
+        lifecycle(TransactionLifecycleAction.ARCHIVE);publishCycles();assertPublished(80,0)
+        assertTrue(backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawArchived()==true)
+        lifecycle(TransactionLifecycleAction.RESTORE);publishCycles();assertPublished(80,-40)
+        lifecycle(TransactionLifecycleAction.ARCHIVE);publishCycles();assertPublished(80,0)
+        lifecycle(TransactionLifecycleAction.DELETE);publishCycles();assertPublished(80,0)
+        assertNotNull(backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.deletedAt)
+    }
+    @Test fun committedLostReplyRecoversWholeGroupWithoutAnotherWrite()=runBlocking {
+        saveExpense();loseOrdinaryReply=true;publishCycles();assertPublished(70,-30)
+        assertEquals(1,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"})
+    }
+    @Test fun newerConfirmedAmountDuringOldCommitPreservesAndPublishesNewIntent()=runBlocking {
+        saveExpense();afterOrdinaryCommit={runBlocking{saveExpense(80,editing=true)}}
+        publishCycles(4);assertPublished(80,-40)
+        assertEquals(2,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"})
+    }
+    @Test fun capturedSourceSurvivesClearedDefaultAndUnrelatedWalletQueue()=runBlocking {
+        saveExpense()
+        val root=store.record(owner,CloudEntity.LEDGER_WALLET.table,investmentSystemWalletId(owner))!!
+        val cleared=root.copy(payload=JsonObject(root.payload+("investment_linked_wallet_id" to JsonNull)))
+        store.commitMutation(cleared,PendingMutation(CloudEntity.LEDGER_WALLET,cleared.id,owner.value,MutationKind.UPSERT,cleared.payload,now,cleared.syncVersion,device))
+        cleanIntoBackend(listOf(CloudEntity.LEDGER_WALLET))
+        finance.saveWallet(owner,WalletDraft(id=id(2),name="Unrelated",kind=WalletKind.CASH,currencyCode="JPY"),device,now).getOrThrow()
+        publishCycles()
+        val pending=snapshot().pending
+        assertEquals(1,pending.size);assertEquals(id(2),pending.single().mutation.recordId)
+        assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+    }
+    @Test fun internalTransferPublishesConsumptionAndDestinationTogether()=runBlocking {
+        finance.saveWallet(owner,WalletDraft(id=id(2),name="Destination",kind=WalletKind.CASH,currencyCode="JPY"),device,now).getOrThrow()
+        cleanIntoBackend(listOf(CloudEntity.LEDGER_WALLET))
+        val draft=TransactionDraft(primaryKind=TransactionPrimaryKind.TRANSFER,transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,
+            title="Transfer",amountMinor=70,occurredAt="2026-10-28T00:00:02Z",sourceWalletId=id(1),destinationWalletId=id(2))
+        val request=TransactionInvestmentSaveRequest(draft,TransactionCreationIdentity(id(20),now),null,"Adjustment","JPY")
+        val error=finance.prepareTransactionWithInvestmentFunds(owner,request,device,now).exceptionOrNull() as InvestmentFundUsageConfirmationRequired
+        finance.saveTransactionWithInvestmentFunds(owner,request.copy(consent=error.review.consent),device,now).getOrThrow()
+        publishCycles();assertPublished(70,0)
+        val posts=backend.values.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.payload.financeRawString("event_id")==id(20)}
+        assertEquals(2,posts.size);assertEquals(setOf(-30L,30L),posts.map{it.payload.financeRawLong("amount_minor")!!}.toSet())
+    }
+    @Test fun realUnreconciledExpensePublishesReserveAndConsumptionTogether()=runBlocking {
+        val cash=store.record(owner,CloudEntity.INVESTMENT_POSTING.table,id(10))!!
+        val unrec=cash.copy(payload=JsonObject(cash.payload+("cash_bucket_raw_value" to JsonPrimitive("unreconciled"))))
+        store.commitMutation(unrec,PendingMutation(CloudEntity.INVESTMENT_POSTING,id(10),owner.value,MutationKind.UPSERT,unrec.payload,now,unrec.syncVersion,device))
+        val w=store.record(owner,CloudEntity.LEDGER_WALLET.table,id(1))!!
+        val zero=w.copy(payload=JsonObject(w.payload+("opening_balance_minor" to JsonPrimitive(0))))
+        store.commitMutation(zero,PendingMutation(CloudEntity.LEDGER_WALLET,id(1),owner.value,MutationKind.UPSERT,zero.payload,now,zero.syncVersion,device))
+        val parent=finance.saveCategory(owner,CategoryDraft(id=id(40),name="Income",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.PARENT),device,now).getOrThrow()
+        finance.saveCategory(owner,CategoryDraft(id=id(41),name="Income child",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=parent.id),device,now).getOrThrow()
+        val income=TransactionDraft(primaryKind=TransactionPrimaryKind.INCOME,title="Later actual income",amountMinor=30,occurredAt="2026-10-28T00:00:03Z",sourceWalletId=id(1),categoryId=id(41))
+        finance.saveTransactionWithInvestmentFunds(owner,TransactionInvestmentSaveRequest(income,TransactionCreationIdentity(id(12),now),null,"Adjustment","JPY"),device,now).getOrThrow()
+        cleanIntoBackend(listOf(CloudEntity.LEDGER_WALLET,CloudEntity.TRANSACTION_CATEGORY,CloudEntity.INVESTMENT_POSTING,CloudEntity.LEDGER_TRANSACTION))
+        saveExpense(30);publishCycles();assertPublished(30,-30)
+        val reserve=backend[CloudEntity.LEDGER_TRANSACTION.table to investmentLedgerIdentity(id(20),"cash-unreconciled-adjustment")]!!
+        assertEquals(30L,reserve.payload.financeRawLong("amount_minor"));assertEquals("investmentReserveUse",reserve.payload.financeRawString("settlement_role_raw_value"))
+    }
+
+    @Test fun sameFinancialParentCommittedBeforeAllocationRecoversWithoutGenericAck()=runBlocking {
+        saveExpense()
+        val primary=investmentOrdinaryPublicationGroup(snapshot()).primary
+        val observed=primary.copy(syncVersion=7,payload=JsonObject(primary.payload+buildJsonObject {
+            put("sync_version",7);put("updated_at","2026-10-28T00:00:10Z");put("last_modified_by_device_id",id(90))
+        }),updatedAt="2026-10-28T00:00:10Z")
+        backend[observed.entity to observed.id]=observed
+        publishCycles();assertPublished(70,-30)
+        assertEquals(8L,backend[observed.entity to observed.id]!!.syncVersion)
+        assertEquals(1L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.syncVersion)
+    }
+
+    @Test fun fullConsumptionBeforeWalletArchivePublishesFinancialGroupBeforeFinalArchive()=runBlocking {
+        saveExpense(100)
+        val root=store.record(owner,CloudEntity.LEDGER_WALLET.table,investmentSystemWalletId(owner))!!
+        val cleared=root.copy(payload=JsonObject(root.payload+("investment_linked_wallet_id" to JsonNull)))
+        store.commitMutation(cleared,PendingMutation(CloudEntity.LEDGER_WALLET,cleared.id,owner.value,MutationKind.UPSERT,cleared.payload,now,cleared.syncVersion,device))
+        cleanIntoBackend(listOf(CloudEntity.LEDGER_WALLET))
+        finance.archiveWallet(owner,RecordId(id(1)),device,now).getOrThrow()
+        repeat(4){wallets.pushPending(owner,session.accessToken);publishCycles(1)}
+        assertPublished(100,-60)
+        assertTrue(store.record(owner,CloudEntity.LEDGER_WALLET.table,id(1))!!.payload.financeRawArchived()==true)
+        assertTrue(backend[CloudEntity.LEDGER_WALLET.table to id(1)]!!.payload.financeRawArchived()==true)
+        val financial=requests.indexOfFirst{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"}
+        val archive=requests.indexOfLast{it.method=="PATCH" && it.requestUrl!!.pathSegments.last()==CloudEntity.LEDGER_WALLET.table}
+        assertTrue(financial>=0 && archive>financial)
+    }
+
+    @Test fun olderGenericCreateCannotStrandNewConfirmedAllocationWithEqualClock()=runBlocking {
+        saveExpense(20)
+        assertEquals(1,snapshot().pending.size)
+        afterGenericCommit={runBlocking{saveExpense(70,editing=true)}}
+        assertEquals(1,transactions.pushPending(owner,session.accessToken).staleResponses)
+        repeat(4){investments.pushPending(owner,session.accessToken);clock+=30001}
+        assertTrue("New confirmed allocation after late generic create must finish",snapshot().pending.isEmpty())
+        assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(1,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()==CloudEntity.LEDGER_TRANSACTION.table})
+    }
+
+    private suspend fun genericLateUpdate(remoteVersion:Long=1,backwardClock:Boolean=false) {
+        saveExpense(20);cleanIntoBackend(listOf(CloudEntity.LEDGER_TRANSACTION));saveExpense(30,editing=true)
+        val old=backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!
+        backend[old.entity to old.id]=old.copy(syncVersion=remoteVersion,updatedAt="2026-10-27T23:59:59Z",payload=JsonObject(old.payload+buildJsonObject {
+            put("sync_version",remoteVersion);put("updated_at","2026-10-27T23:59:59Z")
+        }))
+        afterGenericCommit={runBlocking{
+            saveExpense(70,editing=true)
+            if(backwardClock) {
+                val row=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!
+                val next=row.copy(updatedAt="2026-10-27T23:00:00Z",payload=JsonObject(row.payload+("updated_at" to JsonPrimitive("2026-10-27T23:00:00Z"))))
+                store.commitMutation(next,PendingMutation(CloudEntity.LEDGER_TRANSACTION,id(20),owner.value,MutationKind.UPSERT,next.payload,next.updatedAt!!,next.syncVersion,device))
+            }
+        }}
+        assertEquals(1,transactions.pushPending(owner,session.accessToken).staleResponses)
+        repeat(4){investments.pushPending(owner,session.accessToken);clock+=30001}
+        assertTrue("New confirmed allocation after late generic update must finish",snapshot().pending.isEmpty())
+        assertEquals(70L,backend[old.entity to old.id]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(remoteVersion+2,backend[old.entity to old.id]!!.syncVersion)
+        assertEquals(1L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.syncVersion)
+    }
+    @Test fun olderGenericConditionalUpdateKeepsNewConfirmedFunds()=runBlocking {genericLateUpdate()}
+    @Test fun olderGenericLocalWinnerUsesActualLongTargetAndKeepsBackwardClockEdit()=runBlocking {genericLateUpdate(9007199254740993L,true)}
+    @Test fun olderGenericCreateWithLostReplyStillKeepsNewConfirmedFunds()=runBlocking {
+        saveExpense(20);loseGenericReply=true;afterGenericCommit={runBlocking{saveExpense(70,editing=true)}}
+        assertEquals(1,transactions.pushPending(owner,session.accessToken).staleResponses)
+        repeat(4){investments.pushPending(owner,session.accessToken);clock+=30001}
+        assertTrue(snapshot().pending.isEmpty());assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+    }
+
+    private suspend fun seedOtherDeviceEvent(date:String,version:Long) {
+        val g=investmentOrdinaryPublicationGroup(snapshot())
+        fun cloud(row:CloudRecord,fields:JsonObject)=row.copy(syncVersion=version,updatedAt=date,payload=JsonObject(row.payload+fields+buildJsonObject {
+            put("sync_version",version);put("updated_at",date);put("last_modified_by_device_id",id(90))
+        }))
+        val primary=cloud(g.primary,buildJsonObject{put("amount_minor",80);put("reporting_amount_minor",80)})
+        val posts=g.postings.map{cloud(it,buildJsonObject{put("amount_minor",-40);put("accounting_amount_minor",-40)})}
+        for(row in listOf(primary)+posts)backend[row.entity to row.id]=row
+    }
+    @Test fun actualWholeRemoteWinnerImportsBothRowsWithoutAnyFinancialRequest()=runBlocking {
+        saveExpense();seedOtherDeviceEvent("2026-10-28T00:03:00Z",2)
+        assertEquals(1,investments.pushPending(owner,session.accessToken).reconciled)
+        publishCycles();assertPublished(80,-40)
+        assertEquals(80L,store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!.payload.financeRawLong("amount_minor"))
+        assertFalse(requests.any{it.method=="POST" || it.method=="PATCH"})
+    }
+    @Test fun actualWholeLocalWinnerPublishesItsMoneyAtComparedHigherBases()=runBlocking {
+        saveExpense();seedOtherDeviceEvent("2026-10-27T23:59:59Z",2)
+        publishCycles();assertPublished(70,-30)
+        assertEquals(3L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.syncVersion)
+        assertEquals(3L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.syncVersion)
+    }
+    @Test fun actualSameClockZeroConflictKeepsRawEvidenceAndNeverSendsEitherMoneyRow()=runBlocking {
+        saveExpense();seedOtherDeviceEvent(now,0)
+        assertEquals(1,investments.pushPending(owner,session.accessToken).conflicts)
+        publishCycles()
+        val current=snapshot();assertEquals(2,current.pending.size);assertTrue(current.pending.all{it.nextAttemptAtEpochMillis==Long.MAX_VALUE})
+        val parent=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!
+        val conflict=localInvestmentOrdinaryConflict(parent)!!
+        assertEquals(70L,parent.payload.financeRawLong("amount_minor"));assertEquals(80L,conflict.observed.transaction!!.payload.financeRawLong("amount_minor"))
+        assertFalse(requests.any{it.method=="POST" || it.method=="PATCH"})
+    }
+
+    private suspend fun saveCardPayment(amount:Long=70,editing:Boolean=false) {
+        if(!editing) {
+            finance.saveCreditCard(owner,CreditCardDraft(walletId=id(2),profileId=id(3),name="Card",creditLimitMinor=1000,currencyCode="JPY"),device,now).getOrThrow()
+            cleanIntoBackend(listOf(CloudEntity.LEDGER_WALLET,CloudEntity.CREDIT_CARD_PROFILE))
+        }
+        val draft=TransactionDraft(id=if(editing)id(20)else null,primaryKind=TransactionPrimaryKind.TRANSFER,transferSubtype=TransactionTransferSubtype.INTERNAL_TRANSFER,
+            title="Transfer",amountMinor=amount,destinationAmountMinor=amount,sourceWalletId=id(1),destinationWalletId=id(2),occurredAt="2026-10-28T00:00:02Z")
+        var request=TransactionInvestmentSaveRequest(draft,if(editing)null else TransactionCreationIdentity(id(20),now),null,"Adjustment","JPY")
+        val error=finance.prepareTransactionWithInvestmentFunds(owner,request,device,now).exceptionOrNull()
+        if(error is InvestmentFundUsageConfirmationRequired)request=request.copy(consent=error.review.consent) else if(error!=null)throw error
+        finance.saveTransactionWithInvestmentFunds(owner,request,device,now).getOrThrow()
+    }
+    private suspend fun importPaidCardOccurrence(pending:Boolean) {
+        val row=DueOccurrenceRecord(id(50),owner.value,"creditCard",id(2),"2026-10",now,70,"paid",now,id(20),now,now,null,0,device).toCloudRecord()
+        store.commitMutation(row,PendingMutation(CloudEntity.DUE_OCCURRENCE_RECORD,row.id,owner.value,MutationKind.UPSERT,row.payload,now,0,device))
+        if(!pending)cleanIntoBackend(listOf(CloudEntity.DUE_OCCURRENCE_RECORD))
+    }
+    @Test fun lateCleanPaidCardCycleCannotUploadAnOfflineChangedPayment()=runBlocking {
+        saveCardPayment();publishCycles();saveCardPayment(80,editing=true);importPaidCardOccurrence(false)
+        publishCycles()
+        assertEquals("Paid source must not send a changed financial group",1,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"})
+        assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(80L,store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!.payload.financeRawLong("amount_minor"))
+        assertEquals(2,snapshot().pending.size)
+    }
+    @Test fun ownPendingCardCycleDoesNotBlockItsConfirmedFinancialGroup()=runBlocking {
+        saveCardPayment();publishCycles();saveCardPayment(80,editing=true);importPaidCardOccurrence(true)
+        publishCycles()
+        assertEquals(80L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        val pending=snapshot().pending;assertEquals(1,pending.size);assertEquals(CloudEntity.DUE_OCCURRENCE_RECORD,pending.single().mutation.entity)
+        assertEquals(-40L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+    }
+    @Test fun sameFinancialLegacyPaymentFinishesItsAllocationAfterCleanPaidCycleArrives()=runBlocking {
+        saveCardPayment();cleanIntoBackend(listOf(CloudEntity.LEDGER_TRANSACTION));importPaidCardOccurrence(false)
+        assertEquals(1,snapshot().pending.size)
+        publishCycles();assertPublished(70,-30)
+        assertEquals(2L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.syncVersion)
+        assertEquals(1L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.syncVersion)
+    }
+
+    @Test fun capacityRetryDoesNotBlockLaterReleaseAndEarlierBackdatedGroupFinishesNextCycle()=runBlocking {
+        saveExpense(70);publishCycles();saveExpense(20,event=21);publishCycles()
+        saveExpense(20,editing=true)
+        val draft=TransactionDraft(primaryKind=TransactionPrimaryKind.EXPENSE,title="Earlier expense",amountMinor=60,
+            occurredAt="2026-10-28T00:00:01.500Z",sourceWalletId=id(1),categoryId=id(31))
+        val request=TransactionInvestmentSaveRequest(draft,TransactionCreationIdentity(id(22),now),null,"Adjustment","JPY")
+        val review=finance.prepareTransactionWithInvestmentFunds(owner,request,device,now).exceptionOrNull() as InvestmentFundUsageConfirmationRequired
+        finance.saveTransactionWithInvestmentFunds(owner,request.copy(consent=review.review.consent),device,now).getOrThrow()
+        for(event in listOf(20,21,22))assertEquals(-20L,store.record(owner,CloudEntity.INVESTMENT_POSTING.table,investmentLedgerIdentity(id(event),"cash-consumption-booked"))!!.payload.financeRawLong("amount_minor"))
+        // Real source-derived final allocations are20+20+20. SQL capacity math
+        // is tested separately; this fixture injects its closed retry condition.
+        capacityFailureEvent=id(22)
+        val start=requests.size
+        val first=investments.pushPending(owner,session.accessToken)
+        assertEquals(1,first.retryableFailures);assertEquals(2,first.pushed)
+        assertNull(backend[CloudEntity.LEDGER_TRANSACTION.table to id(22)])
+        assertEquals(20L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        val pending=snapshot().pending;assertEquals(2,pending.size)
+        val driver=pending.single{it.mutation.entity==CloudEntity.LEDGER_TRANSACTION}
+        assertEquals(id(22),driver.mutation.recordId);assertEquals(clock+30000,driver.nextAttemptAtEpochMillis)
+        val eventOrder=requests.drop(start).filter{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"}
+            .map{Json.parseToJsonElement(it.body.clone().readUtf8()).jsonObject.getValue("p_transaction").jsonObject.financeRawString("id")}
+        assertEquals(listOf(id(22),id(20),id(21)),eventOrder)
+        clock+=30001
+        assertEquals(1,investments.pushPending(owner,session.accessToken).pushed)
+        assertTrue(snapshot().pending.isEmpty())
+        assertEquals(60L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(22)]!!.payload.financeRawLong("amount_minor"))
+        for(event in listOf(20,21,22))assertEquals(-20L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(event),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+    }
+
+    @Test fun remoteWinnerCannotReattributeOrPublishAnotherConfirmedEventOnTheSameCashSource()=runBlocking {
+        saveExpense();saveExpense(20,event=21)
+        val primary=store.record(owner,CloudEntity.LEDGER_TRANSACTION.table,id(20))!!
+        val remote=primary.copy(syncVersion=2,updatedAt="2026-10-28T00:03:00Z",payload=JsonObject(primary.payload+buildJsonObject {
+            put("amount_minor",30);put("reporting_amount_minor",30);put("sync_version",2);put("updated_at","2026-10-28T00:03:00Z");put("last_modified_by_device_id",id(90))
+        }))
+        backend[remote.entity to remote.id]=remote
+        publishCycles()
+        val current=snapshot();assertEquals(4,current.pending.size)
+        assertEquals("other_event_allocation_changed",localInvestmentOrdinaryConflict(current.rows.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==id(20)})!!.reason)
+        assertEquals(70L,current.rows.single{it.entity==CloudEntity.LEDGER_TRANSACTION.table && it.id==id(20)}.payload.financeRawLong("amount_minor"))
+        assertEquals(-20L,current.rows.single{it.id==investmentLedgerIdentity(id(21),"cash-consumption-booked")}.payload.financeRawLong("amount_minor"))
+        assertFalse("No dependent financial event may escape the unresolved source",requests.any{it.method=="POST" || it.method=="PATCH"})
+    }
+
+    @Test fun paidSourceLockAlsoRetainsTheNextConfirmedAllocationOnThatWallet()=runBlocking {
+        saveCardPayment(30);publishCycles();saveCardPayment(50,editing=true);saveExpense(20,event=21);importPaidCardOccurrence(false)
+        val before=requests.size
+        publishCycles()
+        val current=snapshot();assertEquals(4,current.pending.size)
+        assertTrue(current.pending.any{it.mutation.recordId==id(20) && it.lastError=="ordinary_paid_source_locked"})
+        assertEquals(30L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertNull(backend[CloudEntity.LEDGER_TRANSACTION.table to id(21)])
+        assertFalse(requests.drop(before).any{it.method=="POST" || it.method=="PATCH"})
+    }
+
+    @Test fun changingAnOfflinePaymentIntoIncomeCannotBypassALatePaidSourceLock()=runBlocking {
+        saveCardPayment();publishCycles()
+        val parent=finance.saveCategory(owner,CategoryDraft(id=id(32),name="Income",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.PARENT),device,now).getOrThrow()
+        finance.saveCategory(owner,CategoryDraft(id=id(33),name="Salary",kind=TransactionCategoryKind.INCOME,hierarchyRole=CategoryHierarchyRole.CHILD,parentCategoryId=parent.id),device,now).getOrThrow()
+        cleanIntoBackend(listOf(CloudEntity.TRANSACTION_CATEGORY))
+        var request=TransactionInvestmentSaveRequest(TransactionDraft(id=id(20),primaryKind=TransactionPrimaryKind.INCOME,title="Income",amountMinor=70,
+            sourceWalletId=id(1),categoryId=id(33),occurredAt="2026-10-28T00:00:02Z"),null,null,"Adjustment","JPY")
+        val error=finance.prepareTransactionWithInvestmentFunds(owner,request,device,now).exceptionOrNull()
+        if(error is InvestmentFundUsageConfirmationRequired)request=request.copy(consent=error.review.consent) else if(error!=null)throw error
+        finance.saveTransactionWithInvestmentFunds(owner,request,device,now).getOrThrow()
+        importPaidCardOccurrence(false);publishCycles()
+        assertEquals("transfer",backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawString("primary_kind_raw_value"))
+        assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(2,snapshot().pending.size)
+        assertTrue(snapshot().pending.any{it.lastError=="ordinary_paid_source_locked"})
+    }
+
+}
