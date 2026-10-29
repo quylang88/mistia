@@ -335,6 +335,7 @@ struct ManagementWalletEditorSheet: View {
 
                 ForEach(paymentSourceWallets) { wallet in
                     Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
+                        .disabled(!PlanningLogic.creditCardPaymentWalletIsEligible(cardCurrencyCode: draft.currencyCode, walletCurrencyCode: wallet.currencyCode))
                 }
             }
             .pickerStyle(.menu)
@@ -383,7 +384,11 @@ struct ManagementWalletEditorSheet: View {
             targetOwnerUserID: targetWalletOwnerUserID,
             excludesCreditCards: true,
             excludedWalletID: target.wallet?.id
-        )
+        ).filter { wallet in
+            wallet.id == draft.paymentSourceWalletID || PlanningLogic.creditCardPaymentWalletIsEligible(
+                cardCurrencyCode: draft.currencyCode, walletCurrencyCode: wallet.currencyCode
+            )
+        }
     }
 
     private var targetWalletOwnerUserID: UUID? {

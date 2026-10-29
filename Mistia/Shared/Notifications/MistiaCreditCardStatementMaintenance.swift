@@ -534,6 +534,17 @@ enum MistiaCreditCardStatementMaintenance {
             return
         }
 
+        do {
+            try PlanningCreditCardPaymentSupport.validateWallet(sourceID: cardWallet.id, wallet: sourceWallet, context: modelContext)
+        } catch {
+            upsertAutoPaymentFailureNotification(
+                statement, reason: error.localizedDescription, modelContext: modelContext,
+                recipientUserID: sessionStore.activeLocalProfileUserID, calendar: calendar
+            )
+            markAutoPaymentAttemptFailed(occurrence, modelContext: modelContext, sessionStore: sessionStore)
+            return
+        }
+
         let sourceBalanceMinor = balanceIndex.balance(
             for: TransactionWalletSnapshot(
                 id: sourceWallet.id,

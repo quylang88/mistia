@@ -69,4 +69,23 @@ class CreditCardStatementScreenTest {
         compose.onNodeWithTag("management.editCard.${card.id}").performClick()
         compose.runOnIdle { assertEquals(1, opened); assertEquals(1, edited) }
     }
+    @Test fun payableStatementOffersTheSwiftPayNowAction() {
+        val charge = TransactionDraft(primaryKind = TransactionPrimaryKind.TRANSFER,
+            transferSubtype = TransactionTransferSubtype.DEBT, debtIntent = TransactionDebtIntent.LEND,
+            title = "Loan", amountMinor = 70, occurredAt = "2026-02-12T00:00:00Z", sourceWalletId = card.id,
+            counterpartyName = "A").toMutation(owner, null, card, null, null, device, now).record
+        val statement = creditCardStatementItems(owner, listOf(CreditCardAccount(card, account.profile.record)), listOf(charge),
+            emptyList(), listOf(month), Instant.parse("2026-03-26T00:00:00Z"), zone).single()
+        assertTrue(statement.isPayable);assertEquals(70L, statement.amountMinor)
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val action = context.getString(vn.com.quyln.mistia.core.designsystem.R.string.management_managementcreditcardstatement_pay_now)
+        var clicks=0
+        compose.setContent { MistiaTheme(darkTheme = false) { CreditCardStatementContent(
+            CreditCardStatementViewData(card, statement, listOf(charge), "Cash"), emptyList(), month,
+            StatementMonthBounds(month, month), zone, onMonth = {},onPay={clicks++}) } }
+        compose.onNodeWithTag("statement.status." + statement.state.wireValue).assertExists()
+        compose.onNodeWithText(action).assertExists().assertHasClickAction().assertIsEnabled().performScrollTo().performClick()
+        compose.runOnIdle{assertEquals(1,clicks)}
+    }
+
 }

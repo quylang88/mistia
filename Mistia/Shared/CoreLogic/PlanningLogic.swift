@@ -833,12 +833,15 @@ nonisolated enum PlanningDuePaymentError: Error, Equatable {
     case missingDestinationWallet
     case billCurrencyMismatch
     case installmentCurrencyMismatch
+    case creditCardCurrencyMismatch
     case missingInstallment
 }
 
 extension PlanningDuePaymentError: LocalizedError {
     var errorDescription: String? {
         switch self {
+        case .creditCardCurrencyMismatch:
+            L10n.management.managementcreditcardstatement.currencyMismatch
         case .installmentCurrencyMismatch:
             L10n.planning.installment.payment.currencyMismatch
         case .missingInstallment:
@@ -2165,6 +2168,12 @@ nonisolated enum PlanningLogic {
         )
     }
 
+    static func creditCardPaymentWalletIsEligible(cardCurrencyCode: String, walletCurrencyCode: String) -> Bool {
+        let card = cardCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let wallet = walletCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return card.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil && card == wallet
+    }
+
     static func installmentPaymentWalletIsEligible(installmentCurrencyCode: String, walletCurrencyCode: String) -> Bool {
         let source = installmentCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let wallet = walletCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -2193,7 +2202,7 @@ nonisolated enum PlanningLogic {
         return PlanningDuePaymentDraft(
             primaryKind: .transfer,
             transferSubtype: .internalTransfer,
-            title: "Thanh toán thẻ \(creditCard.walletName)",
+            title: L10n.management.managementcreditcardstatement.paymentTitle(creditCard.walletName),
             amountMinor: amount,
             sourceWalletID: sourceWalletID,
             destinationWalletID: creditCard.walletID,
@@ -2217,7 +2226,7 @@ nonisolated enum PlanningLogic {
         return PlanningDuePaymentDraft(
             primaryKind: .transfer,
             transferSubtype: .internalTransfer,
-            title: "Thanh toán thẻ \(statement.walletName)",
+            title: L10n.management.managementcreditcardstatement.paymentTitle(statement.walletName),
             amountMinor: amount,
             sourceWalletID: sourceWalletID,
             destinationWalletID: statement.walletID,

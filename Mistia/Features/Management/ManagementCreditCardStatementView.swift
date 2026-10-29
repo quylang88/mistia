@@ -510,6 +510,14 @@ struct ManagementCreditCardStatementView: View {
             return
         }
 
+        do {
+            try PlanningCreditCardPaymentSupport.validateWallet(sourceID: statement.walletID, wallet: sourceWallet, context: modelContext)
+        } catch {
+            alertMessage = error.localizedDescription
+            showingAlert = true
+            return
+        }
+
         let sourceBalanceMinor = walletBalancesByID[sourceWallet.id] ?? TransactionLogic.effectiveBalance(
             for: TransactionWalletSnapshot(
                 id: sourceWallet.id,

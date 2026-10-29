@@ -863,6 +863,7 @@
     <string name="management_managementcreditcardstatement_charges_in_cycle">期間内の利用</string>
     <string name="management_managementcreditcardstatement_closing_date">締め日</string>
     <string name="management_managementcreditcardstatement_could_not_load">現在、明細を読み込めません。</string>
+    <string name="management_managementcreditcardstatement_currency_mismatch">カードと同じ通貨のウォレットで明細を支払ってください。</string>
     <string name="management_managementcreditcardstatement_due">支払</string>
     <string name="management_managementcreditcardstatement_due_date">支払期限</string>
     <string name="management_managementcreditcardstatement_linked_wallet">連携ウォレット</string>
@@ -875,6 +876,8 @@
     <string name="management_managementcreditcardstatement_paid">支払い済み</string>
     <string name="management_managementcreditcardstatement_pay_now">今すぐ支払う</string>
     <string name="management_managementcreditcardstatement_payable">支払い可能</string>
+    <string name="management_managementcreditcardstatement_payment_changed">明細または支払い用ウォレットが変更されました。最新の内容を確認して再試行してください。</string>
+    <string name="management_managementcreditcardstatement_payment_title">カード支払い: %1$s</string>
     <string name="management_managementcreditcardstatement_please_set_a_linked_payment_wallet_for">このカードの連携支払いウォレットを設定してください。</string>
     <string name="management_managementcreditcardstatement_retry">再試行</string>
     <string name="management_managementcreditcardstatement_statement_paid">明細を支払いました。</string>

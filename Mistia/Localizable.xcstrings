@@ -20080,6 +20080,75 @@
         }
       }
     },
+    "management.managementcreditcardstatement.currencyMismatch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chỉ có thể thanh toán sao kê bằng ví cùng tiền tệ với thẻ."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pay this statement using a wallet with the same currency as the card."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カードと同じ通貨のウォレットで明細を支払ってください。"
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.paymentTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thanh toán thẻ %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card payment: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カード支払い: %@"
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.paymentChanged" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sao kê hoặc ví thanh toán đã thay đổi. Kiểm tra dữ liệu mới nhất rồi thử lại."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The statement or payment wallet changed. Review the latest details and try again."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "明細または支払い用ウォレットが変更されました。最新の内容を確認して再試行してください。"
+          }
+        }
+      }
+    },
     "management.managementcreditcardstatement.payNow" : {
       "extractionState" : "stale",
       "localizations" : {

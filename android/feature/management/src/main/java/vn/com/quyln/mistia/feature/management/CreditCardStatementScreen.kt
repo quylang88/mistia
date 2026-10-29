@@ -60,13 +60,15 @@ private sealed interface StatementLoad {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreditCardStatementScreen(owner: UserId, walletId: String, repository: FinanceRepository, onBack: () -> Unit) {
+fun CreditCardStatementScreen(owner: UserId, walletId: String, repository: FinanceRepository, onBack: () -> Unit,
+    deviceIdProvider:()->String, primaryCurrencyCode:String, referenceProvider:()->Instant=Instant::now) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var retry by remember(owner, walletId) { mutableIntStateOf(0) }
-    var reference by remember { mutableStateOf(Instant.now()) }
+    val currentReference by rememberUpdatedState(referenceProvider)
+    var reference by remember { mutableStateOf(referenceProvider()) }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) { reference = Instant.now(); delay(60_000) }
+            while (true) { reference = currentReference(); delay(60_000) }
         }
     }
     val zone = ZoneId.systemDefault()
@@ -119,8 +121,13 @@ fun CreditCardStatementScreen(owner: UserId, walletId: String, repository: Finan
                 Text(stringResource(R.string.management_managementcreditcardstatement_could_not_load), Modifier.testTag("statement.error"))
                 TextButton(onClick = { retry++ }) { Text(stringResource(R.string.management_managementcreditcardstatement_retry)) }
             }
-            data != null -> CreditCardStatementContent(data, records!!.categories.filter { it.ownerUserId == owner.value }, month, bounds, zone,
-                onMonth = { navigation = navigation.copy(month = bounds.clamp(it).toString()) }, modifier = Modifier.padding(padding))
+            data != null -> StatementPaymentHost(owner.value,data.statement,records!!.wallets.filter{it.ownerUserId==owner.value},
+                primaryCurrencyCode,deviceIdProvider,referenceProvider,onPay={request,device->
+                    repository.payCreditCardStatement(owner,request,device,referenceProvider().toString())
+                },operationScopeKey=repository) {pay,busy->
+                CreditCardStatementContent(data,records!!.categories.filter{it.ownerUserId==owner.value},month,bounds,zone,
+                    onMonth={navigation=navigation.copy(month=bounds.clamp(it).toString())},modifier=Modifier.padding(padding),onPay=pay,paymentBusy=busy)
+            }
         }
     }
 }
@@ -134,6 +141,8 @@ internal fun CreditCardStatementContent(
     zone: ZoneId,
     onMonth: (YearMonth) -> Unit,
     modifier: Modifier = Modifier,
+    onPay: ((CreditCardStatement)->Unit)? = null,
+    paymentBusy: Boolean = false,
 ) {
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale, zone) { DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale).withZone(zone) }
@@ -169,6 +178,13 @@ internal fun CreditCardStatementContent(
                         HorizontalDivider(Modifier.padding(start = 34.dp))
                         StatementDetail(Icons.Default.AccountBalanceWallet, stringResource(R.string.management_managementcreditcardstatement_linked_wallet),
                             data.linkedWalletName ?: stringResource(R.string.management_managementcreditcardstatement_no_linked_wallet))
+                    }
+                    if(statement.isPayable && onPay!=null)Button(onClick={onPay(statement)},enabled=!paymentBusy,
+                        modifier=Modifier.fillMaxWidth().heightIn(min=52.dp).testTag("statement.pay"),
+                        colors=ButtonDefaults.buttonColors(containerColor=if(statement.state==CreditCardStatementState.OVERDUE)Color(0xFFF45C7E)else MaterialTheme.colorScheme.primary)) {
+                        if(paymentBusy)CircularProgressIndicator(Modifier.size(20.dp).testTag("statement.payment.busy"),strokeWidth=2.dp,color=MaterialTheme.colorScheme.onPrimary)
+                        else Icon(if(statement.state==CreditCardStatementState.OVERDUE)Icons.Default.Warning else Icons.Default.CreditCard,null)
+                        Spacer(Modifier.width(8.dp));Text(stringResource(R.string.management_managementcreditcardstatement_pay_now))
                     }
                 } }
             }

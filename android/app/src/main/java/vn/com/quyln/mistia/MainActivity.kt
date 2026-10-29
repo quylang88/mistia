@@ -330,7 +330,8 @@ private fun SignedInRoot(
         composable("credit-card-statements/{walletId}") { entry ->
             val walletId = entry.arguments?.getString("walletId") ?: return@composable
             vn.com.quyln.mistia.feature.management.CreditCardStatementScreen(
-                authState.session.userId, walletId, financeRepository, onBack = { navController.popBackStack() })
+                authState.session.userId, walletId, financeRepository, onBack = { navController.popBackStack() },
+                deviceIdProvider={deviceIdStore.getOrCreate()},primaryCurrencyCode=currencySettings.primaryCurrencyCode)
         }
         composable("archived-transactions") {
             vn.com.quyln.mistia.feature.transactions.ArchivedTransactionsRoute(authState.session.userId,financeRepository,

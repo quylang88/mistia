@@ -1791,6 +1791,37 @@ class RoomLocalStore(
     override suspend fun record(ownerUserId: UserId, entity: String, recordId: String): CloudRecord? =
         database.cloudRecordDao().record(ownerUserId.value, entity, recordId)?.toCloudRecord()
 
+    private suspend fun readCreditCardStatementPayment(owner:UserId):vn.com.quyln.mistia.core.model.CreditCardStatementPaymentSnapshot =
+        vn.com.quyln.mistia.core.model.CreditCardStatementPaymentSnapshot(vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot(owner,
+            vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot.entities.associateWith{recordsIncludingDeleted(owner,it.table)})).also{it.requireCoherent()}
+
+    override suspend fun creditCardStatementPaymentSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.CreditCardStatementPaymentSnapshot {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=readCreditCardStatementPayment(owner)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            source
+        }
+    }
+    override suspend fun commitCreditCardStatementPayment(expected:vn.com.quyln.mistia.core.model.CreditCardStatementPaymentSnapshot,
+        request:vn.com.quyln.mistia.core.model.CreditCardStatementPaymentRequest,deviceId:String,now:String,zone:java.time.ZoneId):vn.com.quyln.mistia.core.model.CreditCardStatementPaymentPlan {
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive()
+            val current=readCreditCardStatementPayment(expected.owner)
+            expected.requireUnchanged(current)
+            val plan=vn.com.quyln.mistia.core.model.planCreditCardStatementPayment(current,request,deviceId,now,zone)
+            for((record,_) in plan.mutations) {
+                val old=current.money.recordsByEntity.values.flatten().singleOrNull{it.entity==record.entity && it.id==record.id}
+                require(old!=null || database.syncOutboxDao().record(expected.owner.value,record.entity,record.id)==null){"Statement payment identity has an orphan queue"}
+            }
+            plan.mutations.forEach{(record,mutation)->commitMutationRows(record,mutation)}
+            ensureCurrentFinanceOwner(expected.owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            plan
+        }
+    }
+
     override suspend fun transactionInvestmentSaveSnapshot(owner:UserId):vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot = database.withTransaction {
         ensureCurrentFinanceOwner(owner)
         val snapshot=vn.com.quyln.mistia.core.model.TransactionInvestmentSaveSnapshot(owner,

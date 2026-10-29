@@ -61,6 +61,7 @@ import vn.com.quyln.mistia.core.model.CreditCardNetwork
 import vn.com.quyln.mistia.core.model.CreditCardProfileRecord
 import vn.com.quyln.mistia.core.model.LedgerWalletRecord
 import vn.com.quyln.mistia.core.model.WalletKind
+import vn.com.quyln.mistia.core.model.creditCardPaymentCurrenciesMatch
 import vn.com.quyln.mistia.core.model.currencyAmountInput
 
 data class CreditCardEditorState(
@@ -222,6 +223,10 @@ data class CreditCardEditorDraftResult(
     val draft: CreditCardDraft? = null,
     val validation: CreditCardEditorValidation? = null,
 )
+
+internal fun creditCardPaymentWalletChoices(owner:String,currency:String,wallets:List<LedgerWalletRecord>,retainedId:String?):List<LedgerWalletRecord> =
+    wallets.filter{it.ownerUserId==owner && it.deletedAt==null && it.kind!=null && it.kind !in setOf(WalletKind.CREDIT_CARD,WalletKind.INVESTMENT) &&
+        it.systemPurposeRawValue==null && (it.id==retainedId || !it.isArchived && creditCardPaymentCurrenciesMatch(currency,it.currencyCode))}
 
 enum class CreditCardEditorValidation {
     NAME_REQUIRED,
@@ -461,9 +466,10 @@ private fun OwnedCreditCardEditorSheet(
                             onClick = { state = state.copy(paymentSourceWalletId = null) },
                             label = { Text(stringResource(R.string.management_management_choose_later)) },
                         )
-                        paymentSourceWallets.forEach { source ->
+                        creditCardPaymentWalletChoices(ownerId,state.currencyCode,paymentSourceWallets,state.paymentSourceWalletId).forEach { source ->
                             FilterChip(
                                 selected = state.paymentSourceWalletId == source.id,
+                                enabled = !source.isArchived && creditCardPaymentCurrenciesMatch(state.currencyCode,source.currencyCode),
                                 onClick = { state = state.copy(paymentSourceWalletId = source.id) },
                                 label = { Text(source.name) },
                             )

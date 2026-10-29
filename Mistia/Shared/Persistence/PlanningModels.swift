@@ -396,3 +396,20 @@ enum PlanningInstallmentPaymentSupport {
         }
     }
 }
+
+/// Persisted card/payment-wallet validation shared by manual and automatic payments.
+enum PlanningCreditCardPaymentSupport {
+    static func validateWallet(sourceID: UUID, wallet: LedgerWallet, context: ModelContext) throws {
+        guard let card = try context.fetch(FetchDescriptor<LedgerWallet>(
+            predicate: #Predicate<LedgerWallet> { $0.id == sourceID }
+        )).first, card.kind == .creditCard, card.deletedAt == nil, !card.isArchived else {
+            throw PlanningDuePaymentError.missingDestinationWallet
+        }
+        guard wallet.deletedAt == nil, !wallet.isArchived, wallet.kind != .creditCard, wallet.kind != .investment else {
+            throw PlanningDuePaymentError.missingSourceWallet
+        }
+        guard PlanningLogic.creditCardPaymentWalletIsEligible(cardCurrencyCode: card.currencyCode, walletCurrencyCode: wallet.currencyCode) else {
+            throw PlanningDuePaymentError.creditCardCurrencyMismatch
+        }
+    }
+}

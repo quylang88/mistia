@@ -106,6 +106,23 @@ class CreditCardEditorStateTest {
         assertEquals(PROFILE_ID, state.profileId)
     }
 
+
+    @Test fun `payment choices contain only owned live same currency normal wallets`() {
+        val cash=wallet().copy(id=PAYMENT_WALLET_ID,kindWireValue="cash")
+        val foreign=cash.copy(id="foreign",ownerUserId="other")
+        val other=cash.copy(id="other-currency",currencyCode="VND")
+        val system=cash.copy(id="system",kindWireValue="investment")
+        val deleted=cash.copy(id="deleted",deletedAt=NOW)
+        val archived=cash.copy(id="archived",isArchived=true)
+        assertEquals(listOf(cash),creditCardPaymentWalletChoices(OWNER,"JPY",listOf(cash,foreign,other,system,deleted,archived),null))
+    }
+    @Test fun `legacy selected mismatch is retained without adding new foreign choices`() {
+        val cash=wallet().copy(id=PAYMENT_WALLET_ID,kindWireValue="cash")
+        val retained=cash.copy(id="legacy",currencyCode="VND")
+        val other=cash.copy(id="other",currencyCode="USD")
+        assertEquals(listOf(cash,retained),creditCardPaymentWalletChoices(OWNER,"JPY",listOf(cash,retained,other),retained.id))
+    }
+
     private fun wallet() = LedgerWalletRecord(
         id = CARD_WALLET_ID,
         ownerUserId = OWNER,

@@ -863,6 +863,7 @@
     <string name="management_managementcreditcardstatement_charges_in_cycle">Charges in cycle</string>
     <string name="management_managementcreditcardstatement_closing_date">Closing date</string>
     <string name="management_managementcreditcardstatement_could_not_load">Couldn\'t load this statement right now.</string>
+    <string name="management_managementcreditcardstatement_currency_mismatch">Pay this statement using a wallet with the same currency as the card.</string>
     <string name="management_managementcreditcardstatement_due">To pay</string>
     <string name="management_managementcreditcardstatement_due_date">Due date</string>
     <string name="management_managementcreditcardstatement_linked_wallet">Linked wallet</string>
@@ -875,6 +876,8 @@
     <string name="management_managementcreditcardstatement_paid">Paid</string>
     <string name="management_managementcreditcardstatement_pay_now">Pay now</string>
     <string name="management_managementcreditcardstatement_payable">Payable</string>
+    <string name="management_managementcreditcardstatement_payment_changed">The statement or payment wallet changed. Review the latest details and try again.</string>
+    <string name="management_managementcreditcardstatement_payment_title">Card payment: %1$s</string>
     <string name="management_managementcreditcardstatement_please_set_a_linked_payment_wallet_for">Please set a linked payment wallet for this card.</string>
     <string name="management_managementcreditcardstatement_retry">Retry</string>
     <string name="management_managementcreditcardstatement_statement_paid">Statement paid.</string>

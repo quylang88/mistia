@@ -180,7 +180,7 @@ interface AuthRepository {
     suspend fun signOut(clearLocalSession: Boolean = true)
 }
 
-interface FinanceRepository : InstallmentPaymentRepository, InstallmentRepository, AppNotificationRepository, BillMaintenanceRepository, BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
+interface FinanceRepository : CreditCardStatementPaymentRepository, InstallmentPaymentRepository, InstallmentRepository, AppNotificationRepository, BillMaintenanceRepository, BudgetRepository, SavingsGoalRepository, RecurringBillRepository, SystemCategoryBootstrapRepository, BillPaymentRepository {
     suspend fun prepareTransactionLifecycle(owner:UserId,request:TransactionInvestmentLifecycleRequest,deviceId:String,now:String):Result<TransactionInvestmentSavePlan> =
         Result.failure(UnsupportedOperationException("Ordinary transaction lifecycle preparation unavailable"))
     suspend fun saveTransactionLifecycle(owner:UserId,request:TransactionInvestmentLifecycleRequest,deviceId:String,now:String):Result<LedgerTransactionRecord> =
@@ -413,6 +413,12 @@ interface LocalStore {
     /** Does not remove/reassign category identities; commits only validated FK/outbox/task repairs. */
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
+
+    suspend fun creditCardStatementPaymentSnapshot(owner:UserId):CreditCardStatementPaymentSnapshot =
+        throw UnsupportedOperationException("Complete statement payment snapshot unavailable")
+    suspend fun commitCreditCardStatementPayment(expected:CreditCardStatementPaymentSnapshot,request:CreditCardStatementPaymentRequest,
+        deviceId:String,now:String,zone:java.time.ZoneId):CreditCardStatementPaymentPlan =
+        throw UnsupportedOperationException("Atomic statement payment unavailable")
 
     suspend fun installmentPaymentPublicationSnapshot(owner:UserId,planId:String):InstallmentPaymentPublicationSnapshot =
         throw UnsupportedOperationException("Complete installment payment publication snapshot unavailable")

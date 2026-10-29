@@ -248,6 +248,10 @@ enum PlanningPersistenceSupport {
                 throw PlanningDuePaymentError.billCurrencyMismatch
             }
         }
+        if sourceKind == .creditCard {
+            guard draft.destinationWalletID == sourceID else { throw PlanningDuePaymentError.missingDestinationWallet }
+            try PlanningCreditCardPaymentSupport.validateWallet(sourceID: sourceID, wallet: sourceWallet, context: modelContext)
+        }
         if sourceKind == .installment {
             try PlanningInstallmentPaymentSupport.validateWallet(sourceID: sourceID, wallet: sourceWallet, context: modelContext)
         }

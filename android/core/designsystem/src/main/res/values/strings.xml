@@ -863,6 +863,7 @@
     <string name="management_managementcreditcardstatement_charges_in_cycle">Chi tiêu trong kỳ</string>
     <string name="management_managementcreditcardstatement_closing_date">Ngày chốt</string>
     <string name="management_managementcreditcardstatement_could_not_load">Không thể tải sao kê lúc này.</string>
+    <string name="management_managementcreditcardstatement_currency_mismatch">Chỉ có thể thanh toán sao kê bằng ví cùng tiền tệ với thẻ.</string>
     <string name="management_managementcreditcardstatement_due">Hạn</string>
     <string name="management_managementcreditcardstatement_due_date">Hạn thanh toán</string>
     <string name="management_managementcreditcardstatement_linked_wallet">Ví liên kết</string>
@@ -875,6 +876,8 @@
     <string name="management_managementcreditcardstatement_paid">Đã thanh toán</string>
     <string name="management_managementcreditcardstatement_pay_now">Thanh toán ngay</string>
     <string name="management_managementcreditcardstatement_payable">Cần thanh toán</string>
+    <string name="management_managementcreditcardstatement_payment_changed">Sao kê hoặc ví thanh toán đã thay đổi. Kiểm tra dữ liệu mới nhất rồi thử lại.</string>
+    <string name="management_managementcreditcardstatement_payment_title">Thanh toán thẻ %1$s</string>
     <string name="management_managementcreditcardstatement_please_set_a_linked_payment_wallet_for">Vui lòng thiết lập ví liên kết cho thẻ này.</string>
     <string name="management_managementcreditcardstatement_retry">Thử lại</string>
     <string name="management_managementcreditcardstatement_statement_paid">Đã thanh toán sao kê.</string>

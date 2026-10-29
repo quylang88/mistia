@@ -2134,6 +2134,8 @@ nonisolated enum L10n {
             static func closingDate(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.closingDate", vi: "Ngày chốt", en: "Closing date", ja: "締め日", language: language) }
             static var couldNotLoad: String { L10n.tr("management.managementcreditcardstatement.couldNotLoad", vi: "Không thể tải sao kê lúc này.", en: "Couldn't load this statement right now.", ja: "現在、明細を読み込めません。") }
             static func couldNotLoad(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.couldNotLoad", vi: "Không thể tải sao kê lúc này.", en: "Couldn't load this statement right now.", ja: "現在、明細を読み込めません。", language: language) }
+            static var currencyMismatch: String { L10n.tr("management.managementcreditcardstatement.currencyMismatch", vi: "Chỉ có thể thanh toán sao kê bằng ví cùng tiền tệ với thẻ.", en: "Pay this statement using a wallet with the same currency as the card.", ja: "カードと同じ通貨のウォレットで明細を支払ってください。") }
+            static func currencyMismatch(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.currencyMismatch", vi: "Chỉ có thể thanh toán sao kê bằng ví cùng tiền tệ với thẻ.", en: "Pay this statement using a wallet with the same currency as the card.", ja: "カードと同じ通貨のウォレットで明細を支払ってください。", language: language) }
             static var due: String { L10n.tr("management.managementcreditcardstatement.due", vi: "Hạn", en: "To pay", ja: "支払") }
             static func due(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.due", vi: "Hạn", en: "To pay", ja: "支払", language: language) }
             static var dueDate: String { L10n.tr("management.managementcreditcardstatement.dueDate", vi: "Hạn thanh toán", en: "Due date", ja: "支払期限") }
@@ -2158,6 +2160,14 @@ nonisolated enum L10n {
             static func payNow(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.payNow", vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う", language: language) }
             static var payable: String { L10n.tr("management.managementcreditcardstatement.payable", vi: "Cần thanh toán", en: "Payable", ja: "支払い可能") }
             static func payable(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.payable", vi: "Cần thanh toán", en: "Payable", ja: "支払い可能", language: language) }
+            static var paymentChanged: String { L10n.tr("management.managementcreditcardstatement.paymentChanged", vi: "Sao kê hoặc ví thanh toán đã thay đổi. Kiểm tra dữ liệu mới nhất rồi thử lại.", en: "The statement or payment wallet changed. Review the latest details and try again.", ja: "明細または支払い用ウォレットが変更されました。最新の内容を確認して再試行してください。") }
+            static func paymentChanged(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.paymentChanged", vi: "Sao kê hoặc ví thanh toán đã thay đổi. Kiểm tra dữ liệu mới nhất rồi thử lại.", en: "The statement or payment wallet changed. Review the latest details and try again.", ja: "明細または支払い用ウォレットが変更されました。最新の内容を確認して再試行してください。", language: language) }
+            static func paymentTitle(_ value: String) -> String {
+                L10n.format("management.managementcreditcardstatement.paymentTitle", vi: "Thanh toán thẻ %@", en: "Card payment: %@", ja: "カード支払い: %@", value)
+            }
+            static func paymentTitle(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("management.managementcreditcardstatement.paymentTitle", vi: "Thanh toán thẻ %@", en: "Card payment: %@", ja: "カード支払い: %@", language: language, value)
+            }
             static var pleaseSetALinkedPaymentWalletFor: String { L10n.tr("management.managementcreditcardstatement.pleaseSetALinkedPaymentWalletFor", vi: "Vui lòng thiết lập ví liên kết cho thẻ này.", en: "Please set a linked payment wallet for this card.", ja: "このカードの連携支払いウォレットを設定してください。") }
             static func pleaseSetALinkedPaymentWalletFor(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.pleaseSetALinkedPaymentWalletFor", vi: "Vui lòng thiết lập ví liên kết cho thẻ này.", en: "Please set a linked payment wallet for this card.", ja: "このカードの連携支払いウォレットを設定してください。", language: language) }
             static var retry: String { L10n.tr("management.managementcreditcardstatement.retry", vi: "Thử lại", en: "Retry", ja: "再試行") }
