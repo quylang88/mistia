@@ -42,6 +42,9 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
     private lateinit var wallets:WalletPushCoordinator
     private lateinit var investments:InvestmentPublicationPushCoordinator
     private lateinit var installmentRemote:InstallmentPaymentPublicationRemote
+    private lateinit var cardRemote:CardPaymentPublicationRemote
+    private var loseCardReply=false
+    private var afterCardCommit:(()->Unit)?=null
     private var loseInstallmentReply=false
     private var afterInstallmentCommit:(()->Unit)?=null
     private lateinit var dueRemote:RemoteMutationStore
@@ -78,6 +81,7 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
         val http=OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager).retryOnConnectionFailure(false).callTimeout(5,TimeUnit.SECONDS).build()
         val config=SupabaseConfig(server.url("/").toString(),"local-publishable-key")
         installmentRemote=SupabaseInstallmentPaymentPublicationClient(config,http,{session},{true})
+        cardRemote=SupabaseCardPaymentPublicationClient(config,http,{session},{true})
         transactions=TransactionPushCoordinator(store,SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_TRANSACTION)),true,{clock})
         dueRemote=SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.DUE_OCCURRENCE_RECORD,CloudEntity.TRANSACTION_CATEGORY))
         wallets=WalletPushCoordinator(store,SupabasePostgrestRemoteStore(config,http,writableEntities=setOf(CloudEntity.LEDGER_WALLET)),true,
@@ -111,7 +115,7 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
                 val sourceId=url.queryParameter("source_id")?.removePrefix("eq.")
                 val selectedMonth=url.queryParameter("selected_month_key")?.removePrefix("eq.")
                 val rows=synchronized(backend){backend.values.filter{it.entity==table && (exact==null || it.id==exact) && (ids==null || it.id in ids) && (cursor==null || it.id>cursor) && (event==null || it.payload.financeRawString("event_id")==event) && (systemKey==null || it.payload.financeRawString("system_key")==systemKey) && (sourceKind==null || it.payload.financeRawString("source_kind_raw_value")==sourceKind) && (sourceId==null || it.payload.financeRawString("source_id")==sourceId) && (selectedMonth==null || it.payload.financeRawString("selected_month_key")==selectedMonth)}.sortedBy{it.id}}
-                if(systemKey!=null || sourceKind=="installment") {
+                if(systemKey!=null || sourceKind in setOf("installment","creditCard")) {
                     val offset=request.getHeader("Range")!!.substringBefore('-').toInt()
                     val limit=request.getHeader("Range")!!.substringAfter('-').toInt()-offset+1
                     val page=rows.drop(offset).take(limit)
@@ -130,6 +134,36 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
                     val wire=JsonObject(old.payload+body)
                     val saved=old.copy(payload=wire,syncVersion=wire.financeRawLong("sync_version")!!,updatedAt=wire.financeRawString("updated_at"),deletedAt=wire.financeRawString("deleted_at"))
                     backend[table to rowId]=saved;return reply(listOf(saved))
+                }
+            }
+            if(request.method=="POST" && table=="mutate_card_paid_cycle") {
+                // Protocol/CAS fixture only; actual SQL financial/identity races
+                // are independently exercised against the local85 database.
+                val body=Json.parseToJsonElement(request.body.clone().readUtf8()).jsonObject
+                assertEquals(setOf("p_cycle","p_expected_version","p_expected_presence","p_expected_ledger","p_expected_wallets","p_expected_cycles"),body.keys)
+                val proposed=body.getValue("p_cycle").jsonObject
+                assertEquals(owner.value,proposed.financeRawString("user_id"));assertTrue(proposed.keys.none{it.startsWith("_mistia_android_")})
+                fun changed(code:String)=MockResponse().setResponseCode(400).setBody(buildJsonObject{put("code","P0001");put("message",code)}.toString())
+                synchronized(backend) {
+                    for((arg,entity) in listOf("p_expected_ledger" to CloudEntity.LEDGER_TRANSACTION,"p_expected_wallets" to CloudEntity.LEDGER_WALLET)) {
+                        for((rowId,expected) in body.getValue(arg).jsonObject) {
+                            val actual=backend[entity.table to rowId]?.payload ?: JsonNull
+                            if(actual!=expected)return changed(if(entity==CloudEntity.LEDGER_TRANSACTION)"card_payment_ledger_changed"else"card_payment_wallet_changed")
+                        }
+                    }
+                    val key=CloudEntity.DUE_OCCURRENCE_RECORD.table to requireNotNull(proposed.financeRawString("id"))
+                    val old=backend[key];val version=requireNotNull(body.financeRawLong("p_expected_version"))
+                    if((old!=null)!=body.getValue("p_expected_presence").jsonPrimitive.boolean || old!=null && old.syncVersion!=version)
+                        return changed("card_payment_version_conflict")
+                    val all=backend.values.filter{it.entity==key.first && it.ownerUserId==owner.value && it.payload.financeRawString("source_kind_raw_value")=="creditCard" &&
+                        it.payload.financeRawString("source_id")==proposed.financeRawString("source_id")}.sortedBy{it.id}
+                    if(JsonArray(all.map{it.payload})!=body.getValue("p_expected_cycles"))return changed("card_payment_membership_changed")
+                    assertEquals(version+1,proposed.financeRawLong("sync_version"))
+                    val wire=if(old==null)proposed else JsonObject(proposed+("updated_at" to JsonPrimitive("2026-10-29T00:00:00Z")))
+                    val saved=CloudRecord(key.first,key.second,owner.value,wire,wire.financeRawString("updated_at"),wire.financeRawString("deleted_at"),version+1)
+                    backend[key]=saved;afterCardCommit?.also{afterCardCommit=null;it()}
+                    if(loseCardReply){loseCardReply=false;return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)}
+                    return MockResponse().setBody(saved.payload.toString())
                 }
             }
             if(request.method=="POST" && table=="mutate_installment_paid_cycle") {
@@ -720,4 +754,139 @@ class InvestmentOrdinaryAllocationPublicationIntegrationTest {
         assertFalse(requests.any{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"})
     }
 
+    private suspend fun payCardStatement(amount:Long=70,existingZero:Boolean=false):SavedCreditCardStatementPayment {
+        val zone=java.time.ZoneId.of("UTC");val month=java.time.YearMonth.of(2026,9)
+        finance=OfflineFirstFinanceRepository(store,zone)
+        val account=finance.saveCreditCard(owner,CreditCardDraft(walletId=id(60),profileId=id(61),name="Card",creditLimitMinor=1000,
+            statementClosingDay=10,paymentDueDay=26,paymentSourceWalletId=id(1)),device,"2026-08-01T00:00:00Z").getOrThrow()
+        finance.saveTransaction(owner,TransactionDraft(id=id(62),primaryKind=TransactionPrimaryKind.EXPENSE,title="Charge",amountMinor=amount,
+            occurredAt="2026-09-12T00:00:00Z",sourceWalletId=account.wallet.id,categoryId=id(31)),device,"2026-09-12T00:00:00Z").getOrThrow()
+        cleanIntoBackend(listOf(CloudEntity.LEDGER_WALLET,CloudEntity.CREDIT_CARD_PROFILE,CloudEntity.LEDGER_TRANSACTION))
+        val card=LedgerWalletRecord.fromCloudRecord(store.record(owner,CloudEntity.LEDGER_WALLET.table,account.wallet.id)!!)
+        val profile=CreditCardProfileRecord.fromCloudRecord(store.record(owner,CloudEntity.CREDIT_CARD_PROFILE.table,account.profile.id)!!)
+        val state=store.creditCardStatementPaymentSnapshot(owner)
+        val statement=creditCardStatementItems(owner,listOf(CreditCardAccount(card,profile)),state.money.recordsByEntity.getValue(CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord),
+            emptyList(),listOf(month),java.time.Instant.parse(now),zone,state.money.recordsByEntity.getValue(CloudEntity.TRANSACTION_CATEGORY).map(TransactionCategoryRecord::fromCloudRecord)).single()
+        assertTrue(statement.isPayable);assertEquals(amount,statement.amountMinor)
+        if(existingZero) {
+            val pending=DueOccurrenceRecord(id(63),owner.value,"creditCard",card.id,java.time.YearMonth.from(statement.dueDate.atZone(zone)).toString(),
+                statement.dueDate.toString(),amount,"pending",null,null,"2026-08-01T00:00:00Z",now,null,0,device).toCloudRecord()
+            store.replacePullSnapshot(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,listOf(pending))
+            backend[pending.entity to pending.id]=pending
+        }
+        var request=CreditCardStatementPaymentRequest(statement,BillInvestmentOperationContext(TransactionCreationIdentity(id(20),"2026-10-28T00:00:02Z"),"JPY","Adjustment"),"Card payment: Card")
+        val error=finance.payCreditCardStatement(owner,request,device,"2026-10-28T00:00:02Z").exceptionOrNull()
+        if(error is InvestmentFundUsageConfirmationRequired)request=request.copy(context=request.context.copy(consent=error.review.consent))else if(error!=null)throw error
+        return finance.payCreditCardStatement(owner,request,device,"2026-10-28T00:00:02Z").getOrThrow()
+    }
+    private fun cardDue()=DueOccurrencePushCoordinator(store,dueRemote,false,
+        cardPaymentPublicationCoordinator=CardPaymentPublicationCoordinator(store,dueRemote,cardRemote,true,{session},{clock},{java.time.ZoneId.of("UTC")}),nowEpochMillis={clock})
+    private suspend fun publishCardCycles(due:DueOccurrencePushCoordinator,passes:Int=3) {
+        repeat(passes){transactions.pushPending(owner,session.accessToken);investments.pushPending(owner,session.accessToken);due.pushPending(owner,session.accessToken);clock+=30001}
+    }
+    @Test fun newlyFundedCardStatementNeedsItsPaidMarkerAfterTheFinancialGroupPublishes()=runBlocking {
+        val paid=payCardStatement();val due=cardDue()
+        publishCardCycles(due)
+        assertEquals(70L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+        assertNotNull("A real card payment needs its owned paid-cycle marker to finish cloud publication",backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to paid.occurrence.id])
+        assertTrue(store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).isEmpty())
+        assertTrue("No payment queues may remain: "+snapshot().pending.map{it.mutation.entity.table to it.lastError},snapshot().pending.isEmpty())
+    }
+
+
+    @Test fun cardPaymentLostReplyRecoversActualMarkerWithoutRepeatingMoneyOrRpc()=runBlocking {
+        val paid=payCardStatement();val due=cardDue();loseCardReply=true
+        publishCardCycles(due,1)
+        val q=store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).single()
+        assertEquals("network_io",q.lastError);assertEquals(0L,q.mutation.baseVersion)
+        assertNotNull(backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to paid.occurrence.id])
+        val money=synchronized(backend){backend.filterKeys{it.first!=CloudEntity.DUE_OCCURRENCE_RECORD.table}.toMap()}
+        publishCardCycles(due)
+        assertTrue(snapshot().pending.isEmpty());assertEquals(money,synchronized(backend){backend.filterKeys{it.first!=CloudEntity.DUE_OCCURRENCE_RECORD.table}.toMap()})
+        assertTrue(store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).isEmpty())
+        assertEquals(1,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_card_paid_cycle"})
+    }
+    @Test fun ordinaryCardStatementPublishesWithoutCreatingAnInvestmentAllocation()=runBlocking {
+        val paid=payCardStatement(20);publishCardCycles(cardDue())
+        assertTrue(snapshot().pending.isEmpty());assertEquals(20L,backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to paid.occurrence.id]!!.payload.financeRawLong("amount_minor_snapshot"))
+        assertEquals(20L,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.payload.financeRawLong("amount_minor"))
+        assertFalse(backend.values.any{it.entity==CloudEntity.INVESTMENT_POSTING.table && it.payload.financeRawString("event_id")==id(20)})
+        assertFalse(requests.any{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_ordinary_investment_event"})
+        assertTrue(store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).isEmpty())
+    }
+    @Test fun observedZeroLegacyCardCycleNormalizesMonthAndRetainsActualServerAudit()=runBlocking {
+        val paid=payCardStatement(existingZero=true)
+        val q=store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).single()
+        assertTrue(q.remoteIdentityObserved);assertEquals(0L,q.mutation.baseVersion)
+        assertEquals("2026-09",paid.occurrence.selectedMonthKey);assertEquals("2026-08-01T00:00:00Z",paid.occurrence.createdAt)
+        publishCardCycles(cardDue())
+        val actual=requireNotNull(store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,paid.occurrence.id))
+        assertEquals(1L,actual.syncVersion);assertEquals("2026-10-29T00:00:00Z",actual.updatedAt)
+        assertEquals(actual,backend[actual.entity to actual.id]);assertTrue(store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).isEmpty())
+        val body=Json.parseToJsonElement(requests.single{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_card_paid_cycle"}.body.clone().readUtf8()).jsonObject
+        assertEquals(JsonPrimitive(true),body["p_expected_presence"]);assertEquals(JsonPrimitive(0),body["p_expected_version"])
+    }
+    @Test fun historicalCardTombstoneAndNewPaymentPublishWithoutRewritingMoney()=runBlocking {
+        val zone=java.time.ZoneId.of("UTC");val first=payCardStatement();val due=cardDue();publishCardCycles(due)
+        val deleted="2026-10-28T00:00:03Z";val later="2026-10-28T00:00:04Z"
+        // Imported owned history can retain archived_at after permanent deletion.
+        // This fixture does not bypass the paid-card editor lock or claim an undo UI.
+        for(entity in listOf(CloudEntity.LEDGER_TRANSACTION,CloudEntity.INVESTMENT_POSTING)) {
+            val affected=synchronized(backend){backend.values.filter{it.entity==entity.table && (it.id==id(20) || it.payload.financeRawString("event_id")==id(20))}.toList()}
+            for(row in affected) {
+                val fields=buildJsonObject {
+                    put("deleted_at",deleted);put("updated_at",deleted);put("sync_version",row.syncVersion+1)
+                    if(entity==CloudEntity.LEDGER_TRANSACTION){put("is_archived",true);put("archived_at",deleted)}
+                }
+                val received=row.copy(payload=JsonObject(row.payload+fields),deletedAt=deleted,updatedAt=deleted,syncVersion=row.syncVersion+1)
+                backend[received.entity to received.id]=received
+            }
+            store.replacePullSnapshot(owner,entity.table,synchronized(backend){backend.values.filter{it.entity==entity.table}.toList()})
+        }
+        val financialHistory=synchronized(backend){backend.filterKeys{it.first!=CloudEntity.DUE_OCCURRENCE_RECORD.table}.toMap()}
+        // Supply the queued maintenance marker explicitly. Automatic card
+        // statement maintenance is the next slice; it is not this test's claim.
+        val marker=DueOccurrenceRecord.fromCloudRecord(requireNotNull(store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,first.occurrence.id)))
+            .copy(deletedAt=deleted,updatedAt=deleted)
+        store.commitMutation(marker.toCloudRecord(),marker.pendingMutation(MutationKind.DELETE))
+        publishCardCycles(due)
+        assertEquals(deleted,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.deletedAt)
+        assertEquals("Pending="+store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).map{it.lastError},deleted,backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to marker.id]!!.deletedAt)
+        assertEquals(2L,backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to marker.id]!!.syncVersion)
+        assertEquals(financialHistory,synchronized(backend){backend.filterKeys{it.first!=CloudEntity.DUE_OCCURRENCE_RECORD.table}.toMap()})
+        assertEquals(deleted,backend[CloudEntity.LEDGER_TRANSACTION.table to id(20)]!!.deletedAt)
+        val source=store.creditCardStatementPaymentSnapshot(owner).money.recordsByEntity
+        val card=LedgerWalletRecord.fromCloudRecord(source.getValue(CloudEntity.LEDGER_WALLET).single{it.id==id(60)})
+        val profile=CreditCardProfileRecord.fromCloudRecord(source.getValue(CloudEntity.CREDIT_CARD_PROFILE).single{it.id==id(61)})
+        val statement=creditCardStatementItems(owner,listOf(CreditCardAccount(card,profile)),source.getValue(CloudEntity.LEDGER_TRANSACTION).map(LedgerTransactionRecord::fromCloudRecord),
+            source.getValue(CloudEntity.DUE_OCCURRENCE_RECORD).map(DueOccurrenceRecord::fromCloudRecord),listOf(java.time.YearMonth.of(2026,9)),java.time.Instant.parse(later),zone,
+            source.getValue(CloudEntity.TRANSACTION_CATEGORY).map(TransactionCategoryRecord::fromCloudRecord)).single()
+        assertTrue(statement.isPayable)
+        var request=CreditCardStatementPaymentRequest(statement,BillInvestmentOperationContext(TransactionCreationIdentity(id(21),later),"JPY","Adjustment"),"Card payment again")
+        val secondReview=finance.payCreditCardStatement(owner,request,device,later).exceptionOrNull()
+        if(secondReview is InvestmentFundUsageConfirmationRequired)request=request.copy(context=request.context.copy(consent=secondReview.review.consent))else if(secondReview!=null)throw secondReview
+        val second=finance.payCreditCardStatement(owner,request,device,later).getOrThrow()
+        assertNotEquals(first.occurrence.id,second.occurrence.id);publishCardCycles(due)
+        assertTrue(store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).isEmpty())
+        val actual=backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to second.occurrence.id]!!
+        assertNull(actual.deletedAt);assertEquals(id(21),actual.payload.financeRawString("linked_transaction_id"));assertEquals(70L,actual.payload.financeRawLong("amount_minor_snapshot"))
+        assertEquals(-30L,backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(21),"cash-consumption-booked")]!!.payload.financeRawLong("amount_minor"))
+        assertNotNull(backend[CloudEntity.INVESTMENT_POSTING.table to investmentLedgerIdentity(id(20),"cash-consumption-booked")]!!.deletedAt)
+        assertEquals(3,requests.count{it.method=="POST" && it.requestUrl!!.pathSegments.last()=="mutate_card_paid_cycle"})
+    }
+
+    @Test fun lateCardReceiptCannotConsumeANewerLocalMarkerDeletionIntent()=runBlocking {
+        val paid=payCardStatement();val due=cardDue();val deleted="2026-10-28T00:00:03Z"
+        afterCardCommit={runBlocking {
+            val current=DueOccurrenceRecord.fromCloudRecord(requireNotNull(store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,paid.occurrence.id)))
+            val next=current.copy(deletedAt=deleted,updatedAt=deleted)
+            store.commitMutation(next.toCloudRecord(),next.pendingMutation(MutationKind.DELETE))
+        }}
+        publishCardCycles(due,1)
+        val current=requireNotNull(store.record(owner,CloudEntity.DUE_OCCURRENCE_RECORD.table,paid.occurrence.id))
+        val q=store.pendingMutations(owner,CloudEntity.DUE_OCCURRENCE_RECORD,Long.MAX_VALUE).single()
+        assertEquals(deleted,current.deletedAt);assertEquals(MutationKind.DELETE,q.mutation.kind);assertEquals(0,q.attemptCount);assertNull(q.lastError)
+        assertNull(backend[CloudEntity.DUE_OCCURRENCE_RECORD.table to paid.occurrence.id]!!.deletedAt)
+    }
 }

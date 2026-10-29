@@ -420,6 +420,15 @@ interface LocalStore {
         deviceId:String,now:String,zone:java.time.ZoneId):CreditCardStatementPaymentPlan =
         throw UnsupportedOperationException("Atomic statement payment unavailable")
 
+    suspend fun cardPaymentPublicationSnapshot(owner:UserId,cardId:String):CardPaymentPublicationSnapshot =
+        throw UnsupportedOperationException("Complete card payment publication snapshot unavailable")
+    suspend fun acknowledgeCardPaymentPublication(expected:CardPaymentPublicationSnapshot,queued:QueuedMutation,
+        observed:CardPaymentPublicationObservation,zone:java.time.ZoneId,isSessionCurrent:()->Boolean={true}):Boolean =
+        throw UnsupportedOperationException("Atomic card payment publication ACK unavailable")
+    suspend fun recordCardPaymentPublicationFailure(expected:CardPaymentPublicationSnapshot,queued:QueuedMutation,
+        nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean={true}):Boolean =
+        throw UnsupportedOperationException("Scoped card payment publication retry unavailable")
+
     suspend fun installmentPaymentPublicationSnapshot(owner:UserId,planId:String):InstallmentPaymentPublicationSnapshot =
         throw UnsupportedOperationException("Complete installment payment publication snapshot unavailable")
     suspend fun acknowledgeInstallmentPaymentPublication(expected:InstallmentPaymentPublicationSnapshot,queued:QueuedMutation,
@@ -606,6 +615,10 @@ data class SystemCategoryPage(val records: List<CloudRecord>, val nextOffset: In
 data class DueOccurrencePage(val records: List<CloudRecord>, val nextOffset: Int?)
 
 interface RemoteMutationStore {
+    /** All months, including legacy due-month identities and tombstones. */
+    suspend fun fetchCardCyclePage(cardId:String,accessToken:String,ownerUserId:UserId,
+        offset:Int,limit:Int):DueOccurrencePage = throw UnsupportedOperationException("Complete card cycle lookup unavailable")
+
     suspend fun fetchInstallmentCyclePage(planId: String, month: String, accessToken: String, ownerUserId: UserId,
         offset: Int, limit: Int): DueOccurrencePage = throw UnsupportedOperationException("Complete installment cycle lookup unavailable")
 

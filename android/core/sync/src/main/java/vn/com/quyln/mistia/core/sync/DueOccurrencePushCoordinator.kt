@@ -11,8 +11,10 @@ class DueOccurrencePushCoordinator(
     installmentSkipCoordinator: InstallmentSkipPushCoordinator? = null,
     installmentPaymentAcknowledgementCoordinator: InstallmentPaymentAcknowledgementCoordinator? = null,
     installmentPaymentPublicationCoordinator: InstallmentPaymentPublicationCoordinator? = null,
+    cardPaymentPublicationCoordinator: CardPaymentPublicationCoordinator? = null,
     nowEpochMillis:()->Long=System::currentTimeMillis,
 ):DomainPushCoordinator {
+    private val cardPaymentPublication = cardPaymentPublicationCoordinator
     private val installmentPaymentPublication = installmentPaymentPublicationCoordinator
     private val installmentDeletion = installmentDeletionCoordinator
     private val installmentSkip = installmentSkipCoordinator
@@ -83,5 +85,6 @@ class DueOccurrencePushCoordinator(
         delegate.pushPending(ownerUserId,accessToken) + (installmentDeletion?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary()) +
             (installmentSkip?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary()) +
             (installmentPaymentPublication?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary()) +
-            (installmentPaymentAcknowledgement?.pushPendingExcept(ownerUserId,accessToken) { installmentPaymentPublication?.handles(it)==true } ?: DomainPushSummary())
+            (installmentPaymentAcknowledgement?.pushPendingExcept(ownerUserId,accessToken) { installmentPaymentPublication?.handles(it)==true } ?: DomainPushSummary()) +
+            (cardPaymentPublication?.pushPending(ownerUserId,accessToken) ?: DomainPushSummary())
 }

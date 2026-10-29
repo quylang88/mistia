@@ -104,6 +104,37 @@ class SupabasePostgrestRemoteStore(
         }
     }
 
+    override suspend fun fetchCardCyclePage(cardId: String, accessToken: String, ownerUserId: UserId,
+        offset: Int, limit: Int): vn.com.quyln.mistia.core.model.DueOccurrencePage = withContext(Dispatchers.IO) {
+        for (id in listOf(cardId, ownerUserId.value)) require(id.length == 36 && UUID.fromString(id).toString() == id)
+        require(accessToken.isNotBlank())
+        require(offset >= 0 && limit in 1..1000 && offset <= Int.MAX_VALUE - limit)
+        val url = tableUrl(CloudEntity.DUE_OCCURRENCE_RECORD).addQueryParameter("select", "*")
+            .addQueryParameter("user_id", "eq.${ownerUserId.value}").addQueryParameter("source_kind_raw_value", "eq.creditCard")
+            .addQueryParameter("source_id", "eq.$cardId")
+            .addQueryParameter("order", "id.asc").build()
+        val request = authorizedRequest(url.toString(), accessToken).header("Prefer", "count=exact").header("Range-Unit", "items")
+            .header("Range", "$offset-${offset + limit - 1}").get().build()
+        client.newCall(request).execute().use { response ->
+            val rows = response.requireObjectRows(strict = true)
+            require(rows.size <= limit)
+            val records = rows.map { payload -> payload.toCloudRecord(CloudEntity.DUE_OCCURRENCE_RECORD, ownerUserId).also { record ->
+                val cycle = DueOccurrenceRecord.fromCloudRecord(record)
+                val version = requireNotNull(payload["sync_version"] as? JsonPrimitive)
+                require(!version.isString && version.longOrNull == record.syncVersion && record.syncVersion >= 0)
+                require(cycle.id == record.id && cycle.ownerUserId == ownerUserId.value && cycle.sourceKindWireValue == "creditCard" && cycle.sourceId == cardId && YearMonth.parse(cycle.selectedMonthKey).toString() == cycle.selectedMonthKey && payload == cycle.toPayload())
+            } }
+            require(records.map { it.id }.distinct().size == records.size)
+            val parts = requireNotNull(response.header("Content-Range")).split('/')
+            require(parts.size == 2)
+            val total = requireNotNull(parts[1].toIntOrNull()); require(total >= 0)
+            val consumed = offset + records.size
+            if (records.isEmpty()) require(parts[0] == "*" && offset >= total)
+            else require(parts[0] == "$offset-${consumed - 1}" && consumed <= total)
+            vn.com.quyln.mistia.core.model.DueOccurrencePage(records, if (consumed < total) consumed else null)
+        }
+    }
+
     override suspend fun fetchInstallmentCyclePage(planId: String, month: String, accessToken: String, ownerUserId: UserId,
         offset: Int, limit: Int): vn.com.quyln.mistia.core.model.DueOccurrencePage = withContext(Dispatchers.IO) {
         for (id in listOf(planId, ownerUserId.value)) require(id.length == 36 && UUID.fromString(id).toString() == id)
