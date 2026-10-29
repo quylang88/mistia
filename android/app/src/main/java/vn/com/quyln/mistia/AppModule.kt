@@ -82,6 +82,9 @@ object AppModule {
     private fun installmentOccurrenceDeleteWritesEnabled() = BuildConfig.ALLOW_CLOUD_WRITES && BuildConfig.ALLOW_DUE_OCCURRENCE_CLOUD_WRITES &&
         BuildConfig.ALLOW_INSTALLMENT_CLOUD_WRITES && BuildConfig.ALLOW_WALLET_CLOUD_WRITES
 
+    private fun installmentPaymentWritesEnabled() = installmentOccurrenceDeleteWritesEnabled() &&
+        BuildConfig.ALLOW_TRANSACTION_CLOUD_WRITES && BuildConfig.ALLOW_CATEGORY_CLOUD_WRITES
+
     @Provides
     @Singleton
     fun provideJson(): Json = MistiaWireFormat.json
@@ -351,8 +354,21 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator, installmentSkip: InstallmentSkipPushCoordinator, installmentPaymentAck: InstallmentPaymentAcknowledgementCoordinator):DueOccurrencePushCoordinator =
-        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion, installmentSkipCoordinator=installmentSkip, installmentPaymentAcknowledgementCoordinator=installmentPaymentAck)
+    fun provideDueOccurrencePushCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore, installmentDeletion: InstallmentDeletionPushCoordinator, installmentSkip: InstallmentSkipPushCoordinator, installmentPaymentAck: InstallmentPaymentAcknowledgementCoordinator, installmentPayment: vn.com.quyln.mistia.core.sync.InstallmentPaymentPublicationCoordinator):DueOccurrencePushCoordinator =
+        DueOccurrencePushCoordinator(localStore,remoteStore,writesEnabled=billOccurrenceWritesEnabled(), installmentDeletionCoordinator=installmentDeletion, installmentSkipCoordinator=installmentSkip, installmentPaymentAcknowledgementCoordinator=installmentPaymentAck, installmentPaymentPublicationCoordinator=installmentPayment)
+
+    @Provides
+    @Singleton
+    fun provideInstallmentPaymentPublicationClient(config:SupabaseConfig,client:OkHttpClient,auth:AuthRepository) =
+        vn.com.quyln.mistia.core.network.SupabaseInstallmentPaymentPublicationClient(config,client,
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session},::installmentPaymentWritesEnabled)
+
+    @Provides
+    @Singleton
+    fun provideInstallmentPaymentPublicationCoordinator(localStore:LocalStore,remoteStore:RemoteMutationStore,
+        remote:vn.com.quyln.mistia.core.network.SupabaseInstallmentPaymentPublicationClient,auth:AuthRepository) =
+        vn.com.quyln.mistia.core.sync.InstallmentPaymentPublicationCoordinator(localStore,remoteStore,remote,installmentPaymentWritesEnabled(),
+            {(auth.state.value as? vn.com.quyln.mistia.core.model.AuthState.SignedIn)?.session})
 
     @Provides
     @Singleton

@@ -11,13 +11,17 @@ import vn.com.quyln.mistia.core.network.SupabaseHttpException
 class InstallmentPaymentAcknowledgementCoordinator(private val localStore: LocalStore, private val remoteStore: RemoteMutationStore,
     private val enabled: Boolean, private val nowEpochMillis: () -> Long = System::currentTimeMillis) : DomainPushCoordinator {
     override val entity = CloudEntity.DUE_OCCURRENCE_RECORD
-    override suspend fun pushPending(ownerUserId: UserId, accessToken: String): DomainPushSummary {
+    override suspend fun pushPending(ownerUserId: UserId, accessToken: String): DomainPushSummary =
+        pushPendingExcept(ownerUserId, accessToken) { false }
+
+    internal suspend fun pushPendingExcept(ownerUserId: UserId, accessToken: String, excluded: (CloudRecord) -> Boolean): DomainPushSummary {
         if (!enabled) return DomainPushSummary()
         var summary = DomainPushSummary()
         val now = nowEpochMillis()
         for (queued in localStore.pendingMutations(ownerUserId, entity, now)) {
             currentCoroutineContext().ensureActive()
             val row = localStore.record(ownerUserId, entity.table, queued.mutation.recordId) ?: continue
+            if (excluded(row)) continue
             val due = runCatching { DueOccurrenceRecord.fromCloudRecord(row) }.getOrNull() ?: continue
             if (due.ownerUserId != ownerUserId.value || due.sourceKindWireValue != "installment" || due.statusWireValue != "paid") continue
             val snapshot = localStore.installmentPaymentAcknowledgementSnapshot(ownerUserId, due.sourceId)

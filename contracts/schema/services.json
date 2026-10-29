@@ -21,6 +21,7 @@
     "mutate_investment_cash_postings",
     "mutate_investment_cash_event",
     "mutate_ordinary_investment_event",
+    "mutate_installment_paid_cycle",
     "mutate_investment_asset",
     "delete_investment_trade",
     "delete_investment_asset",

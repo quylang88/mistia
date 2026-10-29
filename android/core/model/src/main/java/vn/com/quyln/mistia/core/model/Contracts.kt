@@ -414,6 +414,15 @@ interface LocalStore {
     suspend fun commitCategoryReferenceRepairs(expected:CategoryReferenceSnapshot,oldId:String,newId:String,deviceId:String,now:String):Boolean =
         throw UnsupportedOperationException("Atomic category reference repairs unavailable")
 
+    suspend fun installmentPaymentPublicationSnapshot(owner:UserId,planId:String):InstallmentPaymentPublicationSnapshot =
+        throw UnsupportedOperationException("Complete installment payment publication snapshot unavailable")
+    suspend fun acknowledgeInstallmentPaymentPublication(expected:InstallmentPaymentPublicationSnapshot,queued:QueuedMutation,
+        observed:InstallmentPaymentPublicationObservation,zone:java.time.ZoneId,isSessionCurrent:()->Boolean={true}):Boolean =
+        throw UnsupportedOperationException("Atomic installment payment publication ACK unavailable")
+    suspend fun recordInstallmentPaymentPublicationFailure(expected:InstallmentPaymentPublicationSnapshot,queued:QueuedMutation,
+        nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean={true}):Boolean =
+        throw UnsupportedOperationException("Scoped installment payment publication retry unavailable")
+
     suspend fun installmentPaymentAcknowledgementSnapshot(owner: UserId, planId: String): InstallmentPaymentAcknowledgementSnapshot =
         throw UnsupportedOperationException("Complete installment payment acknowledgement snapshot unavailable")
     suspend fun commitInstallmentPaymentAcknowledgement(expected: InstallmentPaymentAcknowledgementSnapshot, queued: QueuedMutation,

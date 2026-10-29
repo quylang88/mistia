@@ -1925,6 +1925,58 @@ class RoomLocalStore(
         }
     }
 
+    private suspend fun readInstallmentPaymentPublication(owner:UserId,planId:String):vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationSnapshot {
+        val base=readInstallmentPaymentAcknowledgementSnapshot(owner,planId)
+        val entities=(InstallmentPaymentAcknowledgementSnapshot.entities+CloudEntity.INVESTMENT_POSTING).map{it.table}
+        val rows=database.cloudRecordDao().investmentChannelRows(owner.value,entities)
+        val postings=rows.filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}.map{it.toCloudRecord()}
+        val postingQueues=database.syncOutboxDao().rows(owner.value).filter{it.entity==CloudEntity.INVESTMENT_POSTING.table}.map{it.toQueuedMutation()}
+        return vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationSnapshot(base,postings,postingQueues,
+            rows.filter{it.hasPendingMutation}.map{it.entity to it.recordId}.toSet()).also{it.requireCoherent()}
+    }
+    override suspend fun installmentPaymentPublicationSnapshot(owner:UserId,planId:String):vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationSnapshot {
+        require(vn.com.quyln.mistia.core.model.financeRawUuid(owner.value)==owner.value && vn.com.quyln.mistia.core.model.financeRawUuid(planId)==planId)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive()
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(owner);caller.ensureActive()
+            val source=readInstallmentPaymentPublication(owner,planId)
+            ensureCurrentFinanceOwner(owner);caller.ensureActive();kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            source
+        }
+    }
+    override suspend fun acknowledgeInstallmentPaymentPublication(expected:vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationSnapshot,queued:QueuedMutation,
+        observed:vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationObservation,zone:java.time.ZoneId,isSessionCurrent:()->Boolean):Boolean {
+        expected.requireCoherent();require(queued in expected.base.queues)
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.base.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=readInstallmentPaymentPublication(expected.base.owner,expected.base.planId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val decision=vn.com.quyln.mistia.core.model.planInstallmentPaymentPublication(current,queued,observed,zone)
+            require(decision is vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationDecision.Acknowledge){"No authoritative installment payment ACK"}
+            check(removeQueuedMutationExact(queued)){"Installment payment queue changed"}
+            database.cloudRecordDao().upsert(decision.record.toEntity(false,System.currentTimeMillis()))
+            ensureCurrentFinanceOwner(expected.base.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            true
+        }
+    }
+    override suspend fun recordInstallmentPaymentPublicationFailure(expected:vn.com.quyln.mistia.core.model.InstallmentPaymentPublicationSnapshot,queued:QueuedMutation,
+        nextAttemptAtEpochMillis:Long,errorCode:String,isSessionCurrent:()->Boolean):Boolean {
+        expected.requireCoherent();vn.com.quyln.mistia.core.model.requireInstallmentPaymentAcknowledgementIntent(expected.base,queued)
+        require(expected.base.batch==null && nextAttemptAtEpochMillis>=0 && Regex("[a-z][a-z0-9_]{0,159}").matches(errorCode))
+        val caller=kotlinx.coroutines.currentCoroutineContext();caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+        return database.withTransaction {
+            ensureCurrentFinanceOwner(expected.base.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            val current=readInstallmentPaymentPublication(expected.base.owner,expected.base.planId)
+            if(runCatching{expected.requireUnchanged(current)}.isFailure)return@withTransaction false
+            val recorded=recordMutationFailure(queued,nextAttemptAtEpochMillis,errorCode)
+            ensureCurrentFinanceOwner(expected.base.owner);caller.ensureActive();ensureInvestmentTradePublicationSession(isSessionCurrent)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            recorded
+        }
+    }
+
     override suspend fun installmentPaymentAcknowledgementSnapshot(owner: UserId, planId: String): InstallmentPaymentAcknowledgementSnapshot = database.withTransaction {
         ensureCurrentFinanceOwner(owner)
         val snapshot = readInstallmentPaymentAcknowledgementSnapshot(owner, planId)
