@@ -301,6 +301,9 @@ private fun SignedInRoot(
                         deviceIdProvider = { deviceIdStore.getOrCreate() },
                         exchangeRateRepository = exchangeRateRepository,
                         primaryCurrencyCode = currencySettings.primaryCurrencyCode,
+                        onOpenCreditCardStatements = { walletId -> navController.navigate("credit-card-statements/$walletId") { launchSingleTop = true } },
+                        onAddCreditCard = { navController.navigate("credit-card-editor/new") { launchSingleTop = true } },
+                        onEditCreditCard = { walletId -> navController.navigate("credit-card-editor/$walletId") { launchSingleTop = true } },
                     )
                     RootTab.MANAGEMENT -> ManagementScreen(
                         ownerUserId = authState.session.userId,
@@ -327,12 +330,9 @@ private fun SignedInRoot(
                 }
             }
         }
-        composable("credit-card-statements/{walletId}") { entry ->
-            val walletId = entry.arguments?.getString("walletId") ?: return@composable
-            vn.com.quyln.mistia.feature.management.CreditCardStatementScreen(
-                authState.session.userId, walletId, financeRepository, onBack = { navController.popBackStack() },
-                deviceIdProvider={deviceIdStore.getOrCreate()},primaryCurrencyCode=currencySettings.primaryCurrencyCode)
-        }
+        planningCreditCardDestinations(authState.session.userId, financeRepository, navController,
+            deviceIdProvider = { deviceIdStore.getOrCreate() }, enabledCurrencyCodes = currencySettings.enabledCurrencyCodes,
+            primaryCurrencyCode = currencySettings.primaryCurrencyCode)
         composable("archived-transactions") {
             vn.com.quyln.mistia.feature.transactions.ArchivedTransactionsRoute(authState.session.userId,financeRepository,
                 receiptImageRepository,{deviceIdStore.getOrCreate()},currencySettings.primaryCurrencyCode,onDismiss={navController.popBackStack()})

@@ -1004,6 +1004,7 @@
     <string name="planning_budget_editor_discard_title">Bỏ thay đổi?</string>
     <string name="planning_budget_editor_invalid_amount">Nhập số tiền dương trong phạm vi được hỗ trợ.</string>
     <string name="planning_budget_editor_keep_editing">Tiếp tục chỉnh sửa</string>
+    <string name="planning_card_accounts_load_failed">Không thể tải thẻ tín dụng lúc này. Vui lòng thử lại.</string>
     <string name="planning_duepayment_bill_skipped">Đã bỏ qua</string>
     <string name="planning_duepayment_cancel">Hủy</string>
     <string name="planning_duepayment_choose_wallet">Chọn ví</string>

@@ -1004,6 +1004,7 @@
     <string name="planning_budget_editor_discard_title">変更を破棄しますか？</string>
     <string name="planning_budget_editor_invalid_amount">対応範囲内の正の金額を入力してください。</string>
     <string name="planning_budget_editor_keep_editing">編集を続ける</string>
+    <string name="planning_card_accounts_load_failed">クレジットカードを読み込めません。もう一度お試しください。</string>
     <string name="planning_duepayment_bill_skipped">スキップ済み</string>
     <string name="planning_duepayment_cancel">キャンセル</string>
     <string name="planning_duepayment_choose_wallet">ウォレットを選択</string>

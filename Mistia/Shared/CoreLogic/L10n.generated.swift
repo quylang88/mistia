@@ -2551,6 +2551,11 @@ nonisolated enum L10n {
             static func keepEditing(language: MistiaAppLanguage) -> String { L10n.tr("planning.budgetEditor.keepEditing", vi: "Tiếp tục chỉnh sửa", en: "Keep editing", ja: "編集を続ける", language: language) }
         }
 
+        nonisolated enum cardAccounts {
+            static var loadFailed: String { L10n.tr("planning.cardAccounts.loadFailed", vi: "Không thể tải thẻ tín dụng lúc này. Vui lòng thử lại.", en: "Could not load your credit cards. Try again.", ja: "クレジットカードを読み込めません。もう一度お試しください。") }
+            static func loadFailed(language: MistiaAppLanguage) -> String { L10n.tr("planning.cardAccounts.loadFailed", vi: "Không thể tải thẻ tín dụng lúc này. Vui lòng thử lại.", en: "Could not load your credit cards. Try again.", ja: "クレジットカードを読み込めません。もう一度お試しください。", language: language) }
+        }
+
         nonisolated enum duepayment {
             static var billSkipped: String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み") }
             static func billSkipped(language: MistiaAppLanguage) -> String { L10n.tr("planning.duepayment.billSkipped", vi: "Đã bỏ qua", en: "Skipped", ja: "スキップ済み", language: language) }

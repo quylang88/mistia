@@ -244,28 +244,9 @@ fun ManagementScreen(
     }
 
     creditCardEditorTarget?.let { target ->
-        val wallet = target.walletId?.let { id -> wallets.firstOrNull { it.id == id } }
-        val profile = wallet?.let { card -> creditCardProfiles.firstOrNull { it.walletId == card.id } }
-        CreditCardEditorSheet(
-            ownerId = ownerUserId.value,
-            enabledCurrencyCodes = enabledCurrencyCodes,
-            currencyEditable = currencyEditable(wallet),
-            wallet = wallet,
-            profile = profile,
-            paymentSourceWallets = wallets.filter { candidate ->
-                candidate.id != wallet?.id && candidate.kind != null && candidate.kind != WalletKind.CREDIT_CARD
-            },
-            nextSortOrder = (wallets.maxOfOrNull(LedgerWalletRecord::sortOrder) ?: -1) + 1,
-            onDismiss = { creditCardEditorTarget = null },
-            onSave = { draft: CreditCardDraft ->
-                repository.saveCreditCard(
-                    ownerUserId = ownerUserId,
-                    draft = draft,
-                    deviceId = deviceIdProvider(),
-                    now = Instant.now().toString(),
-                )
-            },
-        )
+        CreditCardEditorRoute(ownerUserId, target.walletId, repository,
+            deviceIdProvider = { deviceIdProvider() }, onDismiss = { creditCardEditorTarget = null },
+            enabledCurrencyCodes = enabledCurrencyCodes)
     }
 
     categoryEditorTarget?.let { target ->

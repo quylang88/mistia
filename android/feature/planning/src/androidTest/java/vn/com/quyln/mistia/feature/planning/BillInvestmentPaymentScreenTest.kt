@@ -197,7 +197,14 @@ class BillInvestmentPaymentScreenTest {
     }
     @Test fun actualPrimaryCurrencyIsUsedToRejectForeignReservedFundsWithLocalizedExplanation()=runBlocking<Unit> {
         val old=store.record(owner,CloudEntity.LEDGER_WALLET.table,wallet.id)!!
-        val vnd=old.copy(payload=JsonObject(old.payload+("currency_code" to JsonPrimitive("VND"))+("opening_balance_minor" to JsonPrimitive(100_000L))));store.commitMutation(vnd,PendingMutation(CloudEntity.LEDGER_WALLET,vnd.id,owner.value,MutationKind.UPSERT,vnd.payload,now,0,device))
+        val vnd=old.copy(payload=JsonObject(old.payload+("currency_code" to JsonPrimitive("VND"))+("opening_balance_minor" to JsonPrimitive(100_000L))));run {
+            // Model an existing legacy FX reserve; the generic wallet writer must keep rejecting this change.
+            val queue = db.syncOutboxDao().record(owner.value, vnd.entity, vnd.id)!!
+            db.cloudRecordDao().upsert(CloudRecordEntity(vnd.ownerUserId, vnd.entity, vnd.id, vnd.payload.toString(), vnd.updatedAt, vnd.deletedAt, vnd.syncVersion, true, 0))
+            db.syncOutboxDao().upsert(queue.copy(payloadJson = vnd.payload.toString()))
+            Assert.assertEquals("VND", LedgerWalletRecord.fromCloudRecord(store.record(owner, vnd.entity, vnd.id)!!).currencyCode)
+            Assert.assertEquals(vnd.payload.toString(), db.syncOutboxDao().record(owner.value, vnd.entity, vnd.id)!!.payloadJson)
+        }
         wallet=LedgerWalletRecord.fromCloudRecord(vnd)
         val raw=store.record(owner,CloudEntity.INVESTMENT_POSTING.table,id(10))!!;val posting=raw.copy(payload=JsonObject(raw.payload+buildJsonObject{put("currency_code","VND");put("amount_minor",40_000L);put("accounting_amount_minor",2L)}))
         store.commitMutation(posting,PendingMutation(CloudEntity.INVESTMENT_POSTING,posting.id,owner.value,MutationKind.UPSERT,posting.payload,now,0,device))

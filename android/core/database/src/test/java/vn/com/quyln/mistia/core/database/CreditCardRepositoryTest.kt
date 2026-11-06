@@ -23,6 +23,40 @@ import vn.com.quyln.mistia.core.model.WalletDraft
 import vn.com.quyln.mistia.core.model.WalletKind
 
 class CreditCardRepositoryTest {
+    @Test fun `stale editor wallet payload cannot overwrite even unchanged versions`() = runTest {
+        val store = CardMemoryStore(); val repo = OfflineFirstFinanceRepository(store)
+        val original = repo.saveCreditCard(UserId(OWNER), draft(), DEVICE, NOW).getOrThrow()
+        val expected = vn.com.quyln.mistia.core.model.CreditCardEditExpectation(original.wallet.toCloudRecord(), original.profile.toCloudRecord())
+        val newer = original.wallet.copy(name = "Newer wallet").toCloudRecord(); store.seed(newer)
+        val queues = store.outbox.toMap()
+        assertTrue(repo.saveCreditCard(UserId(OWNER), draft().copy(expectedEdit = expected), DEVICE, LATER).isFailure)
+        assertEquals(newer, store.record(UserId(OWNER), CloudEntity.LEDGER_WALLET.table, CARD_WALLET_ID)); assertEquals(queues, store.outbox)
+    }
+    @Test fun `stale editor profile payload cannot overwrite even unchanged versions`() = runTest {
+        val store = CardMemoryStore(); val repo = OfflineFirstFinanceRepository(store)
+        val original = repo.saveCreditCard(UserId(OWNER), draft(), DEVICE, NOW).getOrThrow()
+        val expected = vn.com.quyln.mistia.core.model.CreditCardEditExpectation(original.wallet.toCloudRecord(), original.profile.toCloudRecord())
+        val newer = original.profile.copy(creditLimitMinor = 50).toCloudRecord(); store.seed(newer)
+        val queues = store.outbox.toMap()
+        assertTrue(repo.saveCreditCard(UserId(OWNER), draft().copy(expectedEdit = expected), DEVICE, LATER).isFailure)
+        assertEquals(newer, store.record(UserId(OWNER), CloudEntity.CREDIT_CARD_PROFILE.table, PROFILE_ID)); assertEquals(queues, store.outbox)
+    }
+    @Test fun `foreign editor expectation cannot authorize a current owned edit`() = runTest {
+        val store = CardMemoryStore(); val repo = OfflineFirstFinanceRepository(store)
+        val original = repo.saveCreditCard(UserId(OWNER), draft(), DEVICE, NOW).getOrThrow()
+        val expected = vn.com.quyln.mistia.core.model.CreditCardEditExpectation(original.wallet.toCloudRecord().copy(ownerUserId = OTHER_OWNER), original.profile.toCloudRecord())
+        val queues = store.outbox.toMap()
+        assertTrue(repo.saveCreditCard(UserId(OWNER), draft().copy(expectedEdit = expected), DEVICE, LATER).isFailure)
+        assertEquals(original.wallet.toCloudRecord(), store.record(UserId(OWNER), CloudEntity.LEDGER_WALLET.table, CARD_WALLET_ID)); assertEquals(queues, store.outbox)
+    }
+    @Test fun `unchanged editor expectation still saves through atomic authority`() = runTest {
+        val store = CardMemoryStore(); val repo = OfflineFirstFinanceRepository(store)
+        val original = repo.saveCreditCard(UserId(OWNER), draft(), DEVICE, NOW).getOrThrow()
+        val expected = vn.com.quyln.mistia.core.model.CreditCardEditExpectation(original.wallet.toCloudRecord(), original.profile.toCloudRecord())
+        val saved = repo.saveCreditCard(UserId(OWNER), draft().copy(name = "Edited", expectedEdit = expected), DEVICE, LATER).getOrThrow()
+        assertEquals("Edited", saved.wallet.name); assertEquals(CARD_WALLET_ID, saved.wallet.id); assertEquals(PROFILE_ID, saved.profile.id)
+    }
+
     @Test fun `store without atomic card creation capability fails before either write`() = runTest {
         val store = CardMemoryStore(useDefaultCardCommit = true)
         val repository = OfflineFirstFinanceRepository(store)

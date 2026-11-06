@@ -103,6 +103,7 @@ class CreditCardAmountCalculatorTest {
         compose.onNodeWithTag("card.name").performScrollTo().performTextReplacement("Private draft"); amount("1375"); open(); key("+"); key("2")
         compose.runOnIdle { subject = other }
         compose.onNodeWithTag("amountCalculator.dialog").assertDoesNotExist()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("card.name").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("card.name").performScrollTo().assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
         assertInput("")
         Assert.assertTrue(runBlocking { repo.observeCreditCardProfiles(owner).first().isEmpty() })
@@ -121,6 +122,7 @@ class CreditCardAmountCalculatorTest {
         compose.onNodeWithTag("card.name").performScrollTo().performTextReplacement("Old draft"); amount("123")
         compose.onNodeWithTag("card.save").performScrollTo().performClick(); compose.waitUntil(5000) { started.isCompleted }
         compose.runOnIdle { subject = other }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("card.name").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("card.name").performScrollTo().performTextReplacement("New draft")
         compose.runOnIdle { release.complete(Unit) }; compose.waitUntil(5000) { finished.isCompleted }
         compose.waitForIdle(); compose.onNodeWithTag("card.name").assertTextContains("New draft")

@@ -1002,6 +1002,7 @@
   "planning.budgetEditor.discardTitle": "planning_budget_editor_discard_title",
   "planning.budgetEditor.invalidAmount": "planning_budget_editor_invalid_amount",
   "planning.budgetEditor.keepEditing": "planning_budget_editor_keep_editing",
+  "planning.cardAccounts.loadFailed": "planning_card_accounts_load_failed",
   "planning.duepayment.billSkipped": "planning_duepayment_bill_skipped",
   "planning.duepayment.cancel": "planning_duepayment_cancel",
   "planning.duepayment.chooseWallet": "planning_duepayment_choose_wallet",

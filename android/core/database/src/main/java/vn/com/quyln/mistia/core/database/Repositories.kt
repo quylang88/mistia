@@ -76,6 +76,12 @@ class OfflineFirstFinanceRepository(
                     row.matchesFinanceReadScope(owner,entity,includingDeleted=true)
             })
         }
+    override fun observeCreditCardAccountReadSnapshot(owner: UserId): Flow<vn.com.quyln.mistia.core.model.CreditCardAccountReadSnapshot> =
+        localStore.observeCreditCardAccountReadSnapshot(owner).map { snapshot ->
+            require(snapshot.owner == owner) { "Card account snapshot owner changed" }
+            snapshot.requireCoherent()
+            snapshot
+        }
     override fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.UpcomingDueReadSnapshot> =
         localStore.observeUpcomingDueReadSnapshot(owner).map {snapshot ->
             require(snapshot.owner==owner) {"Upcoming due snapshot owner changed"}
@@ -193,6 +199,10 @@ class OfflineFirstFinanceRepository(
             (profileRow == null && profiles.any { canonicalFinanceId(it.id) == requestedProfileId }) || (walletRow != null && profileRow == null))
             throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
         val existingProfile = profileRow?.let(CreditCardProfileRecord::fromCloudRecord)
+        draft.expectedEdit?.let { expected ->
+            if (walletRow != expected.wallet || profileRow != expected.profile)
+                throw vn.com.quyln.mistia.core.model.WalletValidationException(vn.com.quyln.mistia.core.model.WalletValidationError.STALE_EDIT)
+        }
         val paymentSource = draft.paymentSourceWalletId?.let(::canonicalFinanceId)?.let { id ->
             wallets.firstOrNull { canonicalFinanceId(it.id) == id }
         }

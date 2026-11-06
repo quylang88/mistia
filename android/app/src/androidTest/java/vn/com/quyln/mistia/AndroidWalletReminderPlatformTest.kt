@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
@@ -26,6 +27,14 @@ class AndroidWalletReminderPlatformTest {
         override fun deleteSharedPreferences(name:String)=super.deleteSharedPreferences("$name.$suffix")
     }
     private fun context()=IsolatedContext(ApplicationProvider.getApplicationContext())
+    private fun eventually(condition:()->Boolean) {
+        val end=SystemClock.elapsedRealtime()+5_000
+        while(SystemClock.elapsedRealtime()<end) {
+            if(condition()) return
+            SystemClock.sleep(20)
+        }
+        assertTrue(condition())
+    }
     private fun ticket():NativeWalletReminder {
         val zone=ZoneId.systemDefault();val wallet=UUID.randomUUID().toString()
         return NativeWalletReminder(UUID.randomUUID().toString(),"mistia.reminder.wallet.$wallet",wallet,
@@ -62,7 +71,7 @@ class AndroidWalletReminderPlatformTest {
             assertEquals(AndroidWalletReminderPlatform.CHANNEL,posted.channelId)
             assertEquals(row.title,posted.extras.getCharSequence("android.title").toString())
             assertEquals(row.body,posted.extras.getCharSequence("android.text").toString())
-            platform.dismiss(target.tag);assertTrue(manager.activeNotifications.none {it.tag==target.tag})
+            platform.dismiss(target.tag);eventually { manager.activeNotifications.none {it.tag==target.tag} }
         } finally {platform.dismiss(target.tag);context.deleteSharedPreferences("mistia.native.wallet.reminders")}
     }
 }

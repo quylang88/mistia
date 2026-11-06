@@ -105,6 +105,8 @@ data class CreditCardProfileRecord(
     }
 }
 
+data class CreditCardEditExpectation(val wallet: CloudRecord, val profile: CloudRecord)
+
 data class CreditCardDraft(
     val walletId: String? = null,
     val profileId: String? = null,
@@ -121,6 +123,7 @@ data class CreditCardDraft(
     val iconSymbolName: String? = null,
     val iconColorHex: String? = null,
     val sortOrder: Int? = null,
+    val expectedEdit: CreditCardEditExpectation? = null,
 ) {
     fun toMutation(
         ownerUserId: UserId,

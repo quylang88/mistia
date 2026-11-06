@@ -23736,6 +23736,29 @@
         }
       }
     },
+    "planning.cardAccounts.loadFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not load your credit cards. Try again."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クレジットカードを読み込めません。もう一度お試しください。"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể tải thẻ tín dụng lúc này. Vui lòng thử lại."
+          }
+        }
+      }
+    },
     "planning.installment.loadError" : {
       "extractionState" : "manual",
       "localizations" : {

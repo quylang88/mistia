@@ -187,6 +187,8 @@ interface FinanceRepository : CreditCardStatementPaymentRepository, InstallmentP
         Result.failure(UnsupportedOperationException("Ordinary transaction lifecycle persistence unavailable"))
     fun observeOverviewFinancialReadSnapshot(owner:UserId):Flow<OverviewFinancialReadSnapshot> =
         throw UnsupportedOperationException("Consistent Overview financial snapshot unavailable")
+    fun observeCreditCardAccountReadSnapshot(owner: UserId): Flow<CreditCardAccountReadSnapshot> =
+        throw UnsupportedOperationException("Consistent card account snapshot unavailable")
     /** A consistent raw read set; implementations must not fabricate partial loaded snapshots. */
     fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<UpcomingDueReadSnapshot> =
         throw UnsupportedOperationException("Consistent upcoming due snapshot unavailable")
@@ -383,6 +385,8 @@ interface LocalStore {
 
     fun observeOverviewFinancialReadSnapshot(owner:UserId):Flow<OverviewFinancialReadSnapshot> =
         throw UnsupportedOperationException("Consistent Overview financial snapshot unavailable")
+    fun observeCreditCardAccountReadSnapshot(owner: UserId): Flow<CreditCardAccountReadSnapshot> =
+        throw UnsupportedOperationException("Consistent card account snapshot unavailable")
     fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<UpcomingDueReadSnapshot> =
         throw UnsupportedOperationException("Consistent upcoming due snapshot unavailable")
     suspend fun walletReminderSnapshot(owner:UserId):WalletReminderSnapshot =

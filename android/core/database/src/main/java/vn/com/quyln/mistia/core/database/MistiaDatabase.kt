@@ -199,6 +199,9 @@ interface CloudRecordDao {
     fun observeOverviewFinancialRows(ownerUserId:String,entities:List<String>):Flow<List<CloudRecordEntity>>
 
     @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
+    fun observeCreditCardAccountRows(ownerUserId: String, entities: List<String>): Flow<List<CloudRecordEntity>>
+
+    @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
     fun observeBudgetRows(ownerUserId:String,entities:List<String>):Flow<List<CloudRecordEntity>>
 
     @Query("SELECT * FROM cloud_records WHERE owner_user_id = :ownerUserId AND entity IN (:entities) ORDER BY entity ASC, record_id ASC")
@@ -1763,6 +1766,10 @@ class RoomLocalStore(
     override fun observeOverviewFinancialReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.OverviewFinancialReadSnapshot> =
         database.cloudRecordDao().observeOverviewFinancialRows(owner.value,vn.com.quyln.mistia.core.model.OverviewFinancialReadSnapshot.entities.map {it.table})
             .map {rows ->vn.com.quyln.mistia.core.model.OverviewFinancialReadSnapshot(owner,rows.map {it.toCloudRecord()})}
+
+    override fun observeCreditCardAccountReadSnapshot(owner: UserId): Flow<vn.com.quyln.mistia.core.model.CreditCardAccountReadSnapshot> =
+        database.cloudRecordDao().observeCreditCardAccountRows(owner.value, vn.com.quyln.mistia.core.model.CreditCardAccountReadSnapshot.entities.map { it.table })
+            .map { rows -> vn.com.quyln.mistia.core.model.CreditCardAccountReadSnapshot(owner, rows.map { it.toCloudRecord() }) }
 
     override fun observeUpcomingDueReadSnapshot(owner:UserId):Flow<vn.com.quyln.mistia.core.model.UpcomingDueReadSnapshot> =
         database.cloudRecordDao().observeUpcomingDueRows(owner.value,vn.com.quyln.mistia.core.model.UpcomingDueReadSnapshot.entities.map {it.table})
